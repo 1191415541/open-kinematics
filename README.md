@@ -22,6 +22,7 @@ The tool is built around a numerical solver that determines the unique positions
 - Camber Shim Simulation: Model outboard camber shim configurations to simulate shimmed ball joint offsets.
 - Derived Points System: A dependency-aware system for calculating the position of non-kinematic points (like wheel centers) based on the solved positions of core hard points.
 - Suspension Metrics: Computes camber, caster, toe, kingpin inclination (KPI), scrub radius, mechanical trail, and side-view/front-view instant centres from the solved geometry.
+- 2D Steering Linkages: Solve top-view two-segment steering systems driven by a central pitman arm, returning left/right roadwheel angle relationships.
 - Data Export: Save simulation results in wide-format CSV or Apache Parquet files for further analysis.
 - Visualization: Generate static plots of the design condition and create MP4/GIF animations of sweep motions.
 
@@ -56,6 +57,120 @@ uv pip install "kinematics[viz]"
 ## Usage
 
 The primary way to use `open-kinematics` is through its command-line interface.
+
+### 2D two-segment steering API
+
+For steering-only studies, the `kinematics.steering` API solves a pure 2D
+top-view linkage without requiring a full suspension model. Steering-only
+coordinates use +X rearward, +Y rightward, and +Z upward. When importing 3D
+hardpoints, `kingpin_lower` and `kingpin_upper` define the steering axis; the
+2D kingpin point is the axis point at wheel-center height.
+
+```python
+import numpy as np
+
+from kinematics.steering import (
+    PitmanArmGeometry2D,
+    PitmanArmHardpoints3D,
+    SteeringCoordinateSystem,
+    TwoSegmentSteeringHardpoints3D,
+    TwoSegmentSteeringGeometry,
+    WheelSteeringHardpoints3D,
+    WheelSteeringGeometry2D,
+    load_two_segment_steering_hardpoints_csv,
+    solve_two_segment_from_left_wheel_angle,
+    solve_two_segment_from_right_wheel_angle,
+    solve_two_segment_steering,
+    sweep_two_segment_steering,
+)
+
+print(SteeringCoordinateSystem.TOP_VIEW_X_LABEL)
+print(SteeringCoordinateSystem.TOP_VIEW_Y_LABEL)
+
+geometry = TwoSegmentSteeringGeometry(
+    left_wheel=WheelSteeringGeometry2D(
+        kingpin=np.array([0.0, -500.0]),
+        wheel_center=np.array([60.0, -520.0]),
+        tie_rod_pickup=np.array([-180.0, -420.0]),
+    ),
+    right_wheel=WheelSteeringGeometry2D(
+        kingpin=np.array([0.0, 500.0]),
+        wheel_center=np.array([60.0, 520.0]),
+        tie_rod_pickup=np.array([-180.0, 420.0]),
+    ),
+    pitman=PitmanArmGeometry2D(
+        pivot=np.array([-350.0, 0.0]),
+        left_output=np.array([-350.0, -120.0]),
+        right_output=np.array([-350.0, 120.0]),
+    ),
+)
+
+solutions = sweep_two_segment_steering(geometry, [-8.0, 0.0, 8.0])
+for state in solutions:
+    print(state.pitman_angle_deg, state.left_wheel_angle_deg, state.right_wheel_angle_deg)
+
+left_driven = solve_two_segment_from_left_wheel_angle(
+    geometry,
+    left_wheel_angle_deg=solutions[-1].left_wheel_angle_deg,
+)
+right_driven = solve_two_segment_from_right_wheel_angle(
+    geometry,
+    right_wheel_angle_deg=solutions[0].right_wheel_angle_deg,
+)
+print(left_driven.pitman_angle_deg, right_driven.pitman_angle_deg)
+
+hardpoints_3d = TwoSegmentSteeringHardpoints3D(
+    left_wheel=WheelSteeringHardpoints3D(
+        kingpin_lower=np.array([0.0, -500.0, 280.0]),
+        kingpin_upper=np.array([0.0, -500.0, 340.0]),
+        wheel_center=np.array([60.0, -520.0, 320.0]),
+        tie_rod_pickup=np.array([-180.0, -420.0, 280.0]),
+    ),
+    right_wheel=WheelSteeringHardpoints3D(
+        kingpin_lower=np.array([0.0, 500.0, 280.0]),
+        kingpin_upper=np.array([0.0, 500.0, 340.0]),
+        wheel_center=np.array([60.0, 520.0, 319.0]),
+        tie_rod_pickup=np.array([-180.0, 420.0, 281.0]),
+    ),
+    pitman=PitmanArmHardpoints3D(
+        pivot=np.array([-350.0, 0.0, 300.0]),
+        left_output=np.array([-350.0, -120.0, 285.0]),
+        right_output=np.array([-350.0, 120.0, 286.0]),
+    ),
+)
+geometry_from_3d = hardpoints_3d.to_2d_geometry()
+state_from_3d = solve_two_segment_steering(hardpoints_3d, pitman_angle_deg=8.0)
+```
+
+For CSV input, use `category,name,x,y,z`. `symmetric` hardpoints are entered
+only on the left side, so their Y value must be negative. `center` hardpoints
+must lie on Y = 0.
+
+```csv
+category,name,x,y,z
+symmetric,wheel_kingpin_lower,0,-500,280
+symmetric,wheel_kingpin_upper,0,-500,340
+symmetric,wheel_center,60,-520,320
+symmetric,wheel_tie_rod_pickup,-180,-420,280
+symmetric,pitman_output,-350,-120,285
+center,pitman_pivot,-350,0,300
+```
+
+```python
+hardpoints = load_two_segment_steering_hardpoints_csv("steering_hardpoints.csv")
+state = solve_two_segment_steering(hardpoints, pitman_angle_deg=8.0)
+```
+
+Launch the steering workbench GUI with the visualization extra:
+
+```bash
+uv run --extra viz kinematics steering-gui
+```
+
+The GUI can create/open/save steering project JSON files, import the CSV
+hardpoint format above, edit hardpoint coordinates live, preview top-view
+linkage motion, switch between pitman/left-wheel/right-wheel angle inputs,
+show scalar outputs, and manage multiple output curves.
 
 ### 1. Visualising a geometry at 'design condition'
 
