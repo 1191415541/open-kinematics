@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox
 
 from kinematics.steering.workbench import (
+    copy_hardpoint_rows,
     default_steering_project,
     hardpoint_rows_from_csv,
     load_steering_project,
@@ -22,6 +23,7 @@ class SteeringFileActions:
     def new_project(self) -> None:
         self.project = default_steering_project()
         self.project_path = None
+        self.imported_default_hardpoints = copy_hardpoint_rows(self.project.hardpoints)
         self._load_project_to_controls()
         self.refresh()
 
@@ -32,6 +34,9 @@ class SteeringFileActions:
         try:
             self.project = load_steering_project(path)
             self.project_path = Path(path)
+            self.imported_default_hardpoints = copy_hardpoint_rows(
+                self.project.hardpoints
+            )
             self._load_project_to_controls()
             self.refresh()
         except Exception as exc:  # noqa: BLE001 - show GUI error.
@@ -59,7 +64,9 @@ class SteeringFileActions:
         if not path:
             return
         try:
-            self.project.hardpoints = hardpoint_rows_from_csv(path)
+            imported_rows = hardpoint_rows_from_csv(path)
+            self.project.hardpoints = imported_rows
+            self.imported_default_hardpoints = copy_hardpoint_rows(imported_rows)
             self.hardpoint_editor.set_rows(self.project.hardpoints)
             self.pitman_controls.set_rows(self.project.hardpoints)
             self.preview_has_drawn = False

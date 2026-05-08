@@ -2,13 +2,37 @@ from pathlib import Path
 
 import typer
 
+from kinematics.core.enums import PointID
+from kinematics.io.coupled_loader import parse_coupled_sweep_file
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.io.results_writer import SolutionFrame, create_writer_for_path
 from kinematics.io.sweep_loader import parse_sweep_file
 from kinematics.main import solve_sweep
 from kinematics.metrics import compute_metrics_for_state
+from kinematics.steering import load_two_segment_steering_hardpoints_csv
+from kinematics.vehicle import CoupledSweepResult, solve_coupled_sweep
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
+
+
+def _prefixed_positions(
+    result: CoupledSweepResult,
+    output_points: tuple[PointID, ...],
+) -> dict[str, tuple[float, float, float]]:
+    positions: dict[str, tuple[float, float, float]] = {}
+    for prefix, state in (
+        ("left", result.left_state),
+        ("right", result.right_state),
+    ):
+        for point_id in output_points:
+            pos = state.positions.get(point_id)
+            if pos is not None:
+                positions[f"{prefix}_{point_id.name}"] = (
+                    float(pos[0]),
+                    float(pos[1]),
+                    float(pos[2]),
+                )
+    return positions
 
 
 @app.command()
@@ -95,6 +119,88 @@ def sweep(
                 err=True,
             )
             typer.Exit(1)
+
+
+@app.command("coupled-sweep")
+def coupled_sweep(
+    geometry: Path = typer.Option(
+        ...,
+        exists=True,
+        help="Path to one-side suspension geometry YAML",
+    ),
+    steering: Path = typer.Option(
+        ...,
+        exists=True,
+        help="Path to two-segment steering hardpoint CSV",
+    ),
+    coupled_sweep: Path = typer.Option(
+        ...,
+        exists=True,
+        help="Path to coupled sweep YAML",
+    ),
+    out: Path = typer.Option(..., help="Output path (.parquet or .csv)"),
+    animation_out: Path | None = typer.Option(
+        None,
+        help="Optional vehicle animation output path (.gif)",
+    ),
+):
+    """
+    Run a weakly coupled left/right suspension and steering sweep.
+    """
+    source_suspension = load_geometry(geometry)
+    steering_geometry = load_two_segment_steering_hardpoints_csv(steering)
+    coupled_config = parse_coupled_sweep_file(coupled_sweep)
+
+    results = solve_coupled_sweep(
+        source_suspension=source_suspension,
+        steering_geometry=steering_geometry,
+        wheel_travel_values=coupled_config.wheel_travel_values,
+        pitman_angle_values=coupled_config.pitman_angle_values,
+    )
+
+    writer = create_writer_for_path(
+        out,
+        geometry_path=str(geometry),
+        sweep_path=str(coupled_sweep),
+        steering_path=str(steering),
+    )
+    output_points = source_suspension.OUTPUT_POINTS
+    for result in results:
+        writer.add_frame(
+            result.step_index,
+            SolutionFrame(
+                positions=_prefixed_positions(result, output_points),
+                solver_info=result.solver_info,
+                metrics=result.metrics,
+            ),
+        )
+    writer.write()
+
+    typer.echo(f"wrote {out}")
+
+    if not isinstance(animation_out, Path):
+        animation_out = None
+
+    if animation_out:
+        try:
+            from kinematics.visualization.coupled import create_coupled_animation
+
+            create_coupled_animation(
+                source_suspension=source_suspension,
+                steering_geometry=steering_geometry,
+                results=results,
+                output_path=animation_out,
+                fps=12,
+            )
+            typer.echo(f"Wrote animation: {animation_out}")
+        except ImportError as e:
+            typer.echo(
+                f"Error: Visualization dependencies not installed.\n"
+                f'Install with: pip install "kinematics[viz]"\n'
+                f"Details: {e}",
+                err=True,
+            )
+            raise typer.Exit(1)
 
 
 @app.command()

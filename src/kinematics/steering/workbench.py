@@ -10,12 +10,18 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+from scipy.optimize import least_squares
+
 from kinematics.steering.csv_loader import load_two_segment_steering_hardpoints_rows
 from kinematics.steering.geometry import (
     TwoSegmentSteeringHardpoints3D,
     TwoSegmentSteeringSolution,
 )
-from kinematics.steering.limits import steering_limit_outputs
+from kinematics.steering.limits import (
+    estimate_two_segment_steering_limits,
+    steering_limit_outputs,
+)
 from kinematics.steering.outputs import (
     available_steering_outputs as _available_steering_outputs,
 )
@@ -34,6 +40,14 @@ UNREACHABLE_SOLVE_PREFIXES = (
     "No valid steering arm position",
     "No valid pitman arm position",
 )
+OPTIMIZATION_VARIABLES = (
+    "pitman_x",
+    "pitman_arm_x_length",
+    "tie_rod_outer_x",
+    "tie_rod_outer_y",
+    "tie_rod_inner_x",
+    "tie_rod_inner_y",
+)
 
 
 @dataclass(frozen=True)
@@ -43,6 +57,27 @@ class ParsedFloatEntry:
     value: float
     is_valid: bool
     is_complete: bool
+
+
+@dataclass(frozen=True)
+class SliderLimits:
+    """Numeric range for a GUI slider."""
+
+    minimum: float
+    maximum: float
+
+
+@dataclass(frozen=True)
+class SteeringOptimizationResult:
+    """Result of one steering hardpoint optimization."""
+
+    hardpoints: list["SteeringHardpointRow"]
+    initial_error_deg: float
+    final_error_deg: float
+    actual_left_minus_right_deg: float
+    success: bool
+    message: str
+    applied_values: dict[str, float]
 
 
 def parse_float_entry(text: str, previous: float) -> ParsedFloatEntry:
@@ -131,6 +166,9 @@ class SteeringProject:
     sweep_min: float = -20.0
     sweep_max: float = 20.0
     sweep_step: float = 2.0
+    wheel_radius: float = 180.0
+    wheel_width: float = 120.0
+    wheelbase: float = 2800.0
     curves: list[SteeringCurve] = field(default_factory=list)
 
 
@@ -158,6 +196,106 @@ def _pitman_rows(
     )
 
 
+def _copy_hardpoint_rows(
+    rows: list[SteeringHardpointRow],
+) -> list[SteeringHardpointRow]:
+    return [SteeringHardpointRow(**asdict(row)) for row in rows]
+
+
+def copy_hardpoint_rows(
+    rows: list[SteeringHardpointRow],
+) -> list[SteeringHardpointRow]:
+    """Return an independent copy of editable steering hardpoint rows."""
+    return _copy_hardpoint_rows(rows)
+
+
+def _get_optimization_variable(
+    rows: list[SteeringHardpointRow],
+    variable_name: str,
+) -> float:
+    pivot, pitman_output = _pitman_rows(rows)
+    tie_rod_outer = _required_hardpoint_row(rows, "wheel_tie_rod_pickup")
+    if variable_name == "pitman_x":
+        return pivot.x
+    if variable_name == "pitman_arm_x_length":
+        return pitman_output.x - pivot.x
+    if variable_name == "tie_rod_outer_x":
+        return tie_rod_outer.x
+    if variable_name == "tie_rod_outer_y":
+        return tie_rod_outer.y
+    if variable_name == "tie_rod_inner_x":
+        return pitman_output.x
+    if variable_name == "tie_rod_inner_y":
+        return pitman_output.y
+    raise ValueError(f"Unknown steering optimization variable '{variable_name}'")
+
+
+def _set_optimization_variable(
+    rows: list[SteeringHardpointRow],
+    variable_name: str,
+    value: float,
+) -> None:
+    pivot, pitman_output = _pitman_rows(rows)
+    tie_rod_outer = _required_hardpoint_row(rows, "wheel_tie_rod_pickup")
+    if variable_name == "pitman_x":
+        delta = float(value) - pivot.x
+        pivot.x += delta
+        pitman_output.x += delta
+    elif variable_name == "pitman_arm_x_length":
+        pitman_output.x = pivot.x + float(value)
+    elif variable_name == "tie_rod_outer_x":
+        tie_rod_outer.x = float(value)
+    elif variable_name == "tie_rod_outer_y":
+        tie_rod_outer.y = float(value)
+    elif variable_name == "tie_rod_inner_x":
+        pitman_output.x = float(value)
+    elif variable_name == "tie_rod_inner_y":
+        pitman_output.y = float(value)
+    else:
+        raise ValueError(f"Unknown steering optimization variable '{variable_name}'")
+
+
+def _apply_optimization_values(
+    rows: list[SteeringHardpointRow],
+    variable_names: tuple[str, ...],
+    values: np.ndarray,
+) -> None:
+    for variable_name, value in zip(variable_names, values):
+        _set_optimization_variable(rows, variable_name, float(value))
+
+
+def _solve_target_inner_wheel_state(
+    rows: list[SteeringHardpointRow],
+    inner_wheel: str,
+    inner_wheel_angle_deg: float,
+) -> TwoSegmentSteeringSolution:
+    hardpoints = hardpoints_from_rows(rows)
+    if inner_wheel == "left":
+        return solve_two_segment_from_left_wheel_angle(
+            hardpoints,
+            inner_wheel_angle_deg,
+        )
+    if inner_wheel == "right":
+        return solve_two_segment_from_right_wheel_angle(
+            hardpoints,
+            inner_wheel_angle_deg,
+        )
+    raise ValueError("inner_wheel must be 'left' or 'right'")
+
+
+def _left_minus_right_at_inner_wheel_angle(
+    rows: list[SteeringHardpointRow],
+    inner_wheel: str,
+    inner_wheel_angle_deg: float,
+) -> float:
+    solution = _solve_target_inner_wheel_state(
+        rows,
+        inner_wheel,
+        inner_wheel_angle_deg,
+    )
+    return solution.left_wheel_angle_deg - solution.right_wheel_angle_deg
+
+
 def pitman_x_position(rows: list[SteeringHardpointRow]) -> float:
     """Return the current center pitman pivot X position."""
     pivot, _output = _pitman_rows(rows)
@@ -168,6 +306,96 @@ def pitman_arm_x_length(rows: list[SteeringHardpointRow]) -> float:
     """Return signed pitman output X offset from the pivot."""
     pivot, output = _pitman_rows(rows)
     return output.x - pivot.x
+
+
+def pitman_angle_slider_limits(rows: list[SteeringHardpointRow]) -> SliderLimits:
+    """Return pitman-angle slider limits from current reachable geometry."""
+    hardpoints = hardpoints_from_rows(rows)
+    limits = estimate_two_segment_steering_limits(hardpoints)
+    low = min(limits.left_turn.pitman_angle_deg, limits.right_turn.pitman_angle_deg)
+    high = max(limits.left_turn.pitman_angle_deg, limits.right_turn.pitman_angle_deg)
+    return SliderLimits(minimum=low, maximum=high)
+
+
+def input_angle_slider_limits(
+    rows: list[SteeringHardpointRow],
+    input_mode: str,
+) -> SliderLimits:
+    """Return slider limits for the selected steering input mode."""
+    hardpoints = hardpoints_from_rows(rows)
+    limits = estimate_two_segment_steering_limits(hardpoints)
+    if input_mode == "pitman_angle":
+        low = limits.right_turn.pitman_angle_deg
+        high = limits.left_turn.pitman_angle_deg
+    elif input_mode == "left_wheel_angle":
+        low = limits.right_turn.left_wheel_angle_deg
+        high = limits.left_turn.left_wheel_angle_deg
+    elif input_mode == "right_wheel_angle":
+        low = limits.right_turn.right_wheel_angle_deg
+        high = limits.left_turn.right_wheel_angle_deg
+    else:
+        raise ValueError(f"Unknown steering input mode '{input_mode}'")
+    return SliderLimits(minimum=min(low, high), maximum=max(low, high))
+
+
+def optimize_steering_hardpoints(
+    rows: list[SteeringHardpointRow],
+    *,
+    inner_wheel: str,
+    inner_wheel_angle_deg: float,
+    target_left_minus_right_deg: float,
+    variable_names: tuple[str, ...],
+    variable_delta_limit: float,
+) -> SteeringOptimizationResult:
+    """Optimize selected steering hardpoint variables to match wheel angle delta."""
+    if not variable_names:
+        raise ValueError("At least one steering optimization variable is required")
+    if variable_delta_limit <= 0.0:
+        raise ValueError("variable_delta_limit must be positive")
+    variable_names = tuple(variable_names)
+    start_rows = _copy_hardpoint_rows(rows)
+    x0 = np.array(
+        [_get_optimization_variable(start_rows, name) for name in variable_names],
+        dtype=np.float64,
+    )
+    lower = x0 - variable_delta_limit
+    upper = x0 + variable_delta_limit
+
+    def residual(values: np.ndarray) -> np.ndarray:
+        trial_rows = _copy_hardpoint_rows(start_rows)
+        _apply_optimization_values(trial_rows, variable_names, values)
+        try:
+            actual = _left_minus_right_at_inner_wheel_angle(
+                trial_rows,
+                inner_wheel,
+                inner_wheel_angle_deg,
+            )
+        except ValueError:
+            return np.array([1e6], dtype=np.float64)
+        return np.array([actual - target_left_minus_right_deg], dtype=np.float64)
+
+    initial_error = float(abs(residual(x0)[0]))
+    result = least_squares(residual, x0, bounds=(lower, upper), method="trf")
+    optimized_rows = _copy_hardpoint_rows(start_rows)
+    _apply_optimization_values(optimized_rows, variable_names, result.x)
+    actual_delta = _left_minus_right_at_inner_wheel_angle(
+        optimized_rows,
+        inner_wheel,
+        inner_wheel_angle_deg,
+    )
+    final_error = float(abs(actual_delta - target_left_minus_right_deg))
+    return SteeringOptimizationResult(
+        hardpoints=optimized_rows,
+        initial_error_deg=initial_error,
+        final_error_deg=final_error,
+        actual_left_minus_right_deg=float(actual_delta),
+        success=bool(result.success),
+        message=str(result.message),
+        applied_values={
+            name: _get_optimization_variable(optimized_rows, name)
+            for name in variable_names
+        },
+    )
 
 
 def set_pitman_x_position(rows: list[SteeringHardpointRow], x_position: float) -> None:
@@ -279,7 +507,12 @@ def solve_steering_project(
     else:
         raise ValueError(f"Unknown steering input mode '{project.input_mode}'")
     limit_outputs = steering_limit_outputs(hardpoints) if include_limits else None
-    return solution, outputs_from_solution(solution, project.input_value, limit_outputs)
+    return solution, outputs_from_solution(
+        solution,
+        project.input_value,
+        limit_outputs,
+        wheelbase=project.wheelbase,
+    )
 
 
 def sweep_steering_project(
@@ -322,6 +555,9 @@ def project_to_dict(project: SteeringProject) -> dict[str, Any]:
         "sweep_min": project.sweep_min,
         "sweep_max": project.sweep_max,
         "sweep_step": project.sweep_step,
+        "wheel_radius": project.wheel_radius,
+        "wheel_width": project.wheel_width,
+        "wheelbase": project.wheelbase,
         "curves": [asdict(curve) for curve in project.curves],
     }
 
@@ -336,6 +572,9 @@ def project_from_dict(data: dict[str, Any]) -> SteeringProject:
         sweep_min=float(data.get("sweep_min", -20.0)),
         sweep_max=float(data.get("sweep_max", 20.0)),
         sweep_step=float(data.get("sweep_step", 2.0)),
+        wheel_radius=float(data.get("wheel_radius", 180.0)),
+        wheel_width=float(data.get("wheel_width", 120.0)),
+        wheelbase=float(data.get("wheelbase", 2800.0)),
         curves=[SteeringCurve(**curve) for curve in data.get("curves", [])],
     )
 

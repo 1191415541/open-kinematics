@@ -221,6 +221,33 @@ This command will generate both a Parquet data file and an MP4 animation of the 
 uv run kinematics sweep --geometry tests/data/geometry.yaml --sweep tests/data/sweep.yaml --out results.parquet --animation-out animation.mp4
 ```
 
+### 3. Running a weakly coupled suspension and steering sweep
+
+For front-axle K&C studies with a symmetric suspension, provide one side of
+suspension hardpoints plus a two-segment steering CSV. The command mirrors the
+suspension to the opposite side, solves the steering linkage for each pitman
+angle, maps the left/right pitman output positions to each corner's
+`TRACKROD_INBOARD` target, and exports left/right suspension metrics together
+with steering angle relationships.
+
+```yaml
+# coupled_sweep.yaml
+version: 1
+wheel_travel:
+  values: [-20, 0, 20]
+pitman_angle:
+  values: [-6, 0, 6]
+```
+
+```bash
+uv run kinematics coupled-sweep \
+  --geometry tests/data/geometry.yaml \
+  --steering tests/data/steering_hardpoints.csv \
+  --coupled-sweep tests/data/coupled_sweep.yaml \
+  --out coupled_results.csv \
+  --animation-out coupled_motion.gif
+```
+
 This will produce a video like the one below, showing the suspension articulating through a range of bump, droop, and rack travel.
 
 <p align="center">

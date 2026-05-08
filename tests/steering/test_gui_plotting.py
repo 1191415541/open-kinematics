@@ -80,6 +80,29 @@ def test_fit_steering_preview_expands_view_to_drawn_geometry():
     plt.close(fig)
 
 
+def test_steering_preview_uses_visual_wheel_dimensions():
+    fig, ax = plt.subplots()
+    hardpoints, design_state, current_state = _preview_inputs()
+
+    draw_steering_preview(
+        ax,
+        hardpoints,
+        design_state,
+        current_state,
+        wheel_radius=260.0,
+        wheel_width=180.0,
+    )
+
+    wheel_patch = ax.patches[0]
+    vertices = wheel_patch.get_xy()[:4]
+    side_lengths = [
+        np.linalg.norm(vertices[(index + 1) % 4] - vertices[index])
+        for index in range(4)
+    ]
+    np.testing.assert_allclose(sorted(side_lengths), [180.0, 180.0, 520.0, 520.0])
+    plt.close(fig)
+
+
 def test_steering_preview_hides_coordinate_system_and_fills_figure():
     fig, ax = plt.subplots()
     hardpoints, design_state, current_state = _preview_inputs()

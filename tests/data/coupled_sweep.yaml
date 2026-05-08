@@ -1,0 +1,5 @@
+version: 1
+wheel_travel:
+  values: [-20, 0, 20]
+pitman_angle:
+  values: [-6, 0, 6]

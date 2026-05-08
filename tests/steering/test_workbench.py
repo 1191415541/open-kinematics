@@ -1,14 +1,20 @@
+import math
+
 import numpy as np
 
 from kinematics.steering.workbench import (
     SteeringCurve,
     available_steering_outputs,
+    copy_hardpoint_rows,
     curve_specs_for_plot,
     default_steering_project,
     hardpoint_rows_from_csv,
     hardpoints_from_rows,
+    input_angle_slider_limits,
     load_steering_project,
+    optimize_steering_hardpoints,
     parse_float_entry,
+    pitman_angle_slider_limits,
     pitman_arm_x_length,
     pitman_x_position,
     save_hardpoint_rows_csv,
@@ -81,6 +87,16 @@ def test_hardpoint_rows_can_be_exported_to_csv(tmp_path):
     assert loaded[2].y == -535.0
 
 
+def test_copy_hardpoint_rows_returns_independent_rows():
+    project = default_steering_project()
+
+    copied = copy_hardpoint_rows(project.hardpoints)
+    copied[0].x = 99.0
+
+    assert project.hardpoints[0].x == 0.0
+    assert copied[0].x == 99.0
+
+
 def test_pitman_x_position_moves_pivot_and_outputs_and_updates_tie_rod_length():
     project = default_steering_project()
     set_pitman_arm_x_length(project.hardpoints, 80.0)
@@ -119,6 +135,9 @@ def test_project_can_be_saved_and_loaded(tmp_path):
     project.name = "demo steering"
     project.input_mode = "left_wheel_angle"
     project.input_value = 12.5
+    project.wheel_radius = 285.0
+    project.wheel_width = 205.0
+    project.wheelbase = 2800.0
     project.curves.append(
         SteeringCurve(
             x_output="pitman_angle_deg",
@@ -133,6 +152,9 @@ def test_project_can_be_saved_and_loaded(tmp_path):
     assert loaded.name == "demo steering"
     assert loaded.input_mode == "left_wheel_angle"
     assert loaded.input_value == 12.5
+    assert loaded.wheel_radius == 285.0
+    assert loaded.wheel_width == 205.0
+    assert loaded.wheelbase == 2800.0
     assert loaded.curves[0].label == "left sweep"
     assert len(loaded.hardpoints) == len(project.hardpoints)
 
@@ -178,6 +200,61 @@ def test_solve_project_outputs_current_geometry_steering_limits():
     assert outputs["max_right_turn_right_wheel_angle_deg"] < 0.0
 
 
+def test_solve_project_outputs_ackermann_rate_from_wheelbase():
+    project = default_steering_project()
+    project.input_mode = "right_wheel_angle"
+    project.input_value = 10.0
+    project.wheelbase = 2800.0
+
+    _, outputs = solve_steering_project(project)
+
+    actual_ackerman = (
+        outputs["right_wheel_angle_deg"] - outputs["left_wheel_angle_deg"]
+    )
+    inner_angle_deg = max(
+        abs(outputs["left_wheel_angle_deg"]),
+        abs(outputs["right_wheel_angle_deg"]),
+    )
+    track = abs(outputs["right_wheel_center_y"] - outputs["left_wheel_center_y"])
+    radius_to_inner = project.wheelbase / math.tan(math.radians(inner_angle_deg))
+    ideal_outer_angle_deg = math.degrees(
+        math.atan2(project.wheelbase, radius_to_inner + track)
+    )
+    ideal_ackerman = math.copysign(
+        inner_angle_deg - ideal_outer_angle_deg,
+        actual_ackerman,
+    )
+
+    assert "ackermann_rate_pct" in available_steering_outputs()
+    np.testing.assert_allclose(
+        outputs["ackermann_rate_pct"],
+        100.0 * actual_ackerman / ideal_ackerman,
+    )
+
+
+def test_pitman_angle_slider_limits_follow_reachable_geometry_limits():
+    project = default_steering_project()
+
+    limits = pitman_angle_slider_limits(project.hardpoints)
+
+    assert limits.minimum < 0.0
+    assert limits.maximum > 0.0
+    np.testing.assert_allclose(limits.minimum, -15.414004385471344)
+    np.testing.assert_allclose(limits.maximum, 15.414004385471344)
+
+
+def test_input_angle_slider_limits_follow_selected_input_mode():
+    project = default_steering_project()
+
+    left_limits = input_angle_slider_limits(project.hardpoints, "left_wheel_angle")
+    right_limits = input_angle_slider_limits(project.hardpoints, "right_wheel_angle")
+
+    np.testing.assert_allclose(left_limits.minimum, -21.2185729573261)
+    np.testing.assert_allclose(left_limits.maximum, 4.3944304333923725)
+    np.testing.assert_allclose(right_limits.minimum, -4.3944304333923725)
+    np.testing.assert_allclose(right_limits.maximum, 21.2185729573261)
+
+
 def test_sweep_project_outputs_selected_variables():
     project = default_steering_project()
     project.input_mode = "pitman_angle"
@@ -205,6 +282,31 @@ def test_sweep_project_can_skip_unreachable_wheel_angle_samples():
     assert rows
     assert rows[-1]["input_value"] == 0.0
     assert all(row["input_value"] <= 0.0 for row in rows)
+
+
+def test_optimize_steering_hardpoints_matches_target_wheel_angle_delta():
+    project = default_steering_project()
+
+    result = optimize_steering_hardpoints(
+        project.hardpoints,
+        inner_wheel="right",
+        inner_wheel_angle_deg=10.0,
+        target_left_minus_right_deg=-4.0,
+        variable_names=(
+            "pitman_x",
+            "pitman_arm_x_length",
+            "tie_rod_outer_y",
+            "tie_rod_inner_y",
+        ),
+        variable_delta_limit=40.0,
+    )
+
+    assert abs(result.final_error_deg) < 1e-3
+    assert result.initial_error_deg > result.final_error_deg
+    assert result.applied_values["pitman_x"] != -350.0
+    assert result.applied_values["pitman_arm_x_length"] != 0.0
+    assert result.applied_values["tie_rod_outer_y"] != -420.0
+    assert result.applied_values["tie_rod_inner_y"] != -120.0
 
 
 def test_parse_float_entry_preserves_previous_value_during_partial_edits():

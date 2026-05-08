@@ -27,14 +27,22 @@ from kinematics.core.constants import TEST_TOLERANCE
 # Check if matplotlib is available for animation tests.
 try:
     import matplotlib  # noqa: F401  # type: ignore[import-not-found]
+    import matplotlib.animation as mpl_animation  # type: ignore[import-not-found]
 
     HAS_MATPLOTLIB = True
+    HAS_FFMPEG = mpl_animation.writers.is_available("ffmpeg")
 except ImportError:
     HAS_MATPLOTLIB = False
+    HAS_FFMPEG = False
 
 requires_viz = pytest.mark.skipif(
     not HAS_MATPLOTLIB,
     reason="matplotlib not installed (install with: uv pip install -e '.[viz]')",
+)
+
+requires_ffmpeg = pytest.mark.skipif(
+    not HAS_FFMPEG,
+    reason="ffmpeg is not available for MP4 animation output",
 )
 
 # Columns that contain solver internals which vary across platforms.
@@ -397,6 +405,7 @@ class TestCliEndToEnd:
         assert output  # Should have an error message
 
     @requires_viz
+    @requires_ffmpeg
     def test_csv_output_with_animation(
         self,
         temp_dir: Path,
@@ -416,6 +425,7 @@ class TestCliEndToEnd:
         validate_animation_file(animation_file)
 
     @requires_viz
+    @requires_ffmpeg
     def test_parquet_output_with_animation(
         self,
         temp_dir: Path,

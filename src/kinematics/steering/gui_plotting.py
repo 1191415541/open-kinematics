@@ -14,7 +14,7 @@ from kinematics.steering.geometry import (
     Vec2,
 )
 
-WHEEL_LENGTH = 360.0
+WHEEL_RADIUS = 180.0
 WHEEL_WIDTH = 120.0
 FIT_MARGIN_RATIO = 0.08
 PREVIEW_GEOMETRY_COLORS = {
@@ -27,9 +27,14 @@ PREVIEW_GEOMETRY_COLORS = {
 }
 
 
-def _rotated_rect(center: Vec2, angle_deg: float) -> np.ndarray:
-    half_l = WHEEL_LENGTH / 2.0
-    half_w = WHEEL_WIDTH / 2.0
+def _rotated_rect(
+    center: Vec2,
+    angle_deg: float,
+    wheel_radius: float,
+    wheel_width: float,
+) -> np.ndarray:
+    half_l = wheel_radius
+    half_w = wheel_width / 2.0
     corners = np.array(
         [
             [-half_l, -half_w],
@@ -50,11 +55,18 @@ def _rotated_rect(center: Vec2, angle_deg: float) -> np.ndarray:
     return center + corners @ rot.T
 
 
-def _draw_wheel(ax: Axes, center: Vec2, angle_deg: float, alpha: float) -> None:
+def _draw_wheel(
+    ax: Axes,
+    center: Vec2,
+    angle_deg: float,
+    alpha: float,
+    wheel_radius: float,
+    wheel_width: float,
+) -> None:
     color = PREVIEW_GEOMETRY_COLORS["wheel"]
     ax.add_patch(
         Polygon(
-            _rotated_rect(center, angle_deg),
+            _rotated_rect(center, angle_deg, wheel_radius, wheel_width),
             closed=True,
             facecolor=color,
             edgecolor=color,
@@ -108,10 +120,26 @@ def _draw_state(
     hardpoints: TwoSegmentSteeringHardpoints3D,
     state: TwoSegmentSteeringSolution,
     alpha: float,
+    wheel_radius: float,
+    wheel_width: float,
 ) -> None:
     geometry = hardpoints.to_2d_geometry()
-    _draw_wheel(ax, state.left_wheel_center, state.left_wheel_angle_deg, alpha)
-    _draw_wheel(ax, state.right_wheel_center, state.right_wheel_angle_deg, alpha)
+    _draw_wheel(
+        ax,
+        state.left_wheel_center,
+        state.left_wheel_angle_deg,
+        alpha,
+        wheel_radius,
+        wheel_width,
+    )
+    _draw_wheel(
+        ax,
+        state.right_wheel_center,
+        state.right_wheel_angle_deg,
+        alpha,
+        wheel_radius,
+        wheel_width,
+    )
     _draw_pitman(
         ax,
         geometry.pitman.pivot,
@@ -180,14 +208,30 @@ def draw_steering_preview(
     current_state: TwoSegmentSteeringSolution,
     *,
     preserve_view: bool = False,
+    wheel_radius: float = WHEEL_RADIUS,
+    wheel_width: float = WHEEL_WIDTH,
 ) -> None:
     """Draw the design and current top-view steering geometry."""
     previous_xlim = ax.get_xlim()
     previous_ylim = ax.get_ylim()
     had_data = ax.has_data()
     ax.clear()
-    _draw_state(ax, hardpoints, design_state, alpha=0.28)
-    _draw_state(ax, hardpoints, current_state, alpha=1.0)
+    _draw_state(
+        ax,
+        hardpoints,
+        design_state,
+        alpha=0.28,
+        wheel_radius=wheel_radius,
+        wheel_width=wheel_width,
+    )
+    _draw_state(
+        ax,
+        hardpoints,
+        current_state,
+        alpha=1.0,
+        wheel_radius=wheel_radius,
+        wheel_width=wheel_width,
+    )
     ax.figure.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
     ax.set_position([0.0, 0.0, 1.0, 1.0])
     ax.set_aspect("equal", adjustable="datalim")

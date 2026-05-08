@@ -1,0 +1,7 @@
+category,name,x,y,z
+symmetric,wheel_kingpin_lower,0,-900,200
+symmetric,wheel_kingpin_upper,-25,-750,500
+symmetric,wheel_center,-20,-950,313.426
+symmetric,wheel_tie_rod_pickup,150,-800,275
+symmetric,pitman_output,50,-200,250
+center,pitman_pivot,50,0,250
