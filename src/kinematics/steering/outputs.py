@@ -6,11 +6,16 @@ from __future__ import annotations
 
 import math
 
-from kinematics.steering.geometry import TwoSegmentSteeringSolution
+from kinematics.steering.geometry import (
+    ThreeSegmentSteeringSolution,
+    TwoSegmentSteeringSolution,
+)
 
 STEERING_OUTPUT_NAMES = (
     "input_value",
     "pitman_angle_deg",
+    "left_bellcrank_angle_deg",
+    "right_bellcrank_angle_deg",
     "left_wheel_angle_deg",
     "right_wheel_angle_deg",
     "left_minus_right_deg",
@@ -33,7 +38,7 @@ STEERING_OUTPUT_NAMES = (
 
 
 def _ackermann_rate_pct(
-    solution: TwoSegmentSteeringSolution,
+    solution: TwoSegmentSteeringSolution | ThreeSegmentSteeringSolution,
     wheelbase: float | None,
 ) -> float:
     if wheelbase is None or wheelbase <= 0.0:
@@ -78,6 +83,42 @@ def outputs_from_solution(
     outputs = {
         "input_value": float(input_value),
         "pitman_angle_deg": solution.pitman_angle_deg,
+        "left_bellcrank_angle_deg": 0.0,
+        "right_bellcrank_angle_deg": 0.0,
+        "left_wheel_angle_deg": solution.left_wheel_angle_deg,
+        "right_wheel_angle_deg": solution.right_wheel_angle_deg,
+        "left_minus_right_deg": (
+            solution.left_wheel_angle_deg - solution.right_wheel_angle_deg
+        ),
+        "ackermann_rate_pct": _ackermann_rate_pct(solution, wheelbase),
+        "left_wheel_center_x": float(solution.left_wheel_center[0]),
+        "left_wheel_center_y": float(solution.left_wheel_center[1]),
+        "right_wheel_center_x": float(solution.right_wheel_center[0]),
+        "right_wheel_center_y": float(solution.right_wheel_center[1]),
+        "left_tie_rod_pickup_x": float(solution.left_tie_rod_pickup[0]),
+        "left_tie_rod_pickup_y": float(solution.left_tie_rod_pickup[1]),
+        "right_tie_rod_pickup_x": float(solution.right_tie_rod_pickup[0]),
+        "right_tie_rod_pickup_y": float(solution.right_tie_rod_pickup[1]),
+        "left_tie_rod_residual": solution.left_tie_rod_residual,
+        "right_tie_rod_residual": solution.right_tie_rod_residual,
+    }
+    if extra_outputs is not None:
+        outputs.update(extra_outputs)
+    return outputs
+
+
+def outputs_from_three_segment_solution(
+    solution: ThreeSegmentSteeringSolution,
+    input_value: float,
+    extra_outputs: dict[str, float] | None = None,
+    wheelbase: float | None = None,
+) -> dict[str, float]:
+    """Flatten a three-segment steering solution into scalar GUI outputs."""
+    outputs = {
+        "input_value": float(input_value),
+        "pitman_angle_deg": 0.0,
+        "left_bellcrank_angle_deg": solution.left_bellcrank_angle_deg,
+        "right_bellcrank_angle_deg": solution.right_bellcrank_angle_deg,
         "left_wheel_angle_deg": solution.left_wheel_angle_deg,
         "right_wheel_angle_deg": solution.right_wheel_angle_deg,
         "left_minus_right_deg": (

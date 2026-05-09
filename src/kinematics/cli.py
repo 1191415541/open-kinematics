@@ -239,13 +239,32 @@ def visualize(
     )
 
 
+@app.command("gui")
+def gui():
+    """
+    Launch the kinematics workbench GUI.
+    """
+    try:
+        from kinematics.gui.app import main as run_gui
+    except ImportError as e:
+        typer.echo(
+            f"Error: GUI dependencies not installed.\n"
+            f'Install/run with: uv run --extra viz kinematics gui\n'
+            f"Details: {e}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    run_gui()
+
+
 @app.command("steering-gui")
 def steering_gui():
     """
-    Launch the two-segment steering workbench GUI.
+    Launch the steering workbench GUI.
     """
     try:
-        from kinematics.steering.gui import main as run_steering_gui
+        from kinematics.gui.steering import main as run_steering_gui
     except ImportError as e:
         typer.echo(
             f"Error: GUI dependencies not installed.\n"

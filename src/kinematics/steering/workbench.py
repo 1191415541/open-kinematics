@@ -13,20 +13,34 @@ from typing import Any
 import numpy as np
 from scipy.optimize import least_squares
 
+from kinematics.gui.common import parse_float_entry
+from kinematics.gui.project import build_project_document, write_project_document
 from kinematics.steering.csv_loader import load_two_segment_steering_hardpoints_rows
 from kinematics.steering.geometry import (
+    BellcrankGeometry2D,
+    ThreeSegmentSteeringGeometry,
+    ThreeSegmentSteeringSolution,
     TwoSegmentSteeringHardpoints3D,
     TwoSegmentSteeringSolution,
+    WheelSteeringGeometry2D,
 )
 from kinematics.steering.limits import (
     estimate_two_segment_steering_limits,
     steering_limit_outputs,
+    three_segment_steering_limit_outputs,
 )
 from kinematics.steering.outputs import (
     available_steering_outputs as _available_steering_outputs,
 )
 from kinematics.steering.outputs import (
     outputs_from_solution,
+    outputs_from_three_segment_solution,
+)
+from kinematics.steering.three_segment import (
+    solve_three_segment_from_left_wheel_angle,
+    solve_three_segment_from_right_bellcrank_angle,
+    solve_three_segment_from_right_wheel_angle,
+    solve_three_segment_steering,
 )
 from kinematics.steering.two_segment import (
     solve_two_segment_from_left_wheel_angle,
@@ -34,11 +48,19 @@ from kinematics.steering.two_segment import (
     solve_two_segment_steering,
 )
 
-INPUT_MODES = ("pitman_angle", "left_wheel_angle", "right_wheel_angle")
-PARTIAL_FLOAT_TEXT = frozenset({"", "+", "-", ".", "+.", "-."})
+TWO_SEGMENT_INPUT_MODES = ("pitman_angle", "left_wheel_angle", "right_wheel_angle")
+THREE_SEGMENT_INPUT_MODES = (
+    "left_bellcrank_angle",
+    "right_bellcrank_angle",
+    "left_wheel_angle",
+    "right_wheel_angle",
+)
+INPUT_MODES = TWO_SEGMENT_INPUT_MODES
+LINKAGE_TYPES = ("two_segment", "three_segment")
 UNREACHABLE_SOLVE_PREFIXES = (
     "No valid steering arm position",
     "No valid pitman arm position",
+    "No valid three-segment state",
 )
 OPTIMIZATION_VARIABLES = (
     "pitman_x",
@@ -48,16 +70,6 @@ OPTIMIZATION_VARIABLES = (
     "tie_rod_inner_x",
     "tie_rod_inner_y",
 )
-
-
-@dataclass(frozen=True)
-class ParsedFloatEntry:
-    """Result of parsing a live GUI numeric entry."""
-
-    value: float
-    is_valid: bool
-    is_complete: bool
-
 
 @dataclass(frozen=True)
 class SliderLimits:
@@ -78,18 +90,6 @@ class SteeringOptimizationResult:
     success: bool
     message: str
     applied_values: dict[str, float]
-
-
-def parse_float_entry(text: str, previous: float) -> ParsedFloatEntry:
-    """Parse a live numeric entry without rejecting partial edits."""
-    stripped = text.strip()
-    if stripped in PARTIAL_FLOAT_TEXT:
-        return ParsedFloatEntry(previous, is_valid=True, is_complete=False)
-    try:
-        return ParsedFloatEntry(float(stripped), is_valid=True, is_complete=True)
-    except ValueError:
-        return ParsedFloatEntry(previous, is_valid=False, is_complete=False)
-
 
 def _is_unreachable_solve_error(exc: ValueError) -> bool:
     return str(exc).startswith(UNREACHABLE_SOLVE_PREFIXES)
@@ -135,8 +135,58 @@ class SteeringCurve:
     label: str = ""
 
 
-def default_hardpoint_rows() -> list[SteeringHardpointRow]:
-    """Return a practical symmetric two-segment steering hardpoint set."""
+def default_hardpoint_rows(
+    linkage_type: str = "two_segment",
+) -> list[SteeringHardpointRow]:
+    """Return a practical symmetric steering hardpoint set."""
+    if linkage_type == "three_segment":
+        return [
+            SteeringHardpointRow(
+                "symmetric",
+                "wheel_kingpin_lower",
+                0.0,
+                -500.0,
+                280.0,
+            ),
+            SteeringHardpointRow(
+                "symmetric",
+                "wheel_kingpin_upper",
+                0.0,
+                -500.0,
+                340.0,
+            ),
+            SteeringHardpointRow("symmetric", "wheel_center", 60.0, -520.0, 320.0),
+            SteeringHardpointRow(
+                "symmetric",
+                "wheel_tie_rod_pickup",
+                -180.0,
+                -420.0,
+                280.0,
+            ),
+            SteeringHardpointRow(
+                "symmetric",
+                "bellcrank_pivot",
+                -260.0,
+                -320.0,
+                300.0,
+            ),
+            SteeringHardpointRow(
+                "symmetric",
+                "bellcrank_center_link_pickup",
+                -460.0,
+                -300.0,
+                300.0,
+            ),
+            SteeringHardpointRow(
+                "symmetric",
+                "bellcrank_tie_rod_pickup",
+                -300.0,
+                -300.0,
+                300.0,
+            ),
+        ]
+    if linkage_type != "two_segment":
+        raise ValueError(f"Unknown steering linkage type '{linkage_type}'")
     return [
         SteeringHardpointRow("symmetric", "wheel_kingpin_lower", 0.0, -500.0, 280.0),
         SteeringHardpointRow("symmetric", "wheel_kingpin_upper", 0.0, -500.0, 340.0),
@@ -158,6 +208,7 @@ class SteeringProject:
     """Persisted steering GUI project state."""
 
     name: str = "Untitled steering project"
+    linkage_type: str = "two_segment"
     hardpoints: list[SteeringHardpointRow] = field(
         default_factory=default_hardpoint_rows
     )
@@ -172,9 +223,17 @@ class SteeringProject:
     curves: list[SteeringCurve] = field(default_factory=list)
 
 
-def default_steering_project() -> SteeringProject:
+def default_steering_project(linkage_type: str = "two_segment") -> SteeringProject:
     """Create a default steering project."""
-    return SteeringProject()
+    if linkage_type == "two_segment":
+        return SteeringProject()
+    if linkage_type == "three_segment":
+        return SteeringProject(
+            linkage_type="three_segment",
+            hardpoints=default_hardpoint_rows("three_segment"),
+            input_mode="left_bellcrank_angle",
+        )
+    raise ValueError(f"Unknown steering linkage type '{linkage_type}'")
 
 
 def _required_hardpoint_row(
@@ -320,8 +379,11 @@ def pitman_angle_slider_limits(rows: list[SteeringHardpointRow]) -> SliderLimits
 def input_angle_slider_limits(
     rows: list[SteeringHardpointRow],
     input_mode: str,
+    linkage_type: str = "two_segment",
 ) -> SliderLimits:
     """Return slider limits for the selected steering input mode."""
+    if linkage_type == "three_segment":
+        return _three_segment_input_angle_slider_limits(rows, input_mode)
     hardpoints = hardpoints_from_rows(rows)
     limits = estimate_two_segment_steering_limits(hardpoints)
     if input_mode == "pitman_angle":
@@ -336,6 +398,148 @@ def input_angle_slider_limits(
     else:
         raise ValueError(f"Unknown steering input mode '{input_mode}'")
     return SliderLimits(minimum=min(low, high), maximum=max(low, high))
+
+
+def _three_segment_input_angle_slider_limits(
+    rows: list[SteeringHardpointRow],
+    input_mode: str,
+) -> SliderLimits:
+    geometry = three_segment_geometry_from_rows(rows)
+    if input_mode not in THREE_SEGMENT_INPUT_MODES:
+        raise ValueError(f"Unknown steering input mode '{input_mode}'")
+    output_name = _three_segment_output_for_input_mode(input_mode)
+    if input_mode in {"left_wheel_angle", "right_wheel_angle"}:
+        values = _three_segment_monotonic_output_values(geometry, output_name)
+    else:
+        samples = _three_segment_current_branch_samples(geometry)
+        values = [float(getattr(solution, output_name)) for solution in samples]
+    return SliderLimits(minimum=min(values), maximum=max(values))
+
+
+def _three_segment_monotonic_output_values(
+    geometry: ThreeSegmentSteeringGeometry,
+    output_name: str,
+) -> list[float]:
+    zero = solve_three_segment_steering(geometry, 0.0)
+    values = [float(getattr(zero, output_name))]
+    negative_values = _walk_three_segment_monotonic_output(
+        geometry,
+        zero,
+        output_name=output_name,
+        direction=-1.0,
+    )
+    positive_values = _walk_three_segment_monotonic_output(
+        geometry,
+        zero,
+        output_name=output_name,
+        direction=1.0,
+    )
+    values[:0] = list(reversed(negative_values))
+    values.extend(positive_values)
+    return values
+
+
+def _walk_three_segment_monotonic_output(
+    geometry: ThreeSegmentSteeringGeometry,
+    start: ThreeSegmentSteeringSolution,
+    *,
+    output_name: str,
+    direction: float,
+    step_deg: float = 1.0,
+    max_abs_left_bellcrank_angle_deg: float = 180.0,
+) -> list[float]:
+    values: list[float] = []
+    last = start
+    last_output = float(getattr(start, output_name))
+    trend = 0.0
+    while True:
+        angle = last.left_bellcrank_angle_deg + direction * step_deg
+        if abs(angle) > max_abs_left_bellcrank_angle_deg:
+            break
+        solution = solve_three_segment_steering(
+            geometry,
+            angle,
+            (
+                last.right_bellcrank_angle_deg,
+                last.left_wheel_angle_deg,
+                last.right_wheel_angle_deg,
+            ),
+        )
+        if not solution.converged:
+            break
+        output = float(getattr(solution, output_name))
+        delta = output - last_output
+        if abs(delta) <= 1e-9:
+            break
+        current_trend = 1.0 if delta > 0.0 else -1.0
+        if trend != 0.0 and current_trend != trend:
+            break
+        trend = current_trend
+        values.append(output)
+        last = solution
+        last_output = output
+    return values
+
+
+def _three_segment_current_branch_samples(
+    geometry: ThreeSegmentSteeringGeometry,
+    *,
+    step_deg: float = 1.0,
+    max_abs_left_bellcrank_angle_deg: float = 180.0,
+) -> list[ThreeSegmentSteeringSolution]:
+    zero = solve_three_segment_steering(geometry, 0.0)
+    samples = [zero]
+    samples[:0] = list(
+        reversed(
+            _walk_three_segment_branch(
+                geometry,
+                zero,
+                direction=-1.0,
+                step_deg=step_deg,
+                max_abs_left_bellcrank_angle_deg=max_abs_left_bellcrank_angle_deg,
+            )
+        )
+    )
+    samples.extend(
+        _walk_three_segment_branch(
+            geometry,
+            zero,
+            direction=1.0,
+            step_deg=step_deg,
+            max_abs_left_bellcrank_angle_deg=max_abs_left_bellcrank_angle_deg,
+        )
+    )
+    return samples
+
+
+def _walk_three_segment_branch(
+    geometry: ThreeSegmentSteeringGeometry,
+    start: ThreeSegmentSteeringSolution,
+    *,
+    direction: float,
+    step_deg: float,
+    max_abs_left_bellcrank_angle_deg: float,
+) -> list[ThreeSegmentSteeringSolution]:
+    samples: list[ThreeSegmentSteeringSolution] = []
+    last = start
+    while True:
+        angle = last.left_bellcrank_angle_deg + direction * step_deg
+        if abs(angle) > max_abs_left_bellcrank_angle_deg:
+            break
+        solution = solve_three_segment_steering(
+            geometry,
+            angle,
+            (
+                last.right_bellcrank_angle_deg,
+                last.left_wheel_angle_deg,
+                last.right_wheel_angle_deg,
+            ),
+        )
+        if not solution.converged:
+            break
+        samples.append(solution)
+        last = solution
+    return samples
 
 
 def optimize_steering_hardpoints(
@@ -436,6 +640,51 @@ def hardpoints_from_rows(
     )
 
 
+def _row_vec2(rows: list[SteeringHardpointRow], name: str) -> np.ndarray:
+    row = _required_hardpoint_row(rows, name)
+    return np.array([row.x, row.y], dtype=np.float64)
+
+
+def _mirror_vec2(point: np.ndarray) -> np.ndarray:
+    mirrored = point.copy()
+    mirrored[1] *= -1.0
+    return mirrored
+
+
+def three_segment_geometry_from_rows(
+    rows: list[SteeringHardpointRow],
+) -> ThreeSegmentSteeringGeometry:
+    """Build three-segment 2D geometry from editable project rows."""
+    left_kingpin = _row_vec2(rows, "wheel_kingpin_lower")
+    left_wheel_center = _row_vec2(rows, "wheel_center")
+    left_wheel_tie = _row_vec2(rows, "wheel_tie_rod_pickup")
+    left_bell_pivot = _row_vec2(rows, "bellcrank_pivot")
+    left_center_link = _row_vec2(rows, "bellcrank_center_link_pickup")
+    left_bell_tie = _row_vec2(rows, "bellcrank_tie_rod_pickup")
+    return ThreeSegmentSteeringGeometry(
+        left_wheel=WheelSteeringGeometry2D(
+            kingpin=left_kingpin,
+            wheel_center=left_wheel_center,
+            tie_rod_pickup=left_wheel_tie,
+        ),
+        right_wheel=WheelSteeringGeometry2D(
+            kingpin=_mirror_vec2(left_kingpin),
+            wheel_center=_mirror_vec2(left_wheel_center),
+            tie_rod_pickup=_mirror_vec2(left_wheel_tie),
+        ),
+        left_bellcrank=BellcrankGeometry2D(
+            pivot=left_bell_pivot,
+            center_link_pickup=left_center_link,
+            tie_rod_pickup=left_bell_tie,
+        ),
+        right_bellcrank=BellcrankGeometry2D(
+            pivot=_mirror_vec2(left_bell_pivot),
+            center_link_pickup=_mirror_vec2(left_center_link),
+            tie_rod_pickup=_mirror_vec2(left_bell_tie),
+        ),
+    )
+
+
 def hardpoint_rows_from_csv(path: str | Path) -> list[SteeringHardpointRow]:
     """Load editable hardpoint rows from a symmetric/center steering CSV."""
     with Path(path).open(newline="", encoding="utf-8") as csv_file:
@@ -485,12 +734,71 @@ def curve_specs_for_plot(
     return [(selected_x_output, selected_y_output, label)]
 
 
+def _three_segment_output_for_input_mode(input_mode: str) -> str:
+    if input_mode == "left_bellcrank_angle":
+        return "left_bellcrank_angle_deg"
+    if input_mode == "right_bellcrank_angle":
+        return "right_bellcrank_angle_deg"
+    if input_mode == "left_wheel_angle":
+        return "left_wheel_angle_deg"
+    if input_mode == "right_wheel_angle":
+        return "right_wheel_angle_deg"
+    raise ValueError(f"Unknown steering input mode '{input_mode}'")
+
+
+def solve_three_segment_project(
+    project: SteeringProject,
+    previous_state: ThreeSegmentSteeringSolution | None = None,
+) -> ThreeSegmentSteeringSolution:
+    """Solve a three-segment steering project state."""
+    geometry = three_segment_geometry_from_rows(project.hardpoints)
+    initial_left_bellcrank_guess = (
+        0.0
+        if previous_state is None
+        else previous_state.left_bellcrank_angle_deg
+    )
+    if project.input_mode == "left_bellcrank_angle":
+        return solve_three_segment_steering(geometry, project.input_value)
+    if project.input_mode == "right_bellcrank_angle":
+        return solve_three_segment_from_right_bellcrank_angle(
+            geometry,
+            project.input_value,
+            initial_left_bellcrank_guess,
+        )
+    if project.input_mode == "left_wheel_angle":
+        return solve_three_segment_from_left_wheel_angle(
+            geometry,
+            project.input_value,
+            initial_left_bellcrank_guess,
+        )
+    if project.input_mode == "right_wheel_angle":
+        return solve_three_segment_from_right_wheel_angle(
+            geometry,
+            project.input_value,
+            initial_left_bellcrank_guess,
+        )
+    raise ValueError(f"Unknown steering input mode '{project.input_mode}'")
+
+
 def solve_steering_project(
     project: SteeringProject,
     *,
     include_limits: bool = True,
-) -> tuple[TwoSegmentSteeringSolution, dict[str, float]]:
+    previous_state: ThreeSegmentSteeringSolution | None = None,
+) -> tuple[TwoSegmentSteeringSolution | ThreeSegmentSteeringSolution, dict[str, float]]:
     """Solve the current project state."""
+    if project.linkage_type == "three_segment":
+        geometry = three_segment_geometry_from_rows(project.hardpoints)
+        solution = solve_three_segment_project(project, previous_state)
+        limit_outputs = (
+            three_segment_steering_limit_outputs(geometry) if include_limits else None
+        )
+        return solution, outputs_from_three_segment_solution(
+            solution,
+            project.input_value,
+            limit_outputs,
+            wheelbase=project.wheelbase,
+        )
     hardpoints = hardpoints_from_rows(project.hardpoints)
     if project.input_mode == "pitman_angle":
         solution = solve_two_segment_steering(hardpoints, project.input_value)
@@ -529,7 +837,12 @@ def sweep_steering_project(
         values.append(current)
         current += project.sweep_step
     rows = []
-    limit_outputs = steering_limit_outputs(hardpoints_from_rows(project.hardpoints))
+    if project.linkage_type == "three_segment":
+        limit_outputs = three_segment_steering_limit_outputs(
+            three_segment_geometry_from_rows(project.hardpoints)
+        )
+    else:
+        limit_outputs = steering_limit_outputs(hardpoints_from_rows(project.hardpoints))
     for value in values:
         try:
             _, outputs = solve_steering_project(
@@ -546,28 +859,49 @@ def sweep_steering_project(
 
 
 def project_to_dict(project: SteeringProject) -> dict[str, Any]:
-    """Convert a project to JSON-serializable data."""
-    return {
-        "name": project.name,
-        "hardpoints": [asdict(row) for row in project.hardpoints],
-        "input_mode": project.input_mode,
-        "input_value": project.input_value,
-        "sweep_min": project.sweep_min,
-        "sweep_max": project.sweep_max,
-        "sweep_step": project.sweep_step,
-        "wheel_radius": project.wheel_radius,
-        "wheel_width": project.wheel_width,
-        "wheelbase": project.wheelbase,
-        "curves": [asdict(curve) for curve in project.curves],
-    }
+    """Convert a project to the shared GUI project JSON format."""
+    return build_project_document(
+        module="steering",
+        system_type=project.linkage_type,
+        name=project.name,
+        hardpoints=[asdict(row) for row in project.hardpoints],
+        parameters={
+            "wheel_radius": project.wheel_radius,
+            "wheel_width": project.wheel_width,
+            "wheelbase": project.wheelbase,
+        },
+        simulation={
+            "input_mode": project.input_mode,
+            "input_value": project.input_value,
+            "sweep_min": project.sweep_min,
+            "sweep_max": project.sweep_max,
+            "sweep_step": project.sweep_step,
+        },
+        curves=[asdict(curve) for curve in project.curves],
+    )
 
 
 def project_from_dict(data: dict[str, Any]) -> SteeringProject:
     """Create a project from JSON data."""
+    if data.get("module") == "steering":
+        return _project_from_unified_dict(data)
+
+    linkage_type = str(data.get("linkage_type", "two_segment"))
     return SteeringProject(
         name=str(data.get("name", "Untitled steering project")),
-        hardpoints=[SteeringHardpointRow(**row) for row in data["hardpoints"]],
-        input_mode=str(data.get("input_mode", "pitman_angle")),
+        linkage_type=linkage_type,
+        hardpoints=[
+            SteeringHardpointRow(**row)
+            for row in data.get("hardpoints", default_hardpoint_rows(linkage_type))
+        ],
+        input_mode=str(
+            data.get(
+                "input_mode",
+                "left_bellcrank_angle"
+                if linkage_type == "three_segment"
+                else "pitman_angle",
+            )
+        ),
         input_value=float(data.get("input_value", 0.0)),
         sweep_min=float(data.get("sweep_min", -20.0)),
         sweep_max=float(data.get("sweep_max", 20.0)),
@@ -579,12 +913,39 @@ def project_from_dict(data: dict[str, Any]) -> SteeringProject:
     )
 
 
+def _project_from_unified_dict(data: dict[str, Any]) -> SteeringProject:
+    linkage_type = str(data.get("system_type", "two_segment"))
+    parameters = data.get("parameters", {})
+    simulation = data.get("simulation", {})
+    return SteeringProject(
+        name=str(data.get("name", "Untitled steering project")),
+        linkage_type=linkage_type,
+        hardpoints=[
+            SteeringHardpointRow(**row)
+            for row in data.get("hardpoints", default_hardpoint_rows(linkage_type))
+        ],
+        input_mode=str(
+            simulation.get(
+                "input_mode",
+                "left_bellcrank_angle"
+                if linkage_type == "three_segment"
+                else "pitman_angle",
+            )
+        ),
+        input_value=float(simulation.get("input_value", 0.0)),
+        sweep_min=float(simulation.get("sweep_min", -20.0)),
+        sweep_max=float(simulation.get("sweep_max", 20.0)),
+        sweep_step=float(simulation.get("sweep_step", 2.0)),
+        wheel_radius=float(parameters.get("wheel_radius", 180.0)),
+        wheel_width=float(parameters.get("wheel_width", 120.0)),
+        wheelbase=float(parameters.get("wheelbase", 2800.0)),
+        curves=[SteeringCurve(**curve) for curve in data.get("curves", [])],
+    )
+
+
 def save_steering_project(project: SteeringProject, path: str | Path) -> None:
     """Save a steering project JSON file."""
-    Path(path).write_text(
-        json.dumps(project_to_dict(project), indent=2),
-        encoding="utf-8",
-    )
+    write_project_document(project_to_dict(project), path)
 
 
 def load_steering_project(path: str | Path) -> SteeringProject:

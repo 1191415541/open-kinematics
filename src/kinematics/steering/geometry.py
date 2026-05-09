@@ -150,6 +150,42 @@ class PitmanArmGeometry2D:
 
 
 @dataclass(frozen=True)
+class BellcrankGeometry2D:
+    """
+    One side relay bellcrank in a three-segment steering linkage.
+    """
+
+    pivot: Vec2
+    center_link_pickup: Vec2
+    tie_rod_pickup: Vec2
+
+    def __post_init__(self) -> None:
+        pivot = make_vec2(self.pivot)
+        center_link_pickup = make_vec2(self.center_link_pickup)
+        tie_rod_pickup = make_vec2(self.tie_rod_pickup)
+        _validate_distinct_points(
+            "Bellcrank pivot and center-link pickup",
+            pivot,
+            center_link_pickup,
+        )
+        _validate_distinct_points(
+            "Bellcrank pivot and tie-rod pickup",
+            pivot,
+            tie_rod_pickup,
+        )
+        object.__setattr__(self, "pivot", pivot)
+        object.__setattr__(self, "center_link_pickup", center_link_pickup)
+        object.__setattr__(self, "tie_rod_pickup", tie_rod_pickup)
+
+    def rotate(self, angle_rad: float) -> tuple[Vec2, Vec2]:
+        """Return center-link and tie-rod pickups after bellcrank rotation."""
+        return (
+            rotate_point_2d(self.center_link_pickup, self.pivot, angle_rad),
+            rotate_point_2d(self.tie_rod_pickup, self.pivot, angle_rad),
+        )
+
+
+@dataclass(frozen=True)
 class TwoSegmentSteeringGeometry:
     """Complete two-segment steering geometry."""
 
@@ -178,6 +214,57 @@ class TwoSegmentSteeringGeometry:
     def right_tie_rod_length(self) -> float:
         """Design length of the right tie rod."""
         return distance_2d(self.right_wheel.tie_rod_pickup, self.pitman.right_output)
+
+
+@dataclass(frozen=True)
+class ThreeSegmentSteeringGeometry:
+    """Complete three-segment steering linkage geometry."""
+
+    left_wheel: WheelSteeringGeometry2D
+    right_wheel: WheelSteeringGeometry2D
+    left_bellcrank: BellcrankGeometry2D
+    right_bellcrank: BellcrankGeometry2D
+
+    def __post_init__(self) -> None:
+        _validate_distinct_points(
+            "Center link",
+            self.left_bellcrank.center_link_pickup,
+            self.right_bellcrank.center_link_pickup,
+        )
+        _validate_distinct_points(
+            "Left tie rod",
+            self.left_wheel.tie_rod_pickup,
+            self.left_bellcrank.tie_rod_pickup,
+        )
+        _validate_distinct_points(
+            "Right tie rod",
+            self.right_wheel.tie_rod_pickup,
+            self.right_bellcrank.tie_rod_pickup,
+        )
+
+    @property
+    def center_link_length(self) -> float:
+        """Design length of the center link connecting both bellcranks."""
+        return distance_2d(
+            self.left_bellcrank.center_link_pickup,
+            self.right_bellcrank.center_link_pickup,
+        )
+
+    @property
+    def left_tie_rod_length(self) -> float:
+        """Design length of the left tie rod."""
+        return distance_2d(
+            self.left_wheel.tie_rod_pickup,
+            self.left_bellcrank.tie_rod_pickup,
+        )
+
+    @property
+    def right_tie_rod_length(self) -> float:
+        """Design length of the right tie rod."""
+        return distance_2d(
+            self.right_wheel.tie_rod_pickup,
+            self.right_bellcrank.tie_rod_pickup,
+        )
 
 
 @dataclass(frozen=True)
@@ -271,3 +358,35 @@ class TwoSegmentSteeringSolution:
     def max_abs_tie_rod_residual(self) -> float:
         """Maximum absolute tie-rod length residual in model units."""
         return max(abs(self.left_tie_rod_residual), abs(self.right_tie_rod_residual))
+
+
+@dataclass(frozen=True)
+class ThreeSegmentSteeringSolution:
+    """Solved three-segment steering state for one driven left bellcrank angle."""
+
+    left_bellcrank_angle_deg: float
+    right_bellcrank_angle_deg: float
+    left_wheel_angle_deg: float
+    right_wheel_angle_deg: float
+    left_wheel_center: Vec2
+    right_wheel_center: Vec2
+    left_tie_rod_pickup: Vec2
+    right_tie_rod_pickup: Vec2
+    left_bellcrank_center_link_pickup: Vec2
+    right_bellcrank_center_link_pickup: Vec2
+    left_bellcrank_tie_rod_pickup: Vec2
+    right_bellcrank_tie_rod_pickup: Vec2
+    center_link_residual: float
+    left_tie_rod_residual: float
+    right_tie_rod_residual: float
+    converged: bool
+    nfev: int
+
+    @property
+    def max_abs_link_residual(self) -> float:
+        """Maximum absolute rod-length residual in model units."""
+        return max(
+            abs(self.center_link_residual),
+            abs(self.left_tie_rod_residual),
+            abs(self.right_tie_rod_residual),
+        )

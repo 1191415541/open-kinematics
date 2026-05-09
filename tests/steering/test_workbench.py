@@ -3,10 +3,12 @@ import math
 import numpy as np
 
 from kinematics.steering.workbench import (
+    THREE_SEGMENT_INPUT_MODES,
     SteeringCurve,
     available_steering_outputs,
     copy_hardpoint_rows,
     curve_specs_for_plot,
+    default_hardpoint_rows,
     default_steering_project,
     hardpoint_rows_from_csv,
     hardpoints_from_rows,
@@ -23,6 +25,7 @@ from kinematics.steering.workbench import (
     set_pitman_x_position,
     solve_steering_project,
     sweep_steering_project,
+    three_segment_geometry_from_rows,
 )
 
 
@@ -181,6 +184,119 @@ def test_solve_project_supports_all_input_modes():
     np.testing.assert_allclose(right_outputs["pitman_angle_deg"], 8.0, atol=1e-8)
 
 
+def test_three_segment_project_supports_bellcrank_and_wheel_input_modes():
+    project = default_steering_project(linkage_type="three_segment")
+    project.input_mode = "left_bellcrank_angle"
+    project.input_value = 8.0
+    _, outputs = solve_steering_project(project)
+
+    assert outputs["left_bellcrank_angle_deg"] == 8.0
+    assert outputs["right_bellcrank_angle_deg"] > 0.0
+    assert outputs["left_wheel_angle_deg"] > 0.0
+    assert outputs["right_wheel_angle_deg"] > 0.0
+
+    for input_mode, output_name in (
+        ("right_bellcrank_angle", "right_bellcrank_angle_deg"),
+        ("left_wheel_angle", "left_wheel_angle_deg"),
+        ("right_wheel_angle", "right_wheel_angle_deg"),
+    ):
+        project.input_mode = input_mode
+        project.input_value = outputs[output_name]
+        _, solved_outputs = solve_steering_project(project)
+        np.testing.assert_allclose(
+            solved_outputs["left_bellcrank_angle_deg"],
+            8.0,
+            atol=1e-6,
+        )
+        np.testing.assert_allclose(
+            solved_outputs[output_name],
+            outputs[output_name],
+            atol=1e-6,
+        )
+
+
+def test_three_segment_wheel_input_can_track_previous_solution_branch():
+    project = default_steering_project(linkage_type="three_segment")
+    project.input_mode = "left_wheel_angle"
+    project.input_value = 2.2
+    previous_state, _ = solve_steering_project(project, include_limits=False)
+
+    project.input_value = 2.3
+    state, outputs = solve_steering_project(
+        project,
+        include_limits=False,
+        previous_state=previous_state,
+    )
+
+    np.testing.assert_allclose(outputs["left_wheel_angle_deg"], 2.3, atol=1e-6)
+    assert (
+        abs(state.left_bellcrank_angle_deg - previous_state.left_bellcrank_angle_deg)
+        < 2.0
+    )
+
+
+def test_three_segment_hardpoint_rows_build_symmetric_geometry():
+    rows = default_hardpoint_rows("three_segment")
+
+    geometry = three_segment_geometry_from_rows(rows)
+
+    np.testing.assert_allclose(
+        geometry.left_bellcrank.pivot,
+        np.array([-260.0, -320.0]),
+    )
+    np.testing.assert_allclose(
+        geometry.right_bellcrank.pivot,
+        np.array([-260.0, 320.0]),
+    )
+
+
+def test_three_segment_project_can_be_saved_and_loaded(tmp_path):
+    path = tmp_path / "three_segment_project.json"
+    project = default_steering_project(linkage_type="three_segment")
+    project.input_mode = "right_bellcrank_angle"
+    project.input_value = 6.0
+
+    save_steering_project(project, path)
+    loaded = load_steering_project(path)
+
+    assert loaded.linkage_type == "three_segment"
+    assert loaded.input_mode == "right_bellcrank_angle"
+    assert loaded.input_value == 6.0
+    assert [row.name for row in loaded.hardpoints] == [
+        row.name for row in project.hardpoints
+    ]
+
+
+def test_three_segment_slider_limits_support_all_input_modes():
+    rows = default_hardpoint_rows("three_segment")
+
+    for input_mode in THREE_SEGMENT_INPUT_MODES:
+        limits = input_angle_slider_limits(rows, input_mode, "three_segment")
+
+        assert limits.minimum < 0.0
+        assert limits.maximum > 0.0
+
+
+def test_three_segment_slider_limits_follow_current_continuous_branch():
+    rows = default_hardpoint_rows("three_segment")
+
+    left_wheel_limits = input_angle_slider_limits(
+        rows,
+        "left_wheel_angle",
+        "three_segment",
+    )
+    right_wheel_limits = input_angle_slider_limits(
+        rows,
+        "right_wheel_angle",
+        "three_segment",
+    )
+
+    assert left_wheel_limits.minimum < -2.0
+    assert 15.0 < left_wheel_limits.maximum < 20.0
+    assert right_wheel_limits.minimum < -15.0
+    assert 1.5 < right_wheel_limits.maximum < 3.0
+
+
 def test_solve_project_outputs_current_geometry_steering_limits():
     project = default_steering_project()
 
@@ -200,10 +316,67 @@ def test_solve_project_outputs_current_geometry_steering_limits():
     assert outputs["max_right_turn_right_wheel_angle_deg"] < 0.0
 
 
+def test_three_segment_project_outputs_current_geometry_steering_limits():
+    project = default_steering_project(linkage_type="three_segment")
+
+    _, outputs = solve_steering_project(project)
+
+    expected_names = {
+        "max_left_turn_left_wheel_angle_deg",
+        "max_left_turn_right_wheel_angle_deg",
+        "max_right_turn_left_wheel_angle_deg",
+        "max_right_turn_right_wheel_angle_deg",
+    }
+    assert expected_names.issubset(outputs)
+    assert expected_names.issubset(available_steering_outputs())
+    left_turn_average = 0.5 * (
+        outputs["max_left_turn_left_wheel_angle_deg"]
+        + outputs["max_left_turn_right_wheel_angle_deg"]
+    )
+    right_turn_average = 0.5 * (
+        outputs["max_right_turn_left_wheel_angle_deg"]
+        + outputs["max_right_turn_right_wheel_angle_deg"]
+    )
+    assert left_turn_average > 0.0
+    assert right_turn_average < 0.0
+
+
 def test_solve_project_outputs_ackermann_rate_from_wheelbase():
     project = default_steering_project()
     project.input_mode = "right_wheel_angle"
     project.input_value = 10.0
+    project.wheelbase = 2800.0
+
+    _, outputs = solve_steering_project(project)
+
+    actual_ackerman = (
+        outputs["right_wheel_angle_deg"] - outputs["left_wheel_angle_deg"]
+    )
+    inner_angle_deg = max(
+        abs(outputs["left_wheel_angle_deg"]),
+        abs(outputs["right_wheel_angle_deg"]),
+    )
+    track = abs(outputs["right_wheel_center_y"] - outputs["left_wheel_center_y"])
+    radius_to_inner = project.wheelbase / math.tan(math.radians(inner_angle_deg))
+    ideal_outer_angle_deg = math.degrees(
+        math.atan2(project.wheelbase, radius_to_inner + track)
+    )
+    ideal_ackerman = math.copysign(
+        inner_angle_deg - ideal_outer_angle_deg,
+        actual_ackerman,
+    )
+
+    assert "ackermann_rate_pct" in available_steering_outputs()
+    np.testing.assert_allclose(
+        outputs["ackermann_rate_pct"],
+        100.0 * actual_ackerman / ideal_ackerman,
+    )
+
+
+def test_three_segment_project_outputs_ackermann_rate_from_wheelbase():
+    project = default_steering_project(linkage_type="three_segment")
+    project.input_mode = "left_bellcrank_angle"
+    project.input_value = 8.0
     project.wheelbase = 2800.0
 
     _, outputs = solve_steering_project(project)
@@ -267,6 +440,42 @@ def test_sweep_project_outputs_selected_variables():
     assert [row["pitman_angle_deg"] for row in rows] == [-8.0, 0.0, 8.0]
     assert "left_minus_right_deg" in available_steering_outputs()
     assert rows[0]["left_wheel_angle_deg"] < rows[-1]["left_wheel_angle_deg"]
+
+
+def test_three_segment_sweep_project_outputs_current_geometry_steering_limits():
+    project = default_steering_project(linkage_type="three_segment")
+    project.sweep_min = -4.0
+    project.sweep_max = 4.0
+    project.sweep_step = 4.0
+
+    rows = sweep_steering_project(project)
+
+    expected_names = {
+        "max_left_turn_left_wheel_angle_deg",
+        "max_left_turn_right_wheel_angle_deg",
+        "max_right_turn_left_wheel_angle_deg",
+        "max_right_turn_right_wheel_angle_deg",
+    }
+    assert rows
+    assert all(expected_names.issubset(row) for row in rows)
+
+
+def test_three_segment_sweep_skips_unreachable_wheel_angle_samples():
+    project = default_steering_project(linkage_type="three_segment")
+    project.input_mode = "left_wheel_angle"
+    project.sweep_min = -20.0
+    project.sweep_max = 20.0
+    project.sweep_step = 2.0
+
+    rows = sweep_steering_project(project, skip_unreachable=True)
+
+    assert rows
+    assert rows[0]["input_value"] > project.sweep_min
+    assert rows[-1]["input_value"] < project.sweep_max
+    assert all(
+        abs(row["left_wheel_angle_deg"] - row["input_value"]) <= 1e-6
+        for row in rows
+    )
 
 
 def test_sweep_project_can_skip_unreachable_wheel_angle_samples():

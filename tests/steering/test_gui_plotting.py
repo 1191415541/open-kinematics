@@ -6,15 +6,19 @@ import numpy as np  # noqa: E402
 from matplotlib import pyplot as plt  # noqa: E402
 from matplotlib.colors import to_hex  # noqa: E402
 
-from kinematics.steering.gui_plotting import (  # noqa: E402
+from kinematics.gui.steering.plotting import (  # noqa: E402
     PREVIEW_GEOMETRY_COLORS,
+    draw_curve_plot,
     draw_steering_preview,
+    draw_three_segment_steering_preview,
     fit_steering_preview,
 )
+from kinematics.steering.three_segment import solve_three_segment_steering  # noqa: E402
 from kinematics.steering.two_segment import solve_two_segment_steering  # noqa: E402
 from kinematics.steering.workbench import (  # noqa: E402
     default_steering_project,
     hardpoints_from_rows,
+    three_segment_geometry_from_rows,
 )
 
 
@@ -32,13 +36,40 @@ def _has_line_segment(ax, start, end):
 def _line_segment_color(ax, start, end):
     for line in ax.lines:
         points = np.column_stack([line.get_xdata(), line.get_ydata()])
-        if points.shape != (2, 2):
+        if len(points.shape) != 2 or points.shape[1] != 2:
             continue
-        forward = np.allclose(points[0], start) and np.allclose(points[1], end)
-        reverse = np.allclose(points[0], end) and np.allclose(points[1], start)
-        if forward or reverse:
-            return to_hex(line.get_color())
+        for index in range(points.shape[0] - 1):
+            segment_start = points[index]
+            segment_end = points[index + 1]
+            forward = np.allclose(segment_start, start) and np.allclose(
+                segment_end, end
+            )
+            reverse = np.allclose(segment_start, end) and np.allclose(
+                segment_end, start
+            )
+            if forward or reverse:
+                return to_hex(line.get_color())
     return None
+
+
+def _has_polygon(ax, expected_points, color):
+    expected = np.asarray(expected_points, dtype=np.float64)
+    for patch in ax.patches:
+        if to_hex(patch.get_edgecolor()) != color:
+            continue
+        points = np.asarray(patch.get_xy(), dtype=np.float64)
+        if points.shape != (4, 2):
+            continue
+        if not np.allclose(points[0], points[-1]):
+            continue
+        actual = points[:-1]
+        has_expected_points = all(
+            any(np.allclose(point, candidate) for candidate in actual)
+            for point in expected
+        )
+        if has_expected_points:
+            return True
+    return False
 
 
 def test_steering_preview_can_preserve_existing_view_limits():
@@ -165,4 +196,82 @@ def test_steering_preview_uses_distinct_colors_for_geometry_types():
     assert PREVIEW_GEOMETRY_COLORS["pitman"] in line_colors
     patch_edge_colors = {to_hex(patch.get_edgecolor()) for patch in ax.patches}
     assert PREVIEW_GEOMETRY_COLORS["wheel"] in patch_edge_colors
+    plt.close(fig)
+
+
+def test_three_segment_preview_draws_center_link_and_bellcrank_tie_rods():
+    fig, ax = plt.subplots()
+    project = default_steering_project(linkage_type="three_segment")
+    geometry = three_segment_geometry_from_rows(project.hardpoints)
+    design_state = solve_three_segment_steering(geometry, 0.0)
+    current_state = solve_three_segment_steering(geometry, 8.0)
+
+    draw_three_segment_steering_preview(ax, geometry, design_state, current_state)
+
+    assert _line_segment_color(
+        ax,
+        current_state.left_bellcrank_center_link_pickup,
+        current_state.right_bellcrank_center_link_pickup,
+    ) == PREVIEW_GEOMETRY_COLORS["center_link"]
+    assert _line_segment_color(
+        ax,
+        current_state.left_bellcrank_tie_rod_pickup,
+        current_state.left_tie_rod_pickup,
+    ) == PREVIEW_GEOMETRY_COLORS["tie_rod"]
+    assert _line_segment_color(
+        ax,
+        geometry.left_bellcrank.pivot,
+        current_state.left_bellcrank_tie_rod_pickup,
+    ) == PREVIEW_GEOMETRY_COLORS["bellcrank"]
+    plt.close(fig)
+
+
+def test_three_segment_preview_draws_bellcranks_as_triangles():
+    fig, ax = plt.subplots()
+    project = default_steering_project(linkage_type="three_segment")
+    geometry = three_segment_geometry_from_rows(project.hardpoints)
+    design_state = solve_three_segment_steering(geometry, 0.0)
+    current_state = solve_three_segment_steering(geometry, 8.0)
+
+    draw_three_segment_steering_preview(ax, geometry, design_state, current_state)
+
+    assert _has_polygon(
+        ax,
+        [
+            geometry.left_bellcrank.pivot,
+            current_state.left_bellcrank_center_link_pickup,
+            current_state.left_bellcrank_tie_rod_pickup,
+        ],
+        PREVIEW_GEOMETRY_COLORS["bellcrank"],
+    )
+    assert _has_polygon(
+        ax,
+        [
+            geometry.right_bellcrank.pivot,
+            current_state.right_bellcrank_center_link_pickup,
+            current_state.right_bellcrank_tie_rod_pickup,
+        ],
+        PREVIEW_GEOMETRY_COLORS["bellcrank"],
+    )
+    plt.close(fig)
+
+
+def test_curve_plot_keeps_x_label_inside_figure():
+    fig, ax = plt.subplots(figsize=(5.6, 2.9), dpi=100)
+    rows = [
+        {"input_value": float(value), "left_bellcrank_angle_deg": float(value * value)}
+        for value in range(-5, 6)
+    ]
+
+    draw_curve_plot(
+        ax,
+        rows,
+        [("input_value", "left_bellcrank_angle_deg", "preview")],
+    )
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+
+    figure_bottom = fig.bbox.y0
+    label_bottom = ax.xaxis.label.get_window_extent(renderer).y0
+    assert label_bottom >= figure_bottom
     plt.close(fig)
