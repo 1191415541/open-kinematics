@@ -185,11 +185,32 @@ def test_suspension_page_has_optimization_actions() -> None:
     assert "Pair constraints" in optimization_content_source
     assert "Mode" in optimization_content_source
     assert "SUSPENSION_OPTIMIZATION_TARGET_MODES" in optimization_content_source
+    assert "Analyze Variables" in optimization_content_source
+    assert "Select Recommended" in optimization_content_source
+    assert "Select All" in optimization_content_source
+    assert "Select None" in optimization_content_source
+    assert "Invert" in optimization_content_source
     assert "ttk.Progressbar" in optimization_content_source
+    assert "tk.Text" in optimization_content_source
+    assert "state=tk.DISABLED" in optimization_content_source
     assert "opt_variable_vars" in class_source
     assert "opt_pair_constraint_vars" in class_source
     assert "opt_target_mode_vars" in class_source
     assert "threading.Thread" in run_source
+    assert "def run_optimization_analysis" in class_source
+    assert "def _optimization_analysis_worker" in class_source
+    assert '"analysis_result"' in class_source
+    assert "Morris mu*" in class_source
+    assert "Sobol directions/base samples" in class_source
+    assert "tag_configure" in class_source
+    assert "clipboard_clear" in class_source
+    assert "clipboard_append" in class_source
+    assert "def _select_recommended_optimization_variables" in class_source
+    assert "def _select_all_optimization_variables" in class_source
+    assert "def _clear_optimization_variable_selection" in class_source
+    assert "def _invert_optimization_variable_selection" in class_source
+    assert "def _optimization_variable_style_name" in class_source
+    assert "style=" in variables_source
     assert "_poll_optimization_progress" in class_source
     assert "_sync_available_optimization_pair_constraints" in load_source
     assert "def run_optimization" in class_source

@@ -23,6 +23,7 @@ from kinematics.gui.suspension.optimization import (
     SUSPENSION_OPTIMIZATION_TRENDS,
     SuspensionOptimizationConfig,
     SuspensionOptimizationProgress,
+    SuspensionOptimizationVariableAnalysisResult,
     SuspensionOptimizationPairDeltaConstraint,
     SuspensionOptimizationTarget,
     available_suspension_optimization_variables,
@@ -42,6 +43,7 @@ from kinematics.gui.suspension.workbench import (
     SuspensionSweepSettings,
     create_default_suspension_project,
     curve_specs_for_plot,
+    analyze_suspension_optimization_variables,
     load_suspension_hardpoints_csv,
     load_suspension_project,
     optimize_suspension_hardpoints,
@@ -53,6 +55,20 @@ from kinematics.gui.suspension.workbench import (
 )
 
 PROJECT_FILETYPES = [("Kinematics project", "*.okproj.json")]
+OPTIMIZATION_VARIABLE_COLOR_PALETTE = (
+    "#0f766e",
+    "#b45309",
+    "#b91c1c",
+    "#1d4ed8",
+    "#047857",
+    "#7c2d12",
+    "#4338ca",
+    "#be185d",
+    "#15803d",
+    "#92400e",
+    "#0369a1",
+    "#9a3412",
+)
 
 
 class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
@@ -104,6 +120,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         ] | None = None
         self.optimization_thread: threading.Thread | None = None
         self.pending_optimized_hardpoints = None
+        self.last_optimization_analysis: SuspensionOptimizationVariableAnalysisResult | None = None
         self.opt_variable_limit_var = tk.StringVar(
             value=str(self.project.optimization.variable_delta_limit)
         )
@@ -126,6 +143,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             for metric_name, _label in SUSPENSION_OPTIMIZATION_METRICS
         }
         self.optimization_status_var = tk.StringVar(value="No optimization run")
+        self._copyable_optimization_output = "No optimization run"
         self.status_var = tk.StringVar(value="Edit or import suspension geometry")
         self._build_layout()
         self._bind_control_vars()
@@ -375,6 +393,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
 
     def _build_optimization_content(self, parent: ttk.Frame) -> None:
         parent.columnconfigure(1, weight=1)
+        parent.rowconfigure(6, weight=1)
         ttk.Label(parent, text="Variable limit [mm]").grid(
             row=0,
             column=0,
@@ -389,7 +408,36 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         )
         variables = ttk.LabelFrame(parent, text="Variables", padding=4)
         variables.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        variables.columnconfigure(0, weight=1)
+        variable_actions = ttk.Frame(variables)
+        variable_actions.grid(row=0, column=0, sticky="ew", pady=(0, 4))
+        for column in range(4):
+            variable_actions.columnconfigure(column, weight=1)
+        ttk.Button(
+            variable_actions,
+            text="Select Recommended",
+            command=self._select_recommended_optimization_variables,
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        ttk.Button(
+            variable_actions,
+            text="Select All",
+            command=self._select_all_optimization_variables,
+        ).grid(row=0, column=1, sticky="ew", padx=4)
+        ttk.Button(
+            variable_actions,
+            text="Select None",
+            command=self._clear_optimization_variable_selection,
+        ).grid(row=0, column=2, sticky="ew", padx=4)
+        ttk.Button(
+            variable_actions,
+            text="Invert",
+            command=self._invert_optimization_variable_selection,
+        ).grid(row=0, column=3, sticky="ew", padx=(4, 0))
+        variable_list = ttk.Frame(variables)
+        variable_list.grid(row=1, column=0, sticky="ew")
+        variable_list.columnconfigure(0, weight=1)
         self.opt_variables_frame = variables
+        self.opt_variable_list_frame = variable_list
 
         pair_constraints = ttk.LabelFrame(parent, text="Pair constraints", padding=4)
         pair_constraints.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
@@ -435,6 +483,18 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         buttons.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(6, 0))
         buttons.columnconfigure(0, weight=1)
         buttons.columnconfigure(1, weight=1)
+        buttons.columnconfigure(2, weight=1)
+        self.analyze_variables_button = ttk.Button(
+            buttons,
+            text="Analyze Variables",
+            command=self.run_optimization_analysis,
+        )
+        self.analyze_variables_button.grid(
+            row=0,
+            column=0,
+            sticky="ew",
+            padx=(0, 4),
+        )
         self.optimize_button = ttk.Button(
             buttons,
             text="Optimize",
@@ -442,9 +502,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         )
         self.optimize_button.grid(
             row=0,
-            column=0,
+            column=1,
             sticky="ew",
-            padx=(0, 4),
+            padx=4,
         )
         self.apply_optimization_button = ttk.Button(
             buttons,
@@ -453,7 +513,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         )
         self.apply_optimization_button.grid(
             row=0,
-            column=1,
+            column=2,
             sticky="ew",
             padx=(4, 0),
         )
@@ -468,12 +528,50 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             sticky="ew",
             pady=(6, 0),
         )
-        ttk.Label(
-            parent,
-            textvariable=self.optimization_status_var,
-            justify=tk.LEFT,
-            wraplength=320,
-        ).grid(row=6, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        output_frame = ttk.LabelFrame(parent, text="Results", padding=4)
+        output_frame.grid(
+            row=6,
+            column=0,
+            columnspan=2,
+            sticky="nsew",
+            pady=(6, 0),
+        )
+        output_frame.rowconfigure(0, weight=1)
+        output_frame.columnconfigure(0, weight=1)
+        self.optimization_output = tk.Text(
+            output_frame,
+            height=14,
+            wrap=tk.WORD,
+            state=tk.DISABLED,
+            relief=tk.FLAT,
+            borderwidth=0,
+            padx=6,
+            pady=6,
+        )
+        output_scrollbar = ttk.Scrollbar(
+            output_frame,
+            orient=tk.VERTICAL,
+            command=self.optimization_output.yview,
+        )
+        self.optimization_output.configure(yscrollcommand=output_scrollbar.set)
+        self.optimization_output.grid(row=0, column=0, sticky="nsew")
+        output_scrollbar.grid(row=0, column=1, sticky="ns")
+
+        output_actions = ttk.Frame(parent)
+        output_actions.grid(row=7, column=0, columnspan=2, sticky="e", pady=(4, 0))
+        ttk.Button(
+            output_actions,
+            text="Copy Output",
+            command=self._copy_optimization_output,
+        ).pack(side=tk.RIGHT)
+
+        self.optimization_output.bind("<Control-c>", self._copy_optimization_output)
+        self.optimization_output.bind("<Command-c>", self._copy_optimization_output)
+        self.optimization_output.bind("<<Copy>>", self._copy_optimization_output)
+        self._configure_optimization_output_tags()
+        self._render_optimization_output(
+            [{"kind": "summary", "text": self.optimization_status_var.get()}]
+        )
 
     def open_geometry(self) -> None:
         path = filedialog.askopenfilename(
@@ -502,6 +600,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             self.result = None
             self.preview_has_drawn = False
             self.preview_renderer.reset()
+            self._reset_optimization_analysis()
             self.status_var.set("Hardpoints imported")
             self.refresh()
         except Exception as exc:  # noqa: BLE001 - show GUI error.
@@ -555,6 +654,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             self.result = None
             self.preview_has_drawn = False
             self.preview_renderer.reset()
+            self._reset_optimization_analysis()
             self._load_project_to_controls()
             self.status_var.set("Geometry loaded")
             self.refresh()
@@ -639,7 +739,11 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         if not self._sync_controls_to_project():
             return
         if self.optimization_running:
-            self.optimization_status_var.set("Optimization already running")
+            self._show_optimization_message(
+                "Optimization already running",
+                heading="Optimization Busy",
+                kind="secondary",
+            )
             return
         snapshot = copy.deepcopy(self.project)
         self.pending_optimized_hardpoints = None
@@ -650,14 +754,49 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             daemon=True,
         )
         self._set_optimization_running(True)
-        self.optimization_status_var.set("Optimization started")
+        self._show_optimization_message(
+            "Waiting for solver progress update",
+            heading="Optimization Running",
+            kind="progress",
+        )
+        self.optimization_thread.start()
+        self.after(100, self._poll_optimization_progress)
+
+    def run_optimization_analysis(self) -> None:
+        """Analyze currently selected optimization variables before solving."""
+        if not self._sync_controls_to_project():
+            return
+        if self.optimization_running:
+            self._show_optimization_message(
+                "Optimization already running",
+                heading="Optimization Busy",
+                kind="secondary",
+            )
+            return
+        snapshot = copy.deepcopy(self.project)
+        self.optimization_queue = queue.Queue()
+        self.optimization_thread = threading.Thread(
+            target=self._optimization_analysis_worker,
+            args=(snapshot,),
+            daemon=True,
+        )
+        self._set_optimization_running(True)
+        self._show_optimization_message(
+            "Preparing constrained global sensitivity analysis",
+            heading="Variable Analysis Running",
+            kind="progress",
+        )
         self.optimization_thread.start()
         self.after(100, self._poll_optimization_progress)
 
     def apply_optimization(self) -> None:
         """Apply the last optimized hardpoints to the current suspension project."""
         if self.pending_optimized_hardpoints is None:
-            self.optimization_status_var.set("No optimization result to apply")
+            self._show_optimization_message(
+                "No optimization result to apply",
+                heading="Optimization Output",
+                kind="secondary",
+            )
             return
         self.project.hardpoints = {
             point_id: position.copy()
@@ -667,10 +806,30 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.result = None
         self.preview_has_drawn = False
         self.preview_renderer.reset()
+        self._reset_optimization_analysis()
         self.hardpoint_table.set_hardpoints(self.project.hardpoints)
         self._sync_available_optimization_variables()
         self.refresh()
-        self.optimization_status_var.set("Optimization applied")
+        self._show_optimization_message(
+            "Optimized hardpoints applied to the current suspension project",
+            heading="Optimization Applied",
+            kind="recommended",
+        )
+
+    def _optimization_analysis_worker(self, project: SuspensionProject) -> None:
+        assert self.optimization_queue is not None
+        try:
+            result = analyze_suspension_optimization_variables(
+                project,
+                targets=project.optimization.targets,
+                variable_names=tuple(project.optimization.variable_names),
+                variable_delta_limit=project.optimization.variable_delta_limit,
+                pair_delta_constraints=project.optimization.pair_delta_constraints,
+            )
+        except Exception as exc:  # noqa: BLE001 - surface in GUI polling loop.
+            self.optimization_queue.put(("error", exc))
+            return
+        self.optimization_queue.put(("analysis_result", result))
 
     def _optimization_worker(self, project: SuspensionProject) -> None:
         assert self.optimization_queue is not None
@@ -702,27 +861,28 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             if kind == "progress":
                 progress = payload
                 if isinstance(progress, SuspensionOptimizationProgress):
-                    self.optimization_status_var.set(
-                        f"{progress.message} ({progress.evaluations} evals, "
-                        f"{progress.elapsed_seconds:.1f}s)"
+                    self._render_optimization_output(
+                        self._format_optimization_progress(progress)
                     )
             elif kind == "result":
                 self.pending_optimized_hardpoints = payload.hardpoints
-                lines = [
-                    f"Initial cost: {payload.initial_cost:.6g}",
-                    f"Final cost: {payload.final_cost:.6g}",
-                    f"Rounds: {payload.rounds_completed}",
-                    f"Evaluations: {payload.total_evaluations}",
-                ]
-                for summary in payload.target_summaries:
-                    lines.append(
-                        self._format_optimization_summary_line(summary)
-                    )
-                self.optimization_status_var.set("\n".join(lines))
+                self._render_optimization_output(
+                    self._format_optimization_result(payload)
+                )
+                finished = True
+            elif kind == "analysis_result":
+                self.last_optimization_analysis = payload
+                self._render_optimization_output(
+                    self._format_optimization_analysis(payload)
+                )
                 finished = True
             elif kind == "error":
                 self.pending_optimized_hardpoints = None
-                self.optimization_status_var.set(str(payload))
+                self._show_optimization_message(
+                    str(payload),
+                    heading="Optimization Error",
+                    kind="error",
+                )
                 finished = True
         if finished:
             self._set_optimization_running(False)
@@ -734,6 +894,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
     def _set_optimization_running(self, running: bool) -> None:
         self.optimization_running = running
         state = tk.DISABLED if running else tk.NORMAL
+        self.analyze_variables_button.configure(state=state)
         self.optimize_button.configure(state=state)
         self.apply_optimization_button.configure(
             state=tk.DISABLED if running else tk.NORMAL
@@ -899,7 +1060,11 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             float(current.variable_delta_limit),
         )
         if not parsed_limit.is_valid or parsed_limit.value <= 0.0:
-            self.optimization_status_var.set("Invalid optimization variable limit")
+            self._show_optimization_message(
+                "Invalid optimization variable limit",
+                heading="Optimization Input Error",
+                kind="error",
+            )
             return None
         if not parsed_limit.is_complete:
             return None
@@ -907,8 +1072,10 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             name for name, variable in self.opt_variable_vars.items() if variable.get()
         )
         if not variable_names:
-            self.optimization_status_var.set(
-                "At least one optimization variable is required"
+            self._show_optimization_message(
+                "At least one optimization variable is required",
+                heading="Optimization Input Error",
+                kind="error",
             )
             return None
 
@@ -936,8 +1103,10 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 0.0,
             )
             if not parsed_delta.is_valid:
-                self.optimization_status_var.set(
-                    f"Invalid optimization target: {metric_name}"
+                self._show_optimization_message(
+                    f"Invalid optimization target: {metric_name}",
+                    heading="Optimization Input Error",
+                    kind="error",
                 )
                 return None
             if not parsed_delta.is_complete:
@@ -967,19 +1136,107 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             name: tk.BooleanVar(value=name in selected)
             for name in variables
         }
-        for child in self.opt_variables_frame.winfo_children():
+        variable_list_frame = getattr(self, "opt_variable_list_frame", self.opt_variables_frame)
+        for child in variable_list_frame.winfo_children():
             child.destroy()
+        self._configure_optimization_variable_styles(variables)
         for index, name in enumerate(variables):
             ttk.Checkbutton(
-                self.opt_variables_frame,
+                variable_list_frame,
                 text=name,
                 variable=self.opt_variable_vars[name],
+                style=self._optimization_variable_style_name(name),
+                command=self._store_selected_optimization_variables,
             ).grid(
                 row=index,
                 column=0,
                 sticky="w",
                 padx=(0, 8),
                 pady=1,
+            )
+
+    def _reset_optimization_analysis(self) -> None:
+        self.last_optimization_analysis = None
+
+    def _store_selected_optimization_variables(self) -> None:
+        project = getattr(self, "project", None)
+        if project is None:
+            return
+        project.optimization.variable_names = [
+            name for name, variable in self.opt_variable_vars.items() if variable.get()
+        ]
+
+    def _set_optimization_variable_selection(self, selected_names: set[str]) -> None:
+        for name, variable in self.opt_variable_vars.items():
+            variable.set(name in selected_names)
+        self._store_selected_optimization_variables()
+
+    def _select_recommended_optimization_variables(self) -> None:
+        analysis = self.last_optimization_analysis
+        if analysis is None:
+            self._show_optimization_message(
+                "Run Analyze Variables before selecting recommended variables",
+                heading="Variable Selection",
+                kind="secondary",
+            )
+            return
+        recommended = set(analysis.recommended_variable_names)
+        if not recommended:
+            self._show_optimization_message(
+                "No recommended variables available for the current analysis",
+                heading="Variable Selection",
+                kind="secondary",
+            )
+            return
+        available = set(self.opt_variable_vars)
+        selected = recommended & available
+        self._set_optimization_variable_selection(selected)
+        self._show_optimization_message(
+            "Selected recommended variables: " + ", ".join(sorted(selected)),
+            heading="Variable Selection",
+            kind="recommended",
+        )
+
+    def _select_all_optimization_variables(self) -> None:
+        self._set_optimization_variable_selection(set(self.opt_variable_vars))
+
+    def _clear_optimization_variable_selection(self) -> None:
+        self._set_optimization_variable_selection(set())
+
+    def _invert_optimization_variable_selection(self) -> None:
+        updated: set[str] = set()
+        for name, variable in self.opt_variable_vars.items():
+            variable.set(not variable.get())
+            if variable.get():
+                updated.add(name)
+        self._store_selected_optimization_variables()
+
+    def _optimization_variable_style_name(self, variable_name: str) -> str:
+        hardpoint_name = variable_name.rsplit("_", 1)[0]
+        return f"SuspensionOptimizationVariable.{hardpoint_name}.TCheckbutton"
+
+    def _configure_optimization_variable_styles(
+        self,
+        variable_names: tuple[str, ...],
+    ) -> None:
+        style = ttk.Style(self)
+        hardpoint_names = sorted({name.rsplit("_", 1)[0] for name in variable_names})
+        for index, hardpoint_name in enumerate(hardpoint_names):
+            color = OPTIMIZATION_VARIABLE_COLOR_PALETTE[
+                index % len(OPTIMIZATION_VARIABLE_COLOR_PALETTE)
+            ]
+            style_name = self._optimization_variable_style_name(
+                f"{hardpoint_name}_x"
+            )
+            style.configure(style_name, foreground=color)
+            style.map(
+                style_name,
+                foreground=[
+                    ("disabled", color),
+                    ("selected", color),
+                    ("active", color),
+                    ("!disabled", color),
+                ],
             )
 
     def _optimization_mode_key(self, label: str) -> str:
@@ -993,6 +1250,103 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             if mode_key == mode:
                 return label
         return "End-to-end delta"
+
+    def _show_optimization_message(
+        self,
+        message: str,
+        *,
+        heading: str | None = None,
+        kind: str = "summary",
+    ) -> None:
+        sections: list[dict[str, str]] = []
+        if heading:
+            sections.append({"kind": "heading", "text": heading})
+        sections.append({"kind": kind, "text": message})
+        self._render_optimization_output(sections)
+
+    def _configure_optimization_output_tags(self) -> None:
+        self.optimization_output.tag_configure(
+            "heading",
+            foreground="#0f172a",
+            font=("TkDefaultFont", 10, "bold"),
+            spacing3=4,
+        )
+        self.optimization_output.tag_configure(
+            "summary",
+            foreground="#334155",
+            spacing1=1,
+            spacing3=2,
+        )
+        self.optimization_output.tag_configure(
+            "recommended",
+            foreground="#1d4ed8",
+            spacing1=1,
+            spacing3=2,
+        )
+        self.optimization_output.tag_configure(
+            "keep",
+            foreground="#047857",
+            spacing1=1,
+            spacing3=2,
+        )
+        self.optimization_output.tag_configure(
+            "secondary",
+            foreground="#b45309",
+            spacing1=1,
+            spacing3=2,
+        )
+        self.optimization_output.tag_configure(
+            "suppress",
+            foreground="#b91c1c",
+            spacing1=1,
+            spacing3=2,
+        )
+        self.optimization_output.tag_configure(
+            "progress",
+            foreground="#2563eb",
+            spacing1=1,
+            spacing3=2,
+        )
+        self.optimization_output.tag_configure(
+            "error",
+            foreground="#b91c1c",
+            spacing1=1,
+            spacing3=2,
+        )
+
+    def _render_optimization_output(
+        self,
+        sections: list[dict[str, str]],
+    ) -> None:
+        plain_sections: list[str] = []
+        self.optimization_output.configure(state=tk.NORMAL)
+        self.optimization_output.delete("1.0", tk.END)
+        for index, section in enumerate(sections):
+            text = str(section.get("text", "")).strip()
+            if not text:
+                continue
+            tag = str(section.get("tone") or section.get("kind") or "summary")
+            suffix = "\n\n" if index < len(sections) - 1 else ""
+            self.optimization_output.insert(tk.END, text + suffix, (tag,))
+            plain_sections.append(text)
+        self.optimization_output.configure(state=tk.DISABLED)
+        self._copyable_optimization_output = "\n\n".join(plain_sections)
+        status_var = getattr(self, "optimization_status_var", None)
+        if status_var is not None:
+            status_var.set(self._copyable_optimization_output)
+
+    def _copy_optimization_output(self, _event: object | None = None) -> str:
+        selected_text = ""
+        try:
+            selected_text = str(
+                self.optimization_output.get(tk.SEL_FIRST, tk.SEL_LAST)
+            ).strip()
+        except (AttributeError, tk.TclError):
+            selected_text = ""
+        text = selected_text or self._copyable_optimization_output
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        return "break"
 
     def _format_optimization_summary_line(self, summary: object) -> str:
         metric_name = getattr(summary, "metric_name")
@@ -1011,6 +1365,131 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             f"target {target_value:.6g}, "
             f"initial {initial_value:.6g}, "
             f"final {final_value:.6g}"
+        )
+
+    def _format_optimization_progress(
+        self,
+        progress: SuspensionOptimizationProgress,
+    ) -> list[dict[str, str]]:
+        return [
+            {"kind": "heading", "text": "Optimization Running"},
+            {
+                "kind": "progress",
+                "text": (
+                    f"{progress.message}\n"
+                    f"Phase: {progress.phase}\n"
+                    f"Evaluations: {progress.evaluations}\n"
+                    f"Elapsed: {progress.elapsed_seconds:.1f}s"
+                ),
+            },
+        ]
+
+    def _format_optimization_result(self, result: object) -> list[dict[str, str]]:
+        sections = [
+            {"kind": "heading", "text": "Optimization Result"},
+            {
+                "kind": "summary",
+                "text": (
+                    f"Initial cost: {float(getattr(result, 'initial_cost')):.6g}\n"
+                    f"Final cost: {float(getattr(result, 'final_cost')):.6g}\n"
+                    f"Rounds: {int(getattr(result, 'rounds_completed'))}\n"
+                    f"Evaluations: {int(getattr(result, 'total_evaluations'))}"
+                ),
+            },
+            {
+                "kind": "recommended"
+                if bool(getattr(result, "success", False))
+                else "secondary",
+                "text": f"Solver message: {getattr(result, 'message', '')}",
+            },
+        ]
+        for summary in getattr(result, "target_summaries", []):
+            improved = float(getattr(summary, "final_value")) <= float(
+                getattr(summary, "initial_value")
+            )
+            sections.append(
+                {
+                    "kind": "group",
+                    "tone": "keep" if improved else "secondary",
+                    "text": self._format_optimization_summary_line(summary),
+                }
+            )
+        return sections
+
+    def _format_optimization_analysis(
+        self,
+        result: SuspensionOptimizationVariableAnalysisResult,
+    ) -> list[dict[str, str]]:
+        sections: list[dict[str, str]] = [
+            {"kind": "heading", "text": "Global Sensitivity Analysis"},
+            {
+                "kind": "summary",
+                "text": (
+                    f"Method: {result.method}\n"
+                    f"Effective rank: {result.effective_rank}/{result.variable_count}\n"
+                    f"Constraint rank: {result.constraint_rank}\n"
+                    f"Residual size: {result.residual_size}\n"
+                    f"Morris trajectories: {result.morris_trajectories}\n"
+                    "Sobol directions/base samples: "
+                    f"{result.sobol_direction_count}/{result.sobol_base_samples}"
+                ),
+            },
+            {
+                "kind": "recommended",
+                "text": (
+                    "Recommended variables: "
+                    + (
+                        ", ".join(result.recommended_variable_names)
+                        if result.recommended_variable_names
+                        else "none"
+                    )
+                ),
+            },
+        ]
+        grouped_items = {
+            "keep": [item for item in result.items if item.recommendation == "keep"],
+            "secondary": [
+                item for item in result.items if item.recommendation == "secondary"
+            ],
+            "suppress": [
+                item for item in result.items if item.recommendation == "suppress"
+            ],
+        }
+        for recommendation, label in (
+            ("keep", "Keep"),
+            ("secondary", "Secondary"),
+            ("suppress", "Suppress"),
+        ):
+            items = grouped_items[recommendation]
+            details = "\n\n".join(
+                self._format_optimization_analysis_item(item) for item in items
+            ) or "None"
+            sections.append(
+                {
+                    "kind": "group",
+                    "tone": recommendation,
+                    "text": f"{label}\n{details}",
+                }
+            )
+        return sections
+
+    def _format_optimization_analysis_item(self, item: object) -> str:
+        sobol_text = "Sobol S1/ST: n/a"
+        if (
+            getattr(item, "sobol_first_order") is not None
+            and getattr(item, "sobol_total") is not None
+        ):
+            sobol_text = (
+                "Sobol S1/ST: "
+                f"{float(getattr(item, 'sobol_first_order')):.3g}/"
+                f"{float(getattr(item, 'sobol_total')):.3g}"
+            )
+        return (
+            f"{getattr(item, 'variable_name')}\n"
+            f"Morris mu*: {float(getattr(item, 'morris_mu_star')):.3g} | "
+            f"sigma: {float(getattr(item, 'morris_sigma')):.3g}\n"
+            f"{sobol_text}\n"
+            f"{getattr(item, 'detail')}"
         )
 
     def _sync_available_optimization_pair_constraints(self) -> None:
@@ -1133,6 +1612,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.result = None
         self.preview_has_drawn = False
         self.preview_renderer.reset()
+        self._reset_optimization_analysis()
         self._load_project_to_controls()
         self.status_var.set("Suspension type changed")
         self.refresh()
@@ -1141,6 +1621,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.result = None
         self.preview_has_drawn = False
         self.preview_renderer.reset()
+        self._reset_optimization_analysis()
         self.refresh()
 
     def restore_default_hardpoints(self) -> None:
@@ -1153,6 +1634,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.result = None
         self.preview_has_drawn = False
         self.preview_renderer.reset()
+        self._reset_optimization_analysis()
         self.hardpoint_table.set_hardpoints(self.project.hardpoints)
         self._sync_available_optimization_variables()
         self.status_var.set("Restored default hardpoints")

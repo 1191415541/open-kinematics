@@ -148,6 +148,35 @@ class SuspensionOptimizationResult:
 
 
 @dataclass(frozen=True)
+class SuspensionOptimizationVariableAnalysisItem:
+    """One variable's constrained global-sensitivity summary."""
+
+    variable_name: str
+    morris_mu_star: float
+    morris_sigma: float
+    sobol_first_order: float | None
+    sobol_total: float | None
+    recommendation: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class SuspensionOptimizationVariableAnalysisResult:
+    """Pre-optimization constrained global-sensitivity result."""
+
+    items: tuple[SuspensionOptimizationVariableAnalysisItem, ...]
+    recommended_variable_names: tuple[str, ...]
+    residual_size: int
+    variable_count: int
+    constraint_rank: int
+    effective_rank: int
+    morris_trajectories: int
+    sobol_base_samples: int
+    sobol_direction_count: int
+    method: str
+
+
+@dataclass(frozen=True)
 class SuspensionOptimizationProgress:
     """Progress event emitted while optimizing suspension hardpoints."""
 

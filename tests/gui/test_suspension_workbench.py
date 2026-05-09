@@ -1,18 +1,22 @@
 from pathlib import Path
 from types import SimpleNamespace
+from types import MethodType
 
 import numpy as np
 import pytest
 
 from kinematics.core.enums import PointID
 from kinematics.gui.suspension import workbench as suspension_workbench
+from kinematics.gui.suspension import app as suspension_app
 from kinematics.gui.suspension.workbench import (
     DEFAULT_CURVE_X,
     DEFAULT_CURVE_Y,
     SuspensionCurve,
+    SuspensionOptimizationVariableAnalysisItem,
     SuspensionOptimizationTarget,
     SuspensionOptimizationPairDeltaConstraint,
     SuspensionSweepSettings,
+    analyze_suspension_optimization_variables,
     build_wheel_travel_sweep,
     create_default_suspension_project,
     curve_specs_for_plot,
@@ -397,6 +401,341 @@ def test_optimize_suspension_hardpoints_accepts_pair_delta_constraints(
 
     assert result.success
     assert result.final_cost <= result.initial_cost
+
+
+def test_analyze_suspension_optimization_variables_recommends_independent_axes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = create_default_suspension_project()
+    variable_names = (
+        "TRACKROD_INBOARD_z",
+        "TRACKROD_OUTBOARD_z",
+        "UPPER_WISHBONE_OUTBOARD_z",
+    )
+    baseline = {
+        name: float(
+            project.hardpoints[PointID[name.rsplit("_", 1)[0]]][
+                {"x": 0, "y": 1, "z": 2}[name.rsplit("_", 1)[1]]
+            ]
+        )
+        for name in variable_names
+    }
+
+    def fake_solve(current_project):
+        inboard = (
+            float(current_project.hardpoints[PointID.TRACKROD_INBOARD][2])
+            - baseline["TRACKROD_INBOARD_z"]
+        )
+        outboard = (
+            float(current_project.hardpoints[PointID.TRACKROD_OUTBOARD][2])
+            - baseline["TRACKROD_OUTBOARD_z"]
+        )
+        upper = (
+            float(current_project.hardpoints[PointID.UPPER_WISHBONE_OUTBOARD][2])
+            - baseline["UPPER_WISHBONE_OUTBOARD_z"]
+        )
+        value = inboard + outboard + 1e-5 * upper
+        return SimpleNamespace(rows=[{"camber_deg": value}, {"camber_deg": value}])
+
+    monkeypatch.setattr(suspension_workbench, "solve_suspension_project", fake_solve)
+
+    result = analyze_suspension_optimization_variables(
+        project,
+        targets=[
+            SuspensionOptimizationTarget(
+                metric_name="camber_deg",
+                target_delta=0.0,
+                trend="ignore",
+                target_mode="absolute_value",
+            )
+        ],
+        variable_names=variable_names,
+        variable_delta_limit=5.0,
+    )
+
+    items = {
+        item.variable_name: item
+        for item in result.items
+        if isinstance(item, SuspensionOptimizationVariableAnalysisItem)
+    }
+    assert result.method == "constraint_parameterization+morris+sobol"
+    assert result.effective_rank == 3
+    assert result.sobol_direction_count >= 1
+    assert len(result.recommended_variable_names) >= 1
+    assert items["UPPER_WISHBONE_OUTBOARD_z"].recommendation == "suppress"
+    kept = [
+        item
+        for item in items.values()
+        if item.variable_name in result.recommended_variable_names
+    ]
+    assert kept
+    assert all(item.recommendation == "keep" for item in kept)
+
+
+def test_analyze_suspension_optimization_variables_respects_pair_constraints(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = create_default_suspension_project()
+    variable_names = (
+        "UPPER_WISHBONE_INBOARD_FRONT_z",
+        "UPPER_WISHBONE_INBOARD_REAR_z",
+    )
+    baseline = {
+        name: float(
+            project.hardpoints[PointID[name.rsplit("_", 1)[0]]][
+                {"x": 0, "y": 1, "z": 2}[name.rsplit("_", 1)[1]]
+            ]
+        )
+        for name in variable_names
+    }
+
+    def fake_solve(current_project):
+        front = (
+            float(current_project.hardpoints[PointID.UPPER_WISHBONE_INBOARD_FRONT][2])
+            - baseline["UPPER_WISHBONE_INBOARD_FRONT_z"]
+        )
+        rear = (
+            float(current_project.hardpoints[PointID.UPPER_WISHBONE_INBOARD_REAR][2])
+            - baseline["UPPER_WISHBONE_INBOARD_REAR_z"]
+        )
+        value = rear - front
+        return SimpleNamespace(rows=[{"camber_deg": value}, {"camber_deg": value}])
+
+    monkeypatch.setattr(suspension_workbench, "solve_suspension_project", fake_solve)
+
+    result = analyze_suspension_optimization_variables(
+        project,
+        targets=[
+            SuspensionOptimizationTarget(
+                metric_name="camber_deg",
+                target_delta=0.0,
+                trend="ignore",
+                target_mode="absolute_value",
+            )
+        ],
+        variable_names=variable_names,
+        variable_delta_limit=5.0,
+        pair_delta_constraints=[
+            SuspensionOptimizationPairDeltaConstraint(
+                point_a="UPPER_WISHBONE_INBOARD_FRONT",
+                point_b="UPPER_WISHBONE_INBOARD_REAR",
+                label="Upper wishbone inboard front/rear",
+                enabled=True,
+                axes=("z",),
+            )
+        ],
+    )
+
+    items = {
+        item.variable_name: item
+        for item in result.items
+        if isinstance(item, SuspensionOptimizationVariableAnalysisItem)
+    }
+    assert result.constraint_rank == 1
+    assert result.effective_rank == 1
+    assert items["UPPER_WISHBONE_INBOARD_FRONT_z"].morris_mu_star >= 0.0
+    assert items["UPPER_WISHBONE_INBOARD_REAR_z"].morris_mu_star >= 0.0
+    assert all(
+        item.recommendation in {"keep", "secondary", "suppress"}
+        for item in items.values()
+    )
+
+
+def test_format_optimization_analysis_groups_sections_and_metrics() -> None:
+    page = object.__new__(suspension_app.SuspensionWorkbenchPage)
+    result = suspension_workbench.SuspensionOptimizationVariableAnalysisResult(
+        items=(
+            suspension_workbench.SuspensionOptimizationVariableAnalysisItem(
+                variable_name="TRACKROD_OUTBOARD_z",
+                morris_mu_star=0.21,
+                morris_sigma=0.04,
+                sobol_first_order=0.18,
+                sobol_total=0.31,
+                recommendation="keep",
+                detail="High constrained global influence for current targets",
+            ),
+            suspension_workbench.SuspensionOptimizationVariableAnalysisItem(
+                variable_name="TRACKROD_INBOARD_z",
+                morris_mu_star=0.05,
+                morris_sigma=0.07,
+                sobol_first_order=0.01,
+                sobol_total=0.03,
+                recommendation="secondary",
+                detail="Useful but lower-priority variable under current targets",
+            ),
+            suspension_workbench.SuspensionOptimizationVariableAnalysisItem(
+                variable_name="UPPER_WISHBONE_INBOARD_FRONT_z",
+                morris_mu_star=0.002,
+                morris_sigma=0.001,
+                sobol_first_order=None,
+                sobol_total=None,
+                recommendation="suppress",
+                detail="Low constrained global influence in Morris/Sobol screening",
+            ),
+        ),
+        recommended_variable_names=("TRACKROD_OUTBOARD_z",),
+        residual_size=162,
+        variable_count=4,
+        constraint_rank=1,
+        effective_rank=3,
+        morris_trajectories=6,
+        sobol_base_samples=8,
+        sobol_direction_count=2,
+        method="constraint_parameterization+morris+sobol",
+    )
+
+    sections = page._format_optimization_analysis(result)
+
+    assert [section["kind"] for section in sections] == [
+        "heading",
+        "summary",
+        "recommended",
+        "group",
+        "group",
+        "group",
+    ]
+    assert "Global Sensitivity Analysis" in sections[0]["text"]
+    assert "TRACKROD_OUTBOARD_z" in sections[2]["text"]
+    assert "Keep" in sections[3]["text"]
+    assert "Morris mu*" in sections[3]["text"]
+    assert "Suppress" in sections[5]["text"]
+
+
+def test_render_optimization_output_writes_copyable_text() -> None:
+    page = object.__new__(suspension_app.SuspensionWorkbenchPage)
+    recorded: list[tuple[str, tuple[object, ...]]] = []
+
+    class FakeText:
+        def configure(self, **kwargs):
+            recorded.append(("configure", (kwargs,)))
+
+        def delete(self, start, end):
+            recorded.append(("delete", (start, end)))
+
+        def insert(self, index, text, tags=()):
+            recorded.append(("insert", (index, text, tags)))
+
+        def tag_configure(self, name, **kwargs):
+            recorded.append(("tag_configure", (name, kwargs)))
+
+    page.optimization_output = FakeText()
+    page._copyable_optimization_output = ""
+
+    def fake_copy(self, _event=None):
+        return "break"
+
+    page._copy_optimization_output = MethodType(fake_copy, page)
+    page._configure_optimization_output_tags()
+    page._render_optimization_output(
+        [
+            {"kind": "heading", "text": "Heading"},
+            {"kind": "summary", "text": "Summary line"},
+            {"kind": "recommended", "text": "Recommended line"},
+            {"kind": "group", "text": "Keep line"},
+        ]
+    )
+
+    inserted_text = "".join(
+        args[1] for action, args in recorded if action == "insert"
+    )
+    assert "Heading" in inserted_text
+    assert "Summary line" in inserted_text
+    assert "Recommended line" in inserted_text
+    assert "Keep line" in inserted_text
+    assert "Heading" in page._copyable_optimization_output
+
+
+def test_select_recommended_optimization_variables_updates_checkboxes() -> None:
+    page = object.__new__(suspension_app.SuspensionWorkbenchPage)
+    page.last_optimization_analysis = suspension_workbench.SuspensionOptimizationVariableAnalysisResult(
+        items=(),
+        recommended_variable_names=("TRACKROD_OUTBOARD_z", "TRACKROD_INBOARD_z"),
+        residual_size=10,
+        variable_count=3,
+        constraint_rank=0,
+        effective_rank=3,
+        morris_trajectories=6,
+        sobol_base_samples=8,
+        sobol_direction_count=2,
+        method="constraint_parameterization+morris+sobol",
+    )
+
+    class FakeVar:
+        def __init__(self, value: bool) -> None:
+            self.value = value
+
+        def get(self) -> bool:
+            return self.value
+
+        def set(self, value: bool) -> None:
+            self.value = value
+
+    page.opt_variable_vars = {
+        "TRACKROD_OUTBOARD_z": FakeVar(False),
+        "TRACKROD_INBOARD_z": FakeVar(False),
+        "UPPER_WISHBONE_OUTBOARD_z": FakeVar(True),
+    }
+    captured: list[tuple[str, str, str]] = []
+    page._show_optimization_message = MethodType(
+        lambda self, message, *, heading=None, kind="summary": captured.append(
+            (str(heading), str(kind), str(message))
+        ),
+        page,
+    )
+
+    page._select_recommended_optimization_variables()
+
+    assert page.opt_variable_vars["TRACKROD_OUTBOARD_z"].get() is True
+    assert page.opt_variable_vars["TRACKROD_INBOARD_z"].get() is True
+    assert page.opt_variable_vars["UPPER_WISHBONE_OUTBOARD_z"].get() is False
+    assert captured[-1][2].startswith("Selected recommended variables")
+
+
+def test_bulk_optimization_variable_selection_helpers() -> None:
+    page = object.__new__(suspension_app.SuspensionWorkbenchPage)
+
+    class FakeVar:
+        def __init__(self, value: bool) -> None:
+            self.value = value
+
+        def get(self) -> bool:
+            return self.value
+
+        def set(self, value: bool) -> None:
+            self.value = value
+
+    page.opt_variable_vars = {
+        "A_x": FakeVar(False),
+        "A_y": FakeVar(True),
+        "B_z": FakeVar(False),
+    }
+
+    page._select_all_optimization_variables()
+    assert all(variable.get() for variable in page.opt_variable_vars.values())
+
+    page._clear_optimization_variable_selection()
+    assert not any(variable.get() for variable in page.opt_variable_vars.values())
+
+    page.opt_variable_vars["A_x"].set(True)
+    page.opt_variable_vars["A_y"].set(False)
+    page.opt_variable_vars["B_z"].set(True)
+    page._invert_optimization_variable_selection()
+    assert page.opt_variable_vars["A_x"].get() is False
+    assert page.opt_variable_vars["A_y"].get() is True
+    assert page.opt_variable_vars["B_z"].get() is False
+
+
+def test_optimization_variable_style_name_groups_axes_by_hardpoint() -> None:
+    page = object.__new__(suspension_app.SuspensionWorkbenchPage)
+
+    assert (
+        page._optimization_variable_style_name("TRACKROD_OUTBOARD_x")
+        == page._optimization_variable_style_name("TRACKROD_OUTBOARD_z")
+    )
+    assert (
+        page._optimization_variable_style_name("TRACKROD_OUTBOARD_x")
+        != page._optimization_variable_style_name("TRACKROD_INBOARD_x")
+    )
 
 
 def test_solve_suspension_project_locks_trackrod_inboard_in_pure_sweep(

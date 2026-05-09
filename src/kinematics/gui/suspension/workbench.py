@@ -16,11 +16,19 @@ from scipy.optimize import least_squares
 from kinematics.core.enums import Axis, PointID, TargetPositionMode, Units
 from kinematics.core.types import PointTarget, PointTargetAxis, SweepConfig
 from kinematics.gui.project import build_project_document, write_project_document
+from kinematics.gui.suspension.global_sensitivity import (
+    build_linear_constraint_parameterization,
+    pick_reduced_directions_from_morris,
+    run_morris_screening,
+    run_pairwise_sobol_screening,
+)
 from kinematics.gui.suspension.optimization import (
     SuspensionOptimizationConfig,
     SuspensionOptimizationMetricSummary,
     SuspensionOptimizationProgress,
     SuspensionOptimizationResult,
+    SuspensionOptimizationVariableAnalysisItem,
+    SuspensionOptimizationVariableAnalysisResult,
     SuspensionOptimizationPairDeltaConstraint,
     SuspensionOptimizationTarget,
     ProgressCallback,
@@ -362,6 +370,191 @@ def _hardpoints_from_optimization_values(
     for variable_name, variable_value in zip(variable_names, values, strict=True):
         set_suspension_optimization_variable(hardpoints, variable_name, float(variable_value))
     return hardpoints
+
+
+def analyze_suspension_optimization_variables(
+    project: SuspensionProject,
+    *,
+    targets: list[SuspensionOptimizationTarget],
+    variable_names: tuple[str, ...],
+    variable_delta_limit: float,
+    pair_delta_constraints: list[SuspensionOptimizationPairDeltaConstraint] | None = None,
+) -> SuspensionOptimizationVariableAnalysisResult:
+    """Screen optimization variables with constrained global sensitivity."""
+    if not variable_names:
+        raise ValueError("At least one optimization variable is required")
+    if variable_delta_limit <= 0.0:
+        raise ValueError("variable_delta_limit must be positive")
+    active_targets = [target for target in targets if target.enabled]
+    if not active_targets:
+        raise ValueError("At least one optimization target must be enabled")
+    active_pair_delta_constraints = [
+        constraint for constraint in (pair_delta_constraints or []) if constraint.enabled
+    ]
+
+    initial_hardpoints = {
+        point_id: np.asarray(position, dtype=np.float64).copy()
+        for point_id, position in project.hardpoints.items()
+    }
+    x0 = np.asarray(
+        [
+            get_suspension_optimization_variable(initial_hardpoints, name)
+            for name in variable_names
+        ],
+        dtype=np.float64,
+    )
+    lower = x0 - float(variable_delta_limit)
+    upper = x0 + float(variable_delta_limit)
+
+    axis_index_map = {"x": 0, "y": 1, "z": 2}
+    constraint_rows: list[np.ndarray] = []
+    for constraint in active_pair_delta_constraints:
+        point_a = PointID[constraint.point_a]
+        point_b = PointID[constraint.point_b]
+        for axis_name in constraint.axes:
+            row = np.zeros_like(x0)
+            for index, variable_name in enumerate(variable_names):
+                point_name, variable_axis = variable_name.rsplit("_", 1)
+                if variable_axis.lower() != axis_name.lower():
+                    continue
+                if point_name == point_a.name:
+                    row[index] = -1.0
+                elif point_name == point_b.name:
+                    row[index] = 1.0
+            if np.any(np.abs(row) > 0.0):
+                constraint_rows.append(row)
+    constraint_matrix = (
+        np.vstack(constraint_rows).astype(np.float64)
+        if constraint_rows
+        else np.zeros((0, x0.size), dtype=np.float64)
+    )
+    parameterization = build_linear_constraint_parameterization(
+        anchor=x0,
+        lower=lower,
+        upper=upper,
+        constraint_matrix=constraint_matrix,
+    )
+
+    def evaluate(values: np.ndarray) -> np.ndarray:
+        hardpoints = _hardpoints_from_optimization_values(
+            initial_hardpoints,
+            variable_names,
+            values,
+        )
+        rows = solve_suspension_project(replace(project, hardpoints=hardpoints)).rows
+        metric_residuals = suspension_optimization_residuals(
+            rows,
+            active_targets,
+            values=values,
+            baseline_values=x0,
+            regularization_weight=0.0,
+        )
+        pair_residuals = suspension_pair_delta_constraint_residuals(
+            hardpoints,
+            initial_hardpoints,
+            active_pair_delta_constraints,
+        )
+        return np.concatenate((metric_residuals, pair_residuals))
+
+    base_residual = evaluate(x0)
+    residual_size = int(base_residual.size)
+    variable_count = int(x0.size)
+
+    def evaluate_objective(values: np.ndarray) -> float:
+        residuals = evaluate(values)
+        return float(np.linalg.norm(residuals))
+
+    morris_trajectories = 6
+    sobol_base_samples = 8
+    morris_stats, morris_mu_stars = run_morris_screening(
+        parameterization=parameterization,
+        evaluate_objective=evaluate_objective,
+        trajectories=morris_trajectories,
+    )
+    selected_direction_indices = pick_reduced_directions_from_morris(
+        parameterization=parameterization,
+        morris_mu_stars=morris_mu_stars,
+        max_directions=min(3, parameterization.direction_count),
+    )
+    sobol_stats = run_pairwise_sobol_screening(
+        parameterization=parameterization,
+        evaluate_objective=evaluate_objective,
+        direction_indices=selected_direction_indices,
+        base_samples=sobol_base_samples,
+    )
+    sobol_by_variable: dict[int, tuple[float, float]] = {}
+    for stat in sobol_stats:
+        projected = np.abs(parameterization.null_basis[:, stat.variable_index])
+        if float(np.sum(projected)) <= 1e-12:
+            continue
+        dominant_index = int(np.argmax(projected))
+        sobol_by_variable[dominant_index] = (
+            float(stat.first_order),
+            float(stat.total_order),
+        )
+
+    ranked = sorted(
+        morris_stats,
+        key=lambda stat: (-stat.mu_star, -stat.sigma, variable_names[stat.variable_index]),
+    )
+    recommended: list[str] = []
+    for stat in ranked:
+        if stat.mu_star <= 1e-8:
+            continue
+        sobol_total = sobol_by_variable.get(stat.variable_index, (None, None))[1]
+        if sobol_total is not None and sobol_total <= 0.02:
+            continue
+        recommended.append(variable_names[stat.variable_index])
+
+    if not recommended and ranked:
+        recommended = [variable_names[ranked[0].variable_index]]
+
+    items: list[SuspensionOptimizationVariableAnalysisItem] = []
+    max_morris = max((stat.mu_star for stat in morris_stats), default=0.0)
+    low_threshold = max(max_morris * 0.1, 1e-8)
+    for stat in morris_stats:
+        variable_name = variable_names[stat.variable_index]
+        sobol_first, sobol_total = sobol_by_variable.get(stat.variable_index, (None, None))
+        if stat.mu_star <= low_threshold and (sobol_total is None or sobol_total <= 0.02):
+            recommendation = "suppress"
+            detail = "Low constrained global influence in Morris/Sobol screening"
+        elif variable_name in recommended:
+            recommendation = "keep"
+            detail = "High constrained global influence for current targets"
+        else:
+            recommendation = "secondary"
+            detail = "Useful but lower-priority variable under current targets"
+        items.append(
+            SuspensionOptimizationVariableAnalysisItem(
+                variable_name=variable_name,
+                morris_mu_star=float(stat.mu_star),
+                morris_sigma=float(stat.sigma),
+                sobol_first_order=sobol_first,
+                sobol_total=sobol_total,
+                recommendation=recommendation,
+                detail=detail,
+            )
+        )
+
+    items.sort(
+        key=lambda item: (
+            0 if item.recommendation == "keep" else 1 if item.recommendation == "secondary" else 2,
+            -item.morris_mu_star,
+            item.variable_name,
+        )
+    )
+    return SuspensionOptimizationVariableAnalysisResult(
+        items=tuple(items),
+        recommended_variable_names=tuple(recommended),
+        residual_size=residual_size,
+        variable_count=variable_count,
+        constraint_rank=parameterization.constraint_rank,
+        effective_rank=parameterization.direction_count,
+        morris_trajectories=morris_trajectories,
+        sobol_base_samples=sobol_base_samples,
+        sobol_direction_count=len(selected_direction_indices),
+        method="constraint_parameterization+morris+sobol",
+    )
 
 
 def optimize_suspension_hardpoints(
