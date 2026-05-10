@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -89,6 +91,35 @@ class KinematicsWorkbenchApp:
 
 def main() -> None:
     """Run the unified kinematics GUI."""
+    if "--smoke-test" in sys.argv:
+        smoke_test()
+        os._exit(0)
     root = tk.Tk()
     KinematicsWorkbenchApp(root)
     root.mainloop()
+
+
+def smoke_test() -> None:
+    """Create and destroy the workbench once for executable packaging checks."""
+    _write_smoke_log("start")
+    root = tk.Tk()
+    _write_smoke_log("root-created")
+    root.withdraw()
+    _write_smoke_log("root-hidden")
+    KinematicsWorkbenchApp(root)
+    _write_smoke_log("app-created")
+    root.update_idletasks()
+    _write_smoke_log("idle-updated")
+    root.destroy()
+    _write_smoke_log("destroyed")
+
+
+def _write_smoke_log(message: str) -> None:
+    log_path = os.environ.get("KINEMATICS_GUI_SMOKE_LOG")
+    if log_path:
+        with open(log_path, "a", encoding="utf-8") as log_file:
+            log_file.write(f"{message}\n")
+
+
+if __name__ == "__main__":
+    main()
