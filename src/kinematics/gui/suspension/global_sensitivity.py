@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import combinations
+import threading
 
 import numpy as np
+
+from kinematics.gui.common import raise_if_cancelled
 
 
 @dataclass(frozen=True)
@@ -131,6 +134,7 @@ def run_morris_screening(
     evaluate_objective,
     trajectories: int = 6,
     step_fraction: float = 0.3,
+    cancel_event: threading.Event | None = None,
 ) -> tuple[list[MorrisVariableStat], np.ndarray]:
     """Run a reduced-space Morris screening and map it to original variables."""
     direction_count = parameterization.direction_count
@@ -148,8 +152,10 @@ def run_morris_screening(
     reduced_basis = np.eye(direction_count, dtype=np.float64)
 
     for trajectory in range(max(1, trajectories)):
+        raise_if_cancelled(cancel_event)
         order = np.roll(np.arange(direction_count), trajectory % direction_count)
         for reduced_index in order:
+            raise_if_cancelled(cancel_event)
             direction = reduced_basis[reduced_index]
             step = feasible_direction_step(
                 parameterization,
@@ -200,6 +206,7 @@ def run_pairwise_sobol_screening(
     direction_indices: tuple[int, ...],
     base_samples: int = 8,
     rng_seed: int = 0,
+    cancel_event: threading.Event | None = None,
 ) -> list[SobolVariableStat]:
     """Approximate first/total Sobol indices on selected reduced directions."""
     if not direction_indices:
@@ -212,8 +219,10 @@ def run_pairwise_sobol_screening(
     total_values: list[float] = []
 
     for _sample in range(max(1, base_samples)):
+        raise_if_cancelled(cancel_event)
         active_values = np.zeros(direction_count, dtype=np.float64)
         for index in selected:
+            raise_if_cancelled(cancel_event)
             direction = reduced_basis[index]
             lower_t, upper_t = feasible_direction_scales(
                 parameterization,
@@ -241,14 +250,17 @@ def run_pairwise_sobol_screening(
 
     stats: list[SobolVariableStat] = []
     for index in selected:
+        raise_if_cancelled(cancel_event)
         isolated_values = np.asarray(values_by_direction[index], dtype=np.float64)
         first = float(np.var(isolated_values) / total_variance)
         remainder_values: list[float] = []
         for _sample in range(max(1, base_samples)):
+            raise_if_cancelled(cancel_event)
             point = np.zeros(direction_count, dtype=np.float64)
             for other in selected:
                 if other == index:
                     continue
+                raise_if_cancelled(cancel_event)
                 direction = reduced_basis[other]
                 lower_t, upper_t = feasible_direction_scales(
                     parameterization,

@@ -4,6 +4,8 @@ Tkinter steering workbench GUI.
 
 from __future__ import annotations
 
+import queue
+import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import Misc, ttk
@@ -11,7 +13,7 @@ from tkinter import Misc, ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
-from kinematics.gui.common import RefreshWorkflowMixin
+from kinematics.gui.common import OptimizationCancelledError, RefreshWorkflowMixin
 from kinematics.gui.steering.file_actions import SteeringFileActions
 from kinematics.gui.steering.plotting import (
     draw_curve_plot,
@@ -88,6 +90,10 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             name: tk.BooleanVar(value=name in {"pitman_x", "pitman_arm_x_length"})
             for name, _label in OPTIMIZATION_VARIABLE_OPTIONS
         }
+        self.optimization_running = False
+        self.optimization_queue: queue.Queue[tuple[str, object]] | None = None
+        self.optimization_thread: threading.Thread | None = None
+        self.optimization_cancel_event: threading.Event | None = None
         self.pending_optimized_hardpoints = None
         self.imported_default_hardpoints = copy_hardpoint_rows(self.project.hardpoints)
         if self.standalone:
@@ -140,6 +146,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         ).pack(side=tk.RIGHT)
         self.hardpoint_editor = HardpointEditor(left, self._on_hardpoints_changed)
         self.hardpoint_editor.pack(fill=tk.BOTH, expand=True)
+        self._build_suspension_parameters(left)
         self.pitman_controls = PitmanTransformControls(
             left,
             self._on_pitman_transform_changed,
@@ -154,6 +161,30 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         body.pack(fill=tk.BOTH, expand=True, pady=8)
         self._build_preview(body)
         self._build_side_panel(body)
+
+    def _build_suspension_parameters(self, parent: ttk.Frame) -> None:
+        frame = ttk.LabelFrame(parent, text="Suspension Parameters", padding=6)
+        frame.pack(fill=tk.X, pady=(8, 0))
+        frame.columnconfigure(1, weight=1)
+        entries: list[ttk.Entry] = []
+        for row_index, (label, var) in enumerate(
+            (
+                ("Wheel R", self.wheel_radius_var),
+                ("Wheel W", self.wheel_width_var),
+                ("Wheelbase", self.wheelbase_var),
+            )
+        ):
+            ttk.Label(frame, text=label).grid(row=row_index, column=0, sticky="w")
+            entry = ttk.Entry(frame, textvariable=var, width=12)
+            entry.grid(
+                row=row_index,
+                column=1,
+                sticky="ew",
+                padx=(6, 0),
+                pady=2,
+            )
+            entries.append(entry)
+        self.bind_entry_commit_refresh(entries)
 
     def _build_controls(self, parent: ttk.Frame) -> None:
         parent.columnconfigure(7, weight=1)
@@ -194,9 +225,6 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 ("Sweep min", self.sweep_min_var),
                 ("Sweep max", self.sweep_max_var),
                 ("Step", self.sweep_step_var),
-                ("Wheel R", self.wheel_radius_var),
-                ("Wheel W", self.wheel_width_var),
-                ("Wheelbase", self.wheelbase_var),
             )
         ):
             label_column = column * 2
@@ -301,15 +329,38 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         buttons.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         buttons.columnconfigure(0, weight=1)
         buttons.columnconfigure(1, weight=1)
-        ttk.Button(buttons, text="Optimize", command=self.run_optimization).grid(
+        buttons.columnconfigure(2, weight=1)
+        self.optimize_button = ttk.Button(
+            buttons,
+            text="Optimize",
+            command=self.run_optimization,
+        )
+        self.optimize_button.grid(
             row=0,
             column=0,
             sticky="ew",
             padx=(0, 4),
         )
-        ttk.Button(buttons, text="Apply", command=self.apply_optimization).grid(
+        self.apply_optimization_button = ttk.Button(
+            buttons,
+            text="Apply",
+            command=self.apply_optimization,
+        )
+        self.apply_optimization_button.grid(
             row=0,
             column=1,
+            sticky="ew",
+            padx=(4, 0),
+        )
+        self.stop_optimization_button = ttk.Button(
+            buttons,
+            text="Stop",
+            command=self.stop_optimization,
+            state=tk.DISABLED,
+        )
+        self.stop_optimization_button.grid(
+            row=0,
+            column=2,
             sticky="ew",
             padx=(4, 0),
         )
@@ -492,6 +543,9 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         """Run steering hardpoint optimization from the optimization tab."""
         if not self._sync_controls_to_project():
             return
+        if self.optimization_running:
+            self.optimization_status_var.set("Optimization already running")
+            return
         inner_angle = parse_float_entry(self.opt_inner_angle_var.get(), 0.0)
         target_delta = parse_float_entry(self.opt_target_delta_var.get(), 0.0)
         delta_limit = parse_float_entry(self.opt_delta_limit_var.get(), 40.0)
@@ -501,23 +555,99 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         if not delta_limit.is_valid or delta_limit.value <= 0.0:
             self.optimization_status_var.set("Invalid variable limit")
             return
+        self.pending_optimized_hardpoints = None
+        self.optimization_queue = queue.Queue()
+        self.optimization_cancel_event = threading.Event()
+        self.optimization_thread = threading.Thread(
+            target=self._optimization_worker,
+            args=(
+                self.opt_inner_wheel_var.get(),
+                inner_angle.value,
+                target_delta.value,
+                self._selected_optimization_variables(),
+                delta_limit.value,
+            ),
+            daemon=True,
+        )
+        self._set_optimization_running(True)
+        self.optimization_status_var.set("Optimization running")
+        self.optimization_thread.start()
+        self.root.after(100, self._poll_optimization_progress)
+
+    def stop_optimization(self) -> None:
+        """Request cooperative cancellation for steering optimization."""
+        if (
+            not self.optimization_running
+            or self.optimization_cancel_event is None
+            or self.optimization_cancel_event.is_set()
+        ):
+            return
+        self.optimization_cancel_event.set()
+        self.optimization_status_var.set("Stopping optimization")
+
+    def _optimization_worker(
+        self,
+        inner_wheel: str,
+        inner_angle_deg: float,
+        target_left_minus_right_deg: float,
+        variable_names: tuple[str, ...],
+        variable_delta_limit: float,
+    ) -> None:
+        assert self.optimization_queue is not None
         try:
             result = optimize_steering_hardpoints(
-                self.project.hardpoints,
-                inner_wheel=self.opt_inner_wheel_var.get(),
-                inner_wheel_angle_deg=inner_angle.value,
-                target_left_minus_right_deg=target_delta.value,
-                variable_names=self._selected_optimization_variables(),
-                variable_delta_limit=delta_limit.value,
+                copy_hardpoint_rows(self.project.hardpoints),
+                inner_wheel=inner_wheel,
+                inner_wheel_angle_deg=inner_angle_deg,
+                target_left_minus_right_deg=target_left_minus_right_deg,
+                variable_names=variable_names,
+                variable_delta_limit=variable_delta_limit,
+                cancel_event=self.optimization_cancel_event,
             )
-        except Exception as exc:  # noqa: BLE001 - show GUI error.
-            self.optimization_status_var.set(str(exc))
+        except Exception as exc:  # noqa: BLE001 - surface in polling loop.
+            self.optimization_queue.put(("error", exc))
             return
-        self.pending_optimized_hardpoints = result.hardpoints
-        self.optimization_status_var.set(
-            f"Initial error: {result.initial_error_deg:.6g} deg\n"
-            f"Final error: {result.final_error_deg:.6g} deg\n"
-            f"Actual L-R: {result.actual_left_minus_right_deg:.6g} deg"
+        self.optimization_queue.put(("result", result))
+
+    def _poll_optimization_progress(self) -> None:
+        if self.optimization_queue is None:
+            return
+        finished = False
+        while True:
+            try:
+                kind, payload = self.optimization_queue.get_nowait()
+            except queue.Empty:
+                break
+            if kind == "result":
+                self.pending_optimized_hardpoints = payload.hardpoints
+                self.optimization_status_var.set(
+                    f"Initial error: {payload.initial_error_deg:.6g} deg\n"
+                    f"Final error: {payload.final_error_deg:.6g} deg\n"
+                    f"Actual L-R: {payload.actual_left_minus_right_deg:.6g} deg"
+                )
+                finished = True
+            elif kind == "error":
+                if isinstance(payload, OptimizationCancelledError):
+                    self.optimization_status_var.set("Stopped")
+                else:
+                    self.optimization_status_var.set(str(payload))
+                finished = True
+        if finished:
+            self._set_optimization_running(False)
+            self.optimization_queue = None
+            self.optimization_thread = None
+            self.optimization_cancel_event = None
+            return
+        self.root.after(100, self._poll_optimization_progress)
+
+    def _set_optimization_running(self, running: bool) -> None:
+        self.optimization_running = running
+        self.optimize_button.configure(state=tk.DISABLED if running else tk.NORMAL)
+        self.apply_optimization_button.configure(
+            state=tk.DISABLED if running else tk.NORMAL
+        )
+        self.stop_optimization_button.configure(
+            state=tk.NORMAL if running else tk.DISABLED
         )
 
     def apply_optimization(self) -> None:

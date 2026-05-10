@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import csv
 import json
+import threading
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,11 @@ from typing import Any
 import numpy as np
 from scipy.optimize import least_squares
 
-from kinematics.gui.common import parse_float_entry
+from kinematics.gui.common import (
+    OptimizationCancelledError,
+    parse_float_entry,
+    raise_if_cancelled,
+)
 from kinematics.gui.project import build_project_document, write_project_document
 from kinematics.steering.csv_loader import load_two_segment_steering_hardpoints_rows
 from kinematics.steering.geometry import (
@@ -550,6 +555,7 @@ def optimize_steering_hardpoints(
     target_left_minus_right_deg: float,
     variable_names: tuple[str, ...],
     variable_delta_limit: float,
+    cancel_event: threading.Event | None = None,
 ) -> SteeringOptimizationResult:
     """Optimize selected steering hardpoint variables to match wheel angle delta."""
     if not variable_names:
@@ -566,6 +572,7 @@ def optimize_steering_hardpoints(
     upper = x0 + variable_delta_limit
 
     def residual(values: np.ndarray) -> np.ndarray:
+        raise_if_cancelled(cancel_event)
         trial_rows = _copy_hardpoint_rows(start_rows)
         _apply_optimization_values(trial_rows, variable_names, values)
         try:
@@ -578,8 +585,10 @@ def optimize_steering_hardpoints(
             return np.array([1e6], dtype=np.float64)
         return np.array([actual - target_left_minus_right_deg], dtype=np.float64)
 
+    raise_if_cancelled(cancel_event)
     initial_error = float(abs(residual(x0)[0]))
     result = least_squares(residual, x0, bounds=(lower, upper), method="trf")
+    raise_if_cancelled(cancel_event)
     optimized_rows = _copy_hardpoint_rows(start_rows)
     _apply_optimization_values(optimized_rows, variable_names, result.x)
     actual_delta = _left_minus_right_at_inner_wheel_angle(

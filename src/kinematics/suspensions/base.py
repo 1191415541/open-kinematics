@@ -145,6 +145,18 @@ class Suspension(ABC):
         """
         ...
 
+    def steering_axis_points(self, state: SuspensionState) -> tuple[Vec3, Vec3]:
+        """
+        Return lower/upper points defining the steering axis.
+
+        Subclasses may override when the steering axis is not the line between the
+        wishbone outboard points.
+        """
+        return (
+            state.get(PointID.LOWER_WISHBONE_OUTBOARD),
+            state.get(PointID.UPPER_WISHBONE_OUTBOARD),
+        )
+
     def validate_hardpoints(self) -> None:
         """Validate that required hardpoints are present."""
         present = set(self.hardpoints.keys())

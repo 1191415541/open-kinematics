@@ -22,8 +22,12 @@ def _ensure_registry_populated() -> None:
     if not SUSPENSION_REGISTRY:
         # Import triggers registration.
         from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
+        from kinematics.suspensions.double_wishbone_carrier import (
+            DoubleWishboneCarrierSuspension,
+        )
 
         _register_class(DoubleWishboneSuspension)
+        _register_class(DoubleWishboneCarrierSuspension)
 
 
 def _register_class(cls: SuspensionClass) -> None:

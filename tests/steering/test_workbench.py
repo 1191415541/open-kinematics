@@ -1,8 +1,11 @@
 import math
+import threading
 
 import numpy as np
+import pytest
 
 from kinematics.steering.workbench import (
+    OptimizationCancelledError,
     THREE_SEGMENT_INPUT_MODES,
     SteeringCurve,
     available_steering_outputs,
@@ -516,6 +519,23 @@ def test_optimize_steering_hardpoints_matches_target_wheel_angle_delta():
     assert result.applied_values["pitman_arm_x_length"] != 0.0
     assert result.applied_values["tie_rod_outer_y"] != -420.0
     assert result.applied_values["tie_rod_inner_y"] != -120.0
+
+
+def test_optimize_steering_hardpoints_can_be_cancelled():
+    project = default_steering_project()
+    cancel_event = threading.Event()
+    cancel_event.set()
+
+    with pytest.raises(OptimizationCancelledError):
+        optimize_steering_hardpoints(
+            project.hardpoints,
+            inner_wheel="right",
+            inner_wheel_angle_deg=10.0,
+            target_left_minus_right_deg=-4.0,
+            variable_names=("pitman_x",),
+            variable_delta_limit=40.0,
+            cancel_event=cancel_event,
+        )
 
 
 def test_parse_float_entry_preserves_previous_value_during_partial_edits():

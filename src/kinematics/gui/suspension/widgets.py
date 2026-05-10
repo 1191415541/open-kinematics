@@ -29,6 +29,8 @@ class HardpointTable(ttk.Frame):
         PointID.TRACKROD_OUTBOARD: "TR_OUT",
         PointID.AXLE_INBOARD: "AX_IN",
         PointID.AXLE_OUTBOARD: "AX_OUT",
+        PointID.CARRIER_STEERING_AXIS_LOWER: "CAR_AX_LO",
+        PointID.CARRIER_STEERING_AXIS_UPPER: "CAR_AX_UP",
     }
 
     def __init__(self, master: tk.Misc, on_change=None) -> None:

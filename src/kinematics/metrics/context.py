@@ -79,8 +79,7 @@ class MetricContext:
         """
         Unit vector along the steering axis from lower to upper pivot.
         """
-        lower = self.state.get(PointID.LOWER_WISHBONE_OUTBOARD)
-        upper = self.state.get(PointID.UPPER_WISHBONE_OUTBOARD)
+        lower, upper = self.suspension.steering_axis_points(self.state)
         return normalize_vector(upper - lower)
 
     @cached_property
@@ -105,8 +104,7 @@ class MetricContext:
         ball joint and solves for the parameter t where Z = ground_z.
         Returns None if the steering axis is parallel to the ground plane.
         """
-        lower = self.state.get(PointID.LOWER_WISHBONE_OUTBOARD)
-        upper = self.state.get(PointID.UPPER_WISHBONE_OUTBOARD)
+        lower, upper = self.suspension.steering_axis_points(self.state)
         direction = upper - lower
         dz = direction[Axis.Z]
         if abs(dz) < EPS_GEOMETRIC:

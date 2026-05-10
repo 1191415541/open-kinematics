@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from kinematics.constraints import AngleConstraint, DistanceConstraint
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.types import make_vec3
 from kinematics.io.geometry_loader import load_geometry
@@ -25,6 +26,9 @@ from kinematics.suspensions.config.settings import (
     WheelConfig,
 )
 from kinematics.suspensions.double_wishbone import DoubleWishboneSuspension
+from kinematics.suspensions.double_wishbone_carrier import (
+    DoubleWishboneCarrierSuspension,
+)
 from kinematics.suspensions.registry import get_suspension_class, list_supported_types
 
 # Test fixtures
@@ -46,6 +50,27 @@ def valid_hardpoints() -> dict[PointID, np.ndarray]:
         PointID.TRACKROD_OUTBOARD: make_vec3([150, 800, 275]),
         PointID.AXLE_INBOARD: make_vec3([-20, 800, 308.426]),
         PointID.AXLE_OUTBOARD: make_vec3([-20, 950, 313.426]),
+    }
+
+
+@pytest.fixture
+def valid_carrier_hardpoints() -> dict[PointID, np.ndarray]:
+    """
+    Valid hardpoints for double wishbone carrier suspension.
+    """
+    return {
+        PointID.LOWER_WISHBONE_INBOARD_FRONT: make_vec3([250, 400, 200]),
+        PointID.LOWER_WISHBONE_INBOARD_REAR: make_vec3([-250, 450, 200]),
+        PointID.LOWER_WISHBONE_OUTBOARD: make_vec3([0, 900, 200]),
+        PointID.UPPER_WISHBONE_INBOARD_FRONT: make_vec3([225, 350, 500]),
+        PointID.UPPER_WISHBONE_INBOARD_REAR: make_vec3([-275, 350, 500]),
+        PointID.UPPER_WISHBONE_OUTBOARD: make_vec3([-25, 750, 500]),
+        PointID.TRACKROD_INBOARD: make_vec3([50, 200, 250]),
+        PointID.TRACKROD_OUTBOARD: make_vec3([140, 810, 275]),
+        PointID.AXLE_INBOARD: make_vec3([-20, 800, 308.426]),
+        PointID.AXLE_OUTBOARD: make_vec3([-20, 950, 313.426]),
+        PointID.CARRIER_STEERING_AXIS_LOWER: make_vec3([15, 820, 230]),
+        PointID.CARRIER_STEERING_AXIS_UPPER: make_vec3([15, 820, 470]),
     }
 
 
@@ -103,6 +128,7 @@ class TestSuspensionBase:
         assert DoubleWishboneSuspension.matches_type("DOUBLE_WISHBONE")
         assert DoubleWishboneSuspension.matches_type("double_wishbone_front")
         assert not DoubleWishboneSuspension.matches_type("macpherson_strut")
+        assert DoubleWishboneCarrierSuspension.matches_type("double_wishbone_carrier")
 
 
 # Test DoubleWishboneSuspension
@@ -233,6 +259,147 @@ class TestDoubleWishboneSuspension:
         labels = [link.label for link in links]
         assert "Upper Wishbone" in labels
         assert "Lower Wishbone" in labels
+
+
+class TestDoubleWishboneCarrierSuspension:
+    """
+    Tests for DoubleWishboneCarrierSuspension class.
+    """
+
+    def test_class_attributes(self):
+        """
+        Test class-level attributes are correctly defined.
+        """
+        assert DoubleWishboneCarrierSuspension.TYPE_KEY == "double_wishbone_carrier"
+        required = DoubleWishboneCarrierSuspension.REQUIRED_POINTS
+        assert PointID.LOWER_WISHBONE_OUTBOARD in required
+        assert PointID.UPPER_WISHBONE_OUTBOARD in required
+        assert PointID.CARRIER_STEERING_AXIS_LOWER in required
+        assert PointID.CARRIER_STEERING_AXIS_UPPER in required
+
+    def test_create_suspension(self, valid_carrier_hardpoints, valid_config):
+        """
+        Test creating a carrier suspension instance.
+        """
+        suspension = DoubleWishboneCarrierSuspension(
+            name="carrier",
+            version="1.0.0",
+            units=Units.MILLIMETERS,
+            hardpoints=valid_carrier_hardpoints,
+            config=valid_config,
+        )
+        assert suspension.name == "carrier"
+        assert len(suspension.hardpoints) == 12
+
+    def test_initial_state(self, valid_carrier_hardpoints, valid_config):
+        """
+        Test generating initial state for carrier suspension.
+        """
+        suspension = DoubleWishboneCarrierSuspension(
+            name="carrier",
+            units=Units.MILLIMETERS,
+            hardpoints=valid_carrier_hardpoints,
+            config=valid_config,
+        )
+        state = suspension.initial_state()
+        assert PointID.CARRIER_STEERING_AXIS_UPPER in state.positions
+        assert PointID.WHEEL_CENTER in state.positions
+
+    def test_constraints(self, valid_carrier_hardpoints, valid_config):
+        """
+        Test building carrier suspension constraints.
+        """
+        suspension = DoubleWishboneCarrierSuspension(
+            name="carrier",
+            units=Units.MILLIMETERS,
+            hardpoints=valid_carrier_hardpoints,
+            config=valid_config,
+        )
+        constraints = suspension.constraints()
+        assert len(constraints) > 0
+
+    def test_visualization_links(self, valid_carrier_hardpoints, valid_config):
+        """
+        Test visualization link generation for carrier suspension.
+        """
+        suspension = DoubleWishboneCarrierSuspension(
+            name="carrier",
+            units=Units.MILLIMETERS,
+            hardpoints=valid_carrier_hardpoints,
+            config=valid_config,
+        )
+        links = suspension.get_visualization_links()
+        labels = [link.label for link in links]
+        assert "Carrier" in labels
+        assert "Upright" in labels
+        assert "Steering Axis" in labels
+        upright = next(link for link in links if link.label == "Upright")
+        assert upright.points == [
+            PointID.TRACKROD_OUTBOARD,
+            PointID.UPPER_WISHBONE_OUTBOARD,
+            PointID.LOWER_WISHBONE_OUTBOARD,
+            PointID.TRACKROD_OUTBOARD,
+        ]
+        steering_axis = next(link for link in links if link.label == "Steering Axis")
+        assert steering_axis.points == [
+            PointID.CARRIER_STEERING_AXIS_LOWER,
+            PointID.CARRIER_STEERING_AXIS_UPPER,
+        ]
+
+    def test_constraints_keep_trackrod_and_axle_on_upright(
+        self, valid_carrier_hardpoints, valid_config
+    ):
+        """
+        Carrier should connect to upright, while tie rod and axle stay on the upright.
+        """
+        suspension = DoubleWishboneCarrierSuspension(
+            name="carrier",
+            units=Units.MILLIMETERS,
+            hardpoints=valid_carrier_hardpoints,
+            config=valid_config,
+        )
+        constraints = suspension.constraints()
+        distance_pairs = {
+            frozenset((constraint.p1, constraint.p2))
+            for constraint in constraints
+            if isinstance(constraint, DistanceConstraint)
+        }
+
+        for carrier_point in (
+            PointID.CARRIER_STEERING_AXIS_LOWER,
+            PointID.CARRIER_STEERING_AXIS_UPPER,
+        ):
+            assert frozenset((PointID.TRACKROD_OUTBOARD, carrier_point)) not in distance_pairs
+            assert frozenset((PointID.AXLE_INBOARD, carrier_point)) not in distance_pairs
+            assert frozenset((PointID.AXLE_OUTBOARD, carrier_point)) not in distance_pairs
+        carrier_pairs = {
+            frozenset((PointID.LOWER_WISHBONE_OUTBOARD, PointID.CARRIER_STEERING_AXIS_LOWER)),
+            frozenset((PointID.UPPER_WISHBONE_OUTBOARD, PointID.CARRIER_STEERING_AXIS_UPPER)),
+            frozenset((PointID.CARRIER_STEERING_AXIS_LOWER, PointID.CARRIER_STEERING_AXIS_UPPER)),
+            frozenset((PointID.LOWER_WISHBONE_OUTBOARD, PointID.CARRIER_STEERING_AXIS_UPPER)),
+            frozenset((PointID.UPPER_WISHBONE_OUTBOARD, PointID.CARRIER_STEERING_AXIS_LOWER)),
+        }
+        assert carrier_pairs <= distance_pairs
+
+    def test_instant_centers_return_points(self, valid_carrier_hardpoints, valid_config):
+        """
+        Carrier suspension IC helpers should return 3D points when defined.
+        """
+        suspension = DoubleWishboneCarrierSuspension(
+            name="carrier",
+            units=Units.MILLIMETERS,
+            hardpoints=valid_carrier_hardpoints,
+            config=valid_config,
+        )
+        state = suspension.initial_state()
+
+        svic = suspension.compute_side_view_instant_center(state)
+        fvic = suspension.compute_front_view_instant_center(state)
+
+        if svic is not None:
+            assert np.asarray(svic).shape == (3,)
+        if fvic is not None:
+            assert np.asarray(fvic).shape == (3,)
 
 
 class TestCamberShimConfig:

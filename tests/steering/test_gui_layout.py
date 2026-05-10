@@ -11,7 +11,7 @@ def test_simulation_input_controls_use_wrapping_grid_layout():
     assert "side=tk.LEFT" not in source
     assert "Linkage" in source
     assert "linkage_type_var" in source
-    assert "Wheelbase" in source
+    assert "Sweep min" in source
 
 
 def test_slider_drag_uses_throttled_preview_refresh():
@@ -23,10 +23,14 @@ def test_slider_drag_uses_throttled_preview_refresh():
 
 def test_side_panel_includes_optimization_tab():
     source = inspect.getsource(SteeringWorkbenchApp._build_side_panel)
+    optimization_source = inspect.getsource(SteeringWorkbenchApp._build_optimization_tab)
+    class_source = inspect.getsource(SteeringWorkbenchApp)
 
     assert "ttk.Notebook" in source
     assert "Optimization" in source
     assert "_build_optimization_tab" in source
+    assert "Stop" in optimization_source
+    assert "def stop_optimization" in class_source
 
 
 def test_steering_numeric_entries_use_commit_refresh_and_not_trace_refresh():
@@ -59,6 +63,22 @@ def test_hardpoint_panel_includes_restore_default_button():
 
     assert "Restore Default Hardpoints" in source
     assert "restore_default_hardpoints" in source
+
+
+def test_left_panel_moves_suspension_parameters_below_hardpoints_without_width_change():
+    layout_source = inspect.getsource(SteeringWorkbenchApp._build_layout)
+    parameter_source = inspect.getsource(SteeringWorkbenchApp._build_suspension_parameters)
+
+    assert "main.add(left, weight=1)" in layout_source
+    assert "main.add(right, weight=3)" in layout_source
+    assert (
+        layout_source.index("self.hardpoint_editor.pack(fill=tk.BOTH, expand=True)")
+        < layout_source.index("self._build_suspension_parameters(left)")
+        < layout_source.index("self.pitman_controls = PitmanTransformControls(")
+    )
+    assert "Suspension Parameters" in parameter_source
+    assert "Wheelbase" in parameter_source
+    assert "self.bind_entry_commit_refresh(entries)" in parameter_source
 
 
 def test_steering_gui_supports_embedded_mode():
