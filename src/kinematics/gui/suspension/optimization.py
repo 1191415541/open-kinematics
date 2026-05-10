@@ -60,8 +60,12 @@ class SuspensionOptimizationTarget:
     trend: str = "ignore"
     target_mode: str = "endpoint_delta"
     enabled: bool = True
+    weight: float = 1.0
 
     def __post_init__(self) -> None:
+        self.weight = float(self.weight)
+        if self.weight <= 0.0:
+            raise ValueError("optimization target weight must be positive")
         if self.trend not in SUSPENSION_OPTIMIZATION_TRENDS:
             raise ValueError(f"Unsupported optimization trend: {self.trend!r}")
         supported_modes = {mode for mode, _label in SUSPENSION_OPTIMIZATION_TARGET_MODES}
@@ -272,6 +276,7 @@ def optimization_config_from_dict(data: object) -> SuspensionOptimizationConfig:
             trend=str(item.get("trend", "ignore")),
             target_mode=str(item.get("target_mode", "endpoint_delta")),
             enabled=bool(item.get("enabled", True)),
+            weight=float(item.get("weight", 1.0)),
         )
         for item in targets_data
         if isinstance(item, dict)
@@ -379,6 +384,7 @@ def suspension_optimization_residuals(
     values: np.ndarray | None = None,
     baseline_values: np.ndarray | None = None,
     regularization_weight: float = 0.0,
+    normalize: bool = True,
 ) -> np.ndarray:
     """Build one residual vector for metric-value and trend matching."""
     residuals: list[float] = []
@@ -388,8 +394,18 @@ def suspension_optimization_residuals(
 
     for target in active_targets:
         series = metric_series_from_rows(rows, target.metric_name)
-        residuals.extend(suspension_metric_primary_residuals(series, target).tolist())
-        residuals.extend(_trend_residuals(series, target.trend))
+        target_residuals = np.concatenate(
+            (
+                suspension_metric_primary_residuals(series, target),
+                np.asarray(_trend_residuals(series, target.trend), dtype=np.float64),
+            )
+        )
+        if normalize:
+            target_residuals = target_residuals / _target_residual_scale(
+                series,
+                target,
+            )
+        residuals.extend((target_residuals * target.weight).tolist())
 
     if (
         regularization_weight > 0.0
@@ -450,6 +466,26 @@ def _trend_residuals(series: np.ndarray, trend: str) -> list[float]:
     if trend == "flat":
         return diffs.astype(np.float64).tolist()
     raise ValueError(f"Unsupported optimization trend: {trend!r}")
+
+
+def _target_residual_scale(
+    series: np.ndarray,
+    target: SuspensionOptimizationTarget,
+) -> float:
+    series = np.asarray(series, dtype=np.float64)
+    if target.target_mode == "endpoint_delta":
+        reference = max(abs(float(series[-1] - series[0])), abs(target.target_delta))
+    elif target.target_mode == "value_range":
+        reference = max(
+            abs(float(np.max(series) - np.min(series))),
+            abs(target.target_delta),
+        )
+    else:
+        reference = max(
+            float(np.max(np.abs(series - target.target_delta))),
+            abs(target.target_delta),
+        )
+    return max(reference, 1.0)
 
 
 def _variable_parts(variable_name: str) -> tuple[PointID, Axis]:

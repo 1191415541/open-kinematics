@@ -36,12 +36,14 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
             target_delta=-0.2,
             trend="negative",
             target_mode="endpoint_delta",
+            weight=2.5,
         ),
         SuspensionOptimizationTarget(
             metric_name="toe_deg",
             target_delta=0.0,
             trend="flat",
             target_mode="absolute_value",
+            weight=0.75,
         ),
     ]
     project.optimization.pair_delta_constraints = [
@@ -96,6 +98,7 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
                     "trend": "negative",
                     "target_mode": "endpoint_delta",
                     "enabled": True,
+                    "weight": 2.5,
                 },
                 {
                     "metric_name": "toe_deg",
@@ -103,6 +106,7 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
                     "trend": "flat",
                     "target_mode": "absolute_value",
                     "enabled": True,
+                    "weight": 0.75,
                 },
             ],
             "pair_delta_constraints": [
@@ -157,6 +161,7 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
         "endpoint_delta",
         "absolute_value",
     ]
+    assert [target.weight for target in loaded.optimization.targets] == [2.5, 0.75]
     assert loaded.curves[0].label == "camber"
     assert PointID.TRACKROD_OUTBOARD in loaded.hardpoints
 

@@ -210,6 +210,7 @@ def test_suspension_page_has_optimization_actions() -> None:
     assert "Pair constraints" in optimization_content_source
     assert "Optimization Method" in optimization_content_source
     assert "Mode" in optimization_content_source
+    assert "Weight" in optimization_content_source
     assert "opt_solver_mode_var" in class_source
     assert "SUSPENSION_OPTIMIZATION_TARGET_MODES" in optimization_content_source
     assert "Analyze Variables" in optimization_content_source
@@ -225,6 +226,7 @@ def test_suspension_page_has_optimization_actions() -> None:
     assert "opt_variable_vars" in class_source
     assert "opt_pair_constraint_vars" in class_source
     assert "opt_target_mode_vars" in class_source
+    assert "opt_target_weight_vars" in class_source
     assert "threading.Thread" in run_source
     assert "def run_optimization_analysis" in class_source
     assert "def _optimization_analysis_worker" in class_source

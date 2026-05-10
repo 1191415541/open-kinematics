@@ -150,6 +150,10 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             metric_name: tk.StringVar(value="0.0")
             for metric_name, _label in SUSPENSION_OPTIMIZATION_METRICS
         }
+        self.opt_target_weight_vars = {
+            metric_name: tk.StringVar(value="1.0")
+            for metric_name, _label in SUSPENSION_OPTIMIZATION_METRICS
+        }
         self.optimization_status_var = tk.StringVar(value="No optimization run")
         self._copyable_optimization_output = "No optimization run"
         self.status_var = tk.StringVar(value="Edit or import suspension geometry")
@@ -477,6 +481,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         ttk.Label(targets, text="Trend").grid(row=0, column=2, sticky="w")
         ttk.Label(targets, text="Mode").grid(row=0, column=3, sticky="w")
         ttk.Label(targets, text="Target [deg]").grid(row=0, column=4, sticky="w")
+        ttk.Label(targets, text="Weight").grid(row=0, column=5, sticky="w")
         for row_index, (metric_name, label) in enumerate(
             SUSPENSION_OPTIMIZATION_METRICS,
             start=1,
@@ -505,6 +510,11 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 textvariable=self.opt_target_delta_vars[metric_name],
                 width=12,
             ).grid(row=row_index, column=4, sticky="w", pady=2)
+            ttk.Entry(
+                targets,
+                textvariable=self.opt_target_weight_vars[metric_name],
+                width=8,
+            ).grid(row=row_index, column=5, sticky="w", padx=(6, 0), pady=2)
 
         buttons = ttk.Frame(parent)
         buttons.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(6, 0))
@@ -986,6 +996,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 *self.opt_target_trend_vars.values(),
                 *self.opt_target_mode_vars.values(),
                 *self.opt_target_delta_vars.values(),
+                *self.opt_target_weight_vars.values(),
             ),
             self._on_controls_changed,
         )
@@ -1131,6 +1142,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 self._optimization_mode_label(target.target_mode)
             )
             self.opt_target_delta_vars[metric_name].set(f"{target.target_delta:.6g}")
+            self.opt_target_weight_vars[metric_name].set(f"{target.weight:.6g}")
         self._sync_available_optimization_variables()
         self._sync_available_optimization_pair_constraints()
 
@@ -1194,6 +1206,19 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 return None
             if not parsed_delta.is_complete:
                 return None
+            parsed_weight = parse_float_entry(
+                self.opt_target_weight_vars[metric_name].get(),
+                1.0,
+            )
+            if not parsed_weight.is_valid or parsed_weight.value <= 0.0:
+                self._show_optimization_message(
+                    f"Invalid optimization target weight: {metric_name}",
+                    heading="Optimization Input Error",
+                    kind="error",
+                )
+                return None
+            if not parsed_weight.is_complete:
+                return None
             targets.append(
                 SuspensionOptimizationTarget(
                     metric_name=metric_name,
@@ -1203,6 +1228,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                         self.opt_target_mode_vars[metric_name].get()
                     ),
                     enabled=self.opt_target_enabled_vars[metric_name].get(),
+                    weight=float(parsed_weight.value),
                 )
             )
         return SuspensionOptimizationConfig(

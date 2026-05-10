@@ -141,6 +141,54 @@ def test_suspension_optimization_residuals_support_absolute_value_target_mode() 
     assert residuals == pytest.approx([0.3, -0.1, 0.2])
 
 
+def test_suspension_optimization_residuals_apply_target_weight() -> None:
+    rows = [
+        {"camber_deg": 0.0},
+        {"camber_deg": -0.5},
+        {"camber_deg": -1.0},
+    ]
+    targets = [
+        SuspensionOptimizationTarget(
+            metric_name="camber_deg",
+            target_delta=0.0,
+            trend="ignore",
+            weight=2.0,
+        )
+    ]
+
+    residuals = suspension_optimization_residuals(
+        rows,
+        targets,
+        normalize=False,
+    )
+
+    assert residuals == pytest.approx([-2.0])
+
+
+def test_suspension_optimization_residuals_normalize_each_target() -> None:
+    rows = [
+        {"camber_deg": 0.0, "toe_deg": 0.0},
+        {"camber_deg": 50.0, "toe_deg": 0.5},
+        {"camber_deg": 100.0, "toe_deg": 1.0},
+    ]
+    targets = [
+        SuspensionOptimizationTarget(
+            metric_name="camber_deg",
+            target_delta=0.0,
+            trend="ignore",
+        ),
+        SuspensionOptimizationTarget(
+            metric_name="toe_deg",
+            target_delta=0.0,
+            trend="ignore",
+        ),
+    ]
+
+    residuals = suspension_optimization_residuals(rows, targets)
+
+    assert residuals == pytest.approx([1.0, 1.0])
+
+
 def test_suspension_pair_delta_constraint_residuals_keep_baseline_delta() -> None:
     baseline = {
         PointID.UPPER_WISHBONE_INBOARD_FRONT: np.asarray([10.0, 20.0, 30.0]),
