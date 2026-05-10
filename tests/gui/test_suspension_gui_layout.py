@@ -1,6 +1,7 @@
 import inspect
 
 from kinematics import cli
+from kinematics.core.enums import PointID
 from kinematics.gui.app import KinematicsWorkbenchApp
 from kinematics.gui.suspension import SuspensionWorkbenchPage
 from kinematics.gui.suspension.widgets import HardpointTable
@@ -90,6 +91,18 @@ def test_suspension_hardpoint_table_is_compact_and_auto_sized() -> None:
     assert "_apply_default_layout" in class_source
 
 
+def test_suspension_hardpoint_table_uses_descriptive_display_names() -> None:
+    table = object.__new__(HardpointTable)
+
+    assert (
+        table._display_name(PointID.TRACKROD_INBOARD) == "Track Rod Inboard"
+    )
+    assert (
+        table._display_name(PointID.CARRIER_STEERING_AXIS_LOWER)
+        == "Carrier Steering Axis Lower"
+    )
+
+
 def test_suspension_page_has_wheel_travel_slider_with_throttled_preview() -> None:
     controls_source = inspect.getsource(SuspensionWorkbenchPage._build_controls)
     preview_source = inspect.getsource(SuspensionWorkbenchPage._refresh_preview_only)
@@ -108,7 +121,7 @@ def test_suspension_page_has_wheel_travel_slider_with_throttled_preview() -> Non
     assert "preview_mode=not update_outputs" in draw_result_source
 
 
-def test_suspension_page_uses_full_sweep_for_curves_and_preview_for_slider_drag() -> None:
+def test_suspension_page_uses_full_sweep_and_slider_preview() -> None:
     init_source = inspect.getsource(SuspensionWorkbenchPage.__init__)
     refresh_source = inspect.getsource(SuspensionWorkbenchPage.refresh)
     refresh_curves_source = inspect.getsource(SuspensionWorkbenchPage.refresh_curves)
@@ -169,7 +182,9 @@ def test_suspension_page_has_open_save_and_save_as_project_actions() -> None:
 
 
 def test_suspension_page_has_optimization_actions() -> None:
-    optimization_source = inspect.getsource(SuspensionWorkbenchPage._build_optimization_tab)
+    optimization_source = inspect.getsource(
+        SuspensionWorkbenchPage._build_optimization_tab
+    )
     optimization_content_source = inspect.getsource(
         SuspensionWorkbenchPage._build_optimization_content
     )
@@ -177,7 +192,9 @@ def test_suspension_page_has_optimization_actions() -> None:
         SuspensionWorkbenchPage._sync_available_optimization_variables
     )
     run_source = inspect.getsource(SuspensionWorkbenchPage.run_optimization)
-    load_source = inspect.getsource(SuspensionWorkbenchPage._load_optimization_to_controls)
+    load_source = inspect.getsource(
+        SuspensionWorkbenchPage._load_optimization_to_controls
+    )
     side_source = inspect.getsource(SuspensionWorkbenchPage._build_side_panel)
     class_source = inspect.getsource(SuspensionWorkbenchPage)
 

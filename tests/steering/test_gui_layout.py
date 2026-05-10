@@ -1,7 +1,9 @@
 import inspect
 
 from kinematics.gui.steering import SteeringWorkbenchApp
+from kinematics.gui.steering.widgets import HardpointEditor
 from kinematics.steering.gui import SteeringWorkbenchApp as LegacySteeringWorkbenchApp
+from kinematics.steering.workbench import SteeringHardpointRow
 
 
 def test_simulation_input_controls_use_wrapping_grid_layout():
@@ -23,7 +25,9 @@ def test_slider_drag_uses_throttled_preview_refresh():
 
 def test_side_panel_includes_optimization_tab():
     source = inspect.getsource(SteeringWorkbenchApp._build_side_panel)
-    optimization_source = inspect.getsource(SteeringWorkbenchApp._build_optimization_tab)
+    optimization_source = inspect.getsource(
+        SteeringWorkbenchApp._build_optimization_tab
+    )
     class_source = inspect.getsource(SteeringWorkbenchApp)
 
     assert "ttk.Notebook" in source
@@ -65,9 +69,43 @@ def test_hardpoint_panel_includes_restore_default_button():
     assert "restore_default_hardpoints" in source
 
 
+def test_steering_hardpoint_editor_matches_suspension_table_format():
+    source = inspect.getsource(HardpointEditor._build)
+
+    assert 'columns = ("point", "x", "y", "z")' in source
+    assert 'show="headings"' in source
+    assert 'height=10' in source
+    assert 'self.tree.heading(column, text=column)' in source
+
+
+def test_steering_hardpoint_editor_uses_descriptive_display_names():
+    editor = object.__new__(HardpointEditor)
+
+    assert (
+        editor._display_name(
+            SteeringHardpointRow("symmetric", "wheel_kingpin_lower", 0.0, 0.0, 0.0)
+        )
+        == "Wheel Kingpin Lower"
+    )
+    assert (
+        editor._display_name(
+            SteeringHardpointRow(
+                "symmetric",
+                "bellcrank_center_link_pickup",
+                0.0,
+                0.0,
+                0.0,
+            )
+        )
+        == "Bellcrank Center Link Pickup"
+    )
+
+
 def test_left_panel_moves_suspension_parameters_below_hardpoints_without_width_change():
     layout_source = inspect.getsource(SteeringWorkbenchApp._build_layout)
-    parameter_source = inspect.getsource(SteeringWorkbenchApp._build_suspension_parameters)
+    parameter_source = inspect.getsource(
+        SteeringWorkbenchApp._build_suspension_parameters
+    )
 
     assert "main.add(left, weight=1)" in layout_source
     assert "main.add(right, weight=3)" in layout_source

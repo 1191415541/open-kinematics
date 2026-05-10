@@ -19,18 +19,18 @@ class HardpointTable(ttk.Frame):
     MIN_POINT_COLUMN_WIDTH = 94
     MIN_VALUE_COLUMN_WIDTH = 56
     DISPLAY_NAMES = {
-        PointID.LOWER_WISHBONE_INBOARD_FRONT: "LWB_IN_F",
-        PointID.LOWER_WISHBONE_INBOARD_REAR: "LWB_IN_R",
-        PointID.LOWER_WISHBONE_OUTBOARD: "LWB_OUT",
-        PointID.UPPER_WISHBONE_INBOARD_FRONT: "UWB_IN_F",
-        PointID.UPPER_WISHBONE_INBOARD_REAR: "UWB_IN_R",
-        PointID.UPPER_WISHBONE_OUTBOARD: "UWB_OUT",
-        PointID.TRACKROD_INBOARD: "TR_IN",
-        PointID.TRACKROD_OUTBOARD: "TR_OUT",
-        PointID.AXLE_INBOARD: "AX_IN",
-        PointID.AXLE_OUTBOARD: "AX_OUT",
-        PointID.CARRIER_STEERING_AXIS_LOWER: "CAR_AX_LO",
-        PointID.CARRIER_STEERING_AXIS_UPPER: "CAR_AX_UP",
+        PointID.LOWER_WISHBONE_INBOARD_FRONT: "Lower Wishbone Inboard Front",
+        PointID.LOWER_WISHBONE_INBOARD_REAR: "Lower Wishbone Inboard Rear",
+        PointID.LOWER_WISHBONE_OUTBOARD: "Lower Wishbone Outboard",
+        PointID.UPPER_WISHBONE_INBOARD_FRONT: "Upper Wishbone Inboard Front",
+        PointID.UPPER_WISHBONE_INBOARD_REAR: "Upper Wishbone Inboard Rear",
+        PointID.UPPER_WISHBONE_OUTBOARD: "Upper Wishbone Outboard",
+        PointID.TRACKROD_INBOARD: "Track Rod Inboard",
+        PointID.TRACKROD_OUTBOARD: "Track Rod Outboard",
+        PointID.AXLE_INBOARD: "Axle Inboard",
+        PointID.AXLE_OUTBOARD: "Axle Outboard",
+        PointID.CARRIER_STEERING_AXIS_LOWER: "Carrier Steering Axis Lower",
+        PointID.CARRIER_STEERING_AXIS_UPPER: "Carrier Steering Axis Upper",
     }
 
     def __init__(self, master: tk.Misc, on_change=None) -> None:

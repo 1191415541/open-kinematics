@@ -31,6 +31,18 @@ class CurveRow(Protocol):
 class HardpointEditor(ttk.Frame):
     """Tree and coordinate editor for steering hardpoints."""
 
+    DISPLAY_NAMES = {
+        "wheel_kingpin_lower": "Wheel Kingpin Lower",
+        "wheel_kingpin_upper": "Wheel Kingpin Upper",
+        "wheel_center": "Wheel Center",
+        "wheel_tie_rod_pickup": "Wheel Tie Rod Pickup",
+        "pitman_output": "Pitman Output",
+        "pitman_pivot": "Pitman Pivot",
+        "bellcrank_pivot": "Bellcrank Pivot",
+        "bellcrank_center_link_pickup": "Bellcrank Center Link Pickup",
+        "bellcrank_tie_rod_pickup": "Bellcrank Tie Rod Pickup",
+    }
+
     def __init__(
         self,
         master: tk.Misc,
@@ -44,8 +56,8 @@ class HardpointEditor(ttk.Frame):
         self._build()
 
     def _build(self) -> None:
-        columns = ("category", "name", "x", "y", "z")
-        self.tree = ttk.Treeview(self, columns=columns, show="headings", height=12)
+        columns = ("point", "x", "y", "z")
+        self.tree = ttk.Treeview(self, columns=columns, show="headings", height=10)
         for column in columns:
             self.tree.heading(column, text=column)
             self.tree.column(column, width=86, anchor="center")
@@ -75,7 +87,7 @@ class HardpointEditor(ttk.Frame):
                 "",
                 "end",
                 iid=str(index),
-                values=(row.category, row.name, row.x, row.y, row.z),
+                values=(self._display_name(row), row.x, row.y, row.z),
             )
         if rows:
             self.tree.selection_set("0")
@@ -102,7 +114,7 @@ class HardpointEditor(ttk.Frame):
         row.z = values["z"]
         self.tree.item(
             str(self.selected_index),
-            values=(row.category, row.name, row.x, row.y, row.z),
+            values=(self._display_name(row), row.x, row.y, row.z),
         )
         return True
 
@@ -112,6 +124,9 @@ class HardpointEditor(ttk.Frame):
     def _on_entry_commit(self, _event: tk.Event) -> None:
         if self._apply_current_entry_values():
             self.on_change()
+
+    def _display_name(self, row: SteeringHardpointRow) -> str:
+        return self.DISPLAY_NAMES.get(row.name, row.name.replace("_", " ").title())
 
 
 class OutputTable(ttk.Frame):

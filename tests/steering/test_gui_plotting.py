@@ -275,3 +275,24 @@ def test_curve_plot_keeps_x_label_inside_figure():
     label_bottom = ax.xaxis.label.get_window_extent(renderer).y0
     assert label_bottom >= figure_bottom
     plt.close(fig)
+
+
+def test_curve_plot_keeps_y_label_inside_narrow_figure():
+    fig, ax = plt.subplots(figsize=(3.6, 3.0), dpi=100)
+    rows = [
+        {"input_value": float(value), "left_bellcrank_angle_deg": float(value * value)}
+        for value in range(-5, 6)
+    ]
+
+    draw_curve_plot(
+        ax,
+        rows,
+        [("input_value", "left_bellcrank_angle_deg", "preview")],
+    )
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+
+    figure_left = fig.bbox.x0
+    label_left = ax.yaxis.label.get_window_extent(renderer).x0
+    assert label_left >= figure_left
+    plt.close(fig)

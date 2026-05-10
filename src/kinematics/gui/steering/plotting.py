@@ -447,4 +447,4 @@ def draw_curve_plot(
     ax.grid(True, alpha=0.25)
     if curves:
         ax.legend(loc="best")
-    ax.figure.subplots_adjust(left=0.12, right=0.98, bottom=0.22, top=0.88)
+    ax.figure.subplots_adjust(left=0.18, right=0.98, bottom=0.22, top=0.88)
