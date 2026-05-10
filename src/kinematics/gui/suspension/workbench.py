@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import threading
 import time
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -15,6 +16,7 @@ from scipy.optimize import least_squares
 
 from kinematics.core.enums import Axis, PointID, TargetPositionMode, Units
 from kinematics.core.types import PointTarget, PointTargetAxis, SweepConfig
+from kinematics.gui.common import OptimizationCancelledError, raise_if_cancelled
 from kinematics.gui.project import build_project_document, write_project_document
 from kinematics.gui.suspension.global_sensitivity import (
     build_linear_constraint_parameterization,
@@ -72,6 +74,8 @@ OPTIMIZATION_COARSE_MAX_STEPS = 5
 OPTIMIZATION_CMA_POPSIZE = 8
 OPTIMIZATION_CMA_MAX_ITER = 12
 OPTIMIZATION_REGULARIZATION_WEIGHT = 0.02
+OPTIMIZATION_ANALYSIS_TOP_K_SIZES = (4, 6, 8, 10, 12)
+OPTIMIZATION_ANALYSIS_VALIDATION_COST_TOLERANCE = 0.05
 
 
 @dataclass
@@ -378,7 +382,9 @@ def analyze_suspension_optimization_variables(
     targets: list[SuspensionOptimizationTarget],
     variable_names: tuple[str, ...],
     variable_delta_limit: float,
+    solver_mode: str = "dual_path",
     pair_delta_constraints: list[SuspensionOptimizationPairDeltaConstraint] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> SuspensionOptimizationVariableAnalysisResult:
     """Screen optimization variables with constrained global sensitivity."""
     if not variable_names:
@@ -396,6 +402,7 @@ def analyze_suspension_optimization_variables(
         point_id: np.asarray(position, dtype=np.float64).copy()
         for point_id, position in project.hardpoints.items()
     }
+    raise_if_cancelled(cancel_event)
     x0 = np.asarray(
         [
             get_suspension_optimization_variable(initial_hardpoints, name)
@@ -434,8 +441,10 @@ def analyze_suspension_optimization_variables(
         upper=upper,
         constraint_matrix=constraint_matrix,
     )
+    raise_if_cancelled(cancel_event)
 
     def evaluate(values: np.ndarray) -> np.ndarray:
+        raise_if_cancelled(cancel_event)
         hardpoints = _hardpoints_from_optimization_values(
             initial_hardpoints,
             variable_names,
@@ -461,6 +470,7 @@ def analyze_suspension_optimization_variables(
     variable_count = int(x0.size)
 
     def evaluate_objective(values: np.ndarray) -> float:
+        raise_if_cancelled(cancel_event)
         residuals = evaluate(values)
         return float(np.linalg.norm(residuals))
 
@@ -470,7 +480,9 @@ def analyze_suspension_optimization_variables(
         parameterization=parameterization,
         evaluate_objective=evaluate_objective,
         trajectories=morris_trajectories,
+        cancel_event=cancel_event,
     )
+    raise_if_cancelled(cancel_event)
     selected_direction_indices = pick_reduced_directions_from_morris(
         parameterization=parameterization,
         morris_mu_stars=morris_mu_stars,
@@ -481,7 +493,9 @@ def analyze_suspension_optimization_variables(
         evaluate_objective=evaluate_objective,
         direction_indices=selected_direction_indices,
         base_samples=sobol_base_samples,
+        cancel_event=cancel_event,
     )
+    raise_if_cancelled(cancel_event)
     sobol_by_variable: dict[int, tuple[float, float]] = {}
     for stat in sobol_stats:
         projected = np.abs(parameterization.null_basis[:, stat.variable_index])
@@ -493,22 +507,6 @@ def analyze_suspension_optimization_variables(
             float(stat.total_order),
         )
 
-    ranked = sorted(
-        morris_stats,
-        key=lambda stat: (-stat.mu_star, -stat.sigma, variable_names[stat.variable_index]),
-    )
-    recommended: list[str] = []
-    for stat in ranked:
-        if stat.mu_star <= 1e-8:
-            continue
-        sobol_total = sobol_by_variable.get(stat.variable_index, (None, None))[1]
-        if sobol_total is not None and sobol_total <= 0.02:
-            continue
-        recommended.append(variable_names[stat.variable_index])
-
-    if not recommended and ranked:
-        recommended = [variable_names[ranked[0].variable_index]]
-
     items: list[SuspensionOptimizationVariableAnalysisItem] = []
     max_morris = max((stat.mu_star for stat in morris_stats), default=0.0)
     low_threshold = max(max_morris * 0.1, 1e-8)
@@ -518,8 +516,8 @@ def analyze_suspension_optimization_variables(
         if stat.mu_star <= low_threshold and (sobol_total is None or sobol_total <= 0.02):
             recommendation = "suppress"
             detail = "Low constrained global influence in Morris/Sobol screening"
-        elif variable_name in recommended:
-            recommendation = "keep"
+        elif stat.mu_star > 1e-8 and (sobol_total is None or sobol_total > 0.02):
+            recommendation = "recommended"
             detail = "High constrained global influence for current targets"
         else:
             recommendation = "secondary"
@@ -538,14 +536,29 @@ def analyze_suspension_optimization_variables(
 
     items.sort(
         key=lambda item: (
-            0 if item.recommendation == "keep" else 1 if item.recommendation == "secondary" else 2,
+            0
+            if item.recommendation == "recommended"
+            else 1 if item.recommendation == "secondary" else 2,
             -item.morris_mu_star,
             item.variable_name,
         )
     )
+    recommended_items = [item for item in items if item.recommendation == "recommended"]
+    items, recommended_items = _validate_recommended_variable_subset(
+        project=project,
+        targets=active_targets,
+        variable_delta_limit=variable_delta_limit,
+        solver_mode=solver_mode,
+        pair_delta_constraints=active_pair_delta_constraints,
+        items=items,
+        recommended_items=recommended_items,
+        cancel_event=cancel_event,
+    )
     return SuspensionOptimizationVariableAnalysisResult(
         items=tuple(items),
-        recommended_variable_names=tuple(recommended),
+        recommended_variable_names=tuple(
+            item.variable_name for item in recommended_items
+        ),
         residual_size=residual_size,
         variable_count=variable_count,
         constraint_rank=parameterization.constraint_rank,
@@ -553,8 +566,117 @@ def analyze_suspension_optimization_variables(
         morris_trajectories=morris_trajectories,
         sobol_base_samples=sobol_base_samples,
         sobol_direction_count=len(selected_direction_indices),
-        method="constraint_parameterization+morris+sobol",
+        method="constraint_parameterization+morris+sobol+validated_topk",
     )
+
+
+def _validate_recommended_variable_subset(
+    *,
+    project: SuspensionProject,
+    targets: list[SuspensionOptimizationTarget],
+    variable_delta_limit: float,
+    solver_mode: str,
+    pair_delta_constraints: list[SuspensionOptimizationPairDeltaConstraint],
+    items: list[SuspensionOptimizationVariableAnalysisItem],
+    recommended_items: list[SuspensionOptimizationVariableAnalysisItem],
+    cancel_event: threading.Event | None,
+) -> tuple[list[SuspensionOptimizationVariableAnalysisItem], list[SuspensionOptimizationVariableAnalysisItem]]:
+    raise_if_cancelled(cancel_event)
+    ranked_candidates = [
+        item.variable_name
+        for item in items
+        if item.recommendation != "suppress"
+    ]
+    if not ranked_candidates:
+        ranked_candidates = [item.variable_name for item in items]
+    if not ranked_candidates:
+        return items, recommended_items
+
+    validation_sizes: list[int] = []
+    for size in OPTIMIZATION_ANALYSIS_TOP_K_SIZES:
+        if size <= len(ranked_candidates):
+            validation_sizes.append(size)
+    if len(ranked_candidates) not in validation_sizes:
+        validation_sizes.append(len(ranked_candidates))
+    validation_sizes = sorted(set(validation_sizes))
+
+    evaluated_subsets: list[tuple[tuple[str, ...], float]] = []
+
+    for size in validation_sizes:
+        raise_if_cancelled(cancel_event)
+        subset = tuple(ranked_candidates[:size])
+        result = optimize_suspension_hardpoints(
+            project,
+            targets=targets,
+            variable_names=subset,
+            variable_delta_limit=variable_delta_limit,
+            solver_mode=solver_mode,
+            pair_delta_constraints=pair_delta_constraints,
+            cancel_event=cancel_event,
+            max_rounds=2,
+            convergence_tolerance=5e-2,
+        )
+        evaluated_subsets.append((subset, float(result.final_cost)))
+
+    best_cost = min((cost for _subset, cost in evaluated_subsets), default=float("inf"))
+    tolerance = 1.0 + OPTIMIZATION_ANALYSIS_VALIDATION_COST_TOLERANCE
+    eligible_subsets = [
+        (subset, cost)
+        for subset, cost in evaluated_subsets
+        if cost <= best_cost * tolerance
+    ]
+    if eligible_subsets:
+        best_subset, _selected_cost = min(
+            eligible_subsets,
+            key=lambda item: (len(item[0]), item[1], item[0]),
+        )
+    else:
+        best_subset = tuple()
+
+    if not best_subset:
+        return items, recommended_items
+
+    best_subset_names = set(best_subset)
+    updated_items: list[SuspensionOptimizationVariableAnalysisItem] = []
+    updated_recommended_items: list[SuspensionOptimizationVariableAnalysisItem] = []
+    for item in items:
+        if item.variable_name in best_subset_names:
+            updated_item = SuspensionOptimizationVariableAnalysisItem(
+                variable_name=item.variable_name,
+                morris_mu_star=item.morris_mu_star,
+                morris_sigma=item.morris_sigma,
+                sobol_first_order=item.sobol_first_order,
+                sobol_total=item.sobol_total,
+                recommendation="recommended",
+                detail="Validated by low-budget subset optimization for current targets",
+            )
+        elif item.recommendation == "recommended":
+            updated_item = SuspensionOptimizationVariableAnalysisItem(
+                variable_name=item.variable_name,
+                morris_mu_star=item.morris_mu_star,
+                morris_sigma=item.morris_sigma,
+                sobol_first_order=item.sobol_first_order,
+                sobol_total=item.sobol_total,
+                recommendation="secondary",
+                detail="Sensitive variable, but excluded by subset validation for current targets",
+            )
+        else:
+            updated_item = item
+        updated_items.append(updated_item)
+        if updated_item.recommendation == "recommended":
+            updated_recommended_items.append(updated_item)
+
+    updated_items.sort(
+        key=lambda item: (
+            0
+            if item.recommendation == "recommended"
+            else 1 if item.recommendation == "secondary" else 2,
+            -item.morris_mu_star,
+            item.variable_name,
+        )
+    )
+    updated_recommended_items.sort(key=lambda item: updated_items.index(item))
+    return updated_items, updated_recommended_items
 
 
 def optimize_suspension_hardpoints(
@@ -563,8 +685,10 @@ def optimize_suspension_hardpoints(
     targets: list[SuspensionOptimizationTarget],
     variable_names: tuple[str, ...],
     variable_delta_limit: float,
+    solver_mode: str = "dual_path",
     pair_delta_constraints: list[SuspensionOptimizationPairDeltaConstraint] | None = None,
     progress_callback: ProgressCallback | None = None,
+    cancel_event: threading.Event | None = None,
     max_rounds: int = 6,
     convergence_tolerance: float = 1e-3,
 ) -> SuspensionOptimizationResult:
@@ -579,6 +703,14 @@ def optimize_suspension_hardpoints(
     active_pair_delta_constraints = [
         constraint for constraint in (pair_delta_constraints or []) if constraint.enabled
     ]
+    supported_solver_modes = {
+        "dual_path",
+        "baseline_local_only",
+        "cma_es_then_local_refine",
+        "cma_es_only",
+    }
+    if solver_mode not in supported_solver_modes:
+        raise ValueError(f"Unsupported suspension optimization solver mode: {solver_mode!r}")
 
     initial_hardpoints = {
         point_id: np.asarray(position, dtype=np.float64).copy()
@@ -588,6 +720,7 @@ def optimize_suspension_hardpoints(
     evaluation_count = 0
 
     def emit_progress(phase: str, message: str) -> None:
+        raise_if_cancelled(cancel_event)
         if progress_callback is None:
             return
         progress_callback(
@@ -635,6 +768,7 @@ def optimize_suspension_hardpoints(
         settings: SuspensionSweepSettings,
         regularization_weight: float,
     ) -> tuple[np.ndarray, dict[PointID, np.ndarray], list[dict[str, float | bool | None]]]:
+        raise_if_cancelled(cancel_event)
         hardpoints = _hardpoints_from_optimization_values(
             initial_hardpoints,
             variable_names,
@@ -670,17 +804,21 @@ def optimize_suspension_hardpoints(
             nonlocal evaluation_count
             evaluation_count += 1
             try:
+                raise_if_cancelled(cancel_event)
                 residuals, _hardpoints, _rows = evaluate_values(
                     values,
                     settings=settings,
                     regularization_weight=OPTIMIZATION_REGULARIZATION_WEIGHT,
                 )
+            except OptimizationCancelledError:
+                raise
             except Exception:
                 return np.full_like(baseline_residuals, 1e3, dtype=np.float64)
             if evaluation_count == 1 or evaluation_count % 3 == 0:
                 emit_progress("solving", f"{stage_label}, evaluations: {evaluation_count}")
             return residuals
 
+        raise_if_cancelled(cancel_event)
         emit_progress("solving", f"Running {stage_label}")
         result = least_squares(residual, start_values, bounds=(lower, upper), method="trf")
         objective_residuals, hardpoints, rows = evaluate_values(
@@ -708,12 +846,14 @@ def optimize_suspension_hardpoints(
         iteration = 0
 
         while not strategy.stop():
+            raise_if_cancelled(cancel_event)
             iteration += 1
             candidates = strategy.ask()
             costs: list[float] = []
             for candidate in candidates:
                 nonlocal evaluation_count
                 evaluation_count += 1
+                raise_if_cancelled(cancel_event)
                 clipped = np.clip(np.asarray(candidate, dtype=np.float64), lower, upper)
                 try:
                     residuals, _hardpoints, _rows = evaluate_values(
@@ -722,6 +862,8 @@ def optimize_suspension_hardpoints(
                         regularization_weight=0.0,
                     )
                     cost = float(np.linalg.norm(residuals))
+                except OptimizationCancelledError:
+                    raise
                 except Exception:
                     cost = 1e6
                 costs.append(cost)
@@ -735,6 +877,65 @@ def optimize_suspension_hardpoints(
             )
 
         return best_values
+
+    def build_result_from_values(
+        *,
+        values: np.ndarray,
+        rows: list[dict[str, float | bool | None]],
+        hardpoints: dict[PointID, np.ndarray],
+        rounds_completed: int,
+        success: bool,
+        message: str,
+    ) -> SuspensionOptimizationResult:
+        final_metric_residuals = suspension_optimization_residuals(
+            rows,
+            active_targets,
+            values=np.asarray(values, dtype=np.float64),
+            baseline_values=baseline_x,
+            regularization_weight=0.0,
+        )
+        final_pair_residuals = suspension_pair_delta_constraint_residuals(
+            hardpoints,
+            initial_hardpoints,
+            active_pair_delta_constraints,
+        )
+        final_residuals = np.concatenate((final_metric_residuals, final_pair_residuals))
+        summaries = [
+            SuspensionOptimizationMetricSummary(
+                metric_name=target.metric_name,
+                trend=target.trend,
+                target_mode=target.target_mode,
+                target_delta=float(target.target_delta),
+                initial_value=float(
+                    suspension_metric_summary_value(
+                        metric_series_from_rows(baseline_rows, target.metric_name),
+                        target,
+                    )
+                ),
+                final_value=float(
+                    suspension_metric_summary_value(
+                        metric_series_from_rows(rows, target.metric_name),
+                        target,
+                    )
+                ),
+            )
+            for target in active_targets
+        ]
+        return SuspensionOptimizationResult(
+            hardpoints=hardpoints,
+            initial_cost=baseline_cost,
+            final_cost=float(np.linalg.norm(final_residuals)),
+            solver_mode=solver_mode,
+            rounds_completed=rounds_completed,
+            total_evaluations=evaluation_count,
+            success=success,
+            message=message,
+            applied_values={
+                name: get_suspension_optimization_variable(hardpoints, name)
+                for name in variable_names
+            },
+            target_summaries=summaries,
+        )
 
     def run_iterative_full_refine(
         *,
@@ -758,6 +959,7 @@ def optimize_suspension_hardpoints(
         rounds = 0
 
         for round_index in range(1, max_rounds + 1):
+            raise_if_cancelled(cancel_event)
             result, cost, hardpoints, rows = run_least_squares_stage(
                 start_values=current_values,
                 settings=project.settings,
@@ -792,6 +994,76 @@ def optimize_suspension_hardpoints(
             rounds,
         )
 
+    if solver_mode == "baseline_local_only":
+        raise_if_cancelled(cancel_event)
+        best_result, _best_cost, best_hardpoints, best_rows, rounds_completed = (
+            run_iterative_full_refine(
+                start_values=baseline_x,
+                candidate_label="Baseline full refine",
+            )
+        )
+        emit_progress("solving", "Baseline full refine selected as requested")
+        optimization_result = build_result_from_values(
+            values=np.asarray(best_result.x, dtype=np.float64),
+            rows=best_rows,
+            hardpoints=best_hardpoints,
+            rounds_completed=rounds_completed,
+            success=bool(best_result.success),
+            message=str(best_result.message),
+        )
+        emit_progress(
+            "finished",
+            f"Optimization finished with Baseline Local Only; rounds {rounds_completed}",
+        )
+        return optimization_result
+
+    if solver_mode == "cma_es_then_local_refine":
+        raise_if_cancelled(cancel_event)
+        cma_start_values = run_cma_es_stage()
+        best_result, _best_cost, best_hardpoints, best_rows, rounds_completed = (
+            run_iterative_full_refine(
+                start_values=cma_start_values,
+                candidate_label="CMA-ES full refine",
+            )
+        )
+        emit_progress("solving", "CMA-ES + local refine selected as requested")
+        optimization_result = build_result_from_values(
+            values=np.asarray(best_result.x, dtype=np.float64),
+            rows=best_rows,
+            hardpoints=best_hardpoints,
+            rounds_completed=rounds_completed,
+            success=bool(best_result.success),
+            message=str(best_result.message),
+        )
+        emit_progress(
+            "finished",
+            f"Optimization finished with CMA-ES + Local Refine; rounds {rounds_completed}",
+        )
+        return optimization_result
+
+    if solver_mode == "cma_es_only":
+        raise_if_cancelled(cancel_event)
+        best_values = run_cma_es_stage()
+        final_residuals, best_hardpoints, best_rows = evaluate_values(
+            best_values,
+            settings=project.settings,
+            regularization_weight=0.0,
+        )
+        optimization_result = build_result_from_values(
+            values=best_values,
+            rows=best_rows,
+            hardpoints=best_hardpoints,
+            rounds_completed=0,
+            success=True,
+            message=f"CMA-ES best final cost {float(np.linalg.norm(final_residuals)):.6g}",
+        )
+        emit_progress(
+            "finished",
+            "Optimization finished with CMA-ES Only; no local refine rounds",
+        )
+        return optimization_result
+
+    raise_if_cancelled(cancel_event)
     baseline_result_local, baseline_cost_local, baseline_hardpoints_local, baseline_rows_local, baseline_rounds = (
         run_iterative_full_refine(
             start_values=baseline_x,
@@ -800,6 +1072,7 @@ def optimize_suspension_hardpoints(
     )
     emit_progress("solving", f"Baseline full refine best cost {baseline_cost_local:.6g}")
 
+    raise_if_cancelled(cancel_event)
     cma_start_values = run_cma_es_stage()
     cma_result_local, cma_cost_local, cma_hardpoints_local, cma_rows_local, cma_rounds = (
         run_iterative_full_refine(
@@ -809,6 +1082,7 @@ def optimize_suspension_hardpoints(
     )
     emit_progress("solving", f"CMA-ES full refine best cost {cma_cost_local:.6g}")
 
+    raise_if_cancelled(cancel_event)
     if baseline_cost_local <= cma_cost_local:
         best_result = baseline_result_local
         best_hardpoints = baseline_hardpoints_local
@@ -820,63 +1094,17 @@ def optimize_suspension_hardpoints(
         best_rows = cma_rows_local
         rounds_completed = cma_rounds
 
-    final_metric_residuals = suspension_optimization_residuals(
-        best_rows,
-        active_targets,
-        values=np.asarray(
-            [
-                get_suspension_optimization_variable(best_hardpoints, name)
-                for name in variable_names
-            ],
-            dtype=np.float64,
-        ),
-        baseline_values=baseline_x,
-        regularization_weight=0.0,
-    )
-    final_pair_residuals = suspension_pair_delta_constraint_residuals(
-        best_hardpoints,
-        initial_hardpoints,
-        active_pair_delta_constraints,
-    )
-    final_residuals = np.concatenate((final_metric_residuals, final_pair_residuals))
-    summaries = [
-        SuspensionOptimizationMetricSummary(
-            metric_name=target.metric_name,
-            trend=target.trend,
-            target_mode=target.target_mode,
-            target_delta=float(target.target_delta),
-            initial_value=float(
-                suspension_metric_summary_value(
-                    metric_series_from_rows(baseline_rows, target.metric_name),
-                    target,
-                )
-            ),
-            final_value=float(
-                suspension_metric_summary_value(
-                    metric_series_from_rows(best_rows, target.metric_name),
-                    target,
-                )
-            ),
-        )
-        for target in active_targets
-    ]
-    optimization_result = SuspensionOptimizationResult(
+    optimization_result = build_result_from_values(
+        values=np.asarray(best_result.x, dtype=np.float64),
+        rows=best_rows,
         hardpoints=best_hardpoints,
-        initial_cost=baseline_cost,
-        final_cost=float(np.linalg.norm(final_residuals)),
         rounds_completed=rounds_completed,
-        total_evaluations=evaluation_count,
         success=bool(best_result.success),
         message=str(best_result.message),
-        applied_values={
-            name: get_suspension_optimization_variable(best_hardpoints, name)
-            for name in variable_names
-        },
-        target_summaries=summaries,
     )
     emit_progress(
         "finished",
-        f"Optimization finished; winning polish used {rounds_completed} round(s)",
+        f"Optimization finished with Dual Path; winning polish used {rounds_completed} round(s)",
     )
     return optimization_result
 
@@ -1026,6 +1254,8 @@ def _default_hardpoint(point_id: PointID) -> np.ndarray:
         PointID.TRACKROD_OUTBOARD: (150.0, 800.0, 275.0),
         PointID.AXLE_INBOARD: (-20.0, 800.0, 308.426),
         PointID.AXLE_OUTBOARD: (-20.0, 950.0, 313.426),
+        PointID.CARRIER_STEERING_AXIS_LOWER: (15.0, 820.0, 230.0),
+        PointID.CARRIER_STEERING_AXIS_UPPER: (15.0, 820.0, 470.0),
     }
     return np.asarray(defaults.get(point_id, (0.0, 0.0, 0.0)), dtype=np.float64)
 

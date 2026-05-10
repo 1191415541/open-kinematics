@@ -62,6 +62,14 @@ def test_suspension_page_exposes_load_solve_and_curve_controls() -> None:
     assert "CurveManager" in side_source
 
 
+def test_suspension_page_supports_carrier_type_in_selector() -> None:
+    controls_source = inspect.getsource(SuspensionWorkbenchPage._build_controls)
+    workbench_source = inspect.getsource(SuspensionWorkbenchPage._on_type_changed)
+
+    assert "supported_suspension_type_keys()" in controls_source
+    assert "create_default_suspension_project" in workbench_source
+
+
 def test_suspension_hardpoint_table_is_compact_and_auto_sized() -> None:
     source = inspect.getsource(HardpointTable)
     layout_source = inspect.getsource(SuspensionWorkbenchPage._build_layout)
@@ -183,15 +191,19 @@ def test_suspension_page_has_optimization_actions() -> None:
     assert "row=index" in variables_source
     assert "column=0" in variables_source
     assert "Pair constraints" in optimization_content_source
+    assert "Optimization Method" in optimization_content_source
     assert "Mode" in optimization_content_source
+    assert "opt_solver_mode_var" in class_source
     assert "SUSPENSION_OPTIMIZATION_TARGET_MODES" in optimization_content_source
     assert "Analyze Variables" in optimization_content_source
     assert "Select Recommended" in optimization_content_source
     assert "Select All" in optimization_content_source
     assert "Select None" in optimization_content_source
     assert "Invert" in optimization_content_source
+    assert "Stop" in optimization_content_source
     assert "ttk.Progressbar" in optimization_content_source
     assert "tk.Text" in optimization_content_source
+    assert "output_actions = ttk.Frame(output_frame)" in optimization_content_source
     assert "state=tk.DISABLED" in optimization_content_source
     assert "opt_variable_vars" in class_source
     assert "opt_pair_constraint_vars" in class_source
@@ -212,6 +224,7 @@ def test_suspension_page_has_optimization_actions() -> None:
     assert "def _optimization_variable_style_name" in class_source
     assert "style=" in variables_source
     assert "_poll_optimization_progress" in class_source
+    assert "def stop_optimization" in class_source
     assert "_sync_available_optimization_pair_constraints" in load_source
     assert "def run_optimization" in class_source
     assert "def apply_optimization" in class_source

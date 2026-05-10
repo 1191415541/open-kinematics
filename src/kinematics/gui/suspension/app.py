@@ -13,12 +13,14 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib.figure import Figure
 
 from kinematics.gui.common import (
+    OptimizationCancelledError,
     RefreshWorkflowMixin,
     parse_float_entry,
     parse_int_entry,
 )
 from kinematics.gui.suspension.optimization import (
     SUSPENSION_OPTIMIZATION_METRICS,
+    SUSPENSION_OPTIMIZATION_SOLVER_MODES,
     SUSPENSION_OPTIMIZATION_TARGET_MODES,
     SUSPENSION_OPTIMIZATION_TRENDS,
     SuspensionOptimizationConfig,
@@ -119,10 +121,16 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             tuple[str, object]
         ] | None = None
         self.optimization_thread: threading.Thread | None = None
+        self.optimization_cancel_event: threading.Event | None = None
         self.pending_optimized_hardpoints = None
         self.last_optimization_analysis: SuspensionOptimizationVariableAnalysisResult | None = None
         self.opt_variable_limit_var = tk.StringVar(
             value=str(self.project.optimization.variable_delta_limit)
+        )
+        self.opt_solver_mode_var = tk.StringVar(
+            value=self._optimization_solver_mode_label(
+                self.project.optimization.solver_mode
+            )
         )
         self.opt_variable_vars: dict[str, tk.BooleanVar] = {}
         self.opt_pair_constraint_vars: dict[str, tk.BooleanVar] = {}
@@ -393,7 +401,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
 
     def _build_optimization_content(self, parent: ttk.Frame) -> None:
         parent.columnconfigure(1, weight=1)
-        parent.rowconfigure(6, weight=1)
+        parent.rowconfigure(7, weight=1)
         ttk.Label(parent, text="Variable limit [mm]").grid(
             row=0,
             column=0,
@@ -406,8 +414,27 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             padx=(6, 0),
             pady=1,
         )
+        ttk.Label(parent, text="Optimization Method").grid(
+            row=1,
+            column=0,
+            sticky="w",
+            pady=(6, 0),
+        )
+        ttk.Combobox(
+            parent,
+            textvariable=self.opt_solver_mode_var,
+            values=[label for _mode, label in SUSPENSION_OPTIMIZATION_SOLVER_MODES],
+            state="readonly",
+            width=24,
+        ).grid(
+            row=1,
+            column=1,
+            sticky="ew",
+            padx=(6, 0),
+            pady=(6, 0),
+        )
         variables = ttk.LabelFrame(parent, text="Variables", padding=4)
-        variables.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        variables.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
         variables.columnconfigure(0, weight=1)
         variable_actions = ttk.Frame(variables)
         variable_actions.grid(row=0, column=0, sticky="ew", pady=(0, 4))
@@ -440,11 +467,11 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.opt_variable_list_frame = variable_list
 
         pair_constraints = ttk.LabelFrame(parent, text="Pair constraints", padding=4)
-        pair_constraints.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        pair_constraints.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 0))
         self.opt_pair_constraints_frame = pair_constraints
 
         targets = ttk.LabelFrame(parent, text="Targets", padding=4)
-        targets.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        targets.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(6, 0))
         ttk.Label(targets, text="Metric").grid(row=0, column=0, sticky="w")
         ttk.Label(targets, text="Enable").grid(row=0, column=1, sticky="w")
         ttk.Label(targets, text="Trend").grid(row=0, column=2, sticky="w")
@@ -480,10 +507,11 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             ).grid(row=row_index, column=4, sticky="w", pady=2)
 
         buttons = ttk.Frame(parent)
-        buttons.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        buttons.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(6, 0))
         buttons.columnconfigure(0, weight=1)
         buttons.columnconfigure(1, weight=1)
         buttons.columnconfigure(2, weight=1)
+        buttons.columnconfigure(3, weight=1)
         self.analyze_variables_button = ttk.Button(
             buttons,
             text="Analyze Variables",
@@ -517,12 +545,24 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             sticky="ew",
             padx=(4, 0),
         )
+        self.stop_optimization_button = ttk.Button(
+            buttons,
+            text="Stop",
+            command=self.stop_optimization,
+            state=tk.DISABLED,
+        )
+        self.stop_optimization_button.grid(
+            row=0,
+            column=3,
+            sticky="ew",
+            padx=(4, 0),
+        )
         self.optimization_progressbar = ttk.Progressbar(
             parent,
             mode="indeterminate",
         )
         self.optimization_progressbar.grid(
-            row=5,
+            row=6,
             column=0,
             columnspan=2,
             sticky="ew",
@@ -530,7 +570,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         )
         output_frame = ttk.LabelFrame(parent, text="Results", padding=4)
         output_frame.grid(
-            row=6,
+            row=7,
             column=0,
             columnspan=2,
             sticky="nsew",
@@ -557,8 +597,8 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.optimization_output.grid(row=0, column=0, sticky="nsew")
         output_scrollbar.grid(row=0, column=1, sticky="ns")
 
-        output_actions = ttk.Frame(parent)
-        output_actions.grid(row=7, column=0, columnspan=2, sticky="e", pady=(4, 0))
+        output_actions = ttk.Frame(output_frame)
+        output_actions.grid(row=1, column=0, columnspan=2, sticky="e", pady=(6, 0))
         ttk.Button(
             output_actions,
             text="Copy Output",
@@ -748,6 +788,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         snapshot = copy.deepcopy(self.project)
         self.pending_optimized_hardpoints = None
         self.optimization_queue = queue.Queue()
+        self.optimization_cancel_event = threading.Event()
         self.optimization_thread = threading.Thread(
             target=self._optimization_worker,
             args=(snapshot,),
@@ -775,6 +816,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             return
         snapshot = copy.deepcopy(self.project)
         self.optimization_queue = queue.Queue()
+        self.optimization_cancel_event = threading.Event()
         self.optimization_thread = threading.Thread(
             target=self._optimization_analysis_worker,
             args=(snapshot,),
@@ -816,6 +858,21 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             kind="recommended",
         )
 
+    def stop_optimization(self) -> None:
+        """Request cooperative cancellation for the current optimization task."""
+        if (
+            not self.optimization_running
+            or self.optimization_cancel_event is None
+            or self.optimization_cancel_event.is_set()
+        ):
+            return
+        self.optimization_cancel_event.set()
+        self._show_optimization_message(
+            "Stopping current optimization task",
+            heading="Optimization Stopping",
+            kind="secondary",
+        )
+
     def _optimization_analysis_worker(self, project: SuspensionProject) -> None:
         assert self.optimization_queue is not None
         try:
@@ -824,7 +881,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 targets=project.optimization.targets,
                 variable_names=tuple(project.optimization.variable_names),
                 variable_delta_limit=project.optimization.variable_delta_limit,
+                solver_mode=project.optimization.solver_mode,
                 pair_delta_constraints=project.optimization.pair_delta_constraints,
+                cancel_event=self.optimization_cancel_event,
             )
         except Exception as exc:  # noqa: BLE001 - surface in GUI polling loop.
             self.optimization_queue.put(("error", exc))
@@ -839,10 +898,12 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 targets=project.optimization.targets,
                 variable_names=tuple(project.optimization.variable_names),
                 variable_delta_limit=project.optimization.variable_delta_limit,
+                solver_mode=project.optimization.solver_mode,
                 pair_delta_constraints=project.optimization.pair_delta_constraints,
                 progress_callback=lambda progress: self.optimization_queue.put(
                     ("progress", progress)
                 ),
+                cancel_event=self.optimization_cancel_event,
             )
         except Exception as exc:  # noqa: BLE001 - surface in GUI polling loop.
             self.optimization_queue.put(("error", exc))
@@ -878,16 +939,24 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 finished = True
             elif kind == "error":
                 self.pending_optimized_hardpoints = None
-                self._show_optimization_message(
-                    str(payload),
-                    heading="Optimization Error",
-                    kind="error",
-                )
+                if isinstance(payload, OptimizationCancelledError):
+                    self._show_optimization_message(
+                        "Stopped",
+                        heading="Optimization Stopped",
+                        kind="secondary",
+                    )
+                else:
+                    self._show_optimization_message(
+                        str(payload),
+                        heading="Optimization Error",
+                        kind="error",
+                    )
                 finished = True
         if finished:
             self._set_optimization_running(False)
             self.optimization_queue = None
             self.optimization_thread = None
+            self.optimization_cancel_event = None
             return
         self.after(100, self._poll_optimization_progress)
 
@@ -899,6 +968,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.apply_optimization_button.configure(
             state=tk.DISABLED if running else tk.NORMAL
         )
+        self.stop_optimization_button.configure(
+            state=tk.NORMAL if running else tk.DISABLED
+        )
         if running:
             self.optimization_progressbar.start(10)
         else:
@@ -906,7 +978,15 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
 
     def _bind_control_vars(self) -> None:
         self.bind_control_var_traces(
-            (self.steered_var,),
+            (
+                self.steered_var,
+                self.opt_variable_limit_var,
+                self.opt_solver_mode_var,
+                *self.opt_target_enabled_vars.values(),
+                *self.opt_target_trend_vars.values(),
+                *self.opt_target_mode_vars.values(),
+                *self.opt_target_delta_vars.values(),
+            ),
             self._on_controls_changed,
         )
 
@@ -1034,6 +1114,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
     def _load_optimization_to_controls(self) -> None:
         optimization = self.project.optimization
         self.opt_variable_limit_var.set(str(optimization.variable_delta_limit))
+        self.opt_solver_mode_var.set(
+            self._optimization_solver_mode_label(optimization.solver_mode)
+        )
         targets_by_metric = {
             target.metric_name: target for target in optimization.targets
         }
@@ -1124,6 +1207,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             )
         return SuspensionOptimizationConfig(
             variable_delta_limit=float(parsed_limit.value),
+            solver_mode=self._optimization_solver_mode_key(
+                self.opt_solver_mode_var.get()
+            ),
             variable_names=list(variable_names),
             targets=targets,
             pair_delta_constraints=pair_delta_constraints,
@@ -1165,6 +1251,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         project.optimization.variable_names = [
             name for name, variable in self.opt_variable_vars.items() if variable.get()
         ]
+        self._reset_optimization_analysis()
 
     def _set_optimization_variable_selection(self, selected_names: set[str]) -> None:
         for name, variable in self.opt_variable_vars.items():
@@ -1180,7 +1267,11 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 kind="secondary",
             )
             return
-        recommended = set(analysis.recommended_variable_names)
+        recommended = {
+            item.variable_name
+            for item in analysis.items
+            if getattr(item, "recommendation", "") == "recommended"
+        }
         if not recommended:
             self._show_optimization_message(
                 "No recommended variables available for the current analysis",
@@ -1251,6 +1342,18 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 return label
         return "End-to-end delta"
 
+    def _optimization_solver_mode_key(self, label: str) -> str:
+        for mode, mode_label in SUSPENSION_OPTIMIZATION_SOLVER_MODES:
+            if mode_label == label:
+                return mode
+        return "dual_path"
+
+    def _optimization_solver_mode_label(self, mode: str) -> str:
+        for mode_key, label in SUSPENSION_OPTIMIZATION_SOLVER_MODES:
+            if mode_key == mode:
+                return label
+        return "Dual Path"
+
     def _show_optimization_message(
         self,
         message: str,
@@ -1279,12 +1382,6 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         )
         self.optimization_output.tag_configure(
             "recommended",
-            foreground="#1d4ed8",
-            spacing1=1,
-            spacing3=2,
-        )
-        self.optimization_output.tag_configure(
-            "keep",
             foreground="#047857",
             spacing1=1,
             spacing3=2,
@@ -1346,6 +1443,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         text = selected_text or self._copyable_optimization_output
         self.clipboard_clear()
         self.clipboard_append(text)
+        self.update()
         return "break"
 
     def _format_optimization_summary_line(self, summary: object) -> str:
@@ -1356,7 +1454,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         final_value = float(getattr(summary, "final_value"))
         if target_mode == "absolute_value":
             return (
-                f"{metric_name}: Absolute target {target_value:.6g}, "
+                f"{metric_name}: Curve value target {target_value:.6g}, "
                 f"initial RMS error {initial_value:.6g}, "
                 f"final RMS error {final_value:.6g}"
             )
@@ -1390,6 +1488,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             {
                 "kind": "summary",
                 "text": (
+                    f"Method: {self._optimization_solver_mode_label(str(getattr(result, 'solver_mode', 'dual_path')))}\n"
                     f"Initial cost: {float(getattr(result, 'initial_cost')):.6g}\n"
                     f"Final cost: {float(getattr(result, 'final_cost')):.6g}\n"
                     f"Rounds: {int(getattr(result, 'rounds_completed'))}\n"
@@ -1410,7 +1509,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             sections.append(
                 {
                     "kind": "group",
-                    "tone": "keep" if improved else "secondary",
+                    "tone": "recommended" if improved else "secondary",
                     "text": self._format_optimization_summary_line(summary),
                 }
             )
@@ -1434,20 +1533,11 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                     f"{result.sobol_direction_count}/{result.sobol_base_samples}"
                 ),
             },
-            {
-                "kind": "recommended",
-                "text": (
-                    "Recommended variables: "
-                    + (
-                        ", ".join(result.recommended_variable_names)
-                        if result.recommended_variable_names
-                        else "none"
-                    )
-                ),
-            },
         ]
         grouped_items = {
-            "keep": [item for item in result.items if item.recommendation == "keep"],
+            "recommended": [
+                item for item in result.items if item.recommendation == "recommended"
+            ],
             "secondary": [
                 item for item in result.items if item.recommendation == "secondary"
             ],
@@ -1456,7 +1546,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             ],
         }
         for recommendation, label in (
-            ("keep", "Keep"),
+            ("recommended", "Recommended"),
             ("secondary", "Secondary"),
             ("suppress", "Suppress"),
         ):
@@ -1498,6 +1588,8 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             constraint.key(): tk.BooleanVar(value=constraint.enabled)
             for constraint in constraints
         }
+        for variable in self.opt_pair_constraint_vars.values():
+            variable.trace_add("write", self._on_controls_changed)
         for child in self.opt_pair_constraints_frame.winfo_children():
             child.destroy()
         for index, constraint in enumerate(constraints):
@@ -1575,6 +1667,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         )
 
     def _on_controls_changed(self, *_args: object) -> None:
+        self._reset_optimization_analysis()
         self.trigger_refresh_if_ready()
 
     def refresh(self) -> None:

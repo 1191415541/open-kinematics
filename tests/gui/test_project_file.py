@@ -29,6 +29,7 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
         "TRACKROD_INBOARD_z",
         "UPPER_WISHBONE_OUTBOARD_z",
     ]
+    project.optimization.solver_mode = "cma_es_only"
     project.optimization.targets = [
         SuspensionOptimizationTarget(
             metric_name="camber_deg",
@@ -87,6 +88,7 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
                 "TRACKROD_INBOARD_z",
                 "UPPER_WISHBONE_OUTBOARD_z",
             ],
+            "solver_mode": "cma_es_only",
             "targets": [
                 {
                     "metric_name": "camber_deg",
@@ -142,6 +144,7 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
         "TRACKROD_INBOARD_z",
         "UPPER_WISHBONE_OUTBOARD_z",
     ]
+    assert loaded.optimization.solver_mode == "cma_es_only"
     assert [constraint.enabled for constraint in loaded.optimization.pair_delta_constraints] == [
         True,
         False,

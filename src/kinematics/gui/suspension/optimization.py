@@ -13,8 +13,14 @@ from kinematics.core.enums import Axis, PointID
 SUSPENSION_OPTIMIZATION_TRENDS = ("ignore", "positive", "negative", "flat")
 SUSPENSION_OPTIMIZATION_TARGET_MODES = (
     ("endpoint_delta", "End-to-end delta"),
-    ("value_range", "Full-range variation"),
-    ("absolute_value", "Absolute target"),
+    ("value_range", "Max-min range"),
+    ("absolute_value", "Curve value target"),
+)
+SUSPENSION_OPTIMIZATION_SOLVER_MODES = (
+    ("dual_path", "Dual Path"),
+    ("baseline_local_only", "Baseline Local Only"),
+    ("cma_es_then_local_refine", "CMA-ES + Local Refine"),
+    ("cma_es_only", "CMA-ES Only"),
 )
 SUSPENSION_OPTIMIZATION_METRICS = (
     ("camber_deg", "Camber"),
@@ -96,6 +102,7 @@ class SuspensionOptimizationConfig:
     """Editable optimization settings stored with a suspension project."""
 
     variable_delta_limit: float = 5.0
+    solver_mode: str = "dual_path"
     variable_names: list[str] = field(
         default_factory=lambda: list(DEFAULT_SUSPENSION_OPTIMIZATION_VARIABLES)
     )
@@ -118,6 +125,13 @@ class SuspensionOptimizationConfig:
     def __post_init__(self) -> None:
         if self.variable_delta_limit <= 0.0:
             raise ValueError("variable_delta_limit must be positive")
+        supported_solver_modes = {
+            mode for mode, _label in SUSPENSION_OPTIMIZATION_SOLVER_MODES
+        }
+        if self.solver_mode not in supported_solver_modes:
+            raise ValueError(
+                f"Unsupported suspension optimization solver mode: {self.solver_mode!r}"
+            )
 
 
 @dataclass
@@ -139,6 +153,7 @@ class SuspensionOptimizationResult:
     hardpoints: dict[PointID, np.ndarray]
     initial_cost: float
     final_cost: float
+    solver_mode: str
     rounds_completed: int
     total_evaluations: int
     success: bool
@@ -236,6 +251,7 @@ def optimization_config_to_dict(
     """Convert optimization settings to project-file JSON data."""
     return {
         "variable_delta_limit": float(config.variable_delta_limit),
+        "solver_mode": config.solver_mode,
         "variable_names": list(config.variable_names),
         "targets": [asdict(target) for target in config.targets],
         "pair_delta_constraints": [
@@ -278,6 +294,7 @@ def optimization_config_from_dict(data: object) -> SuspensionOptimizationConfig:
         pair_delta_constraints = SuspensionOptimizationConfig().pair_delta_constraints
     return SuspensionOptimizationConfig(
         variable_delta_limit=float(data.get("variable_delta_limit", 5.0)),
+        solver_mode=str(data.get("solver_mode", "dual_path")),
         variable_names=[str(name) for name in data.get("variable_names", [])]
         or list(DEFAULT_SUSPENSION_OPTIMIZATION_VARIABLES),
         targets=targets,
