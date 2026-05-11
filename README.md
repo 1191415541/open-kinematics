@@ -70,6 +70,7 @@ hardpoints, `kingpin_lower` and `kingpin_upper` define the steering axis; the
 import numpy as np
 
 from kinematics.steering import (
+    compare_two_segment_2d_and_3d,
     PitmanArmGeometry2D,
     PitmanArmHardpoints3D,
     SteeringCoordinateSystem,
@@ -81,6 +82,7 @@ from kinematics.steering import (
     solve_two_segment_from_left_wheel_angle,
     solve_two_segment_from_right_wheel_angle,
     solve_two_segment_steering,
+    solve_two_segment_steering_3d,
     sweep_two_segment_steering,
 )
 
@@ -140,7 +142,20 @@ hardpoints_3d = TwoSegmentSteeringHardpoints3D(
 )
 geometry_from_3d = hardpoints_3d.to_2d_geometry()
 state_from_3d = solve_two_segment_steering(hardpoints_3d, pitman_angle_deg=8.0)
+state_3d = solve_two_segment_steering_3d(hardpoints_3d, pitman_angle_deg=8.0)
+comparison = compare_two_segment_2d_and_3d(hardpoints_3d, pitman_angle_deg=8.0)
+print(
+    comparison.left_wheel_angle_delta_deg,
+    comparison.right_wheel_angle_delta_deg,
+)
 ```
+
+`solve_two_segment_steering()` keeps the existing top-view 2D behaviour even
+when fed 3D hardpoints. Use `solve_two_segment_steering_3d()` to preserve 3D
+tie-rod lengths while rotating each wheel about its kingpin axis and rotating
+the pitman outputs about global `+Z`. `compare_two_segment_2d_and_3d()` solves
+both paths on the same hardpoints and reports wheel-angle and pickup-position
+deltas so you can quantify projection error before wiring anything into the GUI.
 
 For CSV input, use `category,name,x,y,z`. `symmetric` hardpoints are entered
 only on the left side, so their Y value must be negative. `center` hardpoints
