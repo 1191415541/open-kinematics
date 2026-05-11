@@ -8,22 +8,30 @@ from dataclasses import dataclass
 
 from kinematics.steering.geometry import (
     ThreeSegmentSteeringGeometry,
+    ThreeSegmentSteeringHardpoints3D,
     ThreeSegmentSteeringSolution,
     TwoSegmentSteeringGeometry,
     TwoSegmentSteeringHardpoints3D,
     TwoSegmentSteeringSolution,
 )
-from kinematics.steering.three_segment import solve_three_segment_steering
+from kinematics.steering.three_segment import (
+    solve_three_segment_steering,
+    solve_three_segment_steering_3d_analytic,
+)
 from kinematics.steering.two_segment import (
     solve_two_segment_steering,
-    solve_two_segment_steering_3d,
+    solve_two_segment_steering_3d_analytic,
 )
 
 SteeringInputGeometry = TwoSegmentSteeringGeometry | TwoSegmentSteeringHardpoints3D
+ThreeSegmentInputGeometry = (
+    ThreeSegmentSteeringGeometry | ThreeSegmentSteeringHardpoints3D
+)
 SteeringLimitSolution = TwoSegmentSteeringSolution | ThreeSegmentSteeringSolution
 UNREACHABLE_PREFIXES = (
     "No valid steering arm position",
     "No valid pitman arm position",
+    "No valid steering arm position for this bellcrank angle",
 )
 
 
@@ -50,7 +58,11 @@ def _try_solve(
 ) -> TwoSegmentSteeringSolution | None:
     try:
         if isinstance(geometry, TwoSegmentSteeringHardpoints3D):
-            return solve_two_segment_steering_3d(geometry, pitman_angle_deg, guess)
+            return solve_two_segment_steering_3d_analytic(
+                geometry,
+                pitman_angle_deg,
+                guess,
+            )
         return solve_two_segment_steering(geometry, pitman_angle_deg, guess)
     except ValueError as exc:
         if _is_unreachable_error(exc):
@@ -87,7 +99,7 @@ def _walk_pitman_direction(
     refinement_steps: int,
 ) -> list[TwoSegmentSteeringSolution]:
     if isinstance(geometry, TwoSegmentSteeringHardpoints3D):
-        zero = solve_two_segment_steering_3d(geometry, 0.0)
+        zero = solve_two_segment_steering_3d_analytic(geometry, 0.0)
     else:
         zero = solve_two_segment_steering(geometry, 0.0)
     states: list[TwoSegmentSteeringSolution] = []
@@ -105,22 +117,29 @@ def _walk_pitman_direction(
 
 
 def _try_solve_three_segment(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: ThreeSegmentInputGeometry,
     left_bellcrank_angle_deg: float,
     guess: tuple[float, float, float],
 ) -> ThreeSegmentSteeringSolution | None:
-    solution = solve_three_segment_steering(
-        geometry,
-        left_bellcrank_angle_deg,
-        guess,
-    )
+    if isinstance(geometry, ThreeSegmentSteeringHardpoints3D):
+        solution = solve_three_segment_steering_3d_analytic(
+            geometry,
+            left_bellcrank_angle_deg,
+            guess,
+        )
+    else:
+        solution = solve_three_segment_steering(
+            geometry,
+            left_bellcrank_angle_deg,
+            guess,
+        )
     if not solution.converged:
         return None
     return solution
 
 
 def _refine_three_segment_limit(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: ThreeSegmentInputGeometry,
     low_good: ThreeSegmentSteeringSolution,
     high_bad_angle: float,
     iterations: int,
@@ -145,13 +164,16 @@ def _refine_three_segment_limit(
 
 
 def _walk_left_bellcrank_direction(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: ThreeSegmentInputGeometry,
     direction: float,
     step_deg: float,
     max_abs_angle_deg: float,
     refinement_steps: int,
 ) -> list[ThreeSegmentSteeringSolution]:
-    zero = solve_three_segment_steering(geometry, 0.0)
+    if isinstance(geometry, ThreeSegmentSteeringHardpoints3D):
+        zero = solve_three_segment_steering_3d_analytic(geometry, 0.0)
+    else:
+        zero = solve_three_segment_steering(geometry, 0.0)
     states: list[ThreeSegmentSteeringSolution] = []
     last = zero
     while (
@@ -189,7 +211,7 @@ def estimate_two_segment_steering_limits(
 ) -> SteeringTravelLimits:
     """Estimate current geometry left/right steering travel limits."""
     if isinstance(geometry, TwoSegmentSteeringHardpoints3D):
-        zero = solve_two_segment_steering_3d(geometry, 0.0)
+        zero = solve_two_segment_steering_3d_analytic(geometry, 0.0)
     else:
         zero = solve_two_segment_steering(geometry, 0.0)
     states = [zero]
@@ -218,14 +240,17 @@ def estimate_two_segment_steering_limits(
 
 
 def estimate_three_segment_steering_limits(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: ThreeSegmentInputGeometry,
     *,
     step_deg: float = 1.0,
     max_abs_left_bellcrank_angle_deg: float = 180.0,
     refinement_steps: int = 24,
 ) -> SteeringTravelLimits:
     """Estimate current three-segment geometry left/right steering travel limits."""
-    zero = solve_three_segment_steering(geometry, 0.0)
+    if isinstance(geometry, ThreeSegmentSteeringHardpoints3D):
+        zero = solve_three_segment_steering_3d_analytic(geometry, 0.0)
+    else:
+        zero = solve_three_segment_steering(geometry, 0.0)
     states = [zero]
     states.extend(
         _walk_left_bellcrank_direction(
@@ -268,7 +293,7 @@ def steering_limit_outputs(geometry: SteeringInputGeometry) -> dict[str, float]:
 
 
 def three_segment_steering_limit_outputs(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: ThreeSegmentInputGeometry,
 ) -> dict[str, float]:
     """Return scalar output rows for current three-segment steering limits."""
     return _outputs_from_limits(estimate_three_segment_steering_limits(geometry))

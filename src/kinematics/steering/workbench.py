@@ -22,12 +22,15 @@ from kinematics.gui.common import (
 from kinematics.gui.project import build_project_document, write_project_document
 from kinematics.steering.csv_loader import load_two_segment_steering_hardpoints_rows
 from kinematics.steering.geometry import (
+    BellcrankHardpoints3D,
     BellcrankGeometry2D,
     ThreeSegmentSteeringGeometry,
+    ThreeSegmentSteeringHardpoints3D,
     ThreeSegmentSteeringSolution,
     TwoSegmentSteeringHardpoints3D,
     TwoSegmentSteeringSolution,
     WheelSteeringGeometry2D,
+    WheelSteeringHardpoints3D,
 )
 from kinematics.steering.limits import (
     estimate_two_segment_steering_limits,
@@ -46,11 +49,12 @@ from kinematics.steering.three_segment import (
     solve_three_segment_from_right_bellcrank_angle,
     solve_three_segment_from_right_wheel_angle,
     solve_three_segment_steering,
+    solve_three_segment_steering_3d_analytic,
 )
 from kinematics.steering.two_segment import (
-    solve_two_segment_from_left_wheel_angle_3d,
-    solve_two_segment_from_right_wheel_angle_3d,
-    solve_two_segment_steering_3d,
+    solve_two_segment_from_left_wheel_angle_3d_analytic,
+    solve_two_segment_from_right_wheel_angle_3d_analytic,
+    solve_two_segment_steering_3d_analytic,
 )
 
 TWO_SEGMENT_INPUT_MODES = ("pitman_angle", "left_wheel_angle", "right_wheel_angle")
@@ -62,6 +66,9 @@ THREE_SEGMENT_INPUT_MODES = (
 )
 INPUT_MODES = TWO_SEGMENT_INPUT_MODES
 LINKAGE_TYPES = ("two_segment", "three_segment")
+ThreeSegmentGeometryInput = (
+    ThreeSegmentSteeringGeometry | ThreeSegmentSteeringHardpoints3D
+)
 UNREACHABLE_SOLVE_PREFIXES = (
     "No valid steering arm position",
     "No valid pitman arm position",
@@ -108,6 +115,7 @@ __all__ = [
     "set_pitman_x_position",
     "solve_steering_project",
     "sweep_steering_project",
+    "three_segment_hardpoints_from_rows",
     "three_segment_geometry_from_rows",
 ]
 
@@ -370,12 +378,12 @@ def _solve_target_inner_wheel_state(
 ) -> TwoSegmentSteeringSolution:
     hardpoints = hardpoints_from_rows(rows)
     if inner_wheel == "left":
-        return solve_two_segment_from_left_wheel_angle_3d(
+        return solve_two_segment_from_left_wheel_angle_3d_analytic(
             hardpoints,
             inner_wheel_angle_deg,
         )
     if inner_wheel == "right":
-        return solve_two_segment_from_right_wheel_angle_3d(
+        return solve_two_segment_from_right_wheel_angle_3d_analytic(
             hardpoints,
             inner_wheel_angle_deg,
         )
@@ -444,23 +452,27 @@ def _three_segment_input_angle_slider_limits(
     rows: list[SteeringHardpointRow],
     input_mode: str,
 ) -> SliderLimits:
-    geometry = three_segment_geometry_from_rows(rows)
+    hardpoints = three_segment_hardpoints_from_rows(rows)
     if input_mode not in THREE_SEGMENT_INPUT_MODES:
         raise ValueError(f"Unknown steering input mode '{input_mode}'")
     output_name = _three_segment_output_for_input_mode(input_mode)
     if input_mode in {"left_wheel_angle", "right_wheel_angle"}:
-        values = _three_segment_monotonic_output_values(geometry, output_name)
+        values = _three_segment_monotonic_output_values(hardpoints, output_name)
     else:
-        samples = _three_segment_current_branch_samples(geometry)
+        samples = _three_segment_current_branch_samples(hardpoints)
         values = [float(getattr(solution, output_name)) for solution in samples]
     return SliderLimits(minimum=min(values), maximum=max(values))
 
 
 def _three_segment_monotonic_output_values(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: ThreeSegmentGeometryInput,
     output_name: str,
 ) -> list[float]:
-    zero = solve_three_segment_steering(geometry, 0.0)
+    zero = _solve_three_segment_forward(
+        geometry,
+        0.0,
+        (0.0, 0.0, 0.0),
+    )
     values = [float(getattr(zero, output_name))]
     negative_values = _walk_three_segment_monotonic_output(
         geometry,
@@ -480,7 +492,7 @@ def _three_segment_monotonic_output_values(
 
 
 def _walk_three_segment_monotonic_output(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: ThreeSegmentGeometryInput,
     start: ThreeSegmentSteeringSolution,
     *,
     output_name: str,
@@ -496,7 +508,7 @@ def _walk_three_segment_monotonic_output(
         angle = last.left_bellcrank_angle_deg + direction * step_deg
         if abs(angle) > max_abs_left_bellcrank_angle_deg:
             break
-        solution = solve_three_segment_steering(
+        solution = _solve_three_segment_forward(
             geometry,
             angle,
             (
@@ -522,12 +534,16 @@ def _walk_three_segment_monotonic_output(
 
 
 def _three_segment_current_branch_samples(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: ThreeSegmentGeometryInput,
     *,
     step_deg: float = 1.0,
     max_abs_left_bellcrank_angle_deg: float = 180.0,
 ) -> list[ThreeSegmentSteeringSolution]:
-    zero = solve_three_segment_steering(geometry, 0.0)
+    zero = _solve_three_segment_forward(
+        geometry,
+        0.0,
+        (0.0, 0.0, 0.0),
+    )
     samples = [zero]
     samples[:0] = list(
         reversed(
@@ -553,7 +569,7 @@ def _three_segment_current_branch_samples(
 
 
 def _walk_three_segment_branch(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: ThreeSegmentGeometryInput,
     start: ThreeSegmentSteeringSolution,
     *,
     direction: float,
@@ -566,7 +582,7 @@ def _walk_three_segment_branch(
         angle = last.left_bellcrank_angle_deg + direction * step_deg
         if abs(angle) > max_abs_left_bellcrank_angle_deg:
             break
-        solution = solve_three_segment_steering(
+        solution = _solve_three_segment_forward(
             geometry,
             angle,
             (
@@ -580,6 +596,24 @@ def _walk_three_segment_branch(
         samples.append(solution)
         last = solution
     return samples
+
+
+def _solve_three_segment_forward(
+    geometry: ThreeSegmentGeometryInput,
+    left_bellcrank_angle_deg: float,
+    guess: tuple[float, float, float],
+) -> ThreeSegmentSteeringSolution:
+    if isinstance(geometry, ThreeSegmentSteeringHardpoints3D):
+        return solve_three_segment_steering_3d_analytic(
+            geometry,
+            left_bellcrank_angle_deg,
+            guess,
+        )
+    return solve_three_segment_steering(
+        geometry,
+        left_bellcrank_angle_deg,
+        guess,
+    )
 
 
 def optimize_steering_hardpoints(
@@ -689,8 +723,25 @@ def _row_vec2(rows: list[SteeringHardpointRow], name: str) -> np.ndarray:
     return np.array([row.x, row.y], dtype=np.float64)
 
 
+def _row_vec3(rows: list[SteeringHardpointRow], name: str) -> np.ndarray:
+    row = _required_hardpoint_row(rows, name)
+    return np.array([row.x, row.y, row.z], dtype=np.float64)
+
+
 def _mirror_vec2(point: np.ndarray) -> np.ndarray:
     mirrored = point.copy()
+    mirrored[1] *= -1.0
+    return mirrored
+
+
+def _mirror_vec3(point: np.ndarray) -> np.ndarray:
+    mirrored = point.copy()
+    mirrored[1] *= -1.0
+    return mirrored
+
+
+def _mirror_axis_vec3(axis: np.ndarray) -> np.ndarray:
+    mirrored = axis.copy()
     mirrored[1] *= -1.0
     return mirrored
 
@@ -725,6 +776,46 @@ def three_segment_geometry_from_rows(
             pivot=_mirror_vec2(left_bell_pivot),
             center_link_pickup=_mirror_vec2(left_center_link),
             tie_rod_pickup=_mirror_vec2(left_bell_tie),
+        ),
+    )
+
+
+def three_segment_hardpoints_from_rows(
+    rows: list[SteeringHardpointRow],
+) -> ThreeSegmentSteeringHardpoints3D:
+    """Build 3D three-segment hardpoints from editable project rows."""
+    left_kingpin_lower = _row_vec3(rows, "wheel_kingpin_lower")
+    left_kingpin_upper = _row_vec3(rows, "wheel_kingpin_upper")
+    left_wheel_center = _row_vec3(rows, "wheel_center")
+    left_wheel_tie = _row_vec3(rows, "wheel_tie_rod_pickup")
+    left_bell_pivot = _row_vec3(rows, "bellcrank_pivot")
+    left_center_link = _row_vec3(rows, "bellcrank_center_link_pickup")
+    left_bell_tie = _row_vec3(rows, "bellcrank_tie_rod_pickup")
+    left_axis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    return ThreeSegmentSteeringHardpoints3D(
+        left_wheel=WheelSteeringHardpoints3D(
+            kingpin_lower=left_kingpin_lower,
+            kingpin_upper=left_kingpin_upper,
+            wheel_center=left_wheel_center,
+            tie_rod_pickup=left_wheel_tie,
+        ),
+        right_wheel=WheelSteeringHardpoints3D(
+            kingpin_lower=_mirror_vec3(left_kingpin_lower),
+            kingpin_upper=_mirror_vec3(left_kingpin_upper),
+            wheel_center=_mirror_vec3(left_wheel_center),
+            tie_rod_pickup=_mirror_vec3(left_wheel_tie),
+        ),
+        left_bellcrank=BellcrankHardpoints3D(
+            pivot=left_bell_pivot,
+            center_link_pickup=left_center_link,
+            tie_rod_pickup=left_bell_tie,
+            axis=left_axis,
+        ),
+        right_bellcrank=BellcrankHardpoints3D(
+            pivot=_mirror_vec3(left_bell_pivot),
+            center_link_pickup=_mirror_vec3(left_center_link),
+            tie_rod_pickup=_mirror_vec3(left_bell_tie),
+            axis=_mirror_axis_vec3(left_axis),
         ),
     )
 
@@ -795,29 +886,42 @@ def solve_three_segment_project(
     previous_state: ThreeSegmentSteeringSolution | None = None,
 ) -> ThreeSegmentSteeringSolution:
     """Solve a three-segment steering project state."""
-    geometry = three_segment_geometry_from_rows(project.hardpoints)
+    hardpoints = three_segment_hardpoints_from_rows(project.hardpoints)
     initial_left_bellcrank_guess = (
         0.0
         if previous_state is None
         else previous_state.left_bellcrank_angle_deg
     )
+    initial_guess = (
+        (0.0, 0.0, 0.0)
+        if previous_state is None
+        else (
+            previous_state.right_bellcrank_angle_deg,
+            previous_state.left_wheel_angle_deg,
+            previous_state.right_wheel_angle_deg,
+        )
+    )
     if project.input_mode == "left_bellcrank_angle":
-        return solve_three_segment_steering(geometry, project.input_value)
+        return solve_three_segment_steering_3d_analytic(
+            hardpoints,
+            project.input_value,
+            initial_guess,
+        )
     if project.input_mode == "right_bellcrank_angle":
         return solve_three_segment_from_right_bellcrank_angle(
-            geometry,
+            hardpoints,
             project.input_value,
             initial_left_bellcrank_guess,
         )
     if project.input_mode == "left_wheel_angle":
         return solve_three_segment_from_left_wheel_angle(
-            geometry,
+            hardpoints,
             project.input_value,
             initial_left_bellcrank_guess,
         )
     if project.input_mode == "right_wheel_angle":
         return solve_three_segment_from_right_wheel_angle(
-            geometry,
+            hardpoints,
             project.input_value,
             initial_left_bellcrank_guess,
         )
@@ -832,10 +936,10 @@ def solve_steering_project(
 ) -> tuple[TwoSegmentSteeringSolution | ThreeSegmentSteeringSolution, dict[str, float]]:
     """Solve the current project state."""
     if project.linkage_type == "three_segment":
-        geometry = three_segment_geometry_from_rows(project.hardpoints)
+        hardpoints = three_segment_hardpoints_from_rows(project.hardpoints)
         solution = solve_three_segment_project(project, previous_state)
         limit_outputs = (
-            three_segment_steering_limit_outputs(geometry) if include_limits else None
+            three_segment_steering_limit_outputs(hardpoints) if include_limits else None
         )
         return solution, outputs_from_three_segment_solution(
             solution,
@@ -845,14 +949,17 @@ def solve_steering_project(
         )
     hardpoints = hardpoints_from_rows(project.hardpoints)
     if project.input_mode == "pitman_angle":
-        solution = solve_two_segment_steering_3d(hardpoints, project.input_value)
+        solution = solve_two_segment_steering_3d_analytic(
+            hardpoints,
+            project.input_value,
+        )
     elif project.input_mode == "left_wheel_angle":
-        solution = solve_two_segment_from_left_wheel_angle_3d(
+        solution = solve_two_segment_from_left_wheel_angle_3d_analytic(
             hardpoints,
             project.input_value,
         )
     elif project.input_mode == "right_wheel_angle":
-        solution = solve_two_segment_from_right_wheel_angle_3d(
+        solution = solve_two_segment_from_right_wheel_angle_3d_analytic(
             hardpoints,
             project.input_value,
         )
@@ -883,7 +990,7 @@ def sweep_steering_project(
     rows = []
     if project.linkage_type == "three_segment":
         limit_outputs = three_segment_steering_limit_outputs(
-            three_segment_geometry_from_rows(project.hardpoints)
+            three_segment_hardpoints_from_rows(project.hardpoints)
         )
     else:
         limit_outputs = steering_limit_outputs(hardpoints_from_rows(project.hardpoints))

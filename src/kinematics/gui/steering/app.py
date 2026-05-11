@@ -54,6 +54,7 @@ from kinematics.steering.workbench import (
     parse_float_entry,
     solve_steering_project,
     sweep_steering_project,
+    three_segment_hardpoints_from_rows,
     three_segment_geometry_from_rows,
 )
 
@@ -85,6 +86,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.background_refresh_queue: queue.Queue[tuple[str, object]] | None = None
         self.background_refresh_generation = 0
         self.background_refresh_polling = False
+        self.background_refresh_pending = 0
         self.linkage_type_var = tk.StringVar(value=self.project.linkage_type)
         self.input_mode_var = tk.StringVar(value=self.project.input_mode)
         self.input_value_var = tk.StringVar(value=str(self.project.input_value))
@@ -183,8 +185,10 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         key = self._limit_outputs_cache_signature()
         if key != self.limit_outputs_cache_key or self.limit_outputs_cache is None:
             if self.project.linkage_type == "three_segment":
-                geometry = three_segment_geometry_from_rows(self.project.hardpoints)
-                outputs = three_segment_steering_limit_outputs(geometry)
+                hardpoints = three_segment_hardpoints_from_rows(
+                    self.project.hardpoints
+                )
+                outputs = three_segment_steering_limit_outputs(hardpoints)
             else:
                 hardpoints = hardpoints_from_rows(self.project.hardpoints)
                 outputs = steering_limit_outputs(hardpoints)
@@ -212,15 +216,19 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
     ) -> None:
         if not need_limits and not need_curves:
             return
+        if not hasattr(self, "background_refresh_pending"):
+            self.background_refresh_pending = 0
         if self.background_refresh_queue is None:
             self.background_refresh_queue = queue.Queue()
         if need_limits:
+            self.background_refresh_pending += 1
             threading.Thread(
                 target=self._background_limits_worker,
                 args=(project_snapshot, refresh_generation),
                 daemon=True,
             ).start()
         if need_curves:
+            self.background_refresh_pending += 1
             threading.Thread(
                 target=self._background_curve_worker,
                 args=(project_snapshot, refresh_generation),
@@ -238,8 +246,10 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         assert self.background_refresh_queue is not None
         try:
             if project_snapshot.linkage_type == "three_segment":
-                geometry = three_segment_geometry_from_rows(project_snapshot.hardpoints)
-                limit_outputs = three_segment_steering_limit_outputs(geometry)
+                hardpoints = three_segment_hardpoints_from_rows(
+                    project_snapshot.hardpoints
+                )
+                limit_outputs = three_segment_steering_limit_outputs(hardpoints)
             else:
                 hardpoints = hardpoints_from_rows(project_snapshot.hardpoints)
                 limit_outputs = steering_limit_outputs(hardpoints)
@@ -284,6 +294,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         if self.background_refresh_queue is None:
             self.background_refresh_polling = False
             return
+        if not hasattr(self, "background_refresh_pending"):
+            self.background_refresh_pending = 0
 
         while True:
             try:
@@ -291,6 +303,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             except queue.Empty:
                 break
 
+            self.background_refresh_pending = max(0, self.background_refresh_pending - 1)
             kind = item[0]
             generation = item[1]
             if generation != self.background_refresh_generation:
@@ -352,7 +365,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 draw_curve_plot(self.curve_ax, rows, curves)
                 self.curve_canvas.draw_idle()
 
-        if self.background_refresh_queue.empty():
+        if self.background_refresh_queue.empty() and self.background_refresh_pending == 0:
             self.background_refresh_polling = False
             return
         self.root.after(50, self._poll_background_refresh)
@@ -651,6 +664,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.wheelbase_var.set(str(self.project.wheelbase))
         self.hardpoint_editor.set_rows(self.project.hardpoints)
         self._sync_pitman_controls()
+        self._sync_input_slider_limits(self.project.input_value)
         self.curve_manager.set_curves(self.project.curves)
         self.updating_controls = False
 
@@ -709,6 +723,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.project = default_steering_project(linkage_type=linkage_type)
         self._reset_refresh_caches()
         self.background_refresh_generation += 1
+        self.background_refresh_pending = 0
         self.imported_default_hardpoints = copy_hardpoint_rows(self.project.hardpoints)
         self.pending_optimized_hardpoints = None
         self.preview_has_drawn = False
@@ -719,6 +734,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.input_slider_var.set(self.project.input_value)
         self.hardpoint_editor.set_rows(self.project.hardpoints)
         self._sync_pitman_controls()
+        self._sync_input_slider_limits(self.project.input_value)
 
     def _sync_pitman_controls(self) -> None:
         if self.project.linkage_type == "two_segment":
@@ -731,7 +747,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         if self.updating_controls:
             return
         self.updating_controls = True
-        self.input_value_var.set(f"{float(value):.6g}")
+        self.input_value_var.set(f"{float(value):.15g}")
         self.updating_controls = False
         self._schedule_preview_refresh()
 
@@ -993,7 +1009,14 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
     def _draw_preview_state(self, state: object) -> None:
         if self.project.linkage_type == "three_segment":
             geometry = three_segment_geometry_from_rows(self.project.hardpoints)
-            design_state = solve_three_segment_steering(geometry, 0.0)
+            design_state = solve_steering_project(
+                replace(
+                    self.project,
+                    input_mode="left_bellcrank_angle",
+                    input_value=0.0,
+                ),
+                include_limits=False,
+            )[0]
             draw_three_segment_steering_preview(
                 self.preview_ax,
                 geometry,
@@ -1006,28 +1029,11 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             return
         hardpoints = hardpoints_from_rows(self.project.hardpoints)
         design_state = solve_two_segment_steering(hardpoints, 0.0)
-        if self.project.input_mode == "pitman_angle":
-            preview_state = solve_two_segment_steering(
-                hardpoints,
-                self.project.input_value,
-            )
-        elif self.project.input_mode == "left_wheel_angle":
-            preview_state = solve_two_segment_from_left_wheel_angle(
-                hardpoints,
-                self.project.input_value,
-            )
-        elif self.project.input_mode == "right_wheel_angle":
-            preview_state = solve_two_segment_from_right_wheel_angle(
-                hardpoints,
-                self.project.input_value,
-            )
-        else:
-            raise ValueError(f"Unknown steering input mode '{self.project.input_mode}'")
         draw_steering_preview(
             self.preview_ax,
             hardpoints,
             design_state,
-            preview_state,
+            state,
             preserve_view=self.preview_has_drawn,
             wheel_radius=self.project.wheel_radius,
             wheel_width=self.project.wheel_width,
