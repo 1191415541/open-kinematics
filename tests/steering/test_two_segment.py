@@ -1,18 +1,25 @@
 import numpy as np
+import pytest
 
 from kinematics.steering import (
     PitmanArmGeometry2D,
     PitmanArmHardpoints3D,
     SteeringCoordinateSystem,
+    TwoSegmentSteeringAnalyticComparison,
     TwoSegmentSteeringGeometry,
     TwoSegmentSteeringHardpoints3D,
     WheelSteeringGeometry2D,
     WheelSteeringHardpoints3D,
+    compare_two_segment_2d_and_3d,
+    compare_two_segment_3d_analytic_and_numeric,
     project_kingpin_axis_to_steering_top_view,
     project_point_to_steering_top_view,
     solve_two_segment_from_left_wheel_angle,
+    solve_two_segment_from_left_wheel_angle_3d,
+    solve_two_segment_from_left_wheel_angle_3d_analytic,
     solve_two_segment_from_right_wheel_angle,
     solve_two_segment_steering,
+    solve_two_segment_steering_3d_analytic,
     sweep_two_segment_steering,
 )
 
@@ -55,6 +62,50 @@ def symmetric_hardpoints_3d() -> TwoSegmentSteeringHardpoints3D:
             pivot=np.array([-350.0, 0.0, 300.0]),
             left_output=np.array([-350.0, -120.0, 285.0]),
             right_output=np.array([-350.0, 120.0, 286.0]),
+        ),
+    )
+
+
+def inclined_hardpoints_3d() -> TwoSegmentSteeringHardpoints3D:
+    return TwoSegmentSteeringHardpoints3D(
+        left_wheel=WheelSteeringHardpoints3D(
+            kingpin_lower=np.array([10.0, -500.0, 280.0]),
+            kingpin_upper=np.array([50.0, -560.0, 340.0]),
+            wheel_center=np.array([60.0, -520.0, 320.0]),
+            tie_rod_pickup=np.array([-180.0, -420.0, 280.0]),
+        ),
+        right_wheel=WheelSteeringHardpoints3D(
+            kingpin_lower=np.array([10.0, 500.0, 280.0]),
+            kingpin_upper=np.array([50.0, 560.0, 340.0]),
+            wheel_center=np.array([60.0, 520.0, 320.0]),
+            tie_rod_pickup=np.array([-180.0, 420.0, 280.0]),
+        ),
+        pitman=PitmanArmHardpoints3D(
+            pivot=np.array([-350.0, 0.0, 300.0]),
+            left_output=np.array([-350.0, -120.0, 285.0]),
+            right_output=np.array([-350.0, 120.0, 285.0]),
+        ),
+    )
+
+
+def unreachable_left_wheel_target_hardpoints_3d() -> TwoSegmentSteeringHardpoints3D:
+    return TwoSegmentSteeringHardpoints3D(
+        left_wheel=WheelSteeringHardpoints3D(
+            kingpin_lower=np.array([0.0, -500.0, 280.0]),
+            kingpin_upper=np.array([0.0, -500.0, 340.0]),
+            wheel_center=np.array([60.0, -520.0, 320.0]),
+            tie_rod_pickup=np.array([-180.0, -420.0, 280.0]),
+        ),
+        right_wheel=WheelSteeringHardpoints3D(
+            kingpin_lower=np.array([0.0, 500.0, 280.0]),
+            kingpin_upper=np.array([0.0, 500.0, 340.0]),
+            wheel_center=np.array([60.0, 520.0, 320.0]),
+            tie_rod_pickup=np.array([-180.0, 420.0, 281.0]),
+        ),
+        pitman=PitmanArmHardpoints3D(
+            pivot=np.array([-450.0, 0.0, 300.0]),
+            left_output=np.array([-450.0, -120.0, 285.0]),
+            right_output=np.array([-450.0, 120.0, 286.0]),
         ),
     )
 
@@ -250,6 +301,128 @@ def test_left_wheel_angle_can_drive_two_segment_steering():
     assert solution.converged
 
 
+def test_three_dimensional_solver_matches_two_dimensional_projection_when_vertical():
+    hardpoints = symmetric_hardpoints_3d()
+
+    comparison = compare_two_segment_2d_and_3d(
+        hardpoints,
+        pitman_angle_deg=8.0,
+    )
+
+    assert comparison.solve_2d.converged
+    assert comparison.solve_3d.converged
+    np.testing.assert_allclose(comparison.left_wheel_angle_delta_deg, 0.0, atol=1e-8)
+    np.testing.assert_allclose(comparison.right_wheel_angle_delta_deg, 0.0, atol=1e-8)
+
+
+def test_three_dimensional_solver_preserves_tie_rod_lengths():
+    hardpoints = inclined_hardpoints_3d()
+
+    comparison = compare_two_segment_2d_and_3d(
+        hardpoints,
+        pitman_angle_deg=8.0,
+    )
+
+    design_left = np.linalg.norm(
+        hardpoints.left_wheel.tie_rod_pickup - hardpoints.pitman.left_output
+    )
+    design_right = np.linalg.norm(
+        hardpoints.right_wheel.tie_rod_pickup - hardpoints.pitman.right_output
+    )
+    solved_left = np.linalg.norm(
+        comparison.solve_3d.left_tie_rod_pickup_3d
+        - comparison.solve_3d.pitman_left_output_3d
+    )
+    solved_right = np.linalg.norm(
+        comparison.solve_3d.right_tie_rod_pickup_3d
+        - comparison.solve_3d.pitman_right_output_3d
+    )
+
+    np.testing.assert_allclose(solved_left, design_left, atol=1e-6)
+    np.testing.assert_allclose(solved_right, design_right, atol=1e-6)
+
+
+def test_three_dimensional_analytic_solver_preserves_tie_rod_lengths():
+    hardpoints = inclined_hardpoints_3d()
+
+    solution = solve_two_segment_steering_3d_analytic(
+        hardpoints,
+        pitman_angle_deg=8.0,
+    )
+
+    design_left = np.linalg.norm(
+        hardpoints.left_wheel.tie_rod_pickup - hardpoints.pitman.left_output
+    )
+    design_right = np.linalg.norm(
+        hardpoints.right_wheel.tie_rod_pickup - hardpoints.pitman.right_output
+    )
+    solved_left = np.linalg.norm(
+        solution.left_tie_rod_pickup_3d - solution.pitman_left_output_3d
+    )
+    solved_right = np.linalg.norm(
+        solution.right_tie_rod_pickup_3d - solution.pitman_right_output_3d
+    )
+
+    np.testing.assert_allclose(solved_left, design_left, atol=1e-6)
+    np.testing.assert_allclose(solved_right, design_right, atol=1e-6)
+
+
+def test_three_dimensional_analytic_solver_matches_numeric_forward_solution():
+    hardpoints = inclined_hardpoints_3d()
+
+    comparison = compare_two_segment_3d_analytic_and_numeric(
+        hardpoints,
+        pitman_angle_deg=8.0,
+    )
+
+    assert isinstance(comparison, TwoSegmentSteeringAnalyticComparison)
+    assert comparison.solve_numeric.converged
+    assert comparison.solve_analytic.converged
+    assert comparison.max_abs_wheel_angle_delta_deg < 1e-6
+    assert comparison.max_abs_tie_rod_residual_delta < 1e-6
+
+
+def test_three_dimensional_analytic_inverse_matches_numeric_solution():
+    hardpoints = inclined_hardpoints_3d()
+    forward = solve_two_segment_steering_3d_analytic(
+        hardpoints,
+        pitman_angle_deg=8.0,
+    )
+    reference = solve_two_segment_from_left_wheel_angle_3d(
+        hardpoints,
+        left_wheel_angle_deg=forward.left_wheel_angle_deg,
+    )
+
+    analytic = solve_two_segment_from_left_wheel_angle_3d_analytic(
+        hardpoints,
+        left_wheel_angle_deg=forward.left_wheel_angle_deg,
+    )
+
+    np.testing.assert_allclose(
+        analytic.pitman_angle_deg,
+        reference.pitman_angle_deg,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        analytic.right_wheel_angle_deg,
+        reference.right_wheel_angle_deg,
+        atol=1e-6,
+    )
+    assert analytic.max_abs_tie_rod_residual < 1e-6
+
+
+def test_three_dimensional_solver_differs_from_projection_for_inclined_kingpin():
+    comparison = compare_two_segment_2d_and_3d(
+        inclined_hardpoints_3d(),
+        pitman_angle_deg=8.0,
+    )
+
+    assert comparison.solve_2d.converged
+    assert comparison.solve_3d.converged
+    assert abs(comparison.left_wheel_angle_delta_deg) > 1e-3
+    assert abs(comparison.right_wheel_angle_delta_deg) > 1e-3
+
+
 def test_right_wheel_angle_can_drive_two_segment_steering():
     geometry = symmetric_geometry()
     reference = solve_two_segment_steering(geometry, pitman_angle_deg=-8.0)
@@ -271,3 +444,13 @@ def test_right_wheel_angle_can_drive_two_segment_steering():
         atol=1e-8,
     )
     assert solution.converged
+
+
+def test_three_dimensional_left_wheel_inverse_rejects_unreachable_target() -> None:
+    hardpoints = unreachable_left_wheel_target_hardpoints_3d()
+
+    with pytest.raises(ValueError, match="No valid pitman arm position"):
+        solve_two_segment_from_left_wheel_angle_3d(
+            hardpoints,
+            left_wheel_angle_deg=20.0,
+        )

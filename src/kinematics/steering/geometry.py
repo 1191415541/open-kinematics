@@ -353,11 +353,75 @@ class TwoSegmentSteeringSolution:
     right_tie_rod_residual: float
     converged: bool
     nfev: int
+    left_wheel_center_3d: Vec3 | None = None
+    right_wheel_center_3d: Vec3 | None = None
+    left_tie_rod_pickup_3d: Vec3 | None = None
+    right_tie_rod_pickup_3d: Vec3 | None = None
+    pitman_left_output_3d: Vec3 | None = None
+    pitman_right_output_3d: Vec3 | None = None
 
     @property
     def max_abs_tie_rod_residual(self) -> float:
         """Maximum absolute tie-rod length residual in model units."""
         return max(abs(self.left_tie_rod_residual), abs(self.right_tie_rod_residual))
+
+    @property
+    def has_3d_state(self) -> bool:
+        """Whether this solution includes optional 3D hardpoint positions."""
+        return self.left_wheel_center_3d is not None
+
+
+@dataclass(frozen=True)
+class TwoSegmentSteeringComparison:
+    """Side-by-side 2D projection and 3D steering solve for one pitman angle."""
+
+    solve_2d: TwoSegmentSteeringSolution
+    solve_3d: TwoSegmentSteeringSolution
+    left_wheel_angle_delta_deg: float
+    right_wheel_angle_delta_deg: float
+    left_wheel_center_delta_2d: Vec2
+    right_wheel_center_delta_2d: Vec2
+    left_tie_rod_pickup_delta_2d: Vec2
+    right_tie_rod_pickup_delta_2d: Vec2
+    pitman_left_output_delta_2d: Vec2
+    pitman_right_output_delta_2d: Vec2
+
+    @property
+    def max_abs_wheel_angle_delta_deg(self) -> float:
+        """Maximum absolute wheel-angle delta between 3D and projected 2D solves."""
+        return max(
+            abs(self.left_wheel_angle_delta_deg),
+            abs(self.right_wheel_angle_delta_deg),
+        )
+
+
+@dataclass(frozen=True)
+class TwoSegmentSteeringAnalyticComparison:
+    """Side-by-side numeric and analytic 3D steering solve comparison."""
+
+    solve_numeric: TwoSegmentSteeringSolution
+    solve_analytic: TwoSegmentSteeringSolution
+    left_wheel_angle_delta_deg: float
+    right_wheel_angle_delta_deg: float
+    pitman_angle_delta_deg: float
+    left_tie_rod_residual_delta: float
+    right_tie_rod_residual_delta: float
+
+    @property
+    def max_abs_wheel_angle_delta_deg(self) -> float:
+        """Maximum absolute wheel-angle delta between analytic and numeric solves."""
+        return max(
+            abs(self.left_wheel_angle_delta_deg),
+            abs(self.right_wheel_angle_delta_deg),
+        )
+
+    @property
+    def max_abs_tie_rod_residual_delta(self) -> float:
+        """Maximum absolute tie-rod residual delta between both solves."""
+        return max(
+            abs(self.left_tie_rod_residual_delta),
+            abs(self.right_tie_rod_residual_delta),
+        )
 
 
 @dataclass(frozen=True)
