@@ -7,6 +7,7 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
+from dataclasses import replace
 from pathlib import Path
 from tkinter import Misc, ttk
 
@@ -28,8 +29,16 @@ from kinematics.gui.steering.widgets import (
     PitmanTransformControls,
 )
 from kinematics.steering.geometry import ThreeSegmentSteeringSolution
+from kinematics.steering.limits import (
+    steering_limit_outputs,
+    three_segment_steering_limit_outputs,
+)
 from kinematics.steering.three_segment import solve_three_segment_steering
-from kinematics.steering.two_segment import solve_two_segment_steering
+from kinematics.steering.two_segment import (
+    solve_two_segment_from_left_wheel_angle,
+    solve_two_segment_from_right_wheel_angle,
+    solve_two_segment_steering,
+)
 from kinematics.steering.workbench import (
     INPUT_MODES,
     LINKAGE_TYPES,
@@ -72,6 +81,10 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.preview_has_drawn = False
         self.previous_three_segment_state: ThreeSegmentSteeringSolution | None = None
         self.pending_preview_refresh: str | None = None
+        self._reset_refresh_caches()
+        self.background_refresh_queue: queue.Queue[tuple[str, object]] | None = None
+        self.background_refresh_generation = 0
+        self.background_refresh_polling = False
         self.linkage_type_var = tk.StringVar(value=self.project.linkage_type)
         self.input_mode_var = tk.StringVar(value=self.project.input_mode)
         self.input_value_var = tk.StringVar(value=str(self.project.input_value))
@@ -102,6 +115,247 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self._bind_control_vars()
         self._load_project_to_controls()
         self.refresh()
+
+    def _reset_refresh_caches(self) -> None:
+        self.limit_outputs_cache_key: tuple[object, ...] | None = None
+        self.limit_outputs_cache: dict[str, float] | None = None
+        self.slider_limits_cache_key: tuple[object, ...] | None = None
+        self.slider_limits_cache = None
+        self.curve_rows_cache_key: tuple[object, ...] | None = None
+        self.curve_rows_cache: list[dict[str, float]] | None = None
+
+    def _has_valid_limit_outputs_cache(self) -> bool:
+        return (
+            self.limit_outputs_cache_key == self._limit_outputs_cache_signature()
+            and self.limit_outputs_cache is not None
+        )
+
+    def _has_valid_slider_limits_cache(self) -> bool:
+        return (
+            self.slider_limits_cache_key == self._slider_limits_cache_signature()
+            and self.slider_limits_cache is not None
+        )
+
+    def _has_valid_curve_rows_cache(self) -> bool:
+        return (
+            self.curve_rows_cache_key == self._curve_rows_cache_signature()
+            and self.curve_rows_cache is not None
+        )
+
+    def _project_snapshot(self):
+        return replace(
+            self.project,
+            hardpoints=copy_hardpoint_rows(self.project.hardpoints),
+            curves=list(self.project.curves),
+        )
+
+    def _hardpoint_signature(self) -> tuple[tuple[object, ...], ...]:
+        return tuple(
+            (row.category, row.name, row.x, row.y, row.z)
+            for row in self.project.hardpoints
+        )
+
+    def _limit_outputs_cache_signature(self) -> tuple[object, ...]:
+        return (
+            self.project.linkage_type,
+            self._hardpoint_signature(),
+        )
+
+    def _slider_limits_cache_signature(self) -> tuple[object, ...]:
+        return (
+            self.project.linkage_type,
+            self.project.input_mode,
+            self._hardpoint_signature(),
+        )
+
+    def _curve_rows_cache_signature(self) -> tuple[object, ...]:
+        return (
+            self.project.linkage_type,
+            self.project.input_mode,
+            self.project.sweep_min,
+            self.project.sweep_max,
+            self.project.sweep_step,
+            self.project.wheelbase,
+            self._hardpoint_signature(),
+        )
+
+    def _limit_outputs_for_current_project(self) -> dict[str, float]:
+        key = self._limit_outputs_cache_signature()
+        if key != self.limit_outputs_cache_key or self.limit_outputs_cache is None:
+            if self.project.linkage_type == "three_segment":
+                geometry = three_segment_geometry_from_rows(self.project.hardpoints)
+                outputs = three_segment_steering_limit_outputs(geometry)
+            else:
+                hardpoints = hardpoints_from_rows(self.project.hardpoints)
+                outputs = steering_limit_outputs(hardpoints)
+            self.limit_outputs_cache_key = key
+            self.limit_outputs_cache = outputs
+        return dict(self.limit_outputs_cache)
+
+    def _curve_rows_for_current_project(self) -> list[dict[str, float]]:
+        key = self._curve_rows_cache_signature()
+        if key != self.curve_rows_cache_key or self.curve_rows_cache is None:
+            self.curve_rows_cache = sweep_steering_project(
+                self.project,
+                skip_unreachable=True,
+            )
+            self.curve_rows_cache_key = key
+        return self.curve_rows_cache
+
+    def _queue_background_refresh(
+        self,
+        *,
+        project_snapshot,
+        refresh_generation: int,
+        need_limits: bool,
+        need_curves: bool,
+    ) -> None:
+        if not need_limits and not need_curves:
+            return
+        if self.background_refresh_queue is None:
+            self.background_refresh_queue = queue.Queue()
+        if need_limits:
+            threading.Thread(
+                target=self._background_limits_worker,
+                args=(project_snapshot, refresh_generation),
+                daemon=True,
+            ).start()
+        if need_curves:
+            threading.Thread(
+                target=self._background_curve_worker,
+                args=(project_snapshot, refresh_generation),
+                daemon=True,
+            ).start()
+        if not self.background_refresh_polling:
+            self.background_refresh_polling = True
+            self.root.after(50, self._poll_background_refresh)
+
+    def _background_limits_worker(
+        self,
+        project_snapshot,
+        refresh_generation: int,
+    ) -> None:
+        assert self.background_refresh_queue is not None
+        try:
+            if project_snapshot.linkage_type == "three_segment":
+                geometry = three_segment_geometry_from_rows(project_snapshot.hardpoints)
+                limit_outputs = three_segment_steering_limit_outputs(geometry)
+            else:
+                hardpoints = hardpoints_from_rows(project_snapshot.hardpoints)
+                limit_outputs = steering_limit_outputs(hardpoints)
+            slider_limits = input_angle_slider_limits(
+                project_snapshot.hardpoints,
+                project_snapshot.input_mode,
+                project_snapshot.linkage_type,
+            )
+        except Exception as exc:  # noqa: BLE001 - surface in polling loop.
+            self.background_refresh_queue.put(
+                ("background_error", refresh_generation, exc)
+            )
+            return
+        self.background_refresh_queue.put(
+            (
+                "limits",
+                refresh_generation,
+                project_snapshot,
+                limit_outputs,
+                slider_limits,
+            )
+        )
+
+    def _background_curve_worker(
+        self,
+        project_snapshot,
+        refresh_generation: int,
+    ) -> None:
+        assert self.background_refresh_queue is not None
+        try:
+            rows = sweep_steering_project(project_snapshot, skip_unreachable=True)
+        except Exception as exc:  # noqa: BLE001 - surface in polling loop.
+            self.background_refresh_queue.put(
+                ("background_error", refresh_generation, exc)
+            )
+            return
+        self.background_refresh_queue.put(
+            ("curves", refresh_generation, project_snapshot, rows)
+        )
+
+    def _poll_background_refresh(self) -> None:
+        if self.background_refresh_queue is None:
+            self.background_refresh_polling = False
+            return
+
+        while True:
+            try:
+                item = self.background_refresh_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            kind = item[0]
+            generation = item[1]
+            if generation != self.background_refresh_generation:
+                continue
+
+            if kind == "background_error":
+                self.output_table.set_error(str(item[2]))
+                continue
+
+            if kind == "limits":
+                _kind, _generation, project_snapshot, limit_outputs, slider_limits = (
+                    item
+                )
+                self.limit_outputs_cache_key = (
+                    project_snapshot.linkage_type,
+                    tuple(
+                        (row.category, row.name, row.x, row.y, row.z)
+                        for row in project_snapshot.hardpoints
+                    ),
+                )
+                self.limit_outputs_cache = limit_outputs
+                self.slider_limits_cache_key = (
+                    project_snapshot.linkage_type,
+                    project_snapshot.input_mode,
+                    tuple(
+                        (row.category, row.name, row.x, row.y, row.z)
+                        for row in project_snapshot.hardpoints
+                    ),
+                )
+                self.slider_limits_cache = slider_limits
+                if self.output_table.outputs:
+                    outputs = dict(self.output_table.outputs[-1])
+                    outputs.update(limit_outputs)
+                    self.output_table.set_outputs(outputs)
+                self.updating_controls = True
+                self._sync_input_slider_limits(self.project.input_value)
+                self.updating_controls = False
+            elif kind == "curves":
+                _kind, _generation, project_snapshot, rows = item
+                self.curve_rows_cache_key = (
+                    project_snapshot.linkage_type,
+                    project_snapshot.input_mode,
+                    project_snapshot.sweep_min,
+                    project_snapshot.sweep_max,
+                    project_snapshot.sweep_step,
+                    project_snapshot.wheelbase,
+                    tuple(
+                        (row.category, row.name, row.x, row.y, row.z)
+                        for row in project_snapshot.hardpoints
+                    ),
+                )
+                self.curve_rows_cache = rows
+                curves = curve_specs_for_plot(
+                    self.project.curves,
+                    self.curve_manager.x_var.get(),
+                    self.curve_manager.y_var.get(),
+                    self.curve_manager.label_var.get(),
+                )
+                draw_curve_plot(self.curve_ax, rows, curves)
+                self.curve_canvas.draw_idle()
+
+        if self.background_refresh_queue.empty():
+            self.background_refresh_polling = False
+            return
+        self.root.after(50, self._poll_background_refresh)
 
     def _build_menu(self) -> None:
         menu = tk.Menu(self.root)
@@ -401,11 +655,15 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.updating_controls = False
 
     def _sync_input_slider_limits(self, value: float) -> None:
-        limits = input_angle_slider_limits(
-            self.project.hardpoints,
-            self.project.input_mode,
-            self.project.linkage_type,
-        )
+        key = self._slider_limits_cache_signature()
+        if key != self.slider_limits_cache_key or self.slider_limits_cache is None:
+            self.slider_limits_cache = input_angle_slider_limits(
+                self.project.hardpoints,
+                self.project.input_mode,
+                self.project.linkage_type,
+            )
+            self.slider_limits_cache_key = key
+        limits = self.slider_limits_cache
         self.input_slider.configure(from_=limits.minimum, to=limits.maximum)
         slider_value = min(max(value, limits.minimum), limits.maximum)
         self.input_slider_var.set(slider_value)
@@ -449,6 +707,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
 
     def _switch_linkage_type(self, linkage_type: str) -> None:
         self.project = default_steering_project(linkage_type=linkage_type)
+        self._reset_refresh_caches()
+        self.background_refresh_generation += 1
         self.imported_default_hardpoints = copy_hardpoint_rows(self.project.hardpoints)
         self.pending_optimized_hardpoints = None
         self.preview_has_drawn = False
@@ -514,17 +774,23 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.trigger_refresh_if_ready()
 
     def _on_hardpoints_changed(self) -> None:
+        self._reset_refresh_caches()
+        self.background_refresh_generation += 1
         self.previous_three_segment_state = None
         self._sync_pitman_controls()
         self.refresh()
 
     def _on_pitman_transform_changed(self) -> None:
+        self._reset_refresh_caches()
+        self.background_refresh_generation += 1
         self.hardpoint_editor.set_rows(self.project.hardpoints)
         self.refresh()
 
     def restore_default_hardpoints(self) -> None:
         """Restore hardpoints from the latest imported hardpoint snapshot."""
         self.project.hardpoints = copy_hardpoint_rows(self.imported_default_hardpoints)
+        self._reset_refresh_caches()
+        self.background_refresh_generation += 1
         self.pending_optimized_hardpoints = None
         self.previous_three_segment_state = None
         self.hardpoint_editor.set_rows(self.project.hardpoints)
@@ -656,6 +922,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             self.optimization_status_var.set("No optimization result to apply")
             return
         self.project.hardpoints = self.pending_optimized_hardpoints
+        self._reset_refresh_caches()
+        self.background_refresh_generation += 1
         self.pending_optimized_hardpoints = None
         self.previous_three_segment_state = None
         self.hardpoint_editor.set_rows(self.project.hardpoints)
@@ -674,6 +942,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         def redraw_all() -> None:
             if not self._sync_controls_to_project():
                 return
+            self.background_refresh_generation += 1
+            refresh_generation = self.background_refresh_generation
             previous_state = (
                 self.previous_three_segment_state
                 if self.project.linkage_type == "three_segment"
@@ -681,19 +951,40 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             )
             state, outputs = solve_steering_project(
                 self.project,
+                include_limits=False,
                 previous_state=previous_state,
             )
             if isinstance(state, ThreeSegmentSteeringSolution):
                 self.previous_three_segment_state = state
+            if self._has_valid_limit_outputs_cache():
+                outputs.update(self.limit_outputs_cache)
+            if self._has_valid_slider_limits_cache():
+                self.updating_controls = True
+                self._sync_input_slider_limits(self.project.input_value)
+                self.updating_controls = False
             self.updating_controls = True
-            self._sync_input_slider_limits(self.project.input_value)
             self.updating_controls = False
             self._draw_preview_state(state)
             self.preview_has_drawn = True
             self.preview_toolbar.update()
             self.preview_canvas.draw_idle()
             self.output_table.set_outputs(outputs)
-            self.refresh_curves()
+            if self._has_valid_curve_rows_cache():
+                curves = curve_specs_for_plot(
+                    self.project.curves,
+                    self.curve_manager.x_var.get(),
+                    self.curve_manager.y_var.get(),
+                    self.curve_manager.label_var.get(),
+                )
+                draw_curve_plot(self.curve_ax, self.curve_rows_cache, curves)
+                self.curve_canvas.draw_idle()
+            self._queue_background_refresh(
+                project_snapshot=self._project_snapshot(),
+                refresh_generation=refresh_generation,
+                need_limits=not self._has_valid_limit_outputs_cache()
+                or not self._has_valid_slider_limits_cache(),
+                need_curves=not self._has_valid_curve_rows_cache(),
+            )
         self.run_guarded(
             action=redraw_all,
             on_error=lambda exc: self.output_table.set_error(str(exc)),
@@ -715,11 +1006,28 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             return
         hardpoints = hardpoints_from_rows(self.project.hardpoints)
         design_state = solve_two_segment_steering(hardpoints, 0.0)
+        if self.project.input_mode == "pitman_angle":
+            preview_state = solve_two_segment_steering(
+                hardpoints,
+                self.project.input_value,
+            )
+        elif self.project.input_mode == "left_wheel_angle":
+            preview_state = solve_two_segment_from_left_wheel_angle(
+                hardpoints,
+                self.project.input_value,
+            )
+        elif self.project.input_mode == "right_wheel_angle":
+            preview_state = solve_two_segment_from_right_wheel_angle(
+                hardpoints,
+                self.project.input_value,
+            )
+        else:
+            raise ValueError(f"Unknown steering input mode '{self.project.input_mode}'")
         draw_steering_preview(
             self.preview_ax,
             hardpoints,
             design_state,
-            state,
+            preview_state,
             preserve_view=self.preview_has_drawn,
             wheel_radius=self.project.wheel_radius,
             wheel_width=self.project.wheel_width,
@@ -730,7 +1038,17 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         def draw_curves() -> None:
             if not self._sync_controls_to_project():
                 return
-            rows = sweep_steering_project(self.project, skip_unreachable=True)
+            if self._has_valid_curve_rows_cache():
+                rows = self.curve_rows_cache
+            else:
+                self.background_refresh_generation += 1
+                self._queue_background_refresh(
+                    project_snapshot=self._project_snapshot(),
+                    refresh_generation=self.background_refresh_generation,
+                    need_limits=False,
+                    need_curves=True,
+                )
+                return
             curves = curve_specs_for_plot(
                 self.project.curves,
                 self.curve_manager.x_var.get(),

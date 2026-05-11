@@ -14,7 +14,10 @@ from kinematics.steering.geometry import (
     TwoSegmentSteeringSolution,
 )
 from kinematics.steering.three_segment import solve_three_segment_steering
-from kinematics.steering.two_segment import solve_two_segment_steering
+from kinematics.steering.two_segment import (
+    solve_two_segment_steering,
+    solve_two_segment_steering_3d,
+)
 
 SteeringInputGeometry = TwoSegmentSteeringGeometry | TwoSegmentSteeringHardpoints3D
 SteeringLimitSolution = TwoSegmentSteeringSolution | ThreeSegmentSteeringSolution
@@ -46,6 +49,8 @@ def _try_solve(
     guess: tuple[float, float],
 ) -> TwoSegmentSteeringSolution | None:
     try:
+        if isinstance(geometry, TwoSegmentSteeringHardpoints3D):
+            return solve_two_segment_steering_3d(geometry, pitman_angle_deg, guess)
         return solve_two_segment_steering(geometry, pitman_angle_deg, guess)
     except ValueError as exc:
         if _is_unreachable_error(exc):
@@ -81,7 +86,10 @@ def _walk_pitman_direction(
     max_abs_angle_deg: float,
     refinement_steps: int,
 ) -> list[TwoSegmentSteeringSolution]:
-    zero = solve_two_segment_steering(geometry, 0.0)
+    if isinstance(geometry, TwoSegmentSteeringHardpoints3D):
+        zero = solve_two_segment_steering_3d(geometry, 0.0)
+    else:
+        zero = solve_two_segment_steering(geometry, 0.0)
     states: list[TwoSegmentSteeringSolution] = []
     last = zero
     while abs(last.pitman_angle_deg + direction * step_deg) <= max_abs_angle_deg:
@@ -180,7 +188,10 @@ def estimate_two_segment_steering_limits(
     refinement_steps: int = 24,
 ) -> SteeringTravelLimits:
     """Estimate current geometry left/right steering travel limits."""
-    zero = solve_two_segment_steering(geometry, 0.0)
+    if isinstance(geometry, TwoSegmentSteeringHardpoints3D):
+        zero = solve_two_segment_steering_3d(geometry, 0.0)
+    else:
+        zero = solve_two_segment_steering(geometry, 0.0)
     states = [zero]
     states.extend(
         _walk_pitman_direction(

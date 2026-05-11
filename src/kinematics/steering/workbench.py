@@ -48,9 +48,9 @@ from kinematics.steering.three_segment import (
     solve_three_segment_steering,
 )
 from kinematics.steering.two_segment import (
-    solve_two_segment_from_left_wheel_angle,
-    solve_two_segment_from_right_wheel_angle,
-    solve_two_segment_steering,
+    solve_two_segment_from_left_wheel_angle_3d,
+    solve_two_segment_from_right_wheel_angle_3d,
+    solve_two_segment_steering_3d,
 )
 
 TWO_SEGMENT_INPUT_MODES = ("pitman_angle", "left_wheel_angle", "right_wheel_angle")
@@ -75,6 +75,41 @@ OPTIMIZATION_VARIABLES = (
     "tie_rod_inner_x",
     "tie_rod_inner_y",
 )
+
+__all__ = [
+    "INPUT_MODES",
+    "LINKAGE_TYPES",
+    "OPTIMIZATION_VARIABLES",
+    "OptimizationCancelledError",
+    "SliderLimits",
+    "SteeringCurve",
+    "SteeringHardpointRow",
+    "SteeringOptimizationResult",
+    "SteeringProject",
+    "THREE_SEGMENT_INPUT_MODES",
+    "TWO_SEGMENT_INPUT_MODES",
+    "available_steering_outputs",
+    "copy_hardpoint_rows",
+    "curve_specs_for_plot",
+    "default_hardpoint_rows",
+    "default_steering_project",
+    "hardpoint_rows_from_csv",
+    "hardpoints_from_rows",
+    "input_angle_slider_limits",
+    "load_steering_project",
+    "optimize_steering_hardpoints",
+    "parse_float_entry",
+    "pitman_angle_slider_limits",
+    "pitman_arm_x_length",
+    "pitman_x_position",
+    "save_hardpoint_rows_csv",
+    "save_steering_project",
+    "set_pitman_arm_x_length",
+    "set_pitman_x_position",
+    "solve_steering_project",
+    "sweep_steering_project",
+    "three_segment_geometry_from_rows",
+]
 
 @dataclass(frozen=True)
 class SliderLimits:
@@ -335,12 +370,12 @@ def _solve_target_inner_wheel_state(
 ) -> TwoSegmentSteeringSolution:
     hardpoints = hardpoints_from_rows(rows)
     if inner_wheel == "left":
-        return solve_two_segment_from_left_wheel_angle(
+        return solve_two_segment_from_left_wheel_angle_3d(
             hardpoints,
             inner_wheel_angle_deg,
         )
     if inner_wheel == "right":
-        return solve_two_segment_from_right_wheel_angle(
+        return solve_two_segment_from_right_wheel_angle_3d(
             hardpoints,
             inner_wheel_angle_deg,
         )
@@ -810,14 +845,14 @@ def solve_steering_project(
         )
     hardpoints = hardpoints_from_rows(project.hardpoints)
     if project.input_mode == "pitman_angle":
-        solution = solve_two_segment_steering(hardpoints, project.input_value)
+        solution = solve_two_segment_steering_3d(hardpoints, project.input_value)
     elif project.input_mode == "left_wheel_angle":
-        solution = solve_two_segment_from_left_wheel_angle(
+        solution = solve_two_segment_from_left_wheel_angle_3d(
             hardpoints,
             project.input_value,
         )
     elif project.input_mode == "right_wheel_angle":
-        solution = solve_two_segment_from_right_wheel_angle(
+        solution = solve_two_segment_from_right_wheel_angle_3d(
             hardpoints,
             project.input_value,
         )

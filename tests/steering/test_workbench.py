@@ -4,9 +4,10 @@ import threading
 import numpy as np
 import pytest
 
+from kinematics.steering import solve_two_segment_steering_3d
 from kinematics.steering.workbench import (
-    OptimizationCancelledError,
     THREE_SEGMENT_INPUT_MODES,
+    OptimizationCancelledError,
     SteeringCurve,
     available_steering_outputs,
     copy_hardpoint_rows,
@@ -185,6 +186,48 @@ def test_solve_project_supports_all_input_modes():
     project.input_value = right_angle
     _, right_outputs = solve_steering_project(project)
     np.testing.assert_allclose(right_outputs["pitman_angle_deg"], 8.0, atol=1e-8)
+
+
+def test_two_segment_project_outputs_follow_three_dimensional_solver() -> None:
+    project = default_steering_project()
+    project.hardpoints[0].x = -10.311
+    project.hardpoints[0].y = -939.693
+    project.hardpoints[0].z = -166.505
+    project.hardpoints[1].x = 5.246
+    project.hardpoints[1].y = -899.264
+    project.hardpoints[1].z = 87.832
+    project.hardpoints[2].x = 6.608
+    project.hardpoints[2].y = -1083.36
+    project.hardpoints[2].z = -0.909
+    project.hardpoints[3].x = 173.544
+    project.hardpoints[3].y = -902.559
+    project.hardpoints[3].z = -125.786
+    project.hardpoints[4].x = 170.0
+    project.hardpoints[4].y = -45.0
+    project.hardpoints[4].z = -115.75
+    project.hardpoints[5].x = -101.0
+    project.hardpoints[5].y = 0.0
+    project.hardpoints[5].z = -70.0
+    project.input_mode = "left_wheel_angle"
+    project.input_value = 50.0
+
+    state, outputs = solve_steering_project(project, include_limits=False)
+    expected = solve_two_segment_steering_3d(
+        hardpoints_from_rows(project.hardpoints),
+        pitman_angle_deg=state.pitman_angle_deg,
+    )
+
+    np.testing.assert_allclose(outputs["left_wheel_angle_deg"], 50.0, atol=1e-6)
+    np.testing.assert_allclose(
+        outputs["right_wheel_angle_deg"],
+        expected.right_wheel_angle_deg,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        outputs["right_wheel_angle_deg"],
+        37.08335130007165,
+        atol=1e-6,
+    )
 
 
 def test_three_segment_project_supports_bellcrank_and_wheel_input_modes():
@@ -415,8 +458,8 @@ def test_pitman_angle_slider_limits_follow_reachable_geometry_limits():
 
     assert limits.minimum < 0.0
     assert limits.maximum > 0.0
-    np.testing.assert_allclose(limits.minimum, -15.414004385471344)
-    np.testing.assert_allclose(limits.maximum, 15.414004385471344)
+    np.testing.assert_allclose(limits.minimum, -16.0)
+    np.testing.assert_allclose(limits.maximum, 14.0)
 
 
 def test_input_angle_slider_limits_follow_selected_input_mode():
@@ -425,10 +468,10 @@ def test_input_angle_slider_limits_follow_selected_input_mode():
     left_limits = input_angle_slider_limits(project.hardpoints, "left_wheel_angle")
     right_limits = input_angle_slider_limits(project.hardpoints, "right_wheel_angle")
 
-    np.testing.assert_allclose(left_limits.minimum, -21.2185729573261)
-    np.testing.assert_allclose(left_limits.maximum, 4.3944304333923725)
-    np.testing.assert_allclose(right_limits.minimum, -4.3944304333923725)
-    np.testing.assert_allclose(right_limits.maximum, 21.2185729573261)
+    np.testing.assert_allclose(left_limits.minimum, -21.154839497221108)
+    np.testing.assert_allclose(left_limits.maximum, 4.228384681333933)
+    np.testing.assert_allclose(right_limits.minimum, -4.451161785824035)
+    np.testing.assert_allclose(right_limits.maximum, 28.742177977082708)
 
 
 def test_sweep_project_outputs_selected_variables():
