@@ -4,7 +4,7 @@ Shared 2D steering geometry types.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Final
 
 import numpy as np
@@ -320,6 +320,40 @@ class PitmanArmHardpoints3D:
 
 
 @dataclass(frozen=True)
+class BellcrankHardpoints3D:
+    """One relay bellcrank hardpoint set in steering vehicle coordinates."""
+
+    pivot: Vec3
+    center_link_pickup: Vec3
+    tie_rod_pickup: Vec3
+    axis: Vec3 = field(
+        default_factory=lambda: SteeringCoordinateSystem.Z_UP.copy()
+    )
+
+    def __post_init__(self) -> None:
+        pivot = make_vec3(self.pivot)
+        center_link_pickup = make_vec3(self.center_link_pickup)
+        tie_rod_pickup = make_vec3(self.tie_rod_pickup)
+        axis = make_vec3(self.axis)
+        if float(np.linalg.norm(axis)) <= EPS_GEOMETRIC:
+            raise ValueError("Bellcrank axis must be non-zero")
+        object.__setattr__(self, "pivot", pivot)
+        object.__setattr__(self, "center_link_pickup", center_link_pickup)
+        object.__setattr__(self, "tie_rod_pickup", tie_rod_pickup)
+        object.__setattr__(self, "axis", axis)
+
+    def to_2d_geometry(self) -> BellcrankGeometry2D:
+        """Project this 3D bellcrank hardpoint set to top-view geometry."""
+        return BellcrankGeometry2D(
+            pivot=project_point_to_steering_top_view(self.pivot),
+            center_link_pickup=project_point_to_steering_top_view(
+                self.center_link_pickup
+            ),
+            tie_rod_pickup=project_point_to_steering_top_view(self.tie_rod_pickup),
+        )
+
+
+@dataclass(frozen=True)
 class TwoSegmentSteeringHardpoints3D:
     """Complete 3D hardpoint set for a two-segment steering linkage."""
 
@@ -333,6 +367,53 @@ class TwoSegmentSteeringHardpoints3D:
             left_wheel=self.left_wheel.to_2d_geometry(),
             right_wheel=self.right_wheel.to_2d_geometry(),
             pitman=self.pitman.to_2d_geometry(),
+        )
+
+
+@dataclass(frozen=True)
+class ThreeSegmentSteeringHardpoints3D:
+    """Complete 3D hardpoint set for a three-segment steering linkage."""
+
+    left_wheel: WheelSteeringHardpoints3D
+    right_wheel: WheelSteeringHardpoints3D
+    left_bellcrank: BellcrankHardpoints3D
+    right_bellcrank: BellcrankHardpoints3D
+
+    def to_2d_geometry(self) -> ThreeSegmentSteeringGeometry:
+        """Project 3D hardpoints to the 2D geometry required by the solver."""
+        return ThreeSegmentSteeringGeometry(
+            left_wheel=self.left_wheel.to_2d_geometry(),
+            right_wheel=self.right_wheel.to_2d_geometry(),
+            left_bellcrank=self.left_bellcrank.to_2d_geometry(),
+            right_bellcrank=self.right_bellcrank.to_2d_geometry(),
+        )
+
+    @property
+    def center_link_length(self) -> float:
+        """Design length of the center link connecting both bellcranks."""
+        return float(
+            np.linalg.norm(
+                self.left_bellcrank.center_link_pickup
+                - self.right_bellcrank.center_link_pickup
+            )
+        )
+
+    @property
+    def left_tie_rod_length(self) -> float:
+        """Design length of the left tie rod."""
+        return float(
+            np.linalg.norm(
+                self.left_wheel.tie_rod_pickup - self.left_bellcrank.tie_rod_pickup
+            )
+        )
+
+    @property
+    def right_tie_rod_length(self) -> float:
+        """Design length of the right tie rod."""
+        return float(
+            np.linalg.norm(
+                self.right_wheel.tie_rod_pickup - self.right_bellcrank.tie_rod_pickup
+            )
         )
 
 
@@ -425,6 +506,38 @@ class TwoSegmentSteeringAnalyticComparison:
 
 
 @dataclass(frozen=True)
+class ThreeSegmentSteeringAnalyticComparison:
+    """Side-by-side semi-analytic and analytic 3D steering solve comparison."""
+
+    solve_semi_analytic: ThreeSegmentSteeringSolution
+    solve_analytic: ThreeSegmentSteeringSolution
+    right_bellcrank_angle_delta_deg: float
+    left_wheel_angle_delta_deg: float
+    right_wheel_angle_delta_deg: float
+    center_link_residual_delta: float
+    left_tie_rod_residual_delta: float
+    right_tie_rod_residual_delta: float
+
+    @property
+    def max_abs_angle_delta_deg(self) -> float:
+        """Maximum absolute angle delta between analytic and semi-analytic solves."""
+        return max(
+            abs(self.right_bellcrank_angle_delta_deg),
+            abs(self.left_wheel_angle_delta_deg),
+            abs(self.right_wheel_angle_delta_deg),
+        )
+
+    @property
+    def max_abs_link_residual_delta(self) -> float:
+        """Maximum absolute link-length residual delta between both solves."""
+        return max(
+            abs(self.center_link_residual_delta),
+            abs(self.left_tie_rod_residual_delta),
+            abs(self.right_tie_rod_residual_delta),
+        )
+
+
+@dataclass(frozen=True)
 class ThreeSegmentSteeringSolution:
     """Solved three-segment steering state for one driven left bellcrank angle."""
 
@@ -445,6 +558,14 @@ class ThreeSegmentSteeringSolution:
     right_tie_rod_residual: float
     converged: bool
     nfev: int
+    left_wheel_center_3d: Vec3 | None = None
+    right_wheel_center_3d: Vec3 | None = None
+    left_tie_rod_pickup_3d: Vec3 | None = None
+    right_tie_rod_pickup_3d: Vec3 | None = None
+    left_bellcrank_center_link_pickup_3d: Vec3 | None = None
+    right_bellcrank_center_link_pickup_3d: Vec3 | None = None
+    left_bellcrank_tie_rod_pickup_3d: Vec3 | None = None
+    right_bellcrank_tie_rod_pickup_3d: Vec3 | None = None
 
     @property
     def max_abs_link_residual(self) -> float:
@@ -454,3 +575,8 @@ class ThreeSegmentSteeringSolution:
             abs(self.left_tie_rod_residual),
             abs(self.right_tie_rod_residual),
         )
+
+    @property
+    def has_3d_state(self) -> bool:
+        """Whether this solution includes optional 3D hardpoint positions."""
+        return self.left_wheel_center_3d is not None

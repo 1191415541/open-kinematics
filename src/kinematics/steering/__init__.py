@@ -8,11 +8,14 @@ relationships are required.
 
 from kinematics.steering.csv_loader import load_two_segment_steering_hardpoints_csv
 from kinematics.steering.geometry import (
+    BellcrankHardpoints3D,
     BellcrankGeometry2D,
     PitmanArmGeometry2D,
     PitmanArmHardpoints3D,
     SteeringCoordinateSystem,
+    ThreeSegmentSteeringAnalyticComparison,
     ThreeSegmentSteeringGeometry,
+    ThreeSegmentSteeringHardpoints3D,
     ThreeSegmentSteeringSolution,
     TwoSegmentSteeringAnalyticComparison,
     TwoSegmentSteeringComparison,
@@ -25,10 +28,14 @@ from kinematics.steering.geometry import (
     project_point_to_steering_top_view,
 )
 from kinematics.steering.three_segment import (
+    compare_three_segment_3d_analytic_and_semi_analytic,
     solve_three_segment_from_left_wheel_angle,
     solve_three_segment_from_right_bellcrank_angle,
     solve_three_segment_from_right_wheel_angle,
     solve_three_segment_steering,
+    solve_three_segment_steering_3d,
+    solve_three_segment_steering_3d_analytic,
+    solve_three_segment_steering_3d_semi_analytic,
     sweep_three_segment_steering,
 )
 from kinematics.steering.two_segment import (
@@ -48,10 +55,13 @@ from kinematics.steering.two_segment import (
 
 __all__ = [
     "BellcrankGeometry2D",
+    "BellcrankHardpoints3D",
     "PitmanArmGeometry2D",
     "PitmanArmHardpoints3D",
     "SteeringCoordinateSystem",
+    "ThreeSegmentSteeringAnalyticComparison",
     "ThreeSegmentSteeringGeometry",
+    "ThreeSegmentSteeringHardpoints3D",
     "ThreeSegmentSteeringSolution",
     "TwoSegmentSteeringAnalyticComparison",
     "TwoSegmentSteeringComparison",
@@ -65,10 +75,14 @@ __all__ = [
     "project_kingpin_axis_to_steering_top_view",
     "project_point_to_steering_top_view",
     "compare_two_segment_3d_analytic_and_numeric",
+    "compare_three_segment_3d_analytic_and_semi_analytic",
     "solve_three_segment_from_left_wheel_angle",
     "solve_three_segment_from_right_bellcrank_angle",
     "solve_three_segment_from_right_wheel_angle",
     "solve_three_segment_steering",
+    "solve_three_segment_steering_3d",
+    "solve_three_segment_steering_3d_analytic",
+    "solve_three_segment_steering_3d_semi_analytic",
     "solve_two_segment_from_left_wheel_angle",
     "solve_two_segment_from_left_wheel_angle_3d",
     "solve_two_segment_from_left_wheel_angle_3d_analytic",

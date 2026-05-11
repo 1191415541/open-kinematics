@@ -51,7 +51,11 @@ a = Analysis(
     datas=[],
     hiddenimports=hiddenimports,
     hookspath=[],
-    hooksconfig={},
+    hooksconfig={
+        "matplotlib": {
+            "backends": ["TkAgg"],
+        },
+    },
     runtime_hooks=[],
     excludes=excluded_modules,
     win_no_prefer_redirects=False,
@@ -72,7 +76,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
