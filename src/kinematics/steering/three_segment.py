@@ -4,20 +4,32 @@ Three-segment steering linkage solver for top-view 2D geometry.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Sequence
 
 import numpy as np
 from scipy.optimize import OptimizeResult, least_squares
 
 from kinematics.core.constants import EPS_GEOMETRIC
+from kinematics.core.vector_utils.geometric import rotate_point_about_axis
 from kinematics.steering.geometry import (
+    ThreeSegmentSteeringAnalyticComparison,
     ThreeSegmentSteeringGeometry,
+    ThreeSegmentSteeringHardpoints3D,
     ThreeSegmentSteeringSolution,
     Vec2,
+    Vec3,
     WheelSteeringGeometry2D,
     distance_2d,
+    project_point_to_steering_top_view,
     rotate_point_2d,
 )
+from kinematics.steering.two_segment import (
+    _angle_candidates_for_distance,
+    _rotate_wheel_state_3d,
+)
+
+SteeringInputGeometry = ThreeSegmentSteeringGeometry | ThreeSegmentSteeringHardpoints3D
 
 
 def _rotated_wheel_pickups(
@@ -64,6 +76,12 @@ def _normalize_angle_rad(angle: float) -> float:
 
 def _normalize_angle_deg(angle: float) -> float:
     return float((angle + 180.0) % 360.0 - 180.0)
+
+
+def _as_2d_geometry(geometry: SteeringInputGeometry) -> ThreeSegmentSteeringGeometry:
+    if isinstance(geometry, ThreeSegmentSteeringHardpoints3D):
+        return geometry.to_2d_geometry()
+    return geometry
 
 
 def _nearest_equivalent_angle_deg(angle: float, reference: float) -> float:
@@ -190,8 +208,278 @@ def _length_residuals(
     )
 
 
+def _rotate_bellcrank_state_3d(
+    bellcrank,
+    bellcrank_angle_rad: float,
+) -> tuple[Vec3, Vec3]:
+    return (
+        rotate_point_about_axis(
+            bellcrank.center_link_pickup,
+            bellcrank.pivot,
+            bellcrank.axis,
+            bellcrank_angle_rad,
+        ),
+        rotate_point_about_axis(
+            bellcrank.tie_rod_pickup,
+            bellcrank.pivot,
+            bellcrank.axis,
+            bellcrank_angle_rad,
+        ),
+    )
+
+
+def _link_residual_3d(
+    point_a: Vec3,
+    point_b: Vec3,
+    design_length: float,
+) -> float:
+    return float(np.linalg.norm(point_a - point_b) - design_length)
+
+
+def _solve_wheel_pickup_3d_analytic(
+    *,
+    wheel,
+    bellcrank_pickup: Vec3,
+    tie_rod_length: float,
+    initial_guess_rad: float,
+) -> tuple[float, Vec3, Vec3]:
+    candidates = _angle_candidates_for_distance(
+        wheel.tie_rod_pickup,
+        wheel.kingpin_lower,
+        wheel.kingpin_upper - wheel.kingpin_lower,
+        bellcrank_pickup,
+        tie_rod_length,
+    )
+    if not candidates:
+        raise ValueError("No valid steering arm position for this bellcrank angle")
+    angle_rad = min(
+        candidates,
+        key=lambda candidate: abs(
+            _normalize_angle_rad(candidate - initial_guess_rad)
+        ),
+    )
+    wheel_center, pickup = _rotate_wheel_state_3d(wheel, angle_rad)
+    return angle_rad, wheel_center, pickup
+
+
+def _solve_wheel_pickup_3d_with_candidates(
+    *,
+    wheel,
+    bellcrank_pickup: Vec3,
+    tie_rod_length: float,
+) -> tuple[tuple[float, Vec3, Vec3], ...]:
+    candidates = _angle_candidates_for_distance(
+        wheel.tie_rod_pickup,
+        wheel.kingpin_lower,
+        wheel.kingpin_upper - wheel.kingpin_lower,
+        bellcrank_pickup,
+        tie_rod_length,
+    )
+    return tuple(
+        (
+            angle_rad,
+            *_rotate_wheel_state_3d(wheel, angle_rad),
+        )
+        for angle_rad in candidates
+    )
+
+
+def _rotate_solution_components_3d(
+    hardpoints: ThreeSegmentSteeringHardpoints3D,
+    left_bellcrank_angle_rad: float,
+    right_bellcrank_angle_rad: float,
+    left_wheel_angle_rad: float,
+    right_wheel_angle_rad: float,
+) -> dict[str, Vec3]:
+    left_center_link_3d, left_bell_tie_3d = _rotate_bellcrank_state_3d(
+        hardpoints.left_bellcrank,
+        left_bellcrank_angle_rad,
+    )
+    right_center_link_3d, right_bell_tie_3d = _rotate_bellcrank_state_3d(
+        hardpoints.right_bellcrank,
+        right_bellcrank_angle_rad,
+    )
+    left_wheel_center_3d, left_wheel_tie_3d = _rotate_wheel_state_3d(
+        hardpoints.left_wheel,
+        left_wheel_angle_rad,
+    )
+    right_wheel_center_3d, right_wheel_tie_3d = _rotate_wheel_state_3d(
+        hardpoints.right_wheel,
+        right_wheel_angle_rad,
+    )
+    return {
+        "left_center_link_3d": left_center_link_3d,
+        "right_center_link_3d": right_center_link_3d,
+        "left_bell_tie_3d": left_bell_tie_3d,
+        "right_bell_tie_3d": right_bell_tie_3d,
+        "left_wheel_center_3d": left_wheel_center_3d,
+        "right_wheel_center_3d": right_wheel_center_3d,
+        "left_wheel_tie_3d": left_wheel_tie_3d,
+        "right_wheel_tie_3d": right_wheel_tie_3d,
+    }
+
+
+def _build_three_segment_solution_from_3d(
+    hardpoints: ThreeSegmentSteeringHardpoints3D,
+    *,
+    left_bellcrank_angle_deg: float,
+    right_bellcrank_angle_rad: float,
+    left_wheel_angle_rad: float,
+    right_wheel_angle_rad: float,
+    nfev: int,
+    residual_tolerance: float,
+) -> ThreeSegmentSteeringSolution:
+    left_bellcrank_angle_rad = float(np.deg2rad(left_bellcrank_angle_deg))
+    state = _rotate_solution_components_3d(
+        hardpoints,
+        left_bellcrank_angle_rad,
+        right_bellcrank_angle_rad,
+        left_wheel_angle_rad,
+        right_wheel_angle_rad,
+    )
+    center_residual = _link_residual_3d(
+        state["left_center_link_3d"],
+        state["right_center_link_3d"],
+        hardpoints.center_link_length,
+    )
+    left_residual = _link_residual_3d(
+        state["left_wheel_tie_3d"],
+        state["left_bell_tie_3d"],
+        hardpoints.left_tie_rod_length,
+    )
+    right_residual = _link_residual_3d(
+        state["right_wheel_tie_3d"],
+        state["right_bell_tie_3d"],
+        hardpoints.right_tie_rod_length,
+    )
+    max_residual = max(abs(center_residual), abs(left_residual), abs(right_residual))
+    return ThreeSegmentSteeringSolution(
+        left_bellcrank_angle_deg=float(left_bellcrank_angle_deg),
+        right_bellcrank_angle_deg=float(np.rad2deg(right_bellcrank_angle_rad)),
+        left_wheel_angle_deg=float(np.rad2deg(left_wheel_angle_rad)),
+        right_wheel_angle_deg=float(np.rad2deg(right_wheel_angle_rad)),
+        left_wheel_center=project_point_to_steering_top_view(
+            state["left_wheel_center_3d"]
+        ),
+        right_wheel_center=project_point_to_steering_top_view(
+            state["right_wheel_center_3d"]
+        ),
+        left_tie_rod_pickup=project_point_to_steering_top_view(
+            state["left_wheel_tie_3d"]
+        ),
+        right_tie_rod_pickup=project_point_to_steering_top_view(
+            state["right_wheel_tie_3d"]
+        ),
+        left_bellcrank_center_link_pickup=project_point_to_steering_top_view(
+            state["left_center_link_3d"]
+        ),
+        right_bellcrank_center_link_pickup=project_point_to_steering_top_view(
+            state["right_center_link_3d"]
+        ),
+        left_bellcrank_tie_rod_pickup=project_point_to_steering_top_view(
+            state["left_bell_tie_3d"]
+        ),
+        right_bellcrank_tie_rod_pickup=project_point_to_steering_top_view(
+            state["right_bell_tie_3d"]
+        ),
+        center_link_residual=float(center_residual),
+        left_tie_rod_residual=float(left_residual),
+        right_tie_rod_residual=float(right_residual),
+        converged=bool(max_residual <= residual_tolerance),
+        nfev=nfev,
+        left_wheel_center_3d=state["left_wheel_center_3d"],
+        right_wheel_center_3d=state["right_wheel_center_3d"],
+        left_tie_rod_pickup_3d=state["left_wheel_tie_3d"],
+        right_tie_rod_pickup_3d=state["right_wheel_tie_3d"],
+        left_bellcrank_center_link_pickup_3d=state["left_center_link_3d"],
+        right_bellcrank_center_link_pickup_3d=state["right_center_link_3d"],
+        left_bellcrank_tie_rod_pickup_3d=state["left_bell_tie_3d"],
+        right_bellcrank_tie_rod_pickup_3d=state["right_bell_tie_3d"],
+    )
+
+
+def _analytic_three_segment_candidates_3d(
+    hardpoints: ThreeSegmentSteeringHardpoints3D,
+    left_bellcrank_angle_deg: float,
+    initial_guess_deg: Sequence[float],
+) -> list[ThreeSegmentSteeringSolution]:
+    initial_guess = np.deg2rad(np.asarray(initial_guess_deg, dtype=np.float64))
+    if initial_guess.shape != (3,):
+        raise ValueError(
+            "initial_guess_deg must contain right bellcrank, left wheel, "
+            "and right wheel angles"
+        )
+    left_bellcrank_angle_rad = float(np.deg2rad(left_bellcrank_angle_deg))
+    left_center_link_3d, left_bell_tie_3d = _rotate_bellcrank_state_3d(
+        hardpoints.left_bellcrank,
+        left_bellcrank_angle_rad,
+    )
+    right_bellcrank_candidates = _angle_candidates_for_distance(
+        hardpoints.right_bellcrank.center_link_pickup,
+        hardpoints.right_bellcrank.pivot,
+        hardpoints.right_bellcrank.axis,
+        left_center_link_3d,
+        hardpoints.center_link_length,
+    )
+    if not right_bellcrank_candidates:
+        return []
+
+    candidate_solutions: list[ThreeSegmentSteeringSolution] = []
+    for right_bellcrank_angle_rad in right_bellcrank_candidates:
+        _, right_bell_tie_3d = _rotate_bellcrank_state_3d(
+            hardpoints.right_bellcrank,
+            right_bellcrank_angle_rad,
+        )
+        left_wheel_candidates = _solve_wheel_pickup_3d_with_candidates(
+            wheel=hardpoints.left_wheel,
+            bellcrank_pickup=left_bell_tie_3d,
+            tie_rod_length=hardpoints.left_tie_rod_length,
+        )
+        right_wheel_candidates = _solve_wheel_pickup_3d_with_candidates(
+            wheel=hardpoints.right_wheel,
+            bellcrank_pickup=right_bell_tie_3d,
+            tie_rod_length=hardpoints.right_tie_rod_length,
+        )
+        for left_candidate in left_wheel_candidates:
+            for right_candidate in right_wheel_candidates:
+                candidate_solutions.append(
+                    _build_three_segment_solution_from_3d(
+                        hardpoints,
+                        left_bellcrank_angle_deg=left_bellcrank_angle_deg,
+                        right_bellcrank_angle_rad=right_bellcrank_angle_rad,
+                        left_wheel_angle_rad=left_candidate[0],
+                        right_wheel_angle_rad=right_candidate[0],
+                        nfev=0,
+                        residual_tolerance=np.inf,
+                    )
+                )
+
+    def ranking_key(solution: ThreeSegmentSteeringSolution) -> tuple[float, float]:
+        branch_error = (
+            abs(
+                _normalize_angle_deg(
+                    solution.right_bellcrank_angle_deg - float(initial_guess_deg[0])
+                )
+            )
+            + abs(
+                _normalize_angle_deg(
+                    solution.left_wheel_angle_deg - float(initial_guess_deg[1])
+                )
+            )
+            + abs(
+                _normalize_angle_deg(
+                    solution.right_wheel_angle_deg - float(initial_guess_deg[2])
+                )
+            )
+        )
+        residual_error = solution.max_abs_link_residual
+        return branch_error, residual_error
+
+    return sorted(candidate_solutions, key=ranking_key)
+
+
 def solve_three_segment_steering(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: SteeringInputGeometry,
     left_bellcrank_angle_deg: float,
     initial_guess_deg: Sequence[float] = (0.0, 0.0, 0.0),
     residual_tolerance: float = 1e-6,
@@ -205,21 +493,22 @@ def solve_three_segment_steering(
             "initial_guess_deg must contain right bellcrank, left wheel, "
             "and right wheel angles"
         )
+    geometry_2d = _as_2d_geometry(geometry)
     left_bellcrank_angle_rad = float(np.deg2rad(left_bellcrank_angle_deg))
-    left_center_link, left_bell_tie = geometry.left_bellcrank.rotate(
+    left_center_link, left_bell_tie = geometry_2d.left_bellcrank.rotate(
         left_bellcrank_angle_rad
     )
     right_bellcrank = _select_rotation_angle(
-        pivot=geometry.right_bellcrank.pivot,
-        design_point=geometry.right_bellcrank.center_link_pickup,
+        pivot=geometry_2d.right_bellcrank.pivot,
+        design_point=geometry_2d.right_bellcrank.center_link_pickup,
         target_point=left_center_link,
-        link_length=geometry.center_link_length,
+        link_length=geometry_2d.center_link_length,
         initial_guess_rad=float(initial_guess[0]),
     )
     left_wheel = _select_wheel_angle(
-        wheel=geometry.left_wheel,
+        wheel=geometry_2d.left_wheel,
         target_point=left_bell_tie,
-        link_length=geometry.left_tie_rod_length,
+        link_length=geometry_2d.left_tie_rod_length,
         initial_guess_rad=float(initial_guess[1]),
     )
     if right_bellcrank is None or left_wheel is None:
@@ -228,11 +517,13 @@ def solve_three_segment_steering(
         right_wheel_angle_rad = float(initial_guess[2])
     else:
         right_bellcrank_angle_rad = right_bellcrank[0]
-        _, right_bell_tie = geometry.right_bellcrank.rotate(right_bellcrank_angle_rad)
+        _, right_bell_tie = geometry_2d.right_bellcrank.rotate(
+            right_bellcrank_angle_rad
+        )
         right_wheel = _select_wheel_angle(
-            wheel=geometry.right_wheel,
+            wheel=geometry_2d.right_wheel,
             target_point=right_bell_tie,
-            link_length=geometry.right_tie_rod_length,
+            link_length=geometry_2d.right_tie_rod_length,
             initial_guess_rad=float(initial_guess[2]),
         )
         if right_wheel is None:
@@ -240,19 +531,19 @@ def solve_three_segment_steering(
         else:
             right_wheel_angle_rad = right_wheel[0]
         left_wheel_angle_rad = left_wheel[0]
-    right_center_link, right_bell_tie = geometry.right_bellcrank.rotate(
+    right_center_link, right_bell_tie = geometry_2d.right_bellcrank.rotate(
         right_bellcrank_angle_rad
     )
     left_wheel_tie, right_wheel_tie = _rotated_wheel_pickups(
-        geometry, left_wheel_angle_rad, right_wheel_angle_rad
+        geometry_2d, left_wheel_angle_rad, right_wheel_angle_rad
     )
     left_wheel_center, right_wheel_center = _rotated_wheel_centers(
-        geometry,
+        geometry_2d,
         left_wheel_angle_rad,
         right_wheel_angle_rad,
     )
     center_residual, left_residual, right_residual = _length_residuals(
-        geometry,
+        geometry_2d,
         left_bellcrank_angle_rad=left_bellcrank_angle_rad,
         right_bellcrank_angle_rad=right_bellcrank_angle_rad,
         left_wheel_angle_rad=left_wheel_angle_rad,
@@ -284,18 +575,200 @@ def solve_three_segment_steering(
     )
 
 
+def solve_three_segment_steering_3d_analytic(
+    hardpoints: ThreeSegmentSteeringHardpoints3D,
+    left_bellcrank_angle_deg: float,
+    initial_guess_deg: Sequence[float] = (0.0, 0.0, 0.0),
+    residual_tolerance: float = 1e-6,
+) -> ThreeSegmentSteeringSolution:
+    """Solve one three-segment steering state using analytic 3D geometry."""
+    candidate_solutions = _analytic_three_segment_candidates_3d(
+        hardpoints,
+        left_bellcrank_angle_deg,
+        initial_guess_deg,
+    )
+    if candidate_solutions:
+        return replace(
+            candidate_solutions[0],
+            converged=bool(
+                candidate_solutions[0].max_abs_link_residual <= residual_tolerance
+            ),
+        )
+    initial_guess = np.asarray(initial_guess_deg, dtype=np.float64)
+    return _build_three_segment_solution_from_3d(
+        hardpoints,
+        left_bellcrank_angle_deg=left_bellcrank_angle_deg,
+        right_bellcrank_angle_rad=float(np.deg2rad(initial_guess[0])),
+        left_wheel_angle_rad=float(np.deg2rad(initial_guess[1])),
+        right_wheel_angle_rad=float(np.deg2rad(initial_guess[2])),
+        nfev=0,
+        residual_tolerance=residual_tolerance,
+    )
+
+
+def solve_three_segment_steering_3d(
+    hardpoints: ThreeSegmentSteeringHardpoints3D,
+    left_bellcrank_angle_deg: float,
+    initial_guess_deg: Sequence[float] = (0.0, 0.0, 0.0),
+    residual_tolerance: float = 1e-6,
+) -> ThreeSegmentSteeringSolution:
+    """Solve one three-segment steering state using the default 3D solver."""
+    return solve_three_segment_steering_3d_analytic(
+        hardpoints,
+        left_bellcrank_angle_deg=left_bellcrank_angle_deg,
+        initial_guess_deg=initial_guess_deg,
+        residual_tolerance=residual_tolerance,
+    )
+
+
+def solve_three_segment_steering_3d_semi_analytic(
+    hardpoints: ThreeSegmentSteeringHardpoints3D,
+    left_bellcrank_angle_deg: float,
+    initial_guess_deg: Sequence[float] = (0.0, 0.0, 0.0),
+    residual_tolerance: float = 1e-6,
+) -> ThreeSegmentSteeringSolution:
+    """Solve one three-segment steering state with one numeric bellcrank variable."""
+    initial_guess = np.deg2rad(np.asarray(initial_guess_deg, dtype=np.float64))
+    if initial_guess.shape != (3,):
+        raise ValueError(
+            "initial_guess_deg must contain right bellcrank, left wheel, "
+            "and right wheel angles"
+        )
+    left_bellcrank_angle_rad = float(np.deg2rad(left_bellcrank_angle_deg))
+    left_center_link_3d, left_bell_tie_3d = _rotate_bellcrank_state_3d(
+        hardpoints.left_bellcrank,
+        left_bellcrank_angle_rad,
+    )
+
+    def residual(values: np.ndarray) -> np.ndarray:
+        right_bellcrank_angle_rad = float(values[0])
+        right_center_link_3d, right_bell_tie_3d = _rotate_bellcrank_state_3d(
+            hardpoints.right_bellcrank,
+            right_bellcrank_angle_rad,
+        )
+        try:
+            _solve_wheel_pickup_3d_analytic(
+                wheel=hardpoints.left_wheel,
+                bellcrank_pickup=left_bell_tie_3d,
+                tie_rod_length=hardpoints.left_tie_rod_length,
+                initial_guess_rad=float(initial_guess[1]),
+            )
+            _solve_wheel_pickup_3d_analytic(
+                wheel=hardpoints.right_wheel,
+                bellcrank_pickup=right_bell_tie_3d,
+                tie_rod_length=hardpoints.right_tie_rod_length,
+                initial_guess_rad=float(initial_guess[2]),
+            )
+        except ValueError:
+            return np.array([1e6], dtype=np.float64)
+        return np.array(
+            [
+                _link_residual_3d(
+                    left_center_link_3d,
+                    right_center_link_3d,
+                    hardpoints.center_link_length,
+                ),
+            ],
+            dtype=np.float64,
+        )
+
+    guesses = (
+        np.array([float(initial_guess[0])], dtype=np.float64),
+        np.array([float(initial_guess[0]) + np.deg2rad(6.0)], dtype=np.float64),
+        np.array([float(initial_guess[0]) - np.deg2rad(6.0)], dtype=np.float64),
+    )
+    results = _least_squares_results(residual, guesses)
+    best = min(results, key=lambda result: float(np.linalg.norm(result.fun)))
+    right_bellcrank_angle_rad = _normalize_angle_rad(float(best.x[0]))
+    _, right_bell_tie_3d = _rotate_bellcrank_state_3d(
+        hardpoints.right_bellcrank,
+        right_bellcrank_angle_rad,
+    )
+    left_wheel_angle_rad, _, _ = _solve_wheel_pickup_3d_analytic(
+        wheel=hardpoints.left_wheel,
+        bellcrank_pickup=left_bell_tie_3d,
+        tie_rod_length=hardpoints.left_tie_rod_length,
+        initial_guess_rad=float(initial_guess[1]),
+    )
+    right_wheel_angle_rad, _, _ = _solve_wheel_pickup_3d_analytic(
+        wheel=hardpoints.right_wheel,
+        bellcrank_pickup=right_bell_tie_3d,
+        tie_rod_length=hardpoints.right_tie_rod_length,
+        initial_guess_rad=float(initial_guess[2]),
+    )
+    return _build_three_segment_solution_from_3d(
+        hardpoints,
+        left_bellcrank_angle_deg=left_bellcrank_angle_deg,
+        right_bellcrank_angle_rad=right_bellcrank_angle_rad,
+        left_wheel_angle_rad=left_wheel_angle_rad,
+        right_wheel_angle_rad=right_wheel_angle_rad,
+        nfev=int(best.nfev),
+        residual_tolerance=residual_tolerance,
+    )
+
+
+def compare_three_segment_3d_analytic_and_semi_analytic(
+    hardpoints: ThreeSegmentSteeringHardpoints3D,
+    left_bellcrank_angle_deg: float,
+    initial_guess_deg: Sequence[float] = (0.0, 0.0, 0.0),
+    residual_tolerance: float = 1e-6,
+) -> ThreeSegmentSteeringAnalyticComparison:
+    """Compare analytic and semi-analytic 3D steering solves for one input angle."""
+    solve_semi_analytic = solve_three_segment_steering_3d_semi_analytic(
+        hardpoints,
+        left_bellcrank_angle_deg=left_bellcrank_angle_deg,
+        initial_guess_deg=initial_guess_deg,
+        residual_tolerance=residual_tolerance,
+    )
+    solve_analytic = solve_three_segment_steering_3d_analytic(
+        hardpoints,
+        left_bellcrank_angle_deg=left_bellcrank_angle_deg,
+        initial_guess_deg=initial_guess_deg,
+        residual_tolerance=residual_tolerance,
+    )
+    return ThreeSegmentSteeringAnalyticComparison(
+        solve_semi_analytic=solve_semi_analytic,
+        solve_analytic=solve_analytic,
+        right_bellcrank_angle_delta_deg=_normalize_angle_deg(
+            solve_analytic.right_bellcrank_angle_deg
+            - solve_semi_analytic.right_bellcrank_angle_deg
+        ),
+        left_wheel_angle_delta_deg=_normalize_angle_deg(
+            solve_analytic.left_wheel_angle_deg
+            - solve_semi_analytic.left_wheel_angle_deg
+        ),
+        right_wheel_angle_delta_deg=_normalize_angle_deg(
+            solve_analytic.right_wheel_angle_deg
+            - solve_semi_analytic.right_wheel_angle_deg
+        ),
+        center_link_residual_delta=(
+            solve_analytic.center_link_residual
+            - solve_semi_analytic.center_link_residual
+        ),
+        left_tie_rod_residual_delta=(
+            solve_analytic.left_tie_rod_residual
+            - solve_semi_analytic.left_tie_rod_residual
+        ),
+        right_tie_rod_residual_delta=(
+            solve_analytic.right_tie_rod_residual
+            - solve_semi_analytic.right_tie_rod_residual
+        ),
+    )
+
+
 def sweep_three_segment_steering(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: SteeringInputGeometry,
     left_bellcrank_angles_deg: Sequence[float],
 ) -> list[ThreeSegmentSteeringSolution]:
     """
     Solve a sequence of left bellcrank input angles using continuation.
     """
+    geometry_2d = _as_2d_geometry(geometry)
     solutions: list[ThreeSegmentSteeringSolution] = []
     guess = (0.0, 0.0, 0.0)
     for left_bellcrank_angle in left_bellcrank_angles_deg:
         solution = solve_three_segment_steering(
-            geometry,
+            geometry_2d,
             left_bellcrank_angle_deg=float(left_bellcrank_angle),
             initial_guess_deg=guess,
         )
@@ -309,7 +782,7 @@ def sweep_three_segment_steering(
 
 
 def solve_three_segment_from_right_bellcrank_angle(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: SteeringInputGeometry,
     right_bellcrank_angle_deg: float,
     initial_left_bellcrank_guess_deg: float = 0.0,
 ) -> ThreeSegmentSteeringSolution:
@@ -325,7 +798,7 @@ def solve_three_segment_from_right_bellcrank_angle(
 
 
 def solve_three_segment_from_left_wheel_angle(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: SteeringInputGeometry,
     left_wheel_angle_deg: float,
     initial_left_bellcrank_guess_deg: float = 0.0,
 ) -> ThreeSegmentSteeringSolution:
@@ -341,7 +814,7 @@ def solve_three_segment_from_left_wheel_angle(
 
 
 def solve_three_segment_from_right_wheel_angle(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: SteeringInputGeometry,
     right_wheel_angle_deg: float,
     initial_left_bellcrank_guess_deg: float = 0.0,
 ) -> ThreeSegmentSteeringSolution:
@@ -357,15 +830,17 @@ def solve_three_segment_from_right_wheel_angle(
 
 
 def _solve_three_segment_from_output(
-    geometry: ThreeSegmentSteeringGeometry,
+    geometry: SteeringInputGeometry,
     *,
     target_value_deg: float,
     output_name: str,
     initial_left_bellcrank_guess_deg: float,
 ) -> ThreeSegmentSteeringSolution:
+    geometry_2d = _as_2d_geometry(geometry)
+
     def residual(values: np.ndarray) -> np.ndarray:
         solution = solve_three_segment_steering(
-            geometry,
+            geometry_2d,
             left_bellcrank_angle_deg=float(values[0]),
         )
         return np.array(
@@ -382,7 +857,7 @@ def _solve_three_segment_from_output(
     )
     solutions = [
         solve_three_segment_steering(
-            geometry,
+            geometry_2d,
             left_bellcrank_angle_deg=float(result.x[0]),
         )
         for result in _least_squares_results(residual, guesses)
@@ -430,27 +905,12 @@ def _with_left_bellcrank_angle_near(
     solution: ThreeSegmentSteeringSolution,
     reference_deg: float,
 ) -> ThreeSegmentSteeringSolution:
-    return ThreeSegmentSteeringSolution(
+    return replace(
+        solution,
         left_bellcrank_angle_deg=_nearest_equivalent_angle_deg(
             solution.left_bellcrank_angle_deg,
             reference_deg,
         ),
-        right_bellcrank_angle_deg=solution.right_bellcrank_angle_deg,
-        left_wheel_angle_deg=solution.left_wheel_angle_deg,
-        right_wheel_angle_deg=solution.right_wheel_angle_deg,
-        left_wheel_center=solution.left_wheel_center,
-        right_wheel_center=solution.right_wheel_center,
-        left_tie_rod_pickup=solution.left_tie_rod_pickup,
-        right_tie_rod_pickup=solution.right_tie_rod_pickup,
-        left_bellcrank_center_link_pickup=solution.left_bellcrank_center_link_pickup,
-        right_bellcrank_center_link_pickup=solution.right_bellcrank_center_link_pickup,
-        left_bellcrank_tie_rod_pickup=solution.left_bellcrank_tie_rod_pickup,
-        right_bellcrank_tie_rod_pickup=solution.right_bellcrank_tie_rod_pickup,
-        center_link_residual=solution.center_link_residual,
-        left_tie_rod_residual=solution.left_tie_rod_residual,
-        right_tie_rod_residual=solution.right_tie_rod_residual,
-        converged=solution.converged,
-        nfev=solution.nfev,
     )
 
 

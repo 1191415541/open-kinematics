@@ -106,8 +106,14 @@ def smoke_test() -> None:
     _write_smoke_log("root-created")
     root.withdraw()
     _write_smoke_log("root-hidden")
-    KinematicsWorkbenchApp(root)
+    app = KinematicsWorkbenchApp(root)
     _write_smoke_log("app-created")
+    notebook = app.notebook
+    _write_smoke_log(f"tabs={len(notebook.tabs())}")
+    for tab_id in notebook.tabs():
+        notebook.select(tab_id)
+        root.update_idletasks()
+        _write_smoke_log(f"selected-tab={notebook.tab(tab_id, 'text')}")
     root.update_idletasks()
     _write_smoke_log("idle-updated")
     root.destroy()
