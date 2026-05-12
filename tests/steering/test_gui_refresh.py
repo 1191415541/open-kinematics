@@ -5,6 +5,7 @@ import pytest
 from kinematics.gui.steering import app as steering_app
 from kinematics.gui.steering import widgets as steering_widgets
 from kinematics.steering.workbench import default_steering_project
+from kinematics.steering.workbench import copy_hardpoint_rows
 
 
 class _FakeVar:
@@ -411,3 +412,24 @@ def test_background_refresh_results_update_outputs_slider_and_curve_plot(
     }
     assert app.input_slider.configured[-1] == {"from_": -10.0, "to": 10.0}
     assert drawn_rows == [[{"input_value": -8.0, "left_wheel_angle_deg": -1.0}]]
+
+
+def test_pitman_transform_commit_applies_geometry_and_notifies_once() -> None:
+    calls: list[str] = []
+    controls = object.__new__(steering_widgets.PitmanTransformControls)
+    controls.on_change = lambda: calls.append("changed")
+    controls.updating = False
+    controls.rows = copy_hardpoint_rows(default_steering_project().hardpoints)
+    controls.x_var = _FakeVar("-420")
+    controls.length_var = _FakeVar("80")
+
+    controls._on_entry_commit(SimpleNamespace())
+
+    rows_by_name = {
+        (row.category, row.name): row
+        for row in controls.rows
+    }
+
+    assert calls == ["changed"]
+    assert rows_by_name[("center", "pitman_pivot")].x == pytest.approx(-420.0)
+    assert rows_by_name[("symmetric", "pitman_output")].x == pytest.approx(-340.0)

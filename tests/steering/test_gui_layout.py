@@ -70,6 +70,17 @@ def test_curve_manager_label_entry_commits_before_refresh():
     assert "state=\"readonly\"" in build_source
 
 
+def test_pitman_geometry_entries_commit_before_applying_changes() -> None:
+    from kinematics.gui.steering.widgets import PitmanTransformControls
+
+    build_source = inspect.getsource(PitmanTransformControls._build)
+    class_source = inspect.getsource(PitmanTransformControls)
+
+    assert "on_live_edit=lambda _event: None" in build_source
+    assert "on_commit=self._on_entry_commit" in build_source
+    assert "def _on_entry_live_edit" not in class_source
+
+
 def test_hardpoint_panel_includes_restore_default_button():
     source = inspect.getsource(SteeringWorkbenchApp._build_layout)
 

@@ -408,31 +408,39 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
     def _build_optimization_content(self, parent: ttk.Frame) -> None:
         parent.columnconfigure(1, weight=1)
         parent.rowconfigure(7, weight=1)
+        optimization_commit_entries: list[ttk.Entry] = []
         ttk.Label(parent, text="Variable limit [mm]").grid(
             row=0,
             column=0,
             sticky="w",
         )
-        ttk.Entry(parent, textvariable=self.opt_variable_limit_var, width=12).grid(
+        variable_limit_entry = ttk.Entry(
+            parent,
+            textvariable=self.opt_variable_limit_var,
+            width=12,
+        )
+        variable_limit_entry.grid(
             row=0,
             column=1,
             sticky="ew",
             padx=(6, 0),
             pady=1,
         )
+        optimization_commit_entries.append(variable_limit_entry)
         ttk.Label(parent, text="Optimization Method").grid(
             row=1,
             column=0,
             sticky="w",
             pady=(6, 0),
         )
-        ttk.Combobox(
+        self.opt_solver_mode_combo = ttk.Combobox(
             parent,
             textvariable=self.opt_solver_mode_var,
             values=[label for _mode, label in SUSPENSION_OPTIMIZATION_SOLVER_MODES],
             state="readonly",
             width=24,
-        ).grid(
+        )
+        self.opt_solver_mode_combo.grid(
             row=1,
             column=1,
             sticky="ew",
@@ -489,34 +497,76 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             start=1,
         ):
             ttk.Label(targets, text=label).grid(row=row_index, column=0, sticky="w")
-            ttk.Checkbutton(
+            target_enabled = ttk.Checkbutton(
                 targets,
                 variable=self.opt_target_enabled_vars[metric_name],
-            ).grid(row=row_index, column=1, sticky="w")
-            ttk.Combobox(
+            )
+            target_enabled.grid(row=row_index, column=1, sticky="w")
+            trend_combo = ttk.Combobox(
                 targets,
                 textvariable=self.opt_target_trend_vars[metric_name],
                 values=SUSPENSION_OPTIMIZATION_TRENDS,
                 state="readonly",
                 width=10,
-            ).grid(row=row_index, column=2, sticky="w", padx=(6, 6), pady=2)
-            ttk.Combobox(
+            )
+            trend_combo.grid(
+                row=row_index,
+                column=2,
+                sticky="w",
+                padx=(6, 6),
+                pady=2,
+            )
+            mode_combo = ttk.Combobox(
                 targets,
                 textvariable=self.opt_target_mode_vars[metric_name],
                 values=[label for _mode, label in SUSPENSION_OPTIMIZATION_TARGET_MODES],
                 state="readonly",
                 width=18,
-            ).grid(row=row_index, column=3, sticky="w", padx=(0, 6), pady=2)
-            ttk.Entry(
+            )
+            mode_combo.grid(
+                row=row_index,
+                column=3,
+                sticky="w",
+                padx=(0, 6),
+                pady=2,
+            )
+            delta_entry = ttk.Entry(
                 targets,
                 textvariable=self.opt_target_delta_vars[metric_name],
                 width=12,
-            ).grid(row=row_index, column=4, sticky="w", pady=2)
-            ttk.Entry(
+            )
+            delta_entry.grid(row=row_index, column=4, sticky="w", pady=2)
+            weight_entry = ttk.Entry(
                 targets,
                 textvariable=self.opt_target_weight_vars[metric_name],
                 width=8,
-            ).grid(row=row_index, column=5, sticky="w", padx=(6, 0), pady=2)
+            )
+            weight_entry.grid(
+                row=row_index,
+                column=5,
+                sticky="w",
+                padx=(6, 0),
+                pady=2,
+            )
+            target_enabled.configure(command=self._on_optimization_controls_changed)
+            trend_combo.bind(
+                "<<ComboboxSelected>>",
+                self._on_optimization_controls_changed,
+            )
+            mode_combo.bind(
+                "<<ComboboxSelected>>",
+                self._on_optimization_controls_changed,
+            )
+            optimization_commit_entries.extend((delta_entry, weight_entry))
+
+        self.opt_solver_mode_combo.bind(
+            "<<ComboboxSelected>>",
+            self._on_optimization_controls_changed,
+        )
+        self.bind_entry_commit_callback(
+            optimization_commit_entries,
+            callback=self._on_optimization_controls_changed,
+        )
 
         buttons = ttk.Frame(parent)
         buttons.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(6, 0))
@@ -992,13 +1042,6 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.bind_control_var_traces(
             (
                 self.steered_var,
-                self.opt_variable_limit_var,
-                self.opt_solver_mode_var,
-                *self.opt_target_enabled_vars.values(),
-                *self.opt_target_trend_vars.values(),
-                *self.opt_target_mode_vars.values(),
-                *self.opt_target_delta_vars.values(),
-                *self.opt_target_weight_vars.values(),
             ),
             self._on_controls_changed,
         )
@@ -1624,8 +1667,6 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             constraint.key(): tk.BooleanVar(value=constraint.enabled)
             for constraint in constraints
         }
-        for variable in self.opt_pair_constraint_vars.values():
-            variable.trace_add("write", self._on_controls_changed)
         for child in self.opt_pair_constraints_frame.winfo_children():
             child.destroy()
         for index, constraint in enumerate(constraints):
@@ -1634,6 +1675,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 self.opt_pair_constraints_frame,
                 text=f"{constraint.label} ({'/'.join(axis.upper() for axis in constraint.axes)})",
                 variable=self.opt_pair_constraint_vars[key],
+                command=self._on_optimization_controls_changed,
             ).grid(
                 row=index,
                 column=0,
@@ -1705,6 +1747,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
     def _on_controls_changed(self, *_args: object) -> None:
         self._reset_optimization_analysis()
         self.trigger_refresh_if_ready()
+
+    def _on_optimization_controls_changed(self, _event: tk.Event | None = None) -> None:
+        self._reset_optimization_analysis()
 
     def refresh(self) -> None:
         """Refresh preview/output at current travel and regenerate sweep curves."""

@@ -90,7 +90,7 @@ class PitmanTransformControls(ttk.LabelFrame):
             entry.grid(row=row_index, column=1, sticky="ew", padx=(6, 0), pady=2)
             bind_entry_commit_events(
                 entry,
-                on_live_edit=self._on_entry_live_edit,
+                on_live_edit=lambda _event: None,
                 on_commit=self._on_entry_commit,
             )
 
@@ -119,9 +119,6 @@ class PitmanTransformControls(ttk.LabelFrame):
         set_pitman_x_position(self.rows, x_value.value)
         set_pitman_arm_x_length(self.rows, length.value)
         return True
-
-    def _on_entry_live_edit(self, _event: tk.Event) -> None:
-        self._apply_current_entry_values()
 
     def _on_entry_commit(self, _event: tk.Event) -> None:
         if self._apply_current_entry_values():

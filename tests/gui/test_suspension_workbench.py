@@ -1226,6 +1226,18 @@ def test_on_controls_changed_resets_analysis_before_refresh() -> None:
     assert refresh_calls == ["refresh"]
 
 
+def test_on_optimization_controls_changed_resets_analysis_without_refresh() -> None:
+    page = object.__new__(suspension_app.SuspensionWorkbenchPage)
+    page.last_optimization_analysis = object()
+    refresh_calls: list[str] = []
+    page.refresh = MethodType(lambda self: refresh_calls.append("refresh"), page)
+
+    page._on_optimization_controls_changed()
+
+    assert page.last_optimization_analysis is None
+    assert refresh_calls == []
+
+
 def test_bulk_optimization_variable_selection_helpers() -> None:
     page = object.__new__(suspension_app.SuspensionWorkbenchPage)
 

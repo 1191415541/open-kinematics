@@ -32,17 +32,27 @@ class RefreshWorkflowMixin:
         until ``Return`` or ``FocusOut``.
         """
 
+        self.bind_entry_commit_callback(
+            entries,
+            callback=lambda _event: self.trigger_refresh_if_ready(),
+        )
+
+    def bind_entry_commit_callback(
+        self,
+        entries: Iterable[tk.Widget],
+        *,
+        callback: Callable[[tk.Event], None],
+    ) -> None:
+        """Bind entry widgets so only commit actions invoke one callback."""
+
         def _ignore_live_edit(_event: tk.Event) -> None:
             return
-
-        def _refresh_on_commit(_event: tk.Event) -> None:
-            self.trigger_refresh_if_ready()
 
         for entry in entries:
             bind_entry_commit_events(
                 entry,
                 on_live_edit=_ignore_live_edit,
-                on_commit=_refresh_on_commit,
+                on_commit=callback,
             )
 
     def trigger_refresh_if_ready(self) -> None:
