@@ -11,6 +11,7 @@ src_root = project_root + "/src"
 hiddenimports = [
     "matplotlib.backends.backend_tkagg",
     "mpl_toolkits.mplot3d",
+    "tksheet",
 ]
 hiddenimports += collect_submodules("kinematics.suspensions")
 

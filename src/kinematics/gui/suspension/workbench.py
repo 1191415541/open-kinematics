@@ -73,9 +73,11 @@ DEFAULT_CURVE_OPTIONS = (
 OPTIMIZATION_COARSE_MAX_STEPS = 5
 OPTIMIZATION_CMA_POPSIZE = 8
 OPTIMIZATION_CMA_MAX_ITER = 12
-OPTIMIZATION_REGULARIZATION_WEIGHT = 0.02
+OPTIMIZATION_REGULARIZATION_WEIGHT = 0.0
 OPTIMIZATION_ANALYSIS_TOP_K_SIZES = (4, 6, 8, 10, 12)
 OPTIMIZATION_ANALYSIS_VALIDATION_COST_TOLERANCE = 0.05
+SUSPENSION_GUI_COORDINATE_SYSTEM = "rear_right_up"
+SUSPENSION_INTERNAL_COORDINATE_SYSTEM = "forward_left_up"
 
 
 @dataclass
@@ -264,6 +266,31 @@ def load_suspension_project(path: str | Path) -> SuspensionProject:
     )
 
 
+def suspension_internal_to_gui_vec3(value: object) -> np.ndarray:
+    """Convert internal suspension coordinates to GUI-facing coordinates."""
+    vec = np.asarray(value, dtype=np.float64)
+    return np.asarray([-float(vec[0]), -float(vec[1]), float(vec[2])], dtype=np.float64)
+
+
+def suspension_gui_to_internal_vec3(value: object) -> np.ndarray:
+    """Convert GUI-facing suspension coordinates to internal coordinates."""
+    return suspension_internal_to_gui_vec3(value)
+
+
+def suspension_metric_internal_to_gui(
+    metric_name: str,
+    value: float | None,
+) -> float | None:
+    """Convert internal-coordinate scalar metrics to GUI-facing values."""
+    if value is None:
+        return None
+    if metric_name in {"svic_x_mm", "svsa_length_mm"}:
+        return -float(value)
+    if metric_name in {"fvic_y_mm", "fvsa_length_mm"}:
+        return -float(value)
+    return float(value)
+
+
 def suspension_project_to_dict(project: SuspensionProject) -> dict[str, Any]:
     """Convert a suspension GUI project to the shared JSON project format."""
     return build_project_document(
@@ -273,10 +300,13 @@ def suspension_project_to_dict(project: SuspensionProject) -> dict[str, Any]:
         version=project.version,
         units=project.units.name,
         hardpoints={
-            point_id.name: _vec3_to_dict(position)
+            point_id.name: _vec3_to_dict(position, gui_coordinates=True)
             for point_id, position in sorted(project.hardpoints.items())
         },
-        parameters={"config": _suspension_config_to_dict(project.config)},
+        parameters={
+            "coordinate_system": SUSPENSION_GUI_COORDINATE_SYSTEM,
+            "config": _suspension_config_to_dict(project.config, gui_coordinates=True),
+        },
         simulation={
             "start": float(project.settings.start),
             "stop": float(project.settings.stop),
@@ -298,15 +328,25 @@ def suspension_project_from_dict(
 
     settings_data = data.get("simulation", {})
     parameters = data.get("parameters", {})
+    coordinate_system = str(
+        parameters.get("coordinate_system", SUSPENSION_INTERNAL_COORDINATE_SYSTEM)
+    )
+    gui_coordinates = coordinate_system == SUSPENSION_GUI_COORDINATE_SYSTEM
     return SuspensionProject(
         geometry_path=geometry_path,
         suspension_type=str(data.get("system_type", "double_wishbone")),
         name=str(data.get("name", "GUI suspension")),
         version=str(data.get("version", "0.0.0")),
         units=coerce_enum(Units, data.get("units", Units.MILLIMETERS.name)),
-        hardpoints=_suspension_hardpoints_from_dict(data.get("hardpoints", {})),
+        hardpoints=_suspension_hardpoints_from_dict(
+            data.get("hardpoints", {}),
+            gui_coordinates=gui_coordinates,
+        ),
         config=SuspensionConfig.model_validate(
-            parameters.get("config", default_suspension_config().model_dump())
+            _suspension_config_from_dict(
+                parameters.get("config", default_suspension_config().model_dump()),
+                gui_coordinates=gui_coordinates,
+            )
         ),
         settings=SuspensionSweepSettings(
             start=float(settings_data.get("start", -40.0)),
@@ -829,6 +869,12 @@ def optimize_suspension_hardpoints(
         return result, float(np.linalg.norm(objective_residuals)), hardpoints, rows
 
     def run_cma_es_stage() -> np.ndarray:
+        if baseline_x.size <= 1:
+            emit_progress(
+                "solving",
+                "Skipping CMA-ES for a single optimization variable; using local refine",
+            )
+            return baseline_x.copy()
         sigma0 = max(float(variable_delta_limit) / 3.0, 1e-3)
         strategy = cma.CMAEvolutionStrategy(
             baseline_x,
@@ -1165,9 +1211,8 @@ def load_suspension_hardpoints_csv(path: str | Path) -> dict[PointID, np.ndarray
             raise ValueError(f"Missing required CSV columns: {columns}")
         for row in reader:
             point_id = PointID[row["point"].strip().upper()]
-            hardpoints[point_id] = np.asarray(
-                [float(row["x"]), float(row["y"]), float(row["z"])],
-                dtype=np.float64,
+            hardpoints[point_id] = suspension_gui_to_internal_vec3(
+                [float(row["x"]), float(row["y"]), float(row["z"])]
             )
     return hardpoints
 
@@ -1181,12 +1226,13 @@ def save_suspension_hardpoints_csv(
         writer = csv.DictWriter(csv_file, fieldnames=("point", "x", "y", "z"))
         writer.writeheader()
         for point_id, position in sorted(hardpoints.items()):
+            gui_position = suspension_internal_to_gui_vec3(position)
             writer.writerow(
                 {
                     "point": point_id.name,
-                    "x": f"{position[0]:.12g}",
-                    "y": f"{position[1]:.12g}",
-                    "z": f"{position[2]:.12g}",
+                    "x": f"{gui_position[0]:.12g}",
+                    "y": f"{gui_position[1]:.12g}",
+                    "z": f"{gui_position[2]:.12g}",
                 }
             )
 
@@ -1198,19 +1244,31 @@ def save_suspension_project(project: SuspensionProject, path: str | Path) -> Non
 
 def _suspension_hardpoints_from_dict(
     hardpoints: object,
+    *,
+    gui_coordinates: bool = False,
 ) -> dict[PointID, np.ndarray]:
     if not isinstance(hardpoints, dict):
         raise ValueError("Suspension project hardpoints must be an object")
     return {
-        coerce_enum(PointID, name): np.asarray(
-            [float(value["x"]), float(value["y"]), float(value["z"])],
-            dtype=np.float64,
+        coerce_enum(PointID, name): (
+            suspension_gui_to_internal_vec3(
+                [float(value["x"]), float(value["y"]), float(value["z"])]
+            )
+            if gui_coordinates
+            else np.asarray(
+                [float(value["x"]), float(value["y"]), float(value["z"])],
+                dtype=np.float64,
+            )
         )
         for name, value in hardpoints.items()
     }
 
 
-def _suspension_config_to_dict(config: SuspensionConfig) -> dict[str, Any]:
+def _suspension_config_to_dict(
+    config: SuspensionConfig,
+    *,
+    gui_coordinates: bool = False,
+) -> dict[str, Any]:
     data = {
         "steered": config.steered,
         "wheel": {
@@ -1221,24 +1279,73 @@ def _suspension_config_to_dict(config: SuspensionConfig) -> dict[str, Any]:
                 "rim_diameter": float(config.wheel.tire.rim_diameter),
             },
         },
-        "cg_position": _vec3_to_dict(config.cg_position),
+        "cg_position": _vec3_to_dict(
+            config.cg_position,
+            gui_coordinates=gui_coordinates,
+        ),
         "wheelbase": float(config.wheelbase),
         "upright_mounted_points": list(config.upright_mounted_points),
     }
     if config.camber_shim is not None:
         shim = config.camber_shim
         data["camber_shim"] = {
-            "shim_face_point_a": _vec3_to_dict(shim.shim_face_point_a),
-            "shim_face_point_b": _vec3_to_dict(shim.shim_face_point_b),
-            "shim_face_normal": _vec3_to_dict(shim.shim_face_normal),
+            "shim_face_point_a": _vec3_to_dict(
+                shim.shim_face_point_a,
+                gui_coordinates=gui_coordinates,
+            ),
+            "shim_face_point_b": _vec3_to_dict(
+                shim.shim_face_point_b,
+                gui_coordinates=gui_coordinates,
+            ),
+            "shim_face_normal": _vec3_to_dict(
+                shim.shim_face_normal,
+                gui_coordinates=gui_coordinates,
+            ),
             "design_thickness": float(shim.design_thickness),
             "setup_thickness": float(shim.setup_thickness),
         }
     return data
 
 
-def _vec3_to_dict(value: object) -> dict[str, float]:
-    vec = np.asarray(value, dtype=np.float64)
+def _suspension_config_from_dict(
+    config: object,
+    *,
+    gui_coordinates: bool = False,
+) -> dict[str, Any]:
+    if not isinstance(config, dict):
+        return default_suspension_config().model_dump()
+
+    data = dict(config)
+    if gui_coordinates and isinstance(data.get("cg_position"), dict):
+        data["cg_position"] = _vec3_dict_from_gui_dict(data["cg_position"])
+
+    camber_shim = data.get("camber_shim")
+    if gui_coordinates and isinstance(camber_shim, dict):
+        shim = dict(camber_shim)
+        for key in ("shim_face_point_a", "shim_face_point_b", "shim_face_normal"):
+            if isinstance(shim.get(key), dict):
+                shim[key] = _vec3_dict_from_gui_dict(shim[key])
+        data["camber_shim"] = shim
+    return data
+
+
+def _vec3_to_dict(
+    value: object,
+    *,
+    gui_coordinates: bool = False,
+) -> dict[str, float]:
+    vec = (
+        suspension_internal_to_gui_vec3(value)
+        if gui_coordinates
+        else np.asarray(value, dtype=np.float64)
+    )
+    return {"x": float(vec[0]), "y": float(vec[1]), "z": float(vec[2])}
+
+
+def _vec3_dict_from_gui_dict(value: dict[str, Any]) -> dict[str, float]:
+    vec = suspension_gui_to_internal_vec3(
+        [float(value["x"]), float(value["y"]), float(value["z"])]
+    )
     return {"x": float(vec[0]), "y": float(vec[1]), "z": float(vec[2])}
 
 
@@ -1274,7 +1381,12 @@ def _row_from_state(
     solver_info: SolverInfo,
     suspension: Suspension,
 ) -> dict[str, float | bool | None]:
-    metrics = compute_metrics_for_state_from_suspension(state, suspension)
+    metrics = {
+        name: suspension_metric_internal_to_gui(name, value)
+        for name, value in compute_metrics_for_state_from_suspension(
+            state, suspension
+        ).items()
+    }
     if "roadwheel_angle_deg" in metrics and "toe_deg" not in metrics:
         metrics["toe_deg"] = metrics["roadwheel_angle_deg"]
     row: dict[str, float | bool | None] = {

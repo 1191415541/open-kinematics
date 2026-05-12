@@ -12,6 +12,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "pyyaml>=6.0.2",
     "scipy>=1.14.1",
+    "tksheet>=7.6.0",
     "typer>=0.19.2",
 ]
 

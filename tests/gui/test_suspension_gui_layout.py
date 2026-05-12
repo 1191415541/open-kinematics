@@ -76,15 +76,19 @@ def test_suspension_hardpoint_table_is_compact_and_auto_sized() -> None:
     layout_source = inspect.getsource(SuspensionWorkbenchPage._build_layout)
     class_source = inspect.getsource(SuspensionWorkbenchPage)
 
-    assert "_sync_column_widths" in source
-    assert "tkfont.nametofont" in source
-    assert 'height=10' in source
-    assert "width=point_width" in source
-    assert "width=value_width" in source
-    assert "MIN_POINT_COLUMN_WIDTH" in source
-    assert "MIN_VALUE_COLUMN_WIDTH" in source
+    assert "tksheet.Sheet(" in source
+    assert "show_row_index=False" in source
+    assert "show_top_left=False" in source
+    assert 'width=420' in source
+    assert 'height=260' in source
+    assert "enable_bindings(" in source
+    assert "bulk_table_edit_validation(" in source
     assert "DISPLAY_NAMES" in source
     assert "_display_name" in source
+    assert 'table_align("center"' in source
+    assert 'header_align("center"' in source
+    assert 'align_columns(list(range(len(self.COLUMNS))), align="center"' in source
+    assert 'width="text"' in source
     assert "self.main_panedwindow.add(left, weight=0)" in layout_source
     assert "self.main_panedwindow.add(right, weight=5)" in layout_source
     assert "DEFAULT_LEFT_PANE_WIDTH" in class_source
@@ -148,6 +152,24 @@ def test_suspension_numeric_entries_use_commit_refresh_and_not_trace_refresh() -
     assert "self.steps_var" not in trace_source
     assert "self.wheelbase_var" not in trace_source
     assert "self.rim_diameter_var" not in trace_source
+
+
+def test_suspension_optimization_entries_use_commit_updates_without_trace_refresh() -> None:
+    optimization_source = inspect.getsource(
+        SuspensionWorkbenchPage._build_optimization_content
+    )
+    trace_source = inspect.getsource(SuspensionWorkbenchPage._bind_control_vars)
+    optimization_change_source = inspect.getsource(
+        SuspensionWorkbenchPage._on_optimization_controls_changed
+    )
+
+    assert "self.bind_entry_commit_callback" in optimization_source
+    assert "self._on_optimization_controls_changed" in optimization_source
+    assert "self.opt_variable_limit_var" not in trace_source
+    assert "opt_target_delta_vars" not in trace_source
+    assert "opt_target_weight_vars" not in trace_source
+    assert "self._reset_optimization_analysis()" in optimization_change_source
+    assert "trigger_refresh_if_ready" not in optimization_change_source
 
 
 def test_suspension_preview_preserves_3d_view_during_motion() -> None:

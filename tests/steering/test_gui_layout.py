@@ -70,6 +70,17 @@ def test_curve_manager_label_entry_commits_before_refresh():
     assert "state=\"readonly\"" in build_source
 
 
+def test_pitman_geometry_entries_commit_before_applying_changes() -> None:
+    from kinematics.gui.steering.widgets import PitmanTransformControls
+
+    build_source = inspect.getsource(PitmanTransformControls._build)
+    class_source = inspect.getsource(PitmanTransformControls)
+
+    assert "on_live_edit=lambda _event: None" in build_source
+    assert "on_commit=self._on_entry_commit" in build_source
+    assert "def _on_entry_live_edit" not in class_source
+
+
 def test_hardpoint_panel_includes_restore_default_button():
     source = inspect.getsource(SteeringWorkbenchApp._build_layout)
 
@@ -80,10 +91,29 @@ def test_hardpoint_panel_includes_restore_default_button():
 def test_steering_hardpoint_editor_matches_suspension_table_format():
     source = inspect.getsource(HardpointEditor._build)
 
-    assert 'columns = ("point", "x", "y", "z")' in source
-    assert 'show="headings"' in source
-    assert 'height=10' in source
-    assert 'self.tree.heading(column, text=column)' in source
+    assert "tksheet.Sheet(" in source
+    assert 'headers=list(self.COLUMNS)' in source
+    assert 'show_row_index=False' in source
+    assert 'enable_bindings(' in source
+
+
+def test_steering_hardpoint_editor_enables_excel_like_bindings():
+    source = inspect.getsource(HardpointEditor._build)
+
+    assert '"copy"' in source
+    assert '"paste"' in source
+    assert '"undo"' in source
+    assert '"edit_cell"' in source
+    assert 'bulk_table_edit_validation(' in source
+
+
+def test_steering_hardpoint_editor_centers_text_and_auto_sizes_xyz_columns():
+    source = inspect.getsource(HardpointEditor)
+
+    assert 'table_align("center"' in source
+    assert 'header_align("center"' in source
+    assert 'align_columns(list(range(len(self.COLUMNS))), align="center"' in source
+    assert 'width="text"' in source
 
 
 def test_steering_hardpoint_editor_uses_descriptive_display_names():

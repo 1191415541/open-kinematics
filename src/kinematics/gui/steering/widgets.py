@@ -9,6 +9,7 @@ from tkinter import ttk
 from typing import Callable, Protocol
 
 from kinematics.gui.common import bind_entry_commit_events
+from kinematics.gui.steering.hardpoint_sheet import HardpointEditor as _HardpointEditor
 from kinematics.steering.workbench import (
     SteeringCurve,
     SteeringHardpointRow,
@@ -19,6 +20,8 @@ from kinematics.steering.workbench import (
     set_pitman_x_position,
 )
 
+HardpointEditor = _HardpointEditor
+
 
 class CurveRow(Protocol):
     """Curve row shape used by the shared curve manager."""
@@ -28,112 +31,13 @@ class CurveRow(Protocol):
     label: str
 
 
-class HardpointEditor(ttk.Frame):
-    """Tree and coordinate editor for steering hardpoints."""
-
-    DISPLAY_NAMES = {
-        "wheel_kingpin_lower": "Wheel Kingpin Lower",
-        "wheel_kingpin_upper": "Wheel Kingpin Upper",
-        "wheel_center": "Wheel Center",
-        "wheel_tie_rod_pickup": "Wheel Tie Rod Pickup",
-        "pitman_output": "Pitman Output",
-        "pitman_pivot": "Pitman Pivot",
-        "bellcrank_pivot": "Bellcrank Pivot",
-        "bellcrank_center_link_pickup": "Bellcrank Center Link Pickup",
-        "bellcrank_tie_rod_pickup": "Bellcrank Tie Rod Pickup",
-    }
-
-    def __init__(
-        self,
-        master: tk.Misc,
-        on_change: Callable[[], None],
-    ) -> None:
-        super().__init__(master)
-        self.on_change = on_change
-        self.rows: list[SteeringHardpointRow] = []
-        self.selected_index: int | None = None
-        self.vars = {axis: tk.StringVar() for axis in ("x", "y", "z")}
-        self._build()
-
-    def _build(self) -> None:
-        columns = ("point", "x", "y", "z")
-        self.tree = ttk.Treeview(self, columns=columns, show="headings", height=10)
-        for column in columns:
-            self.tree.heading(column, text=column)
-            self.tree.column(column, width=86, anchor="center")
-        self.tree.pack(fill=tk.BOTH, expand=True)
-        self.tree.bind("<<TreeviewSelect>>", self._on_select)
-
-        form = ttk.Frame(self)
-        form.pack(fill=tk.X, pady=(6, 0))
-        for axis in ("x", "y", "z"):
-            ttk.Label(form, text=axis.upper()).pack(side=tk.LEFT)
-            entry = ttk.Entry(form, textvariable=self.vars[axis], width=10)
-            entry.pack(side=tk.LEFT, padx=(2, 8))
-            bind_entry_commit_events(
-                entry,
-                on_live_edit=self._on_entry_live_edit,
-                on_commit=self._on_entry_commit,
-            )
-
-    def set_rows(self, rows: list[SteeringHardpointRow]) -> None:
-        """Load rows into the editor."""
-        self.rows = rows
-        self.selected_index = None
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        for index, row in enumerate(rows):
-            self.tree.insert(
-                "",
-                "end",
-                iid=str(index),
-                values=(self._display_name(row), row.x, row.y, row.z),
-            )
-        if rows:
-            self.tree.selection_set("0")
-
-    def _on_select(self, _event: tk.Event) -> None:
-        selection = self.tree.selection()
-        if not selection:
-            return
-        self.selected_index = int(selection[0])
-        row = self.rows[self.selected_index]
-        for axis in ("x", "y", "z"):
-            self.vars[axis].set(str(getattr(row, axis)))
-
-    def _apply_current_entry_values(self) -> bool:
-        if self.selected_index is None:
-            return False
-        try:
-            values = {axis: float(var.get()) for axis, var in self.vars.items()}
-        except ValueError:
-            return False
-        row = self.rows[self.selected_index]
-        row.x = values["x"]
-        row.y = values["y"]
-        row.z = values["z"]
-        self.tree.item(
-            str(self.selected_index),
-            values=(self._display_name(row), row.x, row.y, row.z),
-        )
-        return True
-
-    def _on_entry_live_edit(self, _event: tk.Event) -> None:
-        self._apply_current_entry_values()
-
-    def _on_entry_commit(self, _event: tk.Event) -> None:
-        if self._apply_current_entry_values():
-            self.on_change()
-
-    def _display_name(self, row: SteeringHardpointRow) -> str:
-        return self.DISPLAY_NAMES.get(row.name, row.name.replace("_", " ").title())
-
-
 class OutputTable(ttk.Frame):
     """Table for scalar steering outputs."""
 
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master)
+        self.outputs: list[dict[str, float]] = []
+        self.errors: list[str] = []
         self.tree = ttk.Treeview(self, columns=("name", "value"), show="headings")
         self.tree.heading("name", text="output")
         self.tree.heading("value", text="value")
@@ -143,6 +47,7 @@ class OutputTable(ttk.Frame):
 
     def set_outputs(self, outputs: dict[str, float]) -> None:
         """Refresh output rows."""
+        self.outputs.append(dict(outputs))
         for item in self.tree.get_children():
             self.tree.delete(item)
         for name, value in outputs.items():
@@ -150,6 +55,7 @@ class OutputTable(ttk.Frame):
 
     def set_error(self, message: str) -> None:
         """Show one error row."""
+        self.errors.append(message)
         for item in self.tree.get_children():
             self.tree.delete(item)
         self.tree.insert("", "end", values=("error", message))
@@ -184,7 +90,7 @@ class PitmanTransformControls(ttk.LabelFrame):
             entry.grid(row=row_index, column=1, sticky="ew", padx=(6, 0), pady=2)
             bind_entry_commit_events(
                 entry,
-                on_live_edit=self._on_entry_live_edit,
+                on_live_edit=lambda _event: None,
                 on_commit=self._on_entry_commit,
             )
 
@@ -213,9 +119,6 @@ class PitmanTransformControls(ttk.LabelFrame):
         set_pitman_x_position(self.rows, x_value.value)
         set_pitman_arm_x_length(self.rows, length.value)
         return True
-
-    def _on_entry_live_edit(self, _event: tk.Event) -> None:
-        self._apply_current_entry_values()
 
     def _on_entry_commit(self, _event: tk.Event) -> None:
         if self._apply_current_entry_values():

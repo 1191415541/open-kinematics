@@ -5,8 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import cast
 
+import numpy as np
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
+from kinematics.gui.suspension.workbench import suspension_internal_to_gui_vec3
 from kinematics.state import SuspensionState
 from kinematics.suspensions.base import Suspension
 from kinematics.visualization.main import LinkVisualization
@@ -76,6 +78,7 @@ class SuspensionPreviewRenderer:
         if suspension.config is None:
             raise ValueError("Suspension has no configuration")
 
+        gui_state = _state_to_gui_coordinates(state)
         wheel_cfg = suspension.config.wheel
         wheel_points = (
             self.PREVIEW_WHEEL_POINTS if preview_mode else self.FULL_WHEEL_POINTS
@@ -115,10 +118,10 @@ class SuspensionPreviewRenderer:
             )
             return
 
-        self._visualizer.update_links(self._link_artists, state.positions)
+        self._visualizer.update_links(self._link_artists, gui_state.positions)
         self._visualizer.update_wheel(
             self._wheel_artists,
-            state.positions,
+            gui_state.positions,
             num_bands=self._wheel_bands,
         )
 
@@ -136,6 +139,7 @@ class SuspensionPreviewRenderer:
         wheel_bands: int,
         signature: _PreviewRenderSignature,
     ) -> None:
+        gui_state = _state_to_gui_coordinates(state)
         limits = (ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d())
         view = (ax.elev, ax.azim)
         ax.clear()
@@ -146,14 +150,13 @@ class SuspensionPreviewRenderer:
             ax.view_init(elev=view[0], azim=view[1])
             ax.set_proj_type("ortho")
             ax.set_box_aspect([1, 1, 1])  # type: ignore[arg-type]
-            ax.set_xlabel("X [mm]")
-            ax.set_ylabel("Y [mm]")
-            ax.set_zlabel("Z [mm]")
+            _set_preview_axis_labels(ax)
         else:
             _, _, (x_mid, y_mid, z_mid, max_range) = compute_bounds_from_positions(
-                state.positions
+                gui_state.positions
             )
             configure_3d_axis(cast(Axes3D, ax), "iso", x_mid, y_mid, z_mid, max_range)
+            _set_preview_axis_labels(ax)
 
         self._visualizer = SuspensionVisualizer(
             links,
@@ -163,10 +166,10 @@ class SuspensionPreviewRenderer:
                 num_points=wheel_points,
             ),
         )
-        self._link_artists = self._visualizer.draw_links(ax, state.positions)
+        self._link_artists = self._visualizer.draw_links(ax, gui_state.positions)
         self._wheel_artists = self._visualizer.draw_wheel(
             ax,
-            state.positions,
+            gui_state.positions,
             num_bands=wheel_bands,
         )
         ax.legend(loc="upper left")
@@ -225,6 +228,7 @@ def draw_suspension_preview(
     if suspension.config is None:
         raise ValueError("Suspension has no configuration")
 
+    gui_state = _state_to_gui_coordinates(state)
     wheel_cfg = suspension.config.wheel
     visualizer = SuspensionVisualizer(
         suspension.get_visualization_links(),
@@ -243,15 +247,14 @@ def draw_suspension_preview(
         ax.view_init(elev=view[0], azim=view[1])
         ax.set_proj_type("ortho")
         ax.set_box_aspect([1, 1, 1])  # type: ignore[arg-type]
-        ax.set_xlabel("X [mm]")
-        ax.set_ylabel("Y [mm]")
-        ax.set_zlabel("Z [mm]")
+        _set_preview_axis_labels(ax)
     else:
         _, _, (x_mid, y_mid, z_mid, max_range) = compute_bounds_from_positions(
-            state.positions
+            gui_state.positions
         )
         configure_3d_axis(cast(Axes3D, ax), "iso", x_mid, y_mid, z_mid, max_range)
-    plot_suspension_on_axis(cast(Axes3D, ax), visualizer, state.positions, "iso")
+        _set_preview_axis_labels(ax)
+    plot_suspension_on_axis(cast(Axes3D, ax), visualizer, gui_state.positions, "iso")
     ax.legend(loc="upper left")
 
 
@@ -303,3 +306,19 @@ def draw_suspension_curve_plot(
 
 def _is_number(value: object) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _state_to_gui_coordinates(state: SuspensionState) -> SuspensionState:
+    return SuspensionState(
+        positions={
+            point_id: suspension_internal_to_gui_vec3(position)
+            for point_id, position in state.positions.items()
+        },
+        free_points=set(state.free_points),
+    )
+
+
+def _set_preview_axis_labels(ax: Axes3D) -> None:
+    ax.set_xlabel("X rearward [mm]")
+    ax.set_ylabel("Y rightward [mm]")
+    ax.set_zlabel("Z upward [mm]")
