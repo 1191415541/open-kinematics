@@ -22,6 +22,7 @@ def test_main_gui_shared_menu_manages_hardpoints_project_save_and_close() -> Non
     assert "Open Project" in source
     assert "Import Hardpoints" in source
     assert "Export Hardpoints" in source
+    assert "Export Combined Hardpoints" in source
     assert "Save Project" in source
     assert "Save Project As" in source
     assert "Close" in source
@@ -35,6 +36,7 @@ def test_main_gui_menu_dispatches_to_active_page() -> None:
     assert "self.pages" in source
     assert 'self._call_active_page("open_project")' in class_source
     assert 'self._call_active_page("save_project_as")' in class_source
+    assert "def export_combined_hardpoints" in class_source
 
 
 def test_suspension_page_exposes_load_solve_and_curve_controls() -> None:
@@ -42,6 +44,7 @@ def test_suspension_page_exposes_load_solve_and_curve_controls() -> None:
     controls_source = inspect.getsource(SuspensionWorkbenchPage._build_controls)
     parameters_source = inspect.getsource(SuspensionWorkbenchPage._build_parameters)
     side_source = inspect.getsource(SuspensionWorkbenchPage._build_side_panel)
+    preview_source = inspect.getsource(SuspensionWorkbenchPage._build_preview)
 
     assert "ttk.PanedWindow" in layout_source
     assert "3D Hardpoints" in layout_source
@@ -54,6 +57,10 @@ def test_suspension_page_exposes_load_solve_and_curve_controls() -> None:
     assert "suspension_type_var" in controls_source
     assert "geometry_path_var" in controls_source
     assert "Suspension Parameters" in layout_source
+    assert "workspace = ttk.PanedWindow(right, orient=tk.HORIZONTAL)" in layout_source
+    assert "workspace.add(workspace_left, weight=self.WORKSPACE_PREVIEW_WEIGHT)" in layout_source
+    assert "workspace.add(workspace_right, weight=self.WORKSPACE_SIDE_WEIGHT)" in layout_source
+    assert "controls = ttk.LabelFrame(workspace_left, text=\"Simulation Input\", padding=8)" in layout_source
     assert "Wheelbase" in parameters_source
     assert "Tire width" in parameters_source
     assert "ttk.Notebook" in side_source
@@ -61,6 +68,7 @@ def test_suspension_page_exposes_load_solve_and_curve_controls() -> None:
     assert "Curves" in side_source
     assert "Optimization" in side_source
     assert "CurveManager" in side_source
+    assert "frame.pack(fill=tk.BOTH, expand=True)" in preview_source
 
 
 def test_suspension_page_supports_carrier_type_in_selector() -> None:
@@ -83,7 +91,6 @@ def test_suspension_hardpoint_table_is_compact_and_auto_sized() -> None:
     assert 'height=260' in source
     assert "enable_bindings(" in source
     assert "bulk_table_edit_validation(" in source
-    assert "DISPLAY_NAMES" in source
     assert "_display_name" in source
     assert 'table_align("center"' in source
     assert 'header_align("center"' in source
@@ -92,19 +99,16 @@ def test_suspension_hardpoint_table_is_compact_and_auto_sized() -> None:
     assert "self.main_panedwindow.add(left, weight=0)" in layout_source
     assert "self.main_panedwindow.add(right, weight=5)" in layout_source
     assert "DEFAULT_LEFT_PANE_WIDTH" in class_source
+    assert "WORKSPACE_PREVIEW_WEIGHT" in class_source
+    assert "WORKSPACE_SIDE_WEIGHT" in class_source
     assert "_apply_default_layout" in class_source
 
 
 def test_suspension_hardpoint_table_uses_descriptive_display_names() -> None:
     table = object.__new__(HardpointTable)
 
-    assert (
-        table._display_name(PointID.TRACKROD_INBOARD) == "Track Rod Inboard"
-    )
-    assert (
-        table._display_name(PointID.CARRIER_STEERING_AXIS_LOWER)
-        == "Carrier Steering Axis Lower"
-    )
+    assert table._display_name(PointID.TRACKROD_INBOARD) == "Tie Rod Inner"
+    assert table._display_name(PointID.CARRIER_STEERING_AXIS_LOWER) == "Kingpin Lower"
 
 
 def test_suspension_page_has_wheel_travel_slider_with_throttled_preview() -> None:
@@ -151,7 +155,7 @@ def test_suspension_numeric_entries_use_commit_refresh_and_not_trace_refresh() -
     assert "self.stop_var" not in trace_source
     assert "self.steps_var" not in trace_source
     assert "self.wheelbase_var" not in trace_source
-    assert "self.rim_diameter_var" not in trace_source
+    assert "self.static_radius_var" not in trace_source
 
 
 def test_suspension_optimization_entries_use_commit_updates_without_trace_refresh() -> None:

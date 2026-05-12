@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from kinematics.core.enums import PointID
 from kinematics.gui.suspension.workbench import (
@@ -104,7 +105,9 @@ def test_legacy_suspension_project_without_coordinate_system_remains_internal(
                     "tire": {
                         "aspect_ratio": float(project.config.wheel.tire.aspect_ratio),
                         "section_width": float(project.config.wheel.tire.section_width),
-                        "rim_diameter": float(project.config.wheel.tire.rim_diameter),
+                        "static_radius_mm": float(
+                            project.config.wheel.tire.static_radius_mm
+                        ),
                     },
                 },
                 "cg_position": {"x": 1250.0, "y": 50.0, "z": 450.0},
@@ -127,3 +130,4 @@ def test_legacy_suspension_project_without_coordinate_system_remains_internal(
         loaded.config.cg_position,
         np.asarray([1250.0, 50.0, 450.0], dtype=np.float64),
     )
+    assert loaded.config.wheel.tire.static_radius_mm == pytest.approx(283.1)

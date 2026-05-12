@@ -86,7 +86,7 @@ def valid_config() -> SuspensionConfig:
             tire=TireConfig(
                 aspect_ratio=0.55,
                 section_width=270,
-                rim_diameter=13,
+                static_radius_mm=283.1,
             ),
         ),
         cg_position={"x": 1250, "y": 0, "z": 450},
@@ -494,7 +494,7 @@ config:
     tire:
       aspect_ratio: 0.55
       section_width: 270
-      rim_diameter: 13
+      static_radius_mm: 283.1
   cg_position: {x: 1250, y: 0, z: 450}
   wheelbase: 2500.0
 """
@@ -535,7 +535,7 @@ config:
     tire:
       aspect_ratio: 0.55
       section_width: 270
-      rim_diameter: 13
+      static_radius_mm: 283.1
   cg_position: {x: 1250, y: 0, z: 450}
   wheelbase: 2500.0
   camber_shim:
@@ -567,7 +567,7 @@ config:
     tire:
       aspect_ratio: 0.55
       section_width: 270
-      rim_diameter: 13
+      static_radius_mm: 283.1
   cg_position: {x: 0, y: 0, z: 0}
   wheelbase: 2500.0
 """
@@ -594,7 +594,7 @@ config:
     tire:
       aspect_ratio: 0.55
       section_width: 270
-      rim_diameter: 13
+      static_radius_mm: 283.1
   cg_position: {x: 0, y: 0, z: 0}
   wheelbase: 2500.0
 """

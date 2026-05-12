@@ -61,3 +61,25 @@ def test_suspension_preview_uses_rear_right_up_axis_labels_and_coordinates(
     assert np.isclose(ydata[0], -expected[1])
     assert np.isclose(zdata[0], expected[2])
     plt.close(fig)
+
+
+def test_suspension_preview_places_legend_in_figure_corner_outside_axis(
+    double_wishbone_geometry_file,
+):
+    project = load_suspension_project(double_wishbone_geometry_file)
+    suspension = project.build_suspension()
+    state = suspension.initial_state()
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
+    draw_suspension_preview(ax, suspension, state)
+
+    legend = ax.get_legend()
+    assert legend is not None
+    assert ax.get_position().x0 > 0.2
+    anchor = legend.get_bbox_to_anchor().transformed(fig.transFigure.inverted())
+    assert anchor.x0 == pytest.approx(0.02)
+    assert anchor.y0 == pytest.approx(0.96)
+    assert anchor.x0 < ax.get_position().x0
+
+    plt.close(fig)

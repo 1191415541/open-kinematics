@@ -80,6 +80,8 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
 
     PREVIEW_REFRESH_DELAY_MS = 16
     DEFAULT_LEFT_PANE_WIDTH = 370
+    WORKSPACE_PREVIEW_WEIGHT = 2
+    WORKSPACE_SIDE_WEIGHT = 1
 
     def __init__(self, master: tk.Misc) -> None:
         super().__init__(master)
@@ -115,8 +117,8 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.tire_aspect_var = tk.StringVar(
             value=str(self.project.config.wheel.tire.aspect_ratio)
         )
-        self.rim_diameter_var = tk.StringVar(
-            value=str(self.project.config.wheel.tire.rim_diameter)
+        self.static_radius_var = tk.StringVar(
+            value=str(self.project.config.wheel.tire.static_radius_mm)
         )
         self.optimization_running = False
         self.optimization_queue: queue.Queue[
@@ -187,14 +189,21 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         left_parameters.pack(fill=tk.X)
         self._build_parameters(left_parameters)
 
-        controls = ttk.LabelFrame(right, text="Simulation Input", padding=8)
+        workspace = ttk.PanedWindow(right, orient=tk.HORIZONTAL)
+        workspace.pack(fill=tk.BOTH, expand=True)
+        workspace_left = ttk.Frame(workspace, padding=(0, 0, 8, 0))
+        workspace_right = ttk.Frame(workspace, padding=(8, 0, 0, 0))
+        workspace.add(workspace_left, weight=self.WORKSPACE_PREVIEW_WEIGHT)
+        workspace.add(workspace_right, weight=self.WORKSPACE_SIDE_WEIGHT)
+
+        controls = ttk.LabelFrame(workspace_left, text="Simulation Input", padding=8)
         controls.pack(fill=tk.X)
         self._build_controls(controls)
 
-        body = ttk.PanedWindow(right, orient=tk.HORIZONTAL)
-        body.pack(fill=tk.BOTH, expand=True, pady=8)
-        self._build_preview(body)
-        self._build_side_panel(body)
+        preview_area = ttk.Frame(workspace_left)
+        preview_area.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        self._build_preview(preview_area)
+        self._build_side_panel(workspace_right)
         self.after_idle(self._apply_default_layout)
 
     def _apply_default_layout(self) -> None:
@@ -290,7 +299,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             ("Wheel offset", self.wheel_offset_var),
             ("Tire width", self.tire_width_var),
             ("Aspect ratio", self.tire_aspect_var),
-            ("Rim diameter", self.rim_diameter_var),
+            ("Static radius [mm]", self.static_radius_var),
         )
         ttk.Checkbutton(parent, text="Steered", variable=self.steered_var).grid(
             row=0,
@@ -313,9 +322,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             refresh_commit_entries.append(entry)
         self.bind_entry_commit_refresh(refresh_commit_entries)
 
-    def _build_preview(self, parent: ttk.PanedWindow) -> None:
+    def _build_preview(self, parent: ttk.Frame) -> None:
         frame = ttk.Frame(parent)
-        parent.add(frame, weight=2)
+        frame.pack(fill=tk.BOTH, expand=True)
         self.preview_fig = Figure(figsize=(6, 5), dpi=100)
         self.preview_ax = self.preview_fig.add_subplot(111, projection="3d")
         self.preview_canvas = FigureCanvasTkAgg(self.preview_fig, master=frame)
@@ -330,9 +339,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.preview_toolbar.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.preview_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-    def _build_side_panel(self, parent: ttk.PanedWindow) -> None:
+    def _build_side_panel(self, parent: ttk.Frame) -> None:
         frame = ttk.Frame(parent)
-        parent.add(frame, weight=1)
+        frame.pack(fill=tk.BOTH, expand=True)
         notebook = ttk.Notebook(frame)
         notebook.pack(fill=tk.BOTH, expand=True)
 
@@ -1060,7 +1069,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.wheel_offset_var.set(str(cfg.wheel.offset))
         self.tire_width_var.set(str(cfg.wheel.tire.section_width))
         self.tire_aspect_var.set(str(cfg.wheel.tire.aspect_ratio))
-        self.rim_diameter_var.set(str(cfg.wheel.tire.rim_diameter))
+        self.static_radius_var.set(str(cfg.wheel.tire.static_radius_mm))
         self.start_var.set(str(self.project.settings.start))
         self.stop_var.set(str(self.project.settings.stop))
         self.steps_var.set(str(self.project.settings.steps))
@@ -1092,9 +1101,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 self.tire_width_var.get(),
                 float(current_cfg.wheel.tire.section_width),
             ),
-            "rim_diameter": parse_float_entry(
-                self.rim_diameter_var.get(),
-                float(current_cfg.wheel.tire.rim_diameter),
+            "static_radius_mm": parse_float_entry(
+                self.static_radius_var.get(),
+                float(current_cfg.wheel.tire.static_radius_mm),
             ),
             "cg_x": parse_float_entry(
                 self.cg_x_var.get(),
@@ -1156,7 +1165,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 tire=TireConfig(
                     aspect_ratio=float(parsed_values["tire_aspect_ratio"].value),
                     section_width=float(parsed_values["tire_section_width"].value),
-                    rim_diameter=float(parsed_values["rim_diameter"].value),
+                    static_radius_mm=float(parsed_values["static_radius_mm"].value),
                 ),
             ),
             cg_position=(

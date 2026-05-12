@@ -45,6 +45,21 @@ def test_side_panel_includes_optimization_tab():
     assert "def stop_optimization" in class_source
 
 
+def test_steering_layout_uses_shared_workspace_split_for_controls_preview_and_outputs():
+    layout_source = inspect.getsource(SteeringWorkbenchApp._build_layout)
+    preview_source = inspect.getsource(SteeringWorkbenchApp._build_preview)
+    class_source = inspect.getsource(SteeringWorkbenchApp)
+
+    assert "workspace = ttk.PanedWindow(right, orient=tk.HORIZONTAL)" in layout_source
+    assert "workspace.add(workspace_left, weight=self.WORKSPACE_PREVIEW_WEIGHT)" in layout_source
+    assert "workspace.add(workspace_right, weight=self.WORKSPACE_SIDE_WEIGHT)" in layout_source
+    assert "controls = ttk.LabelFrame(workspace_left, text=\"Simulation Input\", padding=8)" in layout_source
+    assert "self._build_side_panel(workspace_right)" in layout_source
+    assert "frame.pack(fill=tk.BOTH, expand=True)" in preview_source
+    assert "WORKSPACE_PREVIEW_WEIGHT" in class_source
+    assert "WORKSPACE_SIDE_WEIGHT" in class_source
+
+
 def test_steering_numeric_entries_use_commit_refresh_and_not_trace_refresh():
     controls_source = inspect.getsource(SteeringWorkbenchApp._build_controls)
     trace_source = inspect.getsource(SteeringWorkbenchApp._bind_control_vars)
@@ -123,7 +138,7 @@ def test_steering_hardpoint_editor_uses_descriptive_display_names():
         editor._display_name(
             SteeringHardpointRow("symmetric", "wheel_kingpin_lower", 0.0, 0.0, 0.0)
         )
-        == "Wheel Kingpin Lower"
+        == "Kingpin Lower"
     )
     assert (
         editor._display_name(

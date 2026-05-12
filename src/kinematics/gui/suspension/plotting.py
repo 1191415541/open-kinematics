@@ -172,7 +172,7 @@ class SuspensionPreviewRenderer:
             gui_state.positions,
             num_bands=wheel_bands,
         )
-        ax.legend(loc="upper left")
+        _apply_preview_legend_layout(ax)
         self._signature = signature
         self._wheel_bands = wheel_bands
 
@@ -255,7 +255,7 @@ def draw_suspension_preview(
         configure_3d_axis(cast(Axes3D, ax), "iso", x_mid, y_mid, z_mid, max_range)
         _set_preview_axis_labels(ax)
     plot_suspension_on_axis(cast(Axes3D, ax), visualizer, gui_state.positions, "iso")
-    ax.legend(loc="upper left")
+    _apply_preview_legend_layout(ax)
 
 
 def draw_suspension_curve(
@@ -322,3 +322,14 @@ def _set_preview_axis_labels(ax: Axes3D) -> None:
     ax.set_xlabel("X rearward [mm]")
     ax.set_ylabel("Y rightward [mm]")
     ax.set_zlabel("Z upward [mm]")
+
+
+def _apply_preview_legend_layout(ax: Axes3D) -> None:
+    """Keep the preview legend in the page corner instead of over the suspension."""
+    ax.set_position((0.28, 0.06, 0.7, 0.88))
+    ax.legend(
+        loc="upper left",
+        bbox_to_anchor=(0.02, 0.96),
+        bbox_transform=ax.figure.transFigure,
+        borderaxespad=0.0,
+    )

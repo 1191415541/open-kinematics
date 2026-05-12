@@ -36,7 +36,7 @@ def invalid_geometry_file(tmp_path: Path):
                 "tire": {
                     "aspect_ratio": 0.55,
                     "section_width": 270,
-                    "rim_diameter": 13,
+                    "static_radius_mm": 283.1,
                 },
             },
             "cg_position": {"x": 0, "y": 0, "z": 0},

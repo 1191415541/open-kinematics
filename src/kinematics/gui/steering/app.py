@@ -72,6 +72,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
     """Main steering workbench window."""
 
     PREVIEW_REFRESH_DELAY_MS = 16
+    WORKSPACE_PREVIEW_WEIGHT = 2
+    WORKSPACE_SIDE_WEIGHT = 1
 
     def __init__(self, root: Misc, *, standalone: bool = True) -> None:
         self.root = root
@@ -420,14 +422,21 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         )
         self.pitman_controls.pack(fill=tk.X, pady=(8, 0))
 
-        controls = ttk.LabelFrame(right, text="Simulation Input", padding=8)
+        workspace = ttk.PanedWindow(right, orient=tk.HORIZONTAL)
+        workspace.pack(fill=tk.BOTH, expand=True)
+        workspace_left = ttk.Frame(workspace, padding=(0, 0, 8, 0))
+        workspace_right = ttk.Frame(workspace, padding=(8, 0, 0, 0))
+        workspace.add(workspace_left, weight=self.WORKSPACE_PREVIEW_WEIGHT)
+        workspace.add(workspace_right, weight=self.WORKSPACE_SIDE_WEIGHT)
+
+        controls = ttk.LabelFrame(workspace_left, text="Simulation Input", padding=8)
         controls.pack(fill=tk.X)
         self._build_controls(controls)
 
-        body = ttk.PanedWindow(right, orient=tk.HORIZONTAL)
-        body.pack(fill=tk.BOTH, expand=True, pady=8)
-        self._build_preview(body)
-        self._build_side_panel(body)
+        preview_area = ttk.Frame(workspace_left)
+        preview_area.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        self._build_preview(preview_area)
+        self._build_side_panel(workspace_right)
 
     def _build_suspension_parameters(self, parent: ttk.Frame) -> None:
         frame = ttk.LabelFrame(parent, text="Suspension Parameters", padding=6)
@@ -513,9 +522,9 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             refresh_commit_entries.append(entry)
         self.bind_entry_commit_refresh(refresh_commit_entries)
 
-    def _build_preview(self, parent: ttk.PanedWindow) -> None:
+    def _build_preview(self, parent: ttk.Frame) -> None:
         frame = ttk.Frame(parent)
-        parent.add(frame, weight=2)
+        frame.pack(fill=tk.BOTH, expand=True)
         self.preview_fig = Figure(figsize=(7, 6), dpi=100)
         self.preview_ax = self.preview_fig.add_subplot(111)
         self.preview_canvas = FigureCanvasTkAgg(self.preview_fig, master=frame)
@@ -531,9 +540,9 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         fit_button.pack(side=tk.RIGHT)
         self.preview_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-    def _build_side_panel(self, parent: ttk.PanedWindow) -> None:
+    def _build_side_panel(self, parent: ttk.Frame) -> None:
         panel = ttk.Frame(parent)
-        parent.add(panel, weight=1)
+        panel.pack(fill=tk.BOTH, expand=True)
         notebook = ttk.Notebook(panel)
         notebook.pack(fill=tk.BOTH, expand=True)
 

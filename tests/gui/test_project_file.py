@@ -80,6 +80,7 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
     assert data["name"] == "front suspension"
     assert "TRACKROD_OUTBOARD" in data["hardpoints"]
     assert data["parameters"]["config"]["wheelbase"] == 2650.0
+    assert data["parameters"]["config"]["wheel"]["tire"]["static_radius_mm"] == 283.1
     assert data["simulation"] == {
         "start": -30.0,
         "stop": 90.0,

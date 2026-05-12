@@ -227,6 +227,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "scipy" },
+    { name = "tksheet" },
     { name = "typer" },
 ]
 
@@ -258,6 +259,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "scipy", specifier = ">=1.14.1" },
+    { name = "tksheet", specifier = ">=7.6.0" },
     { name = "typer", specifier = ">=0.19.2" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
 ]
@@ -777,6 +779,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2bb238361cd4ae6125a569b4db67cd9e79846ba2d68c/sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517", size = 7793921, upload-time = "2025-04-27T18:05:01.611Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5", size = 6299353, upload-time = "2025-04-27T18:04:59.103Z" },
+]
+
+[[package]]
+name = "tksheet"
+version = "7.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/28/4e83480a2c1d41d25fbae2b613847ead6d9499a2d7eec0000bf17aed2f30/tksheet-7.6.0.tar.gz", hash = "sha256:42d0618b10184294a85489a474ae747097483dd9a47b4385ba12b1afa8648e1a", size = 199108, upload-time = "2026-03-11T17:49:25.335Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/a2/406016281147857d919c95a9efb6926b8ada683d2fc4de8c1fabc9d5aefa/tksheet-7.6.0-py3-none-any.whl", hash = "sha256:c586d7d04f93bace45f97888b12ea97cbb48dea4f1c3b7931e89491fdf18f9bb", size = 202704, upload-time = "2026-03-11T17:49:22.644Z" },
 ]
 
 [[package]]

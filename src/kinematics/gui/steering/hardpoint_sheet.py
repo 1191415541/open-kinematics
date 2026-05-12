@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 import tksheet
 
+from kinematics.gui.hardpoint_merge import steering_display_name
 from kinematics.steering.workbench import SteeringHardpointRow
 
 
@@ -19,18 +20,6 @@ def _format_coord(value: float) -> str:
 
 class HardpointEditor(ttk.Frame):
     """Spreadsheet-style hardpoint editor with Excel-like interactions."""
-
-    DISPLAY_NAMES = {
-        "wheel_kingpin_lower": "Wheel Kingpin Lower",
-        "wheel_kingpin_upper": "Wheel Kingpin Upper",
-        "wheel_center": "Wheel Center",
-        "wheel_tie_rod_pickup": "Wheel Tie Rod Pickup",
-        "pitman_output": "Pitman Output",
-        "pitman_pivot": "Pitman Pivot",
-        "bellcrank_pivot": "Bellcrank Pivot",
-        "bellcrank_center_link_pickup": "Bellcrank Center Link Pickup",
-        "bellcrank_tie_rod_pickup": "Bellcrank Tie Rod Pickup",
-    }
     COLUMNS = ("Point", "X", "Y", "Z")
 
     def __init__(
@@ -120,7 +109,7 @@ class HardpointEditor(ttk.Frame):
         ]
 
     def _display_name(self, row: SteeringHardpointRow) -> str:
-        return self.DISPLAY_NAMES.get(row.name, row.name.replace("_", " ").title())
+        return steering_display_name(row.name)
 
     def _on_single_cell_validate(self, event_data: dict[str, Any]) -> str | None:
         if getattr(self, "_suppress_sheet_events", False):

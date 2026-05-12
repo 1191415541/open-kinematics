@@ -22,8 +22,8 @@ def test_sheet_rows_include_display_name_and_coordinates() -> None:
     data = table._sheet_rows()
 
     assert data == [
-        ["Track Rod Inboard", "-120", "-40", "180"],
-        ["Track Rod Outboard", "-240", "60", "210"],
+        ["Tie Rod Inner", "-120", "-40", "180"],
+        ["Tie Rod Outer", "-240", "60", "210"],
     ]
 
 
@@ -34,8 +34,8 @@ def test_apply_sheet_values_updates_hardpoint_rows() -> None:
 
     changed = table._apply_sheet_values(
         [
-            ["Track Rod Inboard", "121.5", "39.25", "181.75"],
-            ["Track Rod Outboard", "241", "-59.5", "210"],
+            ["Tie Rod Inner", "121.5", "39.25", "181.75"],
+            ["Tie Rod Outer", "241", "-59.5", "210"],
         ]
     )
 
@@ -58,8 +58,8 @@ def test_apply_sheet_values_rejects_invalid_numeric_cell() -> None:
     with pytest.raises(ValueError, match="row 1 column X"):
         table._apply_sheet_values(
             [
-                ["Track Rod Inboard", "bad", "39.25", "181.75"],
-                ["Track Rod Outboard", "241", "-59.5", "210"],
+                ["Tie Rod Inner", "bad", "39.25", "181.75"],
+                ["Tie Rod Outer", "241", "-59.5", "210"],
             ]
         )
 
@@ -76,8 +76,8 @@ def test_apply_sheet_values_treats_blank_numeric_cell_as_incomplete() -> None:
 
     changed = table._apply_sheet_values(
         [
-            ["Track Rod Inboard", "", "39.25", "181.75"],
-            ["Track Rod Outboard", "241", "-59.5", "210"],
+            ["Tie Rod Inner", "", "39.25", "181.75"],
+            ["Tie Rod Outer", "241", "-59.5", "210"],
         ]
     )
 
@@ -96,8 +96,8 @@ def test_bulk_edit_handler_commits_valid_sheet_change() -> None:
     table.on_change = lambda: calls.append("changed")
     table.sheet = SimpleNamespace(
         get_sheet_data=lambda: [
-            ["Track Rod Inboard", "122", "38", "182"],
-            ["Track Rod Outboard", "242", "-58", "211"],
+            ["Tie Rod Inner", "122", "38", "182"],
+            ["Tie Rod Outer", "242", "-58", "211"],
         ]
     )
 
@@ -120,8 +120,8 @@ def test_bulk_edit_handler_rejects_invalid_sheet_change() -> None:
     table.on_change = lambda: None
     table.sheet = SimpleNamespace(
         get_sheet_data=lambda: [
-            ["Track Rod Inboard", "122", "oops", "182"],
-            ["Track Rod Outboard", "242", "-58", "211"],
+            ["Tie Rod Inner", "122", "oops", "182"],
+            ["Tie Rod Outer", "242", "-58", "211"],
         ]
     )
 
@@ -144,8 +144,8 @@ def test_bulk_edit_handler_allows_blank_sheet_value_without_refresh() -> None:
     table.on_change = lambda: calls.append("changed")
     table.sheet = SimpleNamespace(
         get_sheet_data=lambda: [
-            ["Track Rod Inboard", "", "38", "182"],
-            ["Track Rod Outboard", "242", "-58", "211"],
+            ["Tie Rod Inner", "", "38", "182"],
+            ["Tie Rod Outer", "242", "-58", "211"],
         ]
     )
 

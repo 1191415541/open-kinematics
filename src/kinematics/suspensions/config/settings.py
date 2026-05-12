@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from kinematics.core.constants import MM_PER_INCH
 from kinematics.io.validation import PydanticVec3
 
 
@@ -20,14 +19,14 @@ class TireConfig(BaseModel):
     Attributes:
         aspect_ratio: Aspect ratio as a fraction in [0, 1], e.g., 0.55 for 55%.
         section_width: Section width in mm.
-        rim_diameter: Rim diameter in inches.
+        static_radius_mm: Static wheel radius in mm.
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     aspect_ratio: float
     section_width: float
-    rim_diameter: float
+    static_radius_mm: float
 
     @field_validator("aspect_ratio")
     @classmethod
@@ -36,24 +35,19 @@ class TireConfig(BaseModel):
             raise ValueError(f"aspect_ratio must be in [0, 1], got {v}")
         return v
 
-    @property
-    def sidewall_height(self) -> float:
-        """Calculate sidewall height in mm."""
-        return self.aspect_ratio * self.section_width
-
-    @property
-    def rim_diameter_mm(self) -> float:
-        """Convert rim diameter from inches to mm."""
-        return self.rim_diameter * MM_PER_INCH
+    @field_validator("static_radius_mm")
+    @classmethod
+    def check_static_radius_mm(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError(f"static_radius_mm must be positive, got {v}")
+        return v
 
     @property
     def nominal_radius(self) -> float:
         """
-        Calculate nominal tire radius in mm.
-
-        This makes no consideration of vertical load or speed growth effects.
+        Return static tire radius in mm.
         """
-        return (self.rim_diameter_mm + 2 * self.sidewall_height) / 2
+        return self.static_radius_mm
 
 
 class WheelConfig(BaseModel):

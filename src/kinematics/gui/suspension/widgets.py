@@ -11,6 +11,7 @@ import numpy as np
 import tksheet
 
 from kinematics.core.enums import PointID
+from kinematics.gui.hardpoint_merge import suspension_display_name
 from kinematics.gui.suspension.workbench import (
     suspension_gui_to_internal_vec3,
     suspension_internal_to_gui_vec3,
@@ -25,21 +26,6 @@ def _format_coord(value: float) -> str:
 
 class HardpointTable(ttk.Frame):
     """Editable suspension hardpoint sheet with spreadsheet-style interactions."""
-
-    DISPLAY_NAMES = {
-        PointID.LOWER_WISHBONE_INBOARD_FRONT: "Lower Wishbone Inboard Front",
-        PointID.LOWER_WISHBONE_INBOARD_REAR: "Lower Wishbone Inboard Rear",
-        PointID.LOWER_WISHBONE_OUTBOARD: "Lower Wishbone Outboard",
-        PointID.UPPER_WISHBONE_INBOARD_FRONT: "Upper Wishbone Inboard Front",
-        PointID.UPPER_WISHBONE_INBOARD_REAR: "Upper Wishbone Inboard Rear",
-        PointID.UPPER_WISHBONE_OUTBOARD: "Upper Wishbone Outboard",
-        PointID.TRACKROD_INBOARD: "Track Rod Inboard",
-        PointID.TRACKROD_OUTBOARD: "Track Rod Outboard",
-        PointID.AXLE_INBOARD: "Axle Inboard",
-        PointID.AXLE_OUTBOARD: "Axle Outboard",
-        PointID.CARRIER_STEERING_AXIS_LOWER: "Carrier Steering Axis Lower",
-        PointID.CARRIER_STEERING_AXIS_UPPER: "Carrier Steering Axis Upper",
-    }
     COLUMNS = ("Point", "X", "Y", "Z")
 
     def __init__(self, master: tk.Misc, on_change=None) -> None:
@@ -132,7 +118,7 @@ class HardpointTable(ttk.Frame):
         ]
 
     def _display_name(self, point_id: PointID) -> str:
-        return self.DISPLAY_NAMES.get(point_id, point_id.name)
+        return suspension_display_name(point_id)
 
     def _on_single_cell_validate(self, event_data: dict[str, Any]) -> str | None:
         if getattr(self, "_suppress_sheet_events", False):

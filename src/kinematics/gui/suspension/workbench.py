@@ -14,6 +14,7 @@ import cma
 import numpy as np
 from scipy.optimize import least_squares
 
+from kinematics.core.constants import MM_PER_INCH
 from kinematics.core.enums import Axis, PointID, TargetPositionMode, Units
 from kinematics.core.types import PointTarget, PointTargetAxis, SweepConfig
 from kinematics.gui.common import OptimizationCancelledError, raise_if_cancelled
@@ -218,7 +219,7 @@ def default_suspension_config() -> SuspensionConfig:
             tire=TireConfig(
                 aspect_ratio=0.55,
                 section_width=270.0,
-                rim_diameter=13.0,
+                static_radius_mm=283.1,
             ),
         ),
         cg_position=(1250.0, 0.0, 450.0),
@@ -1276,7 +1277,7 @@ def _suspension_config_to_dict(
             "tire": {
                 "aspect_ratio": float(config.wheel.tire.aspect_ratio),
                 "section_width": float(config.wheel.tire.section_width),
-                "rim_diameter": float(config.wheel.tire.rim_diameter),
+                "static_radius_mm": float(config.wheel.tire.static_radius_mm),
             },
         },
         "cg_position": _vec3_to_dict(
@@ -1316,6 +1317,23 @@ def _suspension_config_from_dict(
         return default_suspension_config().model_dump()
 
     data = dict(config)
+    wheel = data.get("wheel")
+    if isinstance(wheel, dict):
+        wheel_data = dict(wheel)
+        tire = wheel_data.get("tire")
+        if isinstance(tire, dict):
+            tire_data = dict(tire)
+            if "static_radius_mm" not in tire_data and "rim_diameter" in tire_data:
+                section_width = float(tire_data.get("section_width", 0.0))
+                aspect_ratio = float(tire_data.get("aspect_ratio", 0.0))
+                rim_diameter_inches = float(tire_data["rim_diameter"])
+                tire_data["static_radius_mm"] = (
+                    rim_diameter_inches * MM_PER_INCH
+                    + 2.0 * (aspect_ratio * section_width)
+                ) / 2.0
+            tire_data.pop("rim_diameter", None)
+            wheel_data["tire"] = tire_data
+        data["wheel"] = wheel_data
     if gui_coordinates and isinstance(data.get("cg_position"), dict):
         data["cg_position"] = _vec3_dict_from_gui_dict(data["cg_position"])
 

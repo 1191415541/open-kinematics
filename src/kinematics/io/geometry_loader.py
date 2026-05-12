@@ -13,6 +13,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError as PydanticValidationError
 
+from kinematics.core.constants import MM_PER_INCH
 from kinematics.core.enums import PointID, ShimType, Units
 from kinematics.core.types import Vec3
 from kinematics.io.validation import coerce_enum, coerce_vec3
@@ -112,7 +113,9 @@ def load_suspension(
         raise ValueError("Validation failed:\n  - " + "\n  - ".join(errors))
 
     # Load configuration using Pydantic.
-    config_data = yaml_data.get("config", yaml_data.get("configuration", {}))
+    config_data = _normalize_legacy_tire_config(
+        yaml_data.get("config", yaml_data.get("configuration", {}))
+    )
     try:
         config = SuspensionConfig.model_validate(config_data)
     except PydanticValidationError as e:
@@ -140,6 +143,34 @@ def load_suspension(
         hardpoints=hardpoints,
         config=config,
     )
+
+
+def _normalize_legacy_tire_config(config_data: object) -> object:
+    """Convert legacy rim-diameter tire config into static-radius config."""
+    if not isinstance(config_data, dict):
+        return config_data
+
+    normalized = dict(config_data)
+    wheel = normalized.get("wheel")
+    if not isinstance(wheel, dict):
+        return normalized
+
+    wheel_data = dict(wheel)
+    tire = wheel_data.get("tire")
+    if isinstance(tire, dict):
+        tire_data = dict(tire)
+        if "static_radius_mm" not in tire_data and "rim_diameter" in tire_data:
+            section_width = float(tire_data.get("section_width", 0.0))
+            aspect_ratio = float(tire_data.get("aspect_ratio", 0.0))
+            rim_diameter_inches = float(tire_data["rim_diameter"])
+            tire_data["static_radius_mm"] = (
+                rim_diameter_inches * MM_PER_INCH
+                + 2.0 * (aspect_ratio * section_width)
+            ) / 2.0
+        tire_data.pop("rim_diameter", None)
+        wheel_data["tire"] = tire_data
+    normalized["wheel"] = wheel_data
+    return normalized
 
 
 def parse_hardpoints(
