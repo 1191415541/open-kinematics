@@ -33,7 +33,8 @@ if (-not (Test-Path $PythonPath)) {
     pydantic `
     pyyaml `
     cma `
-    matplotlib
+    matplotlib `
+    tksheet
 & $PythonPath -m pip install --no-deps --editable .
 
 & $PythonPath -m PyInstaller --noconfirm --clean .\packaging\kinematics_gui.spec

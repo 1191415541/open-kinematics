@@ -24,6 +24,7 @@ from kinematics.gui.suspension.workbench import (
     load_suspension_project,
     optimize_suspension_hardpoints,
     solve_suspension_project,
+    suspension_metric_internal_to_gui,
     suspension_pair_delta_constraint_residuals,
     suspension_optimization_residuals,
     supported_suspension_type_keys,
@@ -79,6 +80,79 @@ def test_solve_suspension_project_aliases_toe_to_roadwheel_angle(
     assert result.rows[0]["toe_deg"] == pytest.approx(
         result.rows[0]["roadwheel_angle_deg"]
     )
+
+
+def test_suspension_metric_internal_to_gui_flips_coordinate_outputs_only() -> None:
+    assert suspension_metric_internal_to_gui("svic_x_mm", 120.0) == pytest.approx(
+        -120.0
+    )
+    assert suspension_metric_internal_to_gui("svsa_length_mm", 320.0) == pytest.approx(
+        -320.0
+    )
+    assert suspension_metric_internal_to_gui("fvic_y_mm", 45.0) == pytest.approx(
+        -45.0
+    )
+    assert suspension_metric_internal_to_gui("fvsa_length_mm", -210.0) == pytest.approx(
+        210.0
+    )
+    assert suspension_metric_internal_to_gui("camber_deg", -1.5) == pytest.approx(
+        -1.5
+    )
+    assert suspension_metric_internal_to_gui("toe_deg", 0.25) == pytest.approx(0.25)
+
+
+def test_solve_suspension_project_converts_coordinate_outputs_to_gui_convention(
+    double_wishbone_geometry_file: Path,
+) -> None:
+    project = load_suspension_project(double_wishbone_geometry_file)
+    project.settings = SuspensionSweepSettings(start=-10.0, stop=20.0, steps=4)
+
+    result = solve_suspension_project(project)
+    suspension = project.build_suspension()
+    verified_any = False
+    for row, state in zip(result.rows, result.states):
+        internal_metrics = suspension_workbench.compute_metrics_for_state_from_suspension(
+            state, suspension
+        )
+        for key in ("svic_x_mm", "fvic_y_mm", "svsa_length_mm", "fvsa_length_mm"):
+            internal_value = internal_metrics[key]
+            if internal_value is None:
+                assert row[key] is None
+                continue
+            verified_any = True
+            assert row[key] == pytest.approx(-float(internal_value))
+        assert row["camber_deg"] == pytest.approx(float(internal_metrics["camber_deg"]))
+
+    assert verified_any is True
+
+
+def test_single_variable_cma_solver_modes_do_not_fail(
+    double_wishbone_geometry_file: Path,
+) -> None:
+    project = load_suspension_project(double_wishbone_geometry_file)
+    project.settings = SuspensionSweepSettings(start=-10.0, stop=20.0, steps=4)
+    targets = [
+        SuspensionOptimizationTarget(
+            metric_name="toe_deg",
+            target_delta=0.0,
+            trend="ignore",
+            target_mode="endpoint_delta",
+        )
+    ]
+
+    for solver_mode in ("cma_es_only", "cma_es_then_local_refine", "dual_path"):
+        result = optimize_suspension_hardpoints(
+            project,
+            targets=targets,
+            variable_names=("TRACKROD_OUTBOARD_z",),
+            variable_delta_limit=10.0,
+            solver_mode=solver_mode,
+            pair_delta_constraints=[],
+            max_rounds=2,
+        )
+
+        assert "TRACKROD_OUTBOARD_z" in result.applied_values
+        assert isinstance(result.final_cost, float)
 
 
 def test_suspension_optimization_residuals_penalize_wrong_trend() -> None:

@@ -43,6 +43,8 @@ from kinematics.gui.suspension.workbench import (
     SuspensionProject,
     SuspensionSweepResult,
     SuspensionSweepSettings,
+    suspension_gui_to_internal_vec3,
+    suspension_internal_to_gui_vec3,
     create_default_suspension_project,
     curve_specs_for_plot,
     analyze_suspension_optimization_variables,
@@ -282,9 +284,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
     def _build_parameters(self, parent: ttk.Frame) -> None:
         fields = (
             ("Wheelbase", self.wheelbase_var),
-            ("CG X", self.cg_x_var),
-            ("CG Y", self.cg_y_var),
-            ("CG Z", self.cg_z_var),
+            ("CG X rearward", self.cg_x_var),
+            ("CG Y rightward", self.cg_y_var),
+            ("CG Z upward", self.cg_z_var),
             ("Wheel offset", self.wheel_offset_var),
             ("Tire width", self.tire_width_var),
             ("Aspect ratio", self.tire_aspect_var),
@@ -1006,11 +1008,12 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.suspension_type_var.set(self.project.suspension_type)
         self.hardpoint_table.set_hardpoints(self.project.hardpoints)
         cfg = self.project.config
+        cg_position = suspension_internal_to_gui_vec3(cfg.cg_position)
         self.steered_var.set(cfg.steered)
         self.wheelbase_var.set(str(cfg.wheelbase))
-        self.cg_x_var.set(str(cfg.cg_position[0]))
-        self.cg_y_var.set(str(cfg.cg_position[1]))
-        self.cg_z_var.set(str(cfg.cg_position[2]))
+        self.cg_x_var.set(str(cg_position[0]))
+        self.cg_y_var.set(str(cg_position[1]))
+        self.cg_z_var.set(str(cg_position[2]))
         self.wheel_offset_var.set(str(cfg.wheel.offset))
         self.tire_width_var.set(str(cfg.wheel.tire.section_width))
         self.tire_aspect_var.set(str(cfg.wheel.tire.aspect_ratio))
@@ -1096,6 +1099,13 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         if optimization is None:
             return False
         self.project.suspension_type = self.suspension_type_var.get()
+        cg_position = suspension_gui_to_internal_vec3(
+            (
+                float(parsed_values["cg_x"].value),
+                float(parsed_values["cg_y"].value),
+                float(parsed_values["cg_z"].value),
+            )
+        )
         self.project.config = SuspensionConfig(
             steered=self.steered_var.get(),
             wheel=WheelConfig(
@@ -1107,9 +1117,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 ),
             ),
             cg_position=(
-                float(parsed_values["cg_x"].value),
-                float(parsed_values["cg_y"].value),
-                float(parsed_values["cg_z"].value),
+                float(cg_position[0]),
+                float(cg_position[1]),
+                float(cg_position[2]),
             ),
             wheelbase=float(parsed_values["wheelbase"].value),
         )

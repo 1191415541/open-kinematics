@@ -3,6 +3,7 @@ import pytest
 matplotlib = pytest.importorskip("matplotlib")
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt  # noqa: E402
+import numpy as np
 
 from kinematics.gui.suspension.plotting import draw_suspension_preview  # noqa: E402
 from kinematics.gui.suspension.workbench import (  # noqa: E402
@@ -34,4 +35,29 @@ def test_suspension_preview_can_preserve_existing_3d_view_limits(
     assert ax.get_zlim3d() == (100.0, 800.0)
     assert ax.elev == 15.0
     assert ax.azim == 35.0
+    plt.close(fig)
+
+
+def test_suspension_preview_uses_rear_right_up_axis_labels_and_coordinates(
+    double_wishbone_geometry_file,
+):
+    project = load_suspension_project(double_wishbone_geometry_file)
+    suspension = project.build_suspension()
+    state = suspension.initial_state()
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
+    draw_suspension_preview(ax, suspension, state)
+
+    assert ax.get_xlabel() == "X rearward [mm]"
+    assert ax.get_ylabel() == "Y rightward [mm]"
+    assert ax.get_zlabel() == "Z upward [mm]"
+
+    first_line = ax.lines[0]
+    first_point_id = suspension.get_visualization_links()[0].points[0]
+    expected = state.positions[first_point_id]
+    xdata, ydata, zdata = first_line.get_data_3d()
+    assert np.isclose(xdata[0], -expected[0])
+    assert np.isclose(ydata[0], -expected[1])
+    assert np.isclose(zdata[0], expected[2])
     plt.close(fig)

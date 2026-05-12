@@ -80,10 +80,29 @@ def test_hardpoint_panel_includes_restore_default_button():
 def test_steering_hardpoint_editor_matches_suspension_table_format():
     source = inspect.getsource(HardpointEditor._build)
 
-    assert 'columns = ("point", "x", "y", "z")' in source
-    assert 'show="headings"' in source
-    assert 'height=10' in source
-    assert 'self.tree.heading(column, text=column)' in source
+    assert "tksheet.Sheet(" in source
+    assert 'headers=list(self.COLUMNS)' in source
+    assert 'show_row_index=False' in source
+    assert 'enable_bindings(' in source
+
+
+def test_steering_hardpoint_editor_enables_excel_like_bindings():
+    source = inspect.getsource(HardpointEditor._build)
+
+    assert '"copy"' in source
+    assert '"paste"' in source
+    assert '"undo"' in source
+    assert '"edit_cell"' in source
+    assert 'bulk_table_edit_validation(' in source
+
+
+def test_steering_hardpoint_editor_centers_text_and_auto_sizes_xyz_columns():
+    source = inspect.getsource(HardpointEditor)
+
+    assert 'table_align("center"' in source
+    assert 'header_align("center"' in source
+    assert 'align_columns(list(range(len(self.COLUMNS))), align="center"' in source
+    assert 'width="text"' in source
 
 
 def test_steering_hardpoint_editor_uses_descriptive_display_names():

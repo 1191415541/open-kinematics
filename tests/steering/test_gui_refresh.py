@@ -3,6 +3,7 @@ from types import MethodType, SimpleNamespace
 import pytest
 
 from kinematics.gui.steering import app as steering_app
+from kinematics.gui.steering import widgets as steering_widgets
 from kinematics.steering.workbench import default_steering_project
 
 
@@ -46,6 +47,39 @@ class _FakeOutputTable:
         self.errors.append(message)
 
 
+class _FakeTreeview:
+    def __init__(self) -> None:
+        self.items: dict[str, tuple[str, str]] = {}
+        self._next_id = 0
+
+    def heading(self, _name: str, *, text: str) -> None:
+        return None
+
+    def column(self, _name: str, **_kwargs: object) -> None:
+        return None
+
+    def pack(self, **_kwargs: object) -> None:
+        return None
+
+    def get_children(self) -> list[str]:
+        return list(self.items)
+
+    def delete(self, item: str) -> None:
+        self.items.pop(item, None)
+
+    def insert(
+        self,
+        _parent: str,
+        _index: str,
+        *,
+        values: tuple[str, str],
+    ) -> str:
+        item_id = f"item-{self._next_id}"
+        self._next_id += 1
+        self.items[item_id] = values
+        return item_id
+
+
 def _build_app_for_refresh_tests() -> steering_app.SteeringWorkbenchApp:
     app = object.__new__(steering_app.SteeringWorkbenchApp)
     app.project = default_steering_project()
@@ -82,6 +116,38 @@ def _build_app_for_refresh_tests() -> steering_app.SteeringWorkbenchApp:
     app.curve_ax = object()
     app.curve_canvas = SimpleNamespace(draw_idle=lambda: None)
     return app
+
+
+def test_output_table_tracks_outputs_and_errors_for_background_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_tree = _FakeTreeview()
+
+    monkeypatch.setattr(
+        steering_widgets.ttk.Frame,
+        "__init__",
+        lambda self, master: None,
+    )
+    monkeypatch.setattr(
+        steering_widgets.ttk,
+        "Treeview",
+        lambda *args, **kwargs: fake_tree,
+    )
+
+    table = steering_widgets.OutputTable(object())
+
+    assert table.outputs == []
+    assert table.errors == []
+
+    table.set_outputs({"left_wheel_angle_deg": 8.0})
+    table.set_error("background failed")
+    table.set_outputs({"left_wheel_angle_deg": 8.0, "max_left_turn": 12.0})
+
+    assert table.outputs == [
+        {"left_wheel_angle_deg": 8.0},
+        {"left_wheel_angle_deg": 8.0, "max_left_turn": 12.0},
+    ]
+    assert table.errors == ["background failed"]
 
 
 def test_refresh_reuses_cached_limits_and_curve_rows_for_input_value_changes(
