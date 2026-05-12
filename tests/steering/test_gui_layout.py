@@ -23,13 +23,12 @@ def test_slider_drag_uses_throttled_preview_refresh():
     assert "self.refresh()" not in source
 
 
-def test_two_segment_preview_keeps_using_two_dimensional_solver() -> None:
+def test_two_segment_preview_reuses_current_solved_state() -> None:
     source = inspect.getsource(SteeringWorkbenchApp._draw_preview_state)
 
     assert "solve_two_segment_steering(" in source
-    assert "solve_two_segment_from_left_wheel_angle(" in source
-    assert "solve_two_segment_from_right_wheel_angle(" in source
-    assert "preview_state" in source
+    assert "draw_steering_preview(" in source
+    assert "state," in source
 
 
 def test_side_panel_includes_optimization_tab():
