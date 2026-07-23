@@ -5,10 +5,12 @@ import pytest
 
 from kinematics.core.enums import PointID
 from kinematics.points.derived.definitions import (
+    axle_points_from_wheel_center,
     get_axle_midpoint,
     get_wheel_center,
     get_wheel_inboard,
     get_wheel_outboard,
+    wheel_axis_from_static_alignment,
 )
 from kinematics.points.derived.manager import DerivedPointsManager, DerivedPointsSpec
 
@@ -42,6 +44,29 @@ def test_wheel_center_zero_offset(sample_positions):
     # With axle outboard at x=2.0 and offset of 0.0, center should be at x=2.0.
     result = get_wheel_center(sample_positions, wheel_offset=0.0)
     np.testing.assert_array_equal(result, np.array([2.0, 0.0, 0.0]))
+
+
+def test_axle_points_from_wheel_center_round_trip_static_alignment() -> None:
+    wheel_center = np.array([-20.0, 950.0, 313.426], dtype=np.float64)
+    axle_inboard, axle_outboard = axle_points_from_wheel_center(
+        wheel_center,
+        camber_deg=-1.9091524329963767,
+        toe_deg=0.0,
+        wheel_offset=0.0,
+        axle_length_mm=150.08331019803634,
+    )
+    np.testing.assert_allclose(axle_inboard, [-20.0, 800.0, 308.426], atol=1e-9)
+    np.testing.assert_allclose(axle_outboard, [-20.0, 950.0, 313.426], atol=1e-9)
+    axis = wheel_axis_from_static_alignment(
+        camber_deg=-1.9091524329963767,
+        toe_deg=0.0,
+        side_sign=1.0,
+    )
+    np.testing.assert_allclose(
+        axis,
+        (axle_outboard - axle_inboard) / np.linalg.norm(axle_outboard - axle_inboard),
+        atol=1e-12,
+    )
 
 
 def test_wheel_center_negative_offset(sample_positions):

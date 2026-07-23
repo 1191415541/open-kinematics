@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from kinematics.core.enums import PointID
 from kinematics.gui.app import KinematicsWorkbenchApp
@@ -244,6 +245,12 @@ def test_main_gui_imports_suspension_hardpoints_into_steering_page() -> None:
     assert steering_page.project.linkage_type == "two_segment"
     assert steering_page.project.input_mode == "pinion_angle"
     assert steering_page.project.input_value == 0.0
+    assert steering_page.project.static_radius_mm == pytest.approx(
+        suspension_page.project.config.wheel.tire.static_radius_mm
+    )
+    assert steering_page.project.section_width == pytest.approx(
+        suspension_page.project.config.wheel.tire.section_width
+    )
     assert steering_page.pending_optimized_hardpoints is None
     assert steering_page.cache_reset is True
     assert steering_page.controls_loaded is True

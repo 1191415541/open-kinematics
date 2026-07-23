@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox
 
 from kinematics.steering.workbench import (
+    RACK_AND_PINION_LINKAGE_TYPE,
     copy_hardpoint_rows,
     default_steering_project,
     hardpoint_rows_from_csv,
@@ -70,7 +71,10 @@ class SteeringFileActions:
         try:
             imported_rows = hardpoint_rows_from_csv(path)
             self.project.hardpoints = imported_rows
-            self.project.linkage_type = "two_segment"
+            if self.project.linkage_type == "three_segment":
+                self.project.linkage_type = "two_segment"
+            elif self.project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
+                self.project.input_mode = "pinion_angle"
             self.linkage_type_var.set(self.project.linkage_type)
             self.imported_default_hardpoints = copy_hardpoint_rows(imported_rows)
             self.hardpoint_editor.set_rows(self.project.hardpoints)

@@ -12,8 +12,11 @@ class RefreshWorkflowMixin:
     """Reusable control-change, refresh, and debounced-preview workflow helpers."""
 
     PREVIEW_REFRESH_DELAY_MS = 16
+    HARDPOINT_PREVIEW_DELAY_MS = 80
+    HARDPOINT_FULL_REFRESH_DELAY_MS = 400
     updating_controls: bool
     pending_preview_refresh: str | None
+    pending_hardpoint_full_refresh: str | None
 
     def bind_control_var_traces(
         self,
@@ -74,6 +77,72 @@ class RefreshWorkflowMixin:
     def clear_pending_preview_refresh(self) -> None:
         """Clear pending preview callback handle at callback entry."""
         self.pending_preview_refresh = None
+
+    def schedule_hardpoint_edit_refresh(
+        self,
+        *,
+        scheduler: Callable[[int, Callable[[], None]], str],
+        cancel: Callable[[str], None],
+        preview_callback: Callable[[], None],
+        full_callback: Callable[[], None],
+    ) -> None:
+        """
+        Keep the UI responsive while hardpoints are edited.
+
+        - Trailing-debounced preview keeps the geometry view current.
+        - Trailing-debounced full refresh regenerates outputs and full curves
+          after editing stops.
+        """
+        self._reschedule_callback(
+            handle_attr="pending_preview_refresh",
+            delay_ms=self.HARDPOINT_PREVIEW_DELAY_MS,
+            scheduler=scheduler,
+            cancel=cancel,
+            callback=preview_callback,
+        )
+
+        def run_full_refresh() -> None:
+            self.pending_hardpoint_full_refresh = None
+            preview_handle = self.pending_preview_refresh
+            if preview_handle is not None:
+                try:
+                    cancel(preview_handle)
+                except Exception:  # noqa: BLE001 - stale after() handles are fine.
+                    pass
+                self.pending_preview_refresh = None
+            full_callback()
+
+        self._reschedule_callback(
+            handle_attr="pending_hardpoint_full_refresh",
+            delay_ms=self.HARDPOINT_FULL_REFRESH_DELAY_MS,
+            scheduler=scheduler,
+            cancel=cancel,
+            callback=run_full_refresh,
+        )
+
+    def _reschedule_callback(
+        self,
+        *,
+        handle_attr: str,
+        delay_ms: int,
+        scheduler: Callable[[int, Callable[[], None]], str],
+        cancel: Callable[[str], None],
+        callback: Callable[[], None],
+    ) -> None:
+        """Cancel any pending handle and schedule a new trailing callback."""
+        handle = getattr(self, handle_attr, None)
+        if handle is not None:
+            try:
+                cancel(handle)
+            except Exception:  # noqa: BLE001 - stale after() handles are fine.
+                pass
+            setattr(self, handle_attr, None)
+
+        def run_callback() -> None:
+            setattr(self, handle_attr, None)
+            callback()
+
+        setattr(self, handle_attr, scheduler(delay_ms, run_callback))
 
     def run_guarded(
         self,

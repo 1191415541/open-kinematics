@@ -14,6 +14,7 @@ from kinematics.gui.steering.plotting import (
     WHEEL_RADIUS,
     WHEEL_WIDTH,
     draw_curve_plot,
+    draw_rack_and_pinion_steering_preview,
     draw_steering_preview,
     draw_three_segment_steering_preview,
 )
@@ -36,8 +37,11 @@ from kinematics.gui.suspension.workbench import (
 from kinematics.gui.suspension.workbench import (
     curve_specs_for_plot as suspension_curve_specs_for_plot,
 )
+from kinematics.steering.geometry import TwoSegmentSteeringSolution
 from kinematics.steering.two_segment import solve_two_segment_steering
 from kinematics.steering.workbench import (
+    RACK_AND_PINION_INPUT_MODES,
+    RACK_AND_PINION_LINKAGE_TYPE,
     SteeringProject,
     hardpoints_from_rows,
     solve_steering_project,
@@ -58,6 +62,8 @@ ReportImageKey = Literal[
 STEERING_OUTPUT_LABELS = {
     "input_value": "Input value [deg]",
     "pitman_angle_deg": "Pitman angle [deg]",
+    "pinion_angle_deg": "Pinion angle [deg]",
+    "rack_displacement_mm": "Rack displacement [mm]",
     "left_bellcrank_angle_deg": "Left bellcrank angle [deg]",
     "right_bellcrank_angle_deg": "Right bellcrank angle [deg]",
     "left_wheel_angle_deg": "Left wheel angle [deg]",
@@ -313,8 +319,36 @@ def render_steering_preview_png(
             design_state,
             current_state,
             preserve_view=False,
-            wheel_radius=project.wheel_radius,
-            wheel_width=project.wheel_width,
+            wheel_radius=project.static_radius_mm,
+            wheel_width=project.section_width,
+        )
+    elif (
+        project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
+        or project.input_mode in RACK_AND_PINION_INPUT_MODES
+    ):
+        hardpoints = hardpoints_from_rows(project.hardpoints)
+        design_state = solve_steering_project(
+            replace(
+                project,
+                input_mode="rack_displacement",
+                input_value=0.0,
+            ),
+            include_limits=False,
+        )[0]
+        current_state, _outputs = solve_steering_project(
+            project,
+            include_limits=False,
+        )
+        assert isinstance(design_state, TwoSegmentSteeringSolution)
+        assert isinstance(current_state, TwoSegmentSteeringSolution)
+        draw_rack_and_pinion_steering_preview(
+            axis,
+            hardpoints,
+            design_state,
+            current_state,
+            preserve_view=False,
+            wheel_radius=project.static_radius_mm or WHEEL_RADIUS,
+            wheel_width=project.section_width or WHEEL_WIDTH,
         )
     else:
         hardpoints = hardpoints_from_rows(project.hardpoints)
@@ -326,8 +360,8 @@ def render_steering_preview_png(
             design_state,
             current_state,
             preserve_view=False,
-            wheel_radius=project.wheel_radius or WHEEL_RADIUS,
-            wheel_width=project.wheel_width or WHEEL_WIDTH,
+            wheel_radius=project.static_radius_mm or WHEEL_RADIUS,
+            wheel_width=project.section_width or WHEEL_WIDTH,
         )
     return _save_figure_to_png(figure)
 

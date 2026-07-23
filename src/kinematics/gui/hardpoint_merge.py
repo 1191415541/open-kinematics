@@ -25,8 +25,9 @@ SUSPENSION_POINT_DISPLAY_NAMES: dict[PointID, str] = {
     PointID.UPPER_WISHBONE_OUTBOARD: "Upper Ball Joint",
     PointID.TRACKROD_INBOARD: "Tie Rod Inner",
     PointID.TRACKROD_OUTBOARD: "Tie Rod Outer",
-    PointID.AXLE_INBOARD: "Wheel Center Inboard",
-    PointID.AXLE_OUTBOARD: "Wheel Center Outboard",
+    PointID.WHEEL_CENTER: "Wheel Center",
+    PointID.AXLE_INBOARD: "Axle Inboard",
+    PointID.AXLE_OUTBOARD: "Axle Outboard",
     PointID.CARRIER_STEERING_AXIS_LOWER: "Kingpin Lower",
     PointID.CARRIER_STEERING_AXIS_UPPER: "Kingpin Upper",
 }
@@ -50,8 +51,9 @@ SUSPENSION_EXPORT_ALIASES: dict[PointID, str] = {
     PointID.TRACKROD_OUTBOARD: "tie_rod_outer",
     PointID.UPPER_WISHBONE_OUTBOARD: "upper_ball_joint",
     PointID.LOWER_WISHBONE_OUTBOARD: "lower_ball_joint",
-    PointID.AXLE_INBOARD: "wheel_center_inboard",
-    PointID.AXLE_OUTBOARD: "wheel_center_outboard",
+    PointID.AXLE_INBOARD: "axle_inboard",
+    PointID.AXLE_OUTBOARD: "axle_outboard",
+    PointID.WHEEL_CENTER: "wheel_center",
 }
 
 STEERING_EXPORT_ALIASES: dict[str, str] = {

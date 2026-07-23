@@ -3,7 +3,7 @@ import inspect
 from kinematics.gui.steering import SteeringWorkbenchApp
 from kinematics.gui.steering.widgets import HardpointEditor
 from kinematics.steering.gui import SteeringWorkbenchApp as LegacySteeringWorkbenchApp
-from kinematics.steering.workbench import SteeringHardpointRow
+from kinematics.steering.workbench import LINKAGE_TYPES, SteeringHardpointRow
 
 
 def test_simulation_input_controls_use_wrapping_grid_layout():
@@ -16,10 +16,38 @@ def test_simulation_input_controls_use_wrapping_grid_layout():
     assert "Sweep min" in source
 
 
+def test_steering_suspension_parameters_use_shared_tire_fields():
+    source = inspect.getsource(SteeringWorkbenchApp._build_suspension_parameters)
+
+    assert "Tire width" in source
+    assert "Static radius [mm]" in source
+    assert "Wheel R" not in source
+    assert "Wheel W" not in source
+    assert "self.section_width_var" in source
+    assert "self.static_radius_var" in source
+
+
+def test_steering_linkage_selector_includes_rack_and_pinion():
+    source = inspect.getsource(SteeringWorkbenchApp._sync_input_mode_values)
+
+    assert "rack_and_pinion" in LINKAGE_TYPES
+    assert "RACK_AND_PINION_INPUT_MODES" in source
+    assert "RACK_AND_PINION_LINKAGE_TYPE" in source
+
+
 def test_slider_drag_uses_throttled_preview_refresh():
     source = inspect.getsource(SteeringWorkbenchApp._on_input_slider_changed)
 
     assert "_schedule_preview_refresh" in source
+    assert "self.refresh()" not in source
+
+
+def test_hardpoint_edits_use_debounced_preview_then_full_refresh():
+    source = inspect.getsource(SteeringWorkbenchApp._on_hardpoints_changed)
+
+    assert "schedule_hardpoint_edit_refresh" in source
+    assert "preview_callback=self._refresh_preview_only" in source
+    assert "full_callback=self.refresh" in source
     assert "self.refresh()" not in source
 
 
@@ -69,8 +97,8 @@ def test_steering_numeric_entries_use_commit_refresh_and_not_trace_refresh():
     assert "self.sweep_min_var" not in trace_source
     assert "self.sweep_max_var" not in trace_source
     assert "self.sweep_step_var" not in trace_source
-    assert "self.wheel_radius_var" not in trace_source
-    assert "self.wheel_width_var" not in trace_source
+    assert "self.static_radius_var" not in trace_source
+    assert "self.section_width_var" not in trace_source
     assert "self.wheelbase_var" not in trace_source
 
 

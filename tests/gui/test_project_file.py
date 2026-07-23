@@ -1,5 +1,7 @@
 import json
 
+import numpy as np
+
 from kinematics.core.enums import PointID
 from kinematics.gui.suspension.workbench import (
     SuspensionCurve,
@@ -11,6 +13,7 @@ from kinematics.gui.suspension.workbench import (
     save_suspension_project,
 )
 from kinematics.steering.workbench import (
+    RACK_AND_PINION_LINKAGE_TYPE,
     SteeringCurve,
     default_steering_project,
     load_steering_project,
@@ -79,8 +82,14 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
     assert data["system_type"] == "double_wishbone"
     assert data["name"] == "front suspension"
     assert "TRACKROD_OUTBOARD" in data["hardpoints"]
+    assert "AXLE_INBOARD" in data["hardpoints"]
+    assert "AXLE_OUTBOARD" in data["hardpoints"]
+    assert "design_wheel_center" in data["parameters"]
     assert data["parameters"]["config"]["wheelbase"] == 2650.0
     assert data["parameters"]["config"]["wheel"]["tire"]["static_radius_mm"] == 283.1
+    assert "static_camber_deg" in data["parameters"]["config"]
+    assert "static_toe_deg" in data["parameters"]["config"]
+    assert "axle_length_mm" in data["parameters"]["config"]
     assert data["simulation"] == {
         "start": -30.0,
         "stop": 90.0,
@@ -166,6 +175,13 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
     assert [target.weight for target in loaded.optimization.targets] == [2.5, 0.75]
     assert loaded.curves[0].label == "camber"
     assert PointID.TRACKROD_OUTBOARD in loaded.hardpoints
+    assert PointID.WHEEL_CENTER in loaded.hardpoints
+    assert PointID.AXLE_INBOARD not in loaded.hardpoints
+    assert PointID.AXLE_OUTBOARD not in loaded.hardpoints
+    np.testing.assert_allclose(
+        loaded.hardpoints[PointID.WHEEL_CENTER],
+        project.hardpoints[PointID.WHEEL_CENTER],
+    )
 
 
 def test_steering_project_saves_and_loads_unified_json(tmp_path):
@@ -174,8 +190,8 @@ def test_steering_project_saves_and_loads_unified_json(tmp_path):
     project.name = "rackless steering"
     project.input_mode = "right_bellcrank_angle"
     project.input_value = 6.5
-    project.wheel_radius = 310.0
-    project.wheel_width = 220.0
+    project.static_radius_mm = 310.0
+    project.section_width = 220.0
     project.wheelbase = 2780.0
     project.curves.append(
         SteeringCurve(
@@ -192,8 +208,10 @@ def test_steering_project_saves_and_loads_unified_json(tmp_path):
     assert data["module"] == "steering"
     assert data["system_type"] == "three_segment"
     assert data["parameters"] == {
-        "wheel_radius": 310.0,
-        "wheel_width": 220.0,
+        "tire": {
+            "section_width": 220.0,
+            "static_radius_mm": 310.0,
+        },
         "wheelbase": 2780.0,
         "pinion_pitch_radius_mm": 15.0,
     }
@@ -206,11 +224,47 @@ def test_steering_project_saves_and_loads_unified_json(tmp_path):
     assert loaded.linkage_type == "three_segment"
     assert loaded.input_mode == "right_bellcrank_angle"
     assert loaded.input_value == 6.5
-    assert loaded.wheel_radius == 310.0
-    assert loaded.wheel_width == 220.0
+    assert loaded.static_radius_mm == 310.0
+    assert loaded.section_width == 220.0
     assert loaded.wheelbase == 2780.0
     assert loaded.pinion_pitch_radius_mm == 15.0
     assert loaded.curves[0].label == "left wheel"
+
+
+def test_steering_project_loads_legacy_wheel_size_fields(tmp_path):
+    path = tmp_path / "legacy-steering.okproj.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "module": "steering",
+                "system_type": "two_segment",
+                "name": "legacy tire fields",
+                "hardpoints": [],
+                "parameters": {
+                    "wheel_radius": 301.0,
+                    "wheel_width": 245.0,
+                    "wheelbase": 2700.0,
+                    "pinion_pitch_radius_mm": 15.0,
+                },
+                "simulation": {
+                    "input_mode": "pitman_angle",
+                    "input_value": 0.0,
+                    "sweep_min": -20.0,
+                    "sweep_max": 20.0,
+                    "sweep_step": 2.0,
+                },
+                "curves": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = load_steering_project(path)
+
+    assert loaded.static_radius_mm == 301.0
+    assert loaded.section_width == 245.0
+    assert loaded.wheelbase == 2700.0
 
 
 def test_rack_and_pinion_steering_project_round_trips_pinion_settings(tmp_path):
@@ -226,3 +280,17 @@ def test_rack_and_pinion_steering_project_round_trips_pinion_settings(tmp_path):
     assert loaded.input_mode == "pinion_angle"
     assert loaded.input_value == 8.5
     assert loaded.pinion_pitch_radius_mm == 13.5
+
+
+def test_rack_and_pinion_linkage_type_round_trips_with_default_input(tmp_path):
+    path = tmp_path / "rack-and-pinion-linkage.okproj.json"
+    project = default_steering_project(linkage_type=RACK_AND_PINION_LINKAGE_TYPE)
+
+    save_steering_project(project, path)
+    loaded = load_steering_project(path)
+
+    assert loaded.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
+    assert loaded.input_mode == "pinion_angle"
+    assert [row.name for row in loaded.hardpoints] == [
+        row.name for row in project.hardpoints
+    ]

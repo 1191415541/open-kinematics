@@ -57,6 +57,7 @@ def test_suspension_page_exposes_load_solve_and_curve_controls() -> None:
     assert "3D Hardpoints" in layout_source
     assert "Restore Default Hardpoints" in layout_source
     assert "HardpointTable" in layout_source
+    assert "InboardMountControls" in layout_source
     assert "Simulation Input" in layout_source
     assert "left_parameters" in layout_source
     assert "_build_parameters(left_parameters)" in layout_source
@@ -78,13 +79,25 @@ def test_suspension_page_exposes_load_solve_and_curve_controls() -> None:
         in layout_source
     )
     assert "Wheelbase" in parameters_source
+    assert "Wheel offset" in parameters_source
+    assert "Static camber [deg]" in parameters_source
+    assert "Static toe [deg]" in parameters_source
+    assert "Axle length [mm]" in parameters_source
     assert "Tire width" in parameters_source
+    assert "Static radius [mm]" in parameters_source
+    assert "Aspect ratio" not in parameters_source
     assert "ttk.Notebook" in side_source
     assert "Outputs" in side_source
     assert "Curves" in side_source
     assert "Optimization" in side_source
     assert "CurveManager" in side_source
     assert "frame.pack(fill=tk.BOTH, expand=True)" in preview_source
+    assert "set_preview_view_plane" in preview_source
+    assert '"XY"' in preview_source
+    assert '"XZ"' in preview_source
+    assert '"YZ"' in preview_source
+    assert '"ZY"' in preview_source
+    assert '"Iso"' in preview_source
 
 
 def test_suspension_page_supports_carrier_type_in_selector() -> None:
@@ -139,7 +152,8 @@ def test_suspension_page_has_wheel_travel_slider_with_throttled_preview() -> Non
     assert "_schedule_preview_refresh" in class_source
     assert "_refresh_preview_only" in class_source
     assert "PREVIEW_REFRESH_DELAY_MS" in class_source
-    assert "update_outputs=False" in preview_source
+    assert "_queue_background_work" in preview_source
+    assert 'kind="preview"' in preview_source
     assert "self.preview_renderer = SuspensionPreviewRenderer()" in init_source
     assert "renderer=self.preview_renderer" in draw_result_source
     assert "preview_mode=not update_outputs" in draw_result_source
@@ -149,15 +163,28 @@ def test_suspension_page_uses_full_sweep_and_slider_preview() -> None:
     init_source = inspect.getsource(SuspensionWorkbenchPage.__init__)
     refresh_source = inspect.getsource(SuspensionWorkbenchPage.refresh)
     refresh_curves_source = inspect.getsource(SuspensionWorkbenchPage.refresh_curves)
+    preview_source = inspect.getsource(SuspensionWorkbenchPage._refresh_preview_only)
     slider_release_source = inspect.getsource(
         SuspensionWorkbenchPage._on_travel_slider_released
     )
 
     assert "_bind_control_vars" in init_source
     assert "self.refresh()" in init_source
-    assert "solve_suspension_project_at_travel" in refresh_source
-    assert "solve_suspension_project(self.project)" in refresh_curves_source
+    assert "_queue_background_work" in refresh_source
+    assert 'kind="full"' in refresh_source
+    assert "_queue_background_work" in refresh_curves_source
+    assert "_queue_background_work" in preview_source
+    assert 'kind="preview"' in preview_source
     assert "self.refresh()" in slider_release_source
+
+
+def test_suspension_hardpoint_edits_use_debounced_preview_then_full_refresh() -> None:
+    source = inspect.getsource(SuspensionWorkbenchPage._on_hardpoints_changed)
+
+    assert "schedule_hardpoint_edit_refresh" in source
+    assert "preview_callback=self._refresh_preview_only" in source
+    assert "full_callback=self.refresh" in source
+    assert "self.refresh()" not in source
 
 
 def test_suspension_numeric_entries_use_commit_refresh_and_not_trace_refresh() -> None:
@@ -196,10 +223,14 @@ def test_suspension_optimization_entries_use_commit_updates_without_trace_refres
 
 def test_suspension_preview_preserves_3d_view_during_motion() -> None:
     class_source = inspect.getsource(SuspensionWorkbenchPage)
+    draw_source = inspect.getsource(SuspensionWorkbenchPage._draw_result_index)
 
     assert "preview_has_drawn" in class_source
-    assert "preserve_view=self.preview_has_drawn" in class_source
+    assert "preserve_view = bool(self.preview_has_drawn)" in draw_source
+    assert "preserve_view=preserve_view" in draw_source
     assert "self.preview_has_drawn = True" in class_source
+    assert "set_preview_view_plane" in class_source
+    assert "apply_preview_view_plane" in class_source
 
 
 def test_gui_project_save_dialogs_use_shared_project_extension() -> None:

@@ -20,6 +20,15 @@ from kinematics.visualization.plots import (
 )
 
 
+PREVIEW_VIEW_PRESETS: dict[str, tuple[float, float]] = {
+    "iso": (20.0, 45.0),
+    "xy": (90.0, -90.0),  # top: X rearward, Y rightward
+    "xz": (0.0, -90.0),  # side: X rearward, Z up
+    "yz": (0.0, 0.0),  # rear/front: Y rightward, Z up
+    "zy": (0.0, 180.0),  # opposite side of yz
+}
+
+
 @dataclass(frozen=True)
 class _PreviewRenderSignature:
     """Signature used to detect when preview artists must be rebuilt."""
@@ -80,12 +89,18 @@ class SuspensionPreviewRenderer:
 
         gui_state = _state_to_gui_coordinates(state)
         wheel_cfg = suspension.config.wheel
-        wheel_points = (
-            self.PREVIEW_WHEEL_POINTS if preview_mode else self.FULL_WHEEL_POINTS
-        )
-        wheel_bands = (
-            self.PREVIEW_WHEEL_BANDS if preview_mode else self.FULL_WHEEL_BANDS
-        )
+        # Once a scene exists, keep its wheel tessellation so preview/full
+        # redraws update geometry without rebuilding artists or resetting camera.
+        if self._signature is not None and self._visualizer is not None:
+            wheel_points = self._signature.wheel_points
+            wheel_bands = self._signature.wheel_bands
+        else:
+            wheel_points = (
+                self.PREVIEW_WHEEL_POINTS if preview_mode else self.FULL_WHEEL_POINTS
+            )
+            wheel_bands = (
+                self.PREVIEW_WHEEL_BANDS if preview_mode else self.FULL_WHEEL_BANDS
+            )
         links = suspension.get_visualization_links()
         signature = _build_signature(
             links=links,
@@ -96,8 +111,7 @@ class SuspensionPreviewRenderer:
         )
 
         should_rebuild = (
-            not preserve_view
-            or self._signature != signature
+            self._signature != signature
             or self._visualizer is None
             or self._link_artists is None
             or self._wheel_artists is None
@@ -141,7 +155,7 @@ class SuspensionPreviewRenderer:
     ) -> None:
         gui_state = _state_to_gui_coordinates(state)
         limits = (ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d())
-        view = (ax.elev, ax.azim)
+        view = (float(ax.elev), float(ax.azim))
         ax.clear()
         if preserve_view:
             ax.set_xlim3d(limits[0])
@@ -175,6 +189,35 @@ class SuspensionPreviewRenderer:
         _apply_preview_legend_layout(ax)
         self._signature = signature
         self._wheel_bands = wheel_bands
+
+
+def apply_preview_view_plane(
+    ax: Axes3D,
+    plane: str,
+    *,
+    positions: dict | None = None,
+    fit_bounds: bool = True,
+) -> None:
+    """
+    Align the preview camera to a named plane.
+
+    Supported planes: iso, xy, xz, yz, zy.
+    """
+    key = plane.strip().lower()
+    if key not in PREVIEW_VIEW_PRESETS:
+        raise ValueError(f"Unsupported preview plane '{plane}'")
+    elev, azim = PREVIEW_VIEW_PRESETS[key]
+    ax.view_init(elev=elev, azim=azim)
+    ax.set_proj_type("ortho")
+    ax.set_box_aspect([1, 1, 1])  # type: ignore[arg-type]
+    _set_preview_axis_labels(ax)
+    if fit_bounds and positions:
+        _, _, (x_mid, y_mid, z_mid, max_range) = compute_bounds_from_positions(
+            positions
+        )
+        ax.set_xlim3d([x_mid - max_range / 2, x_mid + max_range / 2])
+        ax.set_ylim3d([y_mid - max_range / 2, y_mid + max_range / 2])
+        ax.set_zlim3d([z_mid - max_range / 2, z_mid + max_range / 2])
 
 
 def _build_signature(
@@ -238,7 +281,7 @@ def draw_suspension_preview(
         ),
     )
     limits = (ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d())
-    view = (ax.elev, ax.azim)
+    view = (float(ax.elev), float(ax.azim))
     ax.clear()
     if preserve_view:
         ax.set_xlim3d(limits[0])

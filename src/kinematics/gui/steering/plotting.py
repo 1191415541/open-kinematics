@@ -16,8 +16,8 @@ from kinematics.steering.geometry import (
     Vec2,
 )
 
-WHEEL_RADIUS = 180.0
-WHEEL_WIDTH = 120.0
+WHEEL_RADIUS = 283.1
+WHEEL_WIDTH = 270.0
 FIT_MARGIN_RATIO = 0.08
 PREVIEW_GEOMETRY_COLORS = {
     "wheel": "#1f77b4",

@@ -17,16 +17,18 @@ class TireConfig(BaseModel):
     Configuration parameters for a tire.
 
     Attributes:
-        aspect_ratio: Aspect ratio as a fraction in [0, 1], e.g., 0.55 for 55%.
         section_width: Section width in mm.
         static_radius_mm: Static wheel radius in mm.
+        aspect_ratio: Optional legacy aspect ratio in [0, 1], used only for
+            converting old rim-diameter tire specs. Not part of the active GUI
+            tire definition.
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
-    aspect_ratio: float
     section_width: float
     static_radius_mm: float
+    aspect_ratio: float = 0.55
 
     @field_validator("aspect_ratio")
     @classmethod
@@ -40,6 +42,13 @@ class TireConfig(BaseModel):
     def check_static_radius_mm(cls, v: float) -> float:
         if v <= 0:
             raise ValueError(f"static_radius_mm must be positive, got {v}")
+        return v
+
+    @field_validator("section_width")
+    @classmethod
+    def check_section_width(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError(f"section_width must be positive, got {v}")
         return v
 
     @property
@@ -129,6 +138,10 @@ class SuspensionConfig(BaseModel):
         wheel: Wheel configuration parameters.
         cg_position: Center of gravity position in mm (required for anti-dive/squat).
         wheelbase: Wheelbase distance in mm.
+        static_camber_deg: Design-condition camber in degrees. Negative tilts the
+            top of the wheel inward.
+        static_toe_deg: Design-condition toe in degrees. Positive is toe-in.
+        axle_length_mm: Distance between axle inboard and outboard hardpoints in mm.
         camber_shim: Optional camber shim configuration.
         upright_mounted_points: List of point names mounted to the upright that should
             move when camber shims are applied.
@@ -140,6 +153,9 @@ class SuspensionConfig(BaseModel):
     wheel: WheelConfig
     cg_position: PydanticVec3
     wheelbase: float
+    static_camber_deg: float = 0.0
+    static_toe_deg: float = 0.0
+    axle_length_mm: float = 150.0
     camber_shim: CamberShimConfig | None = None
     upright_mounted_points: list[str] = [
         "axle_inboard",
@@ -147,3 +163,10 @@ class SuspensionConfig(BaseModel):
         "pushrod_outboard",
         "trackrod_outboard",
     ]
+
+    @field_validator("axle_length_mm")
+    @classmethod
+    def check_axle_length_mm(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError(f"axle_length_mm must be positive, got {v}")
+        return v

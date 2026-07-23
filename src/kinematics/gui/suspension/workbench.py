@@ -48,6 +48,11 @@ from kinematics.io.geometry_loader import load_geometry
 from kinematics.io.validation import coerce_enum
 from kinematics.main import solve_sweep
 from kinematics.metrics import compute_metrics_for_state_from_suspension
+from kinematics.points.derived.definitions import (
+    apply_static_alignment_to_hardpoints,
+    axle_points_from_wheel_center,
+    get_wheel_center,
+)
 from kinematics.solver import SolverInfo
 from kinematics.state import SuspensionState
 from kinematics.suspensions.base import Suspension
@@ -57,6 +62,11 @@ from kinematics.suspensions.config.settings import (
     WheelConfig,
 )
 from kinematics.suspensions.registry import get_suspension_class, list_supported_types
+
+DEFAULT_AXLE_LENGTH_MM = 150.08331019803634
+DEFAULT_STATIC_CAMBER_DEG = -1.9091524329963767
+DEFAULT_STATIC_TOE_DEG = 0.0
+DEFAULT_WHEEL_CENTER = (-20.0, 950.0, 313.426)
 
 DEFAULT_CURVE_X = "wheel_travel_mm"
 DEFAULT_CURVE_Y = "camber_deg"
@@ -127,14 +137,12 @@ class SuspensionProject:
         suspension_class = get_suspension_class(self.suspension_type)
         if suspension_class is None:
             raise ValueError(f"Unsupported suspension type: {self.suspension_type}")
+        hardpoints = materialize_solver_hardpoints(self.hardpoints, self.config)
         return suspension_class(
             name=self.name,
             version=self.version,
             units=self.units,
-            hardpoints={
-                point_id: position.copy()
-                for point_id, position in self.hardpoints.items()
-            },
+            hardpoints=hardpoints,
             config=self.config,
         )
 
@@ -217,14 +225,125 @@ def default_suspension_config() -> SuspensionConfig:
         wheel=WheelConfig(
             offset=0.0,
             tire=TireConfig(
-                aspect_ratio=0.55,
                 section_width=270.0,
                 static_radius_mm=283.1,
             ),
         ),
         cg_position=(1250.0, 0.0, 450.0),
         wheelbase=2500.0,
+        static_camber_deg=DEFAULT_STATIC_CAMBER_DEG,
+        static_toe_deg=DEFAULT_STATIC_TOE_DEG,
+        axle_length_mm=DEFAULT_AXLE_LENGTH_MM,
     )
+
+
+def materialize_solver_hardpoints(
+    hardpoints: dict[PointID, np.ndarray],
+    config: SuspensionConfig,
+) -> dict[PointID, np.ndarray]:
+    """Expand GUI hardpoints into the axle points required by the solver."""
+    prepared = {
+        point_id: np.asarray(position, dtype=np.float64).copy()
+        for point_id, position in hardpoints.items()
+    }
+    if PointID.WHEEL_CENTER in prepared:
+        prepared = apply_static_alignment_to_hardpoints(
+            prepared,
+            camber_deg=config.static_camber_deg,
+            toe_deg=config.static_toe_deg,
+            wheel_offset=config.wheel.offset,
+            axle_length_mm=config.axle_length_mm,
+        )
+    elif PointID.AXLE_INBOARD in prepared and PointID.AXLE_OUTBOARD in prepared:
+        prepared[PointID.WHEEL_CENTER] = get_wheel_center(
+            prepared,
+            wheel_offset=config.wheel.offset,
+        )
+    # Solver constraints use axle ends; wheel center remains a derived point.
+    prepared.pop(PointID.WHEEL_CENTER, None)
+    return prepared
+
+
+def gui_editable_hardpoints_from_solver(
+    hardpoints: dict[PointID, np.ndarray],
+    config: SuspensionConfig,
+) -> dict[PointID, np.ndarray]:
+    """
+    Convert solver hardpoints into the GUI-facing wheel-center representation.
+
+    Axle ends remain available for legacy imports, but the editable table prefers
+    a single wheel-center row.
+    """
+    editable = {
+        point_id: np.asarray(position, dtype=np.float64).copy()
+        for point_id, position in hardpoints.items()
+    }
+    if PointID.WHEEL_CENTER not in editable and (
+        PointID.AXLE_INBOARD in editable and PointID.AXLE_OUTBOARD in editable
+    ):
+        editable[PointID.WHEEL_CENTER] = get_wheel_center(
+            editable,
+            wheel_offset=config.wheel.offset,
+        )
+    # Prefer wheel-center editing: hide axle ends from the table.
+    editable.pop(PointID.AXLE_INBOARD, None)
+    editable.pop(PointID.AXLE_OUTBOARD, None)
+    return editable
+
+
+UPPER_WISHBONE_INBOARD_POINTS: tuple[PointID, ...] = (
+    PointID.UPPER_WISHBONE_INBOARD_FRONT,
+    PointID.UPPER_WISHBONE_INBOARD_REAR,
+)
+LOWER_WISHBONE_INBOARD_POINTS: tuple[PointID, ...] = (
+    PointID.LOWER_WISHBONE_INBOARD_FRONT,
+    PointID.LOWER_WISHBONE_INBOARD_REAR,
+)
+
+
+def apply_wishbone_inboard_delta(
+    hardpoints: dict[PointID, np.ndarray],
+    *,
+    upper_dy_mm: float = 0.0,
+    upper_dz_mm: float = 0.0,
+    lower_dy_mm: float = 0.0,
+    lower_dz_mm: float = 0.0,
+    gui_coordinates: bool = True,
+) -> dict[PointID, np.ndarray]:
+    """
+    Apply a bulk Y/Z shift to wishbone inboard hardpoints.
+
+    When ``gui_coordinates`` is true, deltas use the GUI convention
+    (Y rightward, Z upward) and are converted to internal coordinates.
+    """
+    updated = {
+        point_id: np.asarray(position, dtype=np.float64).copy()
+        for point_id, position in hardpoints.items()
+    }
+    if gui_coordinates:
+        upper_delta = suspension_gui_to_internal_vec3(
+            [0.0, float(upper_dy_mm), float(upper_dz_mm)]
+        )
+        lower_delta = suspension_gui_to_internal_vec3(
+            [0.0, float(lower_dy_mm), float(lower_dz_mm)]
+        )
+    else:
+        upper_delta = np.asarray(
+            [0.0, float(upper_dy_mm), float(upper_dz_mm)],
+            dtype=np.float64,
+        )
+        lower_delta = np.asarray(
+            [0.0, float(lower_dy_mm), float(lower_dz_mm)],
+            dtype=np.float64,
+        )
+
+    for point_id in UPPER_WISHBONE_INBOARD_POINTS:
+        if point_id in updated:
+            updated[point_id] = updated[point_id] + upper_delta
+    for point_id in LOWER_WISHBONE_INBOARD_POINTS:
+        if point_id in updated:
+            updated[point_id] = updated[point_id] + lower_delta
+    return updated
 
 
 def create_default_suspension_project(
@@ -234,14 +353,21 @@ def create_default_suspension_project(
     suspension_class = get_suspension_class(suspension_type)
     if suspension_class is None:
         raise ValueError(f"Unsupported suspension type: {suspension_type}")
+    config = default_suspension_config()
     hardpoints = {
         point_id: _default_hardpoint(point_id)
         for point_id in sorted(suspension_class.REQUIRED_POINTS)
+        if point_id not in {PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD}
     }
+    hardpoints[PointID.WHEEL_CENTER] = np.asarray(
+        DEFAULT_WHEEL_CENTER,
+        dtype=np.float64,
+    )
+    hardpoints = gui_editable_hardpoints_from_solver(hardpoints, config)
     return SuspensionProject(
         suspension_type=suspension_class.TYPE_KEY,
         hardpoints=hardpoints,
-        config=default_suspension_config(),
+        config=config,
     )
 
 
@@ -253,17 +379,56 @@ def load_suspension_project(path: str | Path) -> SuspensionProject:
         if isinstance(data, dict) and data.get("module") == "suspension":
             return suspension_project_from_dict(data, geometry_path)
     suspension = load_geometry(geometry_path)
+    config = suspension.config or default_suspension_config()
+    hardpoints = {
+        point_id: np.asarray(position, dtype=np.float64).copy()
+        for point_id, position in suspension.hardpoints.items()
+    }
+    # Infer static alignment from existing axle ends when present.
+    if (
+        PointID.AXLE_INBOARD in hardpoints
+        and PointID.AXLE_OUTBOARD in hardpoints
+    ):
+        axle_in = hardpoints[PointID.AXLE_INBOARD]
+        axle_out = hardpoints[PointID.AXLE_OUTBOARD]
+        axle_length = float(np.linalg.norm(axle_out - axle_in))
+        wheel_center = get_wheel_center(hardpoints, wheel_offset=config.wheel.offset)
+        hardpoints[PointID.WHEEL_CENTER] = wheel_center
+        # Measure camber/toe via a temporary solve-ready suspension.
+        temp_project = SuspensionProject(
+            geometry_path=geometry_path,
+            suspension_type=suspension.TYPE_KEY,
+            name=suspension.name,
+            version=suspension.version,
+            units=suspension.units,
+            hardpoints=hardpoints,
+            config=config.model_copy(
+                update={"axle_length_mm": max(axle_length, 1e-6)}
+            ),
+        )
+        temp_suspension = temp_project.build_suspension()
+        metrics = compute_metrics_for_state_from_suspension(
+            temp_suspension.initial_state(),
+            temp_suspension,
+        )
+        config = config.model_copy(
+            update={
+                "static_camber_deg": float(metrics.get("camber_deg", 0.0) or 0.0),
+                "static_toe_deg": float(
+                    metrics.get("toe_deg", metrics.get("roadwheel_angle_deg", 0.0))
+                    or 0.0
+                ),
+                "axle_length_mm": max(axle_length, 1e-6),
+            }
+        )
     return SuspensionProject(
         geometry_path=geometry_path,
         suspension_type=suspension.TYPE_KEY,
         name=suspension.name,
         version=suspension.version,
         units=suspension.units,
-        hardpoints={
-            point_id: np.asarray(position, dtype=np.float64).copy()
-            for point_id, position in suspension.hardpoints.items()
-        },
-        config=suspension.config or default_suspension_config(),
+        hardpoints=gui_editable_hardpoints_from_solver(hardpoints, config),
+        config=config,
     )
 
 
@@ -306,11 +471,23 @@ def suspension_project_to_dict(project: SuspensionProject) -> dict[str, Any]:
         units=project.units.name,
         hardpoints={
             point_id.name: _vec3_to_dict(position, gui_coordinates=True)
-            for point_id, position in sorted(project.hardpoints.items())
+            for point_id, position in sorted(
+                materialize_solver_hardpoints(
+                    project.hardpoints,
+                    project.config,
+                ).items()
+            )
         },
         parameters={
             "coordinate_system": SUSPENSION_GUI_COORDINATE_SYSTEM,
             "config": _suspension_config_to_dict(project.config, gui_coordinates=True),
+            "design_wheel_center": _vec3_to_dict(
+                project.hardpoints.get(
+                    PointID.WHEEL_CENTER,
+                    DEFAULT_WHEEL_CENTER,
+                ),
+                gui_coordinates=True,
+            ),
         },
         simulation={
             "start": float(project.settings.start),
@@ -337,22 +514,61 @@ def suspension_project_from_dict(
         parameters.get("coordinate_system", SUSPENSION_INTERNAL_COORDINATE_SYSTEM)
     )
     gui_coordinates = coordinate_system == SUSPENSION_GUI_COORDINATE_SYSTEM
+    config = SuspensionConfig.model_validate(
+        _suspension_config_from_dict(
+            parameters.get("config", default_suspension_config().model_dump()),
+            gui_coordinates=gui_coordinates,
+        )
+    )
+    hardpoints = _suspension_hardpoints_from_dict(
+        data.get("hardpoints", {}),
+        gui_coordinates=gui_coordinates,
+    )
+    design_wheel_center = parameters.get("design_wheel_center")
+    if isinstance(design_wheel_center, dict):
+        wheel_center_vec = (
+            suspension_gui_to_internal_vec3(
+                [
+                    float(design_wheel_center["x"]),
+                    float(design_wheel_center["y"]),
+                    float(design_wheel_center["z"]),
+                ]
+            )
+            if gui_coordinates
+            else np.asarray(
+                [
+                    float(design_wheel_center["x"]),
+                    float(design_wheel_center["y"]),
+                    float(design_wheel_center["z"]),
+                ],
+                dtype=np.float64,
+            )
+        )
+        hardpoints[PointID.WHEEL_CENTER] = wheel_center_vec
+    elif (
+        PointID.AXLE_INBOARD in hardpoints
+        and PointID.AXLE_OUTBOARD in hardpoints
+        and PointID.WHEEL_CENTER not in hardpoints
+    ):
+        hardpoints[PointID.WHEEL_CENTER] = get_wheel_center(
+            hardpoints,
+            wheel_offset=config.wheel.offset,
+        )
+        axle_length = float(
+            np.linalg.norm(
+                hardpoints[PointID.AXLE_OUTBOARD] - hardpoints[PointID.AXLE_INBOARD]
+            )
+        )
+        if axle_length > 0.0:
+            config = config.model_copy(update={"axle_length_mm": axle_length})
     return SuspensionProject(
         geometry_path=geometry_path,
         suspension_type=str(data.get("system_type", "double_wishbone")),
         name=str(data.get("name", "GUI suspension")),
         version=str(data.get("version", "0.0.0")),
         units=coerce_enum(Units, data.get("units", Units.MILLIMETERS.name)),
-        hardpoints=_suspension_hardpoints_from_dict(
-            data.get("hardpoints", {}),
-            gui_coordinates=gui_coordinates,
-        ),
-        config=SuspensionConfig.model_validate(
-            _suspension_config_from_dict(
-                parameters.get("config", default_suspension_config().model_dump()),
-                gui_coordinates=gui_coordinates,
-            )
-        ),
+        hardpoints=gui_editable_hardpoints_from_solver(hardpoints, config),
+        config=config,
         settings=SuspensionSweepSettings(
             start=float(settings_data.get("start", -40.0)),
             stop=float(settings_data.get("stop", 120.0)),
@@ -1340,6 +1556,9 @@ def _suspension_config_to_dict(
             gui_coordinates=gui_coordinates,
         ),
         "wheelbase": float(config.wheelbase),
+        "static_camber_deg": float(config.static_camber_deg),
+        "static_toe_deg": float(config.static_toe_deg),
+        "axle_length_mm": float(config.axle_length_mm),
         "upright_mounted_points": list(config.upright_mounted_points),
     }
     if config.camber_shim is not None:
@@ -1432,6 +1651,7 @@ def _default_hardpoint(point_id: PointID) -> np.ndarray:
         PointID.UPPER_WISHBONE_OUTBOARD: (-25.0, 750.0, 500.0),
         PointID.TRACKROD_INBOARD: (50.0, 200.0, 250.0),
         PointID.TRACKROD_OUTBOARD: (150.0, 800.0, 275.0),
+        PointID.WHEEL_CENTER: DEFAULT_WHEEL_CENTER,
         PointID.AXLE_INBOARD: (-20.0, 800.0, 308.426),
         PointID.AXLE_OUTBOARD: (-20.0, 950.0, 313.426),
         PointID.CARRIER_STEERING_AXIS_LOWER: (15.0, 820.0, 230.0),

@@ -1454,11 +1454,16 @@ def test_default_project_is_type_driven_and_builds_suspension() -> None:
         PointID.UPPER_WISHBONE_OUTBOARD,
         PointID.TRACKROD_INBOARD,
         PointID.TRACKROD_OUTBOARD,
-        PointID.AXLE_INBOARD,
-        PointID.AXLE_OUTBOARD,
+        PointID.WHEEL_CENTER,
     }
     assert project.config.wheelbase == 2500.0
+    assert project.config.static_camber_deg == pytest.approx(-1.9091524329963767)
+    assert project.config.static_toe_deg == pytest.approx(0.0)
     assert project.build_suspension().TYPE_KEY == "double_wishbone"
+    solver_state = project.build_suspension().initial_state()
+    assert PointID.AXLE_INBOARD in solver_state.positions
+    assert PointID.AXLE_OUTBOARD in solver_state.positions
+    assert PointID.WHEEL_CENTER in solver_state.positions
 
 
 def test_default_carrier_project_is_type_driven_and_builds_suspension() -> None:
@@ -1468,6 +1473,50 @@ def test_default_carrier_project_is_type_driven_and_builds_suspension() -> None:
     assert PointID.CARRIER_STEERING_AXIS_LOWER in project.hardpoints
     assert PointID.CARRIER_STEERING_AXIS_UPPER in project.hardpoints
     assert project.build_suspension().TYPE_KEY == "double_wishbone_carrier"
+
+
+def test_apply_wishbone_inboard_delta_shifts_only_inboard_mounts() -> None:
+    project = create_default_suspension_project()
+    baseline = {
+        point_id: position.copy() for point_id, position in project.hardpoints.items()
+    }
+    updated = suspension_workbench.apply_wishbone_inboard_delta(
+        baseline,
+        upper_dy_mm=10.0,
+        upper_dz_mm=-5.0,
+        lower_dy_mm=-3.0,
+        lower_dz_mm=8.0,
+        gui_coordinates=True,
+    )
+
+    for point_id in (
+        PointID.UPPER_WISHBONE_INBOARD_FRONT,
+        PointID.UPPER_WISHBONE_INBOARD_REAR,
+    ):
+        np.testing.assert_allclose(
+            updated[point_id] - baseline[point_id],
+            [0.0, -10.0, -5.0],
+        )
+    for point_id in (
+        PointID.LOWER_WISHBONE_INBOARD_FRONT,
+        PointID.LOWER_WISHBONE_INBOARD_REAR,
+    ):
+        np.testing.assert_allclose(
+            updated[point_id] - baseline[point_id],
+            [0.0, 3.0, 8.0],
+        )
+    np.testing.assert_allclose(
+        updated[PointID.UPPER_WISHBONE_OUTBOARD],
+        baseline[PointID.UPPER_WISHBONE_OUTBOARD],
+    )
+    np.testing.assert_allclose(
+        updated[PointID.LOWER_WISHBONE_OUTBOARD],
+        baseline[PointID.LOWER_WISHBONE_OUTBOARD],
+    )
+    np.testing.assert_allclose(
+        updated[PointID.WHEEL_CENTER],
+        baseline[PointID.WHEEL_CENTER],
+    )
 
 
 def test_default_carrier_project_solves_preview_state_without_metric_errors() -> None:

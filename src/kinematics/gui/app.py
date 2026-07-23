@@ -248,10 +248,13 @@ class KinematicsWorkbenchApp:
             messagebox.showerror("Suspension import failed", str(exc))
             return
 
+        tire = suspension_page.project.config.wheel.tire
         steering_page.project.linkage_type = "two_segment"
         steering_page.project.hardpoints = steering_rows
         steering_page.project.input_mode = "pinion_angle"
         steering_page.project.input_value = 0.0
+        steering_page.project.static_radius_mm = float(tire.static_radius_mm)
+        steering_page.project.section_width = float(tire.section_width)
         steering_page.imported_default_hardpoints = copy_hardpoint_rows(steering_rows)
         steering_page.pending_optimized_hardpoints = None
         steering_page._reset_refresh_caches()

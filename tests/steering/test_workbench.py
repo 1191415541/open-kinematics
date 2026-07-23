@@ -6,6 +6,9 @@ import pytest
 
 from kinematics.steering import solve_two_segment_steering_3d_analytic
 from kinematics.steering.workbench import (
+    LINKAGE_TYPES,
+    RACK_AND_PINION_INPUT_MODES,
+    RACK_AND_PINION_LINKAGE_TYPE,
     THREE_SEGMENT_INPUT_MODES,
     OptimizationCancelledError,
     SteeringCurve,
@@ -142,8 +145,8 @@ def test_project_can_be_saved_and_loaded(tmp_path):
     project.name = "demo steering"
     project.input_mode = "left_wheel_angle"
     project.input_value = 12.5
-    project.wheel_radius = 285.0
-    project.wheel_width = 205.0
+    project.static_radius_mm = 285.0
+    project.section_width = 205.0
     project.wheelbase = 2800.0
     project.curves.append(
         SteeringCurve(
@@ -159,8 +162,8 @@ def test_project_can_be_saved_and_loaded(tmp_path):
     assert loaded.name == "demo steering"
     assert loaded.input_mode == "left_wheel_angle"
     assert loaded.input_value == 12.5
-    assert loaded.wheel_radius == 285.0
-    assert loaded.wheel_width == 205.0
+    assert loaded.static_radius_mm == 285.0
+    assert loaded.section_width == 205.0
     assert loaded.wheelbase == 2800.0
     assert loaded.curves[0].label == "left sweep"
     assert len(loaded.hardpoints) == len(project.hardpoints)
@@ -186,6 +189,35 @@ def test_solve_project_supports_all_input_modes():
     project.input_value = right_angle
     _, right_outputs = solve_steering_project(project)
     np.testing.assert_allclose(right_outputs["pitman_angle_deg"], 8.0, atol=1e-8)
+
+
+def test_rack_and_pinion_is_a_first_class_linkage_type():
+    assert RACK_AND_PINION_LINKAGE_TYPE in LINKAGE_TYPES
+    project = default_steering_project(linkage_type=RACK_AND_PINION_LINKAGE_TYPE)
+
+    assert project.input_mode == "pinion_angle"
+    project.input_value = 8.0
+    state, outputs = solve_steering_project(project, include_limits=False)
+
+    assert state.converged
+    assert outputs["pinion_angle_deg"] == 8.0
+    np.testing.assert_allclose(
+        outputs["rack_displacement_mm"],
+        math.radians(8.0) * project.pinion_pitch_radius_mm,
+    )
+
+    for input_mode in RACK_AND_PINION_INPUT_MODES:
+        limits = input_angle_slider_limits(
+            project.hardpoints,
+            input_mode,
+            project.linkage_type,
+            project.pinion_pitch_radius_mm,
+        )
+        assert limits.minimum < 0.0 < limits.maximum
+
+    with pytest.raises(ValueError, match="rack-and-pinion input mode"):
+        project.input_mode = "pitman_angle"
+        solve_steering_project(project, include_limits=False)
 
 
 def test_rack_and_pinion_project_modes_produce_the_same_state():

@@ -95,6 +95,102 @@ def get_wheel_center(positions: dict[PointID, Vec3], wheel_offset: float) -> Vec
     return p1 - v * wheel_offset
 
 
+def wheel_axis_from_static_alignment(
+    *,
+    camber_deg: float,
+    toe_deg: float,
+    side_sign: float,
+) -> Vec3:
+    """
+    Build the axle unit vector (inboard -> outboard) from static camber/toe.
+
+    Conventions match :mod:`kinematics.metrics.angles`:
+    - Positive camber tilts the top of the wheel outward.
+    - Positive toe is toe-in (front of the wheel points inward).
+    - ``side_sign`` is +1 for left (Y > 0) and -1 for right.
+    """
+    camber_rad = np.deg2rad(float(camber_deg))
+    toe_rad = np.deg2rad(float(toe_deg))
+    side = 1.0 if float(side_sign) >= 0.0 else -1.0
+
+    # Left side: outboard is +Y. Right side: outboard is -Y.
+    # Camber: top-out positive => axle outboard end lower (negative Z for left).
+    # Toe-in positive => axle outboard end moves rearward (-X for left when
+    # measuring relative to +Y).
+    lateral = np.cos(camber_rad) * np.cos(toe_rad)
+    longitudinal = side * np.sin(toe_rad) * np.cos(camber_rad)
+    vertical = -side * np.sin(camber_rad)
+
+    axis = np.asarray(
+        [longitudinal, side * lateral, vertical],
+        dtype=np.float64,
+    )
+    return normalize_vector(axis)
+
+
+def axle_points_from_wheel_center(
+    wheel_center: Vec3,
+    *,
+    camber_deg: float,
+    toe_deg: float,
+    wheel_offset: float,
+    axle_length_mm: float,
+    side_sign: float | None = None,
+) -> tuple[Vec3, Vec3]:
+    """
+    Generate axle inboard/outboard hardpoints from wheel-center + alignment.
+
+    Returns:
+        ``(axle_inboard, axle_outboard)`` in internal coordinates.
+    """
+    center = np.asarray(wheel_center, dtype=np.float64)
+    if side_sign is None:
+        side_sign = -1.0 if float(center[1]) < 0.0 else 1.0
+    axis_outboard = wheel_axis_from_static_alignment(
+        camber_deg=camber_deg,
+        toe_deg=toe_deg,
+        side_sign=side_sign,
+    )
+    # Positive offset: wheel center is inboard of hub face (AXLE_OUTBOARD).
+    axle_outboard = center + axis_outboard * float(wheel_offset)
+    axle_inboard = axle_outboard - axis_outboard * float(axle_length_mm)
+    return axle_inboard, axle_outboard
+
+
+def apply_static_alignment_to_hardpoints(
+    hardpoints: dict[PointID, Vec3],
+    *,
+    camber_deg: float,
+    toe_deg: float,
+    wheel_offset: float,
+    axle_length_mm: float,
+    side_sign: float | None = None,
+) -> dict[PointID, Vec3]:
+    """
+    Ensure axle hardpoints match wheel-center + static alignment parameters.
+
+    If ``WHEEL_CENTER`` is present it is treated as the design input and axle
+    ends are generated from it. Otherwise existing axle ends are left unchanged.
+    """
+    updated = {
+        point_id: np.asarray(position, dtype=np.float64).copy()
+        for point_id, position in hardpoints.items()
+    }
+    if PointID.WHEEL_CENTER not in updated:
+        return updated
+    axle_inboard, axle_outboard = axle_points_from_wheel_center(
+        updated[PointID.WHEEL_CENTER],
+        camber_deg=camber_deg,
+        toe_deg=toe_deg,
+        wheel_offset=wheel_offset,
+        axle_length_mm=axle_length_mm,
+        side_sign=side_sign,
+    )
+    updated[PointID.AXLE_INBOARD] = axle_inboard
+    updated[PointID.AXLE_OUTBOARD] = axle_outboard
+    return updated
+
+
 def get_wheel_inboard(positions: dict[PointID, Vec3], wheel_width: float) -> Vec3:
     """
     Determines the inboard edge position of the wheel by moving inward from the wheel

@@ -9,12 +9,16 @@ from matplotlib.colors import to_hex  # noqa: E402
 from kinematics.gui.steering.plotting import (  # noqa: E402
     PREVIEW_GEOMETRY_COLORS,
     draw_curve_plot,
+    draw_rack_and_pinion_steering_preview,
     draw_steering_preview,
     draw_three_segment_steering_preview,
     fit_steering_preview,
 )
 from kinematics.steering.three_segment import solve_three_segment_steering  # noqa: E402
-from kinematics.steering.two_segment import solve_two_segment_steering  # noqa: E402
+from kinematics.steering.two_segment import (  # noqa: E402
+    solve_two_segment_rack_and_pinion_3d_analytic,
+    solve_two_segment_steering,
+)
 from kinematics.steering.workbench import (  # noqa: E402
     default_steering_project,
     hardpoints_from_rows,
@@ -196,6 +200,24 @@ def test_steering_preview_uses_distinct_colors_for_geometry_types():
     assert PREVIEW_GEOMETRY_COLORS["pitman"] in line_colors
     patch_edge_colors = {to_hex(patch.get_edgecolor()) for patch in ax.patches}
     assert PREVIEW_GEOMETRY_COLORS["wheel"] in patch_edge_colors
+    plt.close(fig)
+
+
+def test_rack_and_pinion_preview_draws_a_lateral_rack():
+    fig, ax = plt.subplots()
+    hardpoints = hardpoints_from_rows(
+        default_steering_project(linkage_type="rack_and_pinion").hardpoints
+    )
+    design_state = solve_two_segment_rack_and_pinion_3d_analytic(hardpoints, 0.0)
+    current_state = solve_two_segment_rack_and_pinion_3d_analytic(hardpoints, 2.0)
+
+    draw_rack_and_pinion_steering_preview(ax, hardpoints, design_state, current_state)
+
+    assert _line_segment_color(
+        ax,
+        current_state.pitman_left_output,
+        current_state.pitman_right_output,
+    ) == PREVIEW_GEOMETRY_COLORS["pitman"]
     plt.close(fig)
 
 

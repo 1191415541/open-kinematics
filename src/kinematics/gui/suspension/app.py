@@ -33,10 +33,11 @@ from kinematics.gui.suspension.optimization import (
 )
 from kinematics.gui.suspension.plotting import (
     SuspensionPreviewRenderer,
+    apply_preview_view_plane,
     draw_suspension_curve_plot,
     draw_suspension_preview,
 )
-from kinematics.gui.suspension.widgets import HardpointTable
+from kinematics.gui.suspension.widgets import HardpointTable, InboardMountControls
 from kinematics.gui.suspension.workbench import (
     DEFAULT_CURVE_OPTIONS,
     SuspensionCurve,
@@ -95,7 +96,12 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.updating_controls = False
         self.preview_has_drawn = False
         self.pending_preview_refresh: str | None = None
+        self.pending_hardpoint_full_refresh: str | None = None
         self.preview_renderer = SuspensionPreviewRenderer()
+        self.background_refresh_queue: queue.Queue[tuple[str, object]] | None = None
+        self.background_refresh_generation = 0
+        self.background_refresh_polling = False
+        self.background_refresh_pending = 0
         self.geometry_path_var = tk.StringVar(value="No geometry loaded")
         self.suspension_type_var = tk.StringVar(value=self.project.suspension_type)
         self.travel_slider_var = tk.DoubleVar(value=0.0)
@@ -111,11 +117,17 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.wheel_offset_var = tk.StringVar(
             value=str(self.project.config.wheel.offset)
         )
+        self.static_camber_var = tk.StringVar(
+            value=str(self.project.config.static_camber_deg)
+        )
+        self.static_toe_var = tk.StringVar(
+            value=str(self.project.config.static_toe_deg)
+        )
+        self.axle_length_var = tk.StringVar(
+            value=str(self.project.config.axle_length_mm)
+        )
         self.tire_width_var = tk.StringVar(
             value=str(self.project.config.wheel.tire.section_width)
-        )
-        self.tire_aspect_var = tk.StringVar(
-            value=str(self.project.config.wheel.tire.aspect_ratio)
         )
         self.static_radius_var = tk.StringVar(
             value=str(self.project.config.wheel.tire.static_radius_mm)
@@ -185,6 +197,11 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         ).pack(side=tk.RIGHT)
         self.hardpoint_table = HardpointTable(left, self._on_hardpoints_changed)
         self.hardpoint_table.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+        self.inboard_mount_controls = InboardMountControls(
+            left,
+            self._on_inboard_mounts_changed,
+        )
+        self.inboard_mount_controls.pack(fill=tk.X, pady=(0, 8))
         left_parameters = ttk.LabelFrame(left, text="Suspension Parameters", padding=8)
         left_parameters.pack(fill=tk.X)
         self._build_parameters(left_parameters)
@@ -297,8 +314,10 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             ("CG Y rightward", self.cg_y_var),
             ("CG Z upward", self.cg_z_var),
             ("Wheel offset", self.wheel_offset_var),
+            ("Static camber [deg]", self.static_camber_var),
+            ("Static toe [deg]", self.static_toe_var),
+            ("Axle length [mm]", self.axle_length_var),
             ("Tire width", self.tire_width_var),
-            ("Aspect ratio", self.tire_aspect_var),
             ("Static radius [mm]", self.static_radius_var),
         )
         ttk.Checkbutton(parent, text="Steered", variable=self.steered_var).grid(
@@ -337,7 +356,46 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         )
         self.preview_toolbar.update()
         self.preview_toolbar.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        view_frame = ttk.Frame(toolbar_frame)
+        view_frame.pack(side=tk.RIGHT)
+        for label, plane in (
+            ("Iso", "iso"),
+            ("XY", "xy"),
+            ("XZ", "xz"),
+            ("YZ", "yz"),
+            ("ZY", "zy"),
+        ):
+            ttk.Button(
+                view_frame,
+                text=label,
+                width=4,
+                command=lambda selected=plane: self.set_preview_view_plane(selected),
+            ).pack(side=tk.LEFT, padx=(2, 0))
         self.preview_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def set_preview_view_plane(self, plane: str) -> None:
+        """Align the suspension preview camera to a named plane."""
+        positions = None
+        if self.result is not None and self.result.states:
+            gui_positions = {
+                point_id: suspension_internal_to_gui_vec3(position)
+                for point_id, position in self.result.states[0].positions.items()
+            }
+            positions = gui_positions
+        elif self.project.hardpoints:
+            positions = {
+                point_id: suspension_internal_to_gui_vec3(position)
+                for point_id, position in self.project.hardpoints.items()
+            }
+        apply_preview_view_plane(
+            self.preview_ax,
+            plane,
+            positions=positions,
+            fit_bounds=positions is not None,
+        )
+        self.preview_has_drawn = True
+        self.preview_toolbar.update()
+        self.preview_canvas.draw_idle()
 
     def _build_side_panel(self, parent: ttk.Frame) -> None:
         frame = ttk.Frame(parent)
@@ -708,6 +766,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 for point_id, position in self.project.hardpoints.items()
             }
             self.hardpoint_table.set_hardpoints(self.project.hardpoints)
+            self.inboard_mount_controls.set_hardpoints(self.project.hardpoints)
             self.result = None
             self.preview_has_drawn = False
             self.preview_renderer.reset()
@@ -799,11 +858,14 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         if self.result is None:
             return
         suspension = self.project.build_suspension()
+        # Once the user has interacted with the preview, keep elev/azim/limits
+        # stable across hardpoint edits and travel slider motion.
+        preserve_view = bool(self.preview_has_drawn)
         draw_suspension_preview(
             self.preview_ax,
             suspension,
             self.result.states[index],
-            preserve_view=self.preview_has_drawn,
+            preserve_view=preserve_view,
             renderer=self.preview_renderer,
             preview_mode=not update_outputs,
         )
@@ -828,22 +890,23 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
     def refresh_curves(self) -> None:
         """Refresh managed suspension curve plots."""
 
-        def draw_curves() -> None:
+        def queue_curves() -> None:
             if not self._sync_controls_to_project():
                 return
-            sweep = solve_suspension_project(self.project)
-            curves = curve_specs_for_plot(
-                self.project.curves,
-                self.curve_manager.x_var.get(),
-                self.curve_manager.y_var.get(),
-                self.curve_manager.label_var.get(),
+            travel = self._current_travel_mm()
+            if travel is None:
+                return
+            self.background_refresh_generation += 1
+            self._queue_background_work(
+                kind="full",
+                worker=self._background_full_worker,
+                project_snapshot=self._project_snapshot(),
+                refresh_generation=self.background_refresh_generation,
+                extra_args=(travel,),
             )
-            draw_suspension_curve_plot(self.curve_ax, sweep.rows, curves)
-            self.curve_canvas.draw_idle()
-            self.status_var.set(f"Solved {len(sweep.rows)} steps")
 
         self.run_guarded(
-            action=draw_curves,
+            action=queue_curves,
             on_error=lambda exc: self.status_var.set(str(exc)),
         )
 
@@ -923,6 +986,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.preview_renderer.reset()
         self._reset_optimization_analysis()
         self.hardpoint_table.set_hardpoints(self.project.hardpoints)
+        self.inboard_mount_controls.set_hardpoints(self.project.hardpoints)
         self._sync_available_optimization_variables()
         self.refresh()
         self._show_optimization_message(
@@ -1059,6 +1123,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.updating_controls = True
         self.suspension_type_var.set(self.project.suspension_type)
         self.hardpoint_table.set_hardpoints(self.project.hardpoints)
+        self.inboard_mount_controls.set_hardpoints(self.project.hardpoints)
         cfg = self.project.config
         cg_position = suspension_internal_to_gui_vec3(cfg.cg_position)
         self.steered_var.set(cfg.steered)
@@ -1067,8 +1132,10 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.cg_y_var.set(str(cg_position[1]))
         self.cg_z_var.set(str(cg_position[2]))
         self.wheel_offset_var.set(str(cfg.wheel.offset))
+        self.static_camber_var.set(str(cfg.static_camber_deg))
+        self.static_toe_var.set(str(cfg.static_toe_deg))
+        self.axle_length_var.set(str(cfg.axle_length_mm))
         self.tire_width_var.set(str(cfg.wheel.tire.section_width))
-        self.tire_aspect_var.set(str(cfg.wheel.tire.aspect_ratio))
         self.static_radius_var.set(str(cfg.wheel.tire.static_radius_mm))
         self.start_var.set(str(self.project.settings.start))
         self.stop_var.set(str(self.project.settings.stop))
@@ -1093,9 +1160,17 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 self.wheel_offset_var.get(),
                 float(current_cfg.wheel.offset),
             ),
-            "tire_aspect_ratio": parse_float_entry(
-                self.tire_aspect_var.get(),
-                float(current_cfg.wheel.tire.aspect_ratio),
+            "static_camber_deg": parse_float_entry(
+                self.static_camber_var.get(),
+                float(current_cfg.static_camber_deg),
+            ),
+            "static_toe_deg": parse_float_entry(
+                self.static_toe_var.get(),
+                float(current_cfg.static_toe_deg),
+            ),
+            "axle_length_mm": parse_float_entry(
+                self.axle_length_var.get(),
+                float(current_cfg.axle_length_mm),
             ),
             "tire_section_width": parse_float_entry(
                 self.tire_width_var.get(),
@@ -1148,6 +1223,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         if parsed_steps.value < 2:
             self.status_var.set("Invalid numeric input: steps")
             return False
+        if float(parsed_values["axle_length_mm"].value) <= 0.0:
+            self.status_var.set("Invalid numeric input: axle_length_mm")
+            return False
 
         optimization = self._optimization_from_controls(self.project.optimization)
         if optimization is None:
@@ -1165,9 +1243,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             wheel=WheelConfig(
                 offset=float(parsed_values["wheel_offset"].value),
                 tire=TireConfig(
-                    aspect_ratio=float(parsed_values["tire_aspect_ratio"].value),
                     section_width=float(parsed_values["tire_section_width"].value),
                     static_radius_mm=float(parsed_values["static_radius_mm"].value),
+                    aspect_ratio=float(current_cfg.wheel.tire.aspect_ratio),
                 ),
             ),
             cg_position=(
@@ -1176,6 +1254,11 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 float(cg_position[2]),
             ),
             wheelbase=float(parsed_values["wheelbase"].value),
+            static_camber_deg=float(parsed_values["static_camber_deg"].value),
+            static_toe_deg=float(parsed_values["static_toe_deg"].value),
+            axle_length_mm=float(parsed_values["axle_length_mm"].value),
+            camber_shim=current_cfg.camber_shim,
+            upright_mounted_points=list(current_cfg.upright_mounted_points),
         )
         self.project.settings = SuspensionSweepSettings(
             start=float(parsed_values["start"].value),
@@ -1739,30 +1822,152 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             callback=self._refresh_preview_only,
         )
 
+    def _project_snapshot(self) -> SuspensionProject:
+        return copy.deepcopy(self.project)
+
+    def _queue_background_work(
+        self,
+        *,
+        kind: str,
+        worker: object,
+        project_snapshot: SuspensionProject,
+        refresh_generation: int,
+        extra_args: tuple[object, ...] = (),
+    ) -> None:
+        if self.background_refresh_queue is None:
+            self.background_refresh_queue = queue.Queue()
+        self.background_refresh_pending += 1
+        threading.Thread(
+            target=worker,
+            args=(kind, project_snapshot, refresh_generation, *extra_args),
+            daemon=True,
+        ).start()
+        if not self.background_refresh_polling:
+            self.background_refresh_polling = True
+            self.after(40, self._poll_background_refresh)
+
+    def _background_preview_worker(
+        self,
+        kind: str,
+        project_snapshot: SuspensionProject,
+        refresh_generation: int,
+        travel: float,
+    ) -> None:
+        assert self.background_refresh_queue is not None
+        try:
+            preview = solve_suspension_project_at_travel(project_snapshot, travel)
+        except Exception as exc:  # noqa: BLE001 - surface in polling loop.
+            self.background_refresh_queue.put(
+                ("background_error", refresh_generation, exc)
+            )
+            return
+        self.background_refresh_queue.put(
+            (kind, refresh_generation, preview, travel)
+        )
+
+    def _background_full_worker(
+        self,
+        kind: str,
+        project_snapshot: SuspensionProject,
+        refresh_generation: int,
+        travel: float,
+    ) -> None:
+        assert self.background_refresh_queue is not None
+        try:
+            preview = solve_suspension_project_at_travel(project_snapshot, travel)
+            sweep = solve_suspension_project(project_snapshot)
+        except Exception as exc:  # noqa: BLE001 - surface in polling loop.
+            self.background_refresh_queue.put(
+                ("background_error", refresh_generation, exc)
+            )
+            return
+        self.background_refresh_queue.put(
+            (kind, refresh_generation, preview, sweep, travel)
+        )
+
+    def _poll_background_refresh(self) -> None:
+        if self.background_refresh_queue is None:
+            self.background_refresh_polling = False
+            return
+
+        while True:
+            try:
+                item = self.background_refresh_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            self.background_refresh_pending = max(
+                0, self.background_refresh_pending - 1
+            )
+            kind = item[0]
+            generation = item[1]
+            if generation != self.background_refresh_generation:
+                continue
+
+            if kind == "background_error":
+                self.status_var.set(str(item[2]))
+                continue
+
+            if kind == "preview":
+                _kind, _generation, preview, travel = item
+                self.result = preview
+                self._draw_result_index(0, update_outputs=False)
+                self.status_var.set(f"Preview travel {float(travel):.6g} mm")
+            elif kind == "full":
+                _kind, _generation, preview, sweep, travel = item
+                self.result = preview
+                self._draw_result_index(0)
+                curves = curve_specs_for_plot(
+                    self.project.curves,
+                    self.curve_manager.x_var.get(),
+                    self.curve_manager.y_var.get(),
+                    self.curve_manager.label_var.get(),
+                )
+                draw_suspension_curve_plot(self.curve_ax, sweep.rows, curves)
+                self.curve_canvas.draw_idle()
+                self.status_var.set(f"Solved {len(sweep.rows)} steps")
+
+        if (
+            self.background_refresh_queue.empty()
+            and self.background_refresh_pending == 0
+        ):
+            self.background_refresh_polling = False
+            return
+        self.after(40, self._poll_background_refresh)
+
+    def _current_travel_mm(self) -> float | None:
+        parsed_travel = parse_float_entry(
+            self.travel_value_var.get(),
+            float(self.travel_slider_var.get()),
+        )
+        if not parsed_travel.is_valid:
+            self.status_var.set("Invalid numeric input: travel")
+            return None
+        if not parsed_travel.is_complete:
+            return None
+        return float(parsed_travel.value)
+
     def _refresh_preview_only(self) -> None:
         self.clear_pending_preview_refresh()
 
-        def draw_preview() -> None:
+        def queue_preview() -> None:
             if not self._sync_controls_to_project():
                 return
             self._sync_travel_slider_limits()
-            parsed_travel = parse_float_entry(
-                self.travel_value_var.get(),
-                float(self.travel_slider_var.get()),
+            travel = self._current_travel_mm()
+            if travel is None:
+                return
+            self.background_refresh_generation += 1
+            self._queue_background_work(
+                kind="preview",
+                worker=self._background_preview_worker,
+                project_snapshot=self._project_snapshot(),
+                refresh_generation=self.background_refresh_generation,
+                extra_args=(travel,),
             )
-            if not parsed_travel.is_valid:
-                self.status_var.set("Invalid numeric input: travel")
-                return
-            if not parsed_travel.is_complete:
-                return
-            travel = float(parsed_travel.value)
-            preview = solve_suspension_project_at_travel(self.project, travel)
-            self.result = preview
-            self._draw_result_index(0, update_outputs=False)
-            self.status_var.set(f"Preview travel {travel:.6g} mm")
 
         self.run_guarded(
-            action=draw_preview,
+            action=queue_preview,
             on_error=lambda exc: self.status_var.set(str(exc)),
         )
 
@@ -1776,27 +1981,24 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
     def refresh(self) -> None:
         """Refresh preview/output at current travel and regenerate sweep curves."""
 
-        def redraw_all() -> None:
+        def queue_full_refresh() -> None:
             if not self._sync_controls_to_project():
                 return
             self._sync_travel_slider_limits()
-            parsed_travel = parse_float_entry(
-                self.travel_value_var.get(),
-                float(self.travel_slider_var.get()),
+            travel = self._current_travel_mm()
+            if travel is None:
+                return
+            self.background_refresh_generation += 1
+            self._queue_background_work(
+                kind="full",
+                worker=self._background_full_worker,
+                project_snapshot=self._project_snapshot(),
+                refresh_generation=self.background_refresh_generation,
+                extra_args=(travel,),
             )
-            if not parsed_travel.is_valid:
-                self.status_var.set("Invalid numeric input: travel")
-                return
-            if not parsed_travel.is_complete:
-                return
-            travel = float(parsed_travel.value)
-            preview = solve_suspension_project_at_travel(self.project, travel)
-            self.result = preview
-            self._draw_result_index(0)
-            self.refresh_curves()
 
         self.run_guarded(
-            action=redraw_all,
+            action=queue_full_refresh,
             on_error=lambda exc: self.status_var.set(str(exc)),
         )
 
@@ -1810,17 +2012,35 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.result = None
         self.preview_has_drawn = False
         self.preview_renderer.reset()
+        self.background_refresh_generation += 1
         self._reset_optimization_analysis()
         self._load_project_to_controls()
         self.status_var.set("Suspension type changed")
         self.refresh()
 
     def _on_hardpoints_changed(self) -> None:
-        self.result = None
-        self.preview_has_drawn = False
-        self.preview_renderer.reset()
         self._reset_optimization_analysis()
-        self.refresh()
+        self.background_refresh_generation += 1
+        # Keep mount-control baseline in sync when the table is edited directly.
+        self.inboard_mount_controls.set_hardpoints(self.project.hardpoints)
+        self.schedule_hardpoint_edit_refresh(
+            scheduler=self.after,
+            cancel=self.after_cancel,
+            preview_callback=self._refresh_preview_only,
+            full_callback=self.refresh,
+        )
+
+    def _on_inboard_mounts_changed(self) -> None:
+        """Refresh after bulk wishbone inboard mount adjustments."""
+        self.hardpoint_table.set_hardpoints(self.project.hardpoints)
+        self._reset_optimization_analysis()
+        self.background_refresh_generation += 1
+        self.schedule_hardpoint_edit_refresh(
+            scheduler=self.after,
+            cancel=self.after_cancel,
+            preview_callback=self._refresh_preview_only,
+            full_callback=self.refresh,
+        )
 
     def restore_default_hardpoints(self) -> None:
         """Restore the hardpoints from the latest imported file snapshot."""
@@ -1834,6 +2054,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.preview_renderer.reset()
         self._reset_optimization_analysis()
         self.hardpoint_table.set_hardpoints(self.project.hardpoints)
+        self.inboard_mount_controls.set_hardpoints(self.project.hardpoints)
         self._sync_available_optimization_variables()
         self.status_var.set("Restored default hardpoints")
         self.refresh()

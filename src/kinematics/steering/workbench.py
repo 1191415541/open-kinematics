@@ -9,7 +9,7 @@ import json
 import threading
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 from scipy.optimize import least_squares
@@ -63,6 +63,7 @@ from kinematics.steering.two_segment import (
 )
 
 RACK_AND_PINION_INPUT_MODES = ("pinion_angle", "rack_displacement")
+RACK_AND_PINION_LINKAGE_TYPE = "rack_and_pinion"
 TWO_SEGMENT_INPUT_MODES = (
     "pitman_angle",
     "left_wheel_angle",
@@ -76,7 +77,7 @@ THREE_SEGMENT_INPUT_MODES = (
     "right_wheel_angle",
 )
 INPUT_MODES = TWO_SEGMENT_INPUT_MODES
-LINKAGE_TYPES = ("two_segment", "three_segment")
+LINKAGE_TYPES = ("two_segment", "three_segment", RACK_AND_PINION_LINKAGE_TYPE)
 ThreeSegmentGeometryInput = (
     ThreeSegmentSteeringGeometry | ThreeSegmentSteeringHardpoints3D
 )
@@ -100,6 +101,7 @@ __all__ = [
     "OPTIMIZATION_VARIABLES",
     "OptimizationCancelledError",
     "RACK_AND_PINION_INPUT_MODES",
+    "RACK_AND_PINION_LINKAGE_TYPE",
     "SliderLimits",
     "SteeringCurve",
     "SteeringHardpointRow",
@@ -248,7 +250,7 @@ def default_hardpoint_rows(
                 300.0,
             ),
         ]
-    if linkage_type != "two_segment":
+    if linkage_type not in {"two_segment", RACK_AND_PINION_LINKAGE_TYPE}:
         raise ValueError(f"Unknown steering linkage type '{linkage_type}'")
     return [
         SteeringHardpointRow("symmetric", "wheel_kingpin_lower", 0.0, -500.0, 280.0),
@@ -280,8 +282,8 @@ class SteeringProject:
     sweep_min: float = -20.0
     sweep_max: float = 20.0
     sweep_step: float = 2.0
-    wheel_radius: float = 180.0
-    wheel_width: float = 120.0
+    static_radius_mm: float = 283.1
+    section_width: float = 270.0
     wheelbase: float = 2800.0
     pinion_pitch_radius_mm: float = 15.0
     curves: list[SteeringCurve] = field(default_factory=list)
@@ -297,7 +299,21 @@ def default_steering_project(linkage_type: str = "two_segment") -> SteeringProje
             hardpoints=default_hardpoint_rows("three_segment"),
             input_mode="left_bellcrank_angle",
         )
+    if linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
+        return SteeringProject(
+            linkage_type=RACK_AND_PINION_LINKAGE_TYPE,
+            hardpoints=default_hardpoint_rows(RACK_AND_PINION_LINKAGE_TYPE),
+            input_mode="pinion_angle",
+        )
     raise ValueError(f"Unknown steering linkage type '{linkage_type}'")
+
+
+def _default_input_mode_for_linkage(linkage_type: str) -> str:
+    if linkage_type == "three_segment":
+        return "left_bellcrank_angle"
+    if linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
+        return "pinion_angle"
+    return "pitman_angle"
 
 
 def _required_hardpoint_row(
@@ -449,6 +465,13 @@ def input_angle_slider_limits(
     """Return slider limits for the selected steering input mode."""
     if linkage_type == "three_segment":
         return _three_segment_input_angle_slider_limits(rows, input_mode)
+    if (
+        linkage_type == RACK_AND_PINION_LINKAGE_TYPE
+        and input_mode not in RACK_AND_PINION_INPUT_MODES
+    ):
+        raise ValueError(
+            "Rack-and-pinion steering requires a rack-and-pinion input mode"
+        )
     hardpoints = hardpoints_from_rows(rows)
     if input_mode in RACK_AND_PINION_INPUT_MODES:
         limits = estimate_rack_and_pinion_steering_limits(hardpoints)
@@ -967,7 +990,10 @@ def steering_project_limit_outputs(project: SteeringProject) -> dict[str, float]
             three_segment_hardpoints_from_rows(project.hardpoints)
         )
     hardpoints = hardpoints_from_rows(project.hardpoints)
-    if project.input_mode in RACK_AND_PINION_INPUT_MODES:
+    if (
+        project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
+        or project.input_mode in RACK_AND_PINION_INPUT_MODES
+    ):
         return rack_and_pinion_steering_limit_outputs(hardpoints)
     return steering_limit_outputs(hardpoints)
 
@@ -992,6 +1018,13 @@ def solve_steering_project(
             wheelbase=project.wheelbase,
         )
     hardpoints = hardpoints_from_rows(project.hardpoints)
+    if (
+        project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
+        and project.input_mode not in RACK_AND_PINION_INPUT_MODES
+    ):
+        raise ValueError(
+            "Rack-and-pinion steering requires a rack-and-pinion input mode"
+        )
     actuator_outputs: dict[str, float] = {}
     if project.input_mode == "pitman_angle":
         solution = solve_two_segment_steering_3d_analytic(
@@ -1086,8 +1119,10 @@ def project_to_dict(project: SteeringProject) -> dict[str, Any]:
         name=project.name,
         hardpoints=[asdict(row) for row in project.hardpoints],
         parameters={
-            "wheel_radius": project.wheel_radius,
-            "wheel_width": project.wheel_width,
+            "tire": {
+                "section_width": project.section_width,
+                "static_radius_mm": project.static_radius_mm,
+            },
             "wheelbase": project.wheelbase,
             "pinion_pitch_radius_mm": project.pinion_pitch_radius_mm,
         },
@@ -1108,6 +1143,7 @@ def project_from_dict(data: dict[str, Any]) -> SteeringProject:
         return _project_from_unified_dict(data)
 
     linkage_type = str(data.get("linkage_type", "two_segment"))
+    section_width, static_radius_mm = _tire_sizes_from_mapping(data)
     return SteeringProject(
         name=str(data.get("name", "Untitled steering project")),
         linkage_type=linkage_type,
@@ -1118,27 +1154,57 @@ def project_from_dict(data: dict[str, Any]) -> SteeringProject:
         input_mode=str(
             data.get(
                 "input_mode",
-                "left_bellcrank_angle"
-                if linkage_type == "three_segment"
-                else "pitman_angle",
+                _default_input_mode_for_linkage(linkage_type),
             )
         ),
         input_value=float(data.get("input_value", 0.0)),
         sweep_min=float(data.get("sweep_min", -20.0)),
         sweep_max=float(data.get("sweep_max", 20.0)),
         sweep_step=float(data.get("sweep_step", 2.0)),
-        wheel_radius=float(data.get("wheel_radius", 180.0)),
-        wheel_width=float(data.get("wheel_width", 120.0)),
+        static_radius_mm=static_radius_mm,
+        section_width=section_width,
         wheelbase=float(data.get("wheelbase", 2800.0)),
         pinion_pitch_radius_mm=float(data.get("pinion_pitch_radius_mm", 15.0)),
         curves=[SteeringCurve(**curve) for curve in data.get("curves", [])],
     )
 
 
+def _tire_sizes_from_mapping(
+    data: Mapping[str, Any],
+    *,
+    default_section_width: float = 270.0,
+    default_static_radius_mm: float = 283.1,
+) -> tuple[float, float]:
+    """Read tire sizes from new or legacy steering project fields."""
+    tire = data.get("tire")
+    if isinstance(tire, Mapping):
+        section_width = float(tire.get("section_width", default_section_width))
+        static_radius_mm = float(
+            tire.get(
+                "static_radius_mm",
+                data.get("wheel_radius", default_static_radius_mm),
+            )
+        )
+        return section_width, static_radius_mm
+    section_width = float(
+        data.get("section_width", data.get("wheel_width", default_section_width))
+    )
+    static_radius_mm = float(
+        data.get(
+            "static_radius_mm",
+            data.get("wheel_radius", default_static_radius_mm),
+        )
+    )
+    return section_width, static_radius_mm
+
+
 def _project_from_unified_dict(data: dict[str, Any]) -> SteeringProject:
     linkage_type = str(data.get("system_type", "two_segment"))
     parameters = data.get("parameters", {})
     simulation = data.get("simulation", {})
+    section_width, static_radius_mm = _tire_sizes_from_mapping(
+        parameters if isinstance(parameters, Mapping) else {}
+    )
     return SteeringProject(
         name=str(data.get("name", "Untitled steering project")),
         linkage_type=linkage_type,
@@ -1149,17 +1215,15 @@ def _project_from_unified_dict(data: dict[str, Any]) -> SteeringProject:
         input_mode=str(
             simulation.get(
                 "input_mode",
-                "left_bellcrank_angle"
-                if linkage_type == "three_segment"
-                else "pitman_angle",
+                _default_input_mode_for_linkage(linkage_type),
             )
         ),
         input_value=float(simulation.get("input_value", 0.0)),
         sweep_min=float(simulation.get("sweep_min", -20.0)),
         sweep_max=float(simulation.get("sweep_max", 20.0)),
         sweep_step=float(simulation.get("sweep_step", 2.0)),
-        wheel_radius=float(parameters.get("wheel_radius", 180.0)),
-        wheel_width=float(parameters.get("wheel_width", 120.0)),
+        static_radius_mm=static_radius_mm,
+        section_width=section_width,
         wheelbase=float(parameters.get("wheelbase", 2800.0)),
         pinion_pitch_radius_mm=float(parameters.get("pinion_pitch_radius_mm", 15.0)),
         curves=[SteeringCurve(**curve) for curve in data.get("curves", [])],

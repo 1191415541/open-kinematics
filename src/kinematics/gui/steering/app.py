@@ -29,7 +29,10 @@ from kinematics.gui.steering.widgets import (
     OutputTable,
     PitmanTransformControls,
 )
-from kinematics.steering.geometry import ThreeSegmentSteeringSolution
+from kinematics.steering.geometry import (
+    ThreeSegmentSteeringSolution,
+    TwoSegmentSteeringSolution,
+)
 from kinematics.steering.limits import (
     steering_limit_outputs,
     three_segment_steering_limit_outputs,
@@ -41,6 +44,7 @@ from kinematics.steering.workbench import (
     INPUT_MODES,
     LINKAGE_TYPES,
     RACK_AND_PINION_INPUT_MODES,
+    RACK_AND_PINION_LINKAGE_TYPE,
     THREE_SEGMENT_INPUT_MODES,
     TWO_SEGMENT_INPUT_MODES,
     available_steering_outputs,
@@ -84,6 +88,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.preview_has_drawn = False
         self.previous_three_segment_state: ThreeSegmentSteeringSolution | None = None
         self.pending_preview_refresh: str | None = None
+        self.pending_hardpoint_full_refresh: str | None = None
         self._reset_refresh_caches()
         self.background_refresh_queue: queue.Queue[tuple[str, object]] | None = None
         self.background_refresh_generation = 0
@@ -96,8 +101,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.sweep_min_var = tk.StringVar(value=str(self.project.sweep_min))
         self.sweep_max_var = tk.StringVar(value=str(self.project.sweep_max))
         self.sweep_step_var = tk.StringVar(value=str(self.project.sweep_step))
-        self.wheel_radius_var = tk.StringVar(value=str(self.project.wheel_radius))
-        self.wheel_width_var = tk.StringVar(value=str(self.project.wheel_width))
+        self.static_radius_var = tk.StringVar(value=str(self.project.static_radius_mm))
+        self.section_width_var = tk.StringVar(value=str(self.project.section_width))
         self.wheelbase_var = tk.StringVar(value=str(self.project.wheelbase))
         self.pinion_pitch_radius_var = tk.StringVar(
             value=str(self.project.pinion_pitch_radius_mm)
@@ -196,7 +201,10 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             if self.project.linkage_type == "three_segment":
                 hardpoints = three_segment_hardpoints_from_rows(self.project.hardpoints)
                 outputs = three_segment_steering_limit_outputs(hardpoints)
-            elif self.project.input_mode in RACK_AND_PINION_INPUT_MODES:
+            elif (
+                self.project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
+                or self.project.input_mode in RACK_AND_PINION_INPUT_MODES
+            ):
                 outputs = steering_project_limit_outputs(self.project)
             else:
                 hardpoints = hardpoints_from_rows(self.project.hardpoints)
@@ -259,12 +267,18 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                     project_snapshot.hardpoints
                 )
                 limit_outputs = three_segment_steering_limit_outputs(hardpoints)
-            elif project_snapshot.input_mode in RACK_AND_PINION_INPUT_MODES:
+            elif (
+                project_snapshot.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
+                or project_snapshot.input_mode in RACK_AND_PINION_INPUT_MODES
+            ):
                 limit_outputs = steering_project_limit_outputs(project_snapshot)
             else:
                 hardpoints = hardpoints_from_rows(project_snapshot.hardpoints)
                 limit_outputs = steering_limit_outputs(hardpoints)
-            if project_snapshot.input_mode in RACK_AND_PINION_INPUT_MODES:
+            if (
+                project_snapshot.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
+                or project_snapshot.input_mode in RACK_AND_PINION_INPUT_MODES
+            ):
                 slider_limits = input_angle_slider_limits(
                     project_snapshot.hardpoints,
                     project_snapshot.input_mode,
@@ -332,6 +346,15 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
 
             if kind == "background_error":
                 self.output_table.set_error(str(item[2]))
+                continue
+
+            if kind == "preview":
+                _kind, _generation, state = item
+                if isinstance(state, ThreeSegmentSteeringSolution):
+                    self.previous_three_segment_state = state
+                self._draw_preview_state(state)
+                self.preview_has_drawn = True
+                self.preview_canvas.draw_idle()
                 continue
 
             if kind == "limits":
@@ -421,7 +444,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
 
     def _build_layout(self) -> None:
         if self.standalone and isinstance(self.root, tk.Tk):
-            self.root.title("Two-Segment Steering Workbench")
+            self.root.title("Steering Workbench")
             self.root.geometry("1200x760")
         main = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         main.pack(fill=tk.BOTH, expand=True)
@@ -471,8 +494,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         entries: list[ttk.Entry] = []
         for row_index, (label, var) in enumerate(
             (
-                ("Wheel R", self.wheel_radius_var),
-                ("Wheel W", self.wheel_width_var),
+                ("Tire width", self.section_width_var),
+                ("Static radius [mm]", self.static_radius_var),
                 ("Wheelbase", self.wheelbase_var),
             )
         ):
@@ -713,8 +736,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.sweep_min_var.set(str(self.project.sweep_min))
         self.sweep_max_var.set(str(self.project.sweep_max))
         self.sweep_step_var.set(str(self.project.sweep_step))
-        self.wheel_radius_var.set(str(self.project.wheel_radius))
-        self.wheel_width_var.set(str(self.project.wheel_width))
+        self.static_radius_var.set(str(self.project.static_radius_mm))
+        self.section_width_var.set(str(self.project.section_width))
         self.wheelbase_var.set(str(self.project.wheelbase))
         self.pinion_pitch_radius_var.set(str(self.project.pinion_pitch_radius_mm))
         self.hardpoint_editor.set_rows(self.project.hardpoints)
@@ -756,8 +779,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             ("sweep_min", self.sweep_min_var),
             ("sweep_max", self.sweep_max_var),
             ("sweep_step", self.sweep_step_var),
-            ("wheel_radius", self.wheel_radius_var),
-            ("wheel_width", self.wheel_width_var),
+            ("static_radius_mm", self.static_radius_var),
+            ("section_width", self.section_width_var),
             ("wheelbase", self.wheelbase_var),
             ("pinion_pitch_radius_mm", self.pinion_pitch_radius_var),
         ):
@@ -770,15 +793,19 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             if attr == "pinion_pitch_radius_mm" and parsed.value <= 0.0:
                 self.output_table.set_error("Pinion pitch radius must be positive")
                 return False
+            if attr in {"static_radius_mm", "section_width"} and parsed.value <= 0.0:
+                self.output_table.set_error(f"{attr} must be positive")
+                return False
             setattr(self.project, attr, parsed.value)
         return True
 
     def _sync_input_mode_values(self) -> None:
-        modes = (
-            THREE_SEGMENT_INPUT_MODES
-            if self.project.linkage_type == "three_segment"
-            else TWO_SEGMENT_INPUT_MODES
-        )
+        if self.project.linkage_type == "three_segment":
+            modes = THREE_SEGMENT_INPUT_MODES
+        elif self.project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
+            modes = RACK_AND_PINION_INPUT_MODES
+        else:
+            modes = TWO_SEGMENT_INPUT_MODES
         self.input_mode_combo.configure(values=modes)
         if self.project.input_mode not in modes:
             self.project.input_mode = modes[0]
@@ -832,28 +859,54 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
     def _refresh_preview_only(self) -> None:
         self.clear_pending_preview_refresh()
 
-        def draw_preview() -> None:
+        def queue_preview() -> None:
             if not self._sync_controls_to_project():
                 return
+            self.background_refresh_generation += 1
+            refresh_generation = self.background_refresh_generation
+            project_snapshot = self._project_snapshot()
             previous_state = (
                 self.previous_three_segment_state
                 if self.project.linkage_type == "three_segment"
                 else None
             )
+            if self.background_refresh_queue is None:
+                self.background_refresh_queue = queue.Queue()
+            self.background_refresh_pending += 1
+            threading.Thread(
+                target=self._background_preview_worker,
+                args=(project_snapshot, refresh_generation, previous_state),
+                daemon=True,
+            ).start()
+            if not self.background_refresh_polling:
+                self.background_refresh_polling = True
+                self.root.after(40, self._poll_background_refresh)
+
+        self.run_guarded(
+            action=queue_preview,
+            on_error=lambda exc: self.output_table.set_error(str(exc)),
+        )
+
+    def _background_preview_worker(
+        self,
+        project_snapshot,
+        refresh_generation: int,
+        previous_state,
+    ) -> None:
+        assert self.background_refresh_queue is not None
+        try:
             state, _outputs = solve_steering_project(
-                self.project,
+                project_snapshot,
                 include_limits=False,
                 previous_state=previous_state,
             )
-            if isinstance(state, ThreeSegmentSteeringSolution):
-                self.previous_three_segment_state = state
-            self._draw_preview_state(state)
-            self.preview_has_drawn = True
-            self.preview_canvas.draw_idle()
-
-        self.run_guarded(
-            action=draw_preview,
-            on_error=lambda exc: self.output_table.set_error(str(exc)),
+        except Exception as exc:  # noqa: BLE001 - surface in polling loop.
+            self.background_refresh_queue.put(
+                ("background_error", refresh_generation, exc)
+            )
+            return
+        self.background_refresh_queue.put(
+            ("preview", refresh_generation, state)
         )
 
     def _on_controls_changed(self, *_args: object) -> None:
@@ -864,7 +917,12 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.background_refresh_generation += 1
         self.previous_three_segment_state = None
         self._sync_pitman_controls()
-        self.refresh()
+        self.schedule_hardpoint_edit_refresh(
+            scheduler=self.root.after,
+            cancel=self.root.after_cancel,
+            preview_callback=self._refresh_preview_only,
+            full_callback=self.refresh,
+        )
 
     def _on_pitman_transform_changed(self) -> None:
         self._reset_refresh_caches()
@@ -1095,12 +1153,16 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 design_state,
                 state,
                 preserve_view=self.preview_has_drawn,
-                wheel_radius=self.project.wheel_radius,
-                wheel_width=self.project.wheel_width,
+                wheel_radius=self.project.static_radius_mm,
+                wheel_width=self.project.section_width,
             )
             return
         hardpoints = hardpoints_from_rows(self.project.hardpoints)
-        if self.project.input_mode in RACK_AND_PINION_INPUT_MODES:
+        if (
+            self.project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
+            or self.project.input_mode in RACK_AND_PINION_INPUT_MODES
+        ):
+            assert isinstance(state, TwoSegmentSteeringSolution)
             design_state = solve_steering_project(
                 replace(
                     self.project,
@@ -1115,8 +1177,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 design_state,
                 state,
                 preserve_view=self.preview_has_drawn,
-                wheel_radius=self.project.wheel_radius,
-                wheel_width=self.project.wheel_width,
+                wheel_radius=self.project.static_radius_mm,
+                wheel_width=self.project.section_width,
             )
             return
         design_state = solve_two_segment_steering(hardpoints, 0.0)
@@ -1126,8 +1188,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             design_state,
             state,
             preserve_view=self.preview_has_drawn,
-            wheel_radius=self.project.wheel_radius,
-            wheel_width=self.project.wheel_width,
+            wheel_radius=self.project.static_radius_mm,
+            wheel_width=self.project.section_width,
         )
 
     def refresh_curves(self) -> None:

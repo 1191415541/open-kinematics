@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from tkinter import messagebox, ttk
 from typing import Any
 
@@ -11,8 +11,10 @@ import numpy as np
 import tksheet
 
 from kinematics.core.enums import PointID
+from kinematics.gui.common import bind_entry_commit_events, parse_float_entry
 from kinematics.gui.hardpoint_merge import suspension_display_name
 from kinematics.gui.suspension.workbench import (
+    apply_wishbone_inboard_delta,
     suspension_gui_to_internal_vec3,
     suspension_internal_to_gui_vec3,
 )
@@ -22,6 +24,121 @@ from kinematics.suspensions.base import Suspension
 def _format_coord(value: float) -> str:
     """Return a compact string for one coordinate cell."""
     return f"{value:.15g}"
+
+
+class InboardMountControls(ttk.LabelFrame):
+    """Bulk Y/Z adjustment controls for wishbone inboard hardpoints."""
+
+    def __init__(
+        self,
+        master: tk.Misc,
+        on_change: Callable[[], None],
+    ) -> None:
+        super().__init__(master, text="Wishbone Inboard Mounts", padding=6)
+        self.on_change = on_change
+        self.hardpoints: dict[PointID, np.ndarray] = {}
+        self.baseline_hardpoints: dict[PointID, np.ndarray] = {}
+        self.updating = False
+        self.upper_dy_var = tk.StringVar(value="0")
+        self.upper_dz_var = tk.StringVar(value="0")
+        self.lower_dy_var = tk.StringVar(value="0")
+        self.lower_dz_var = tk.StringVar(value="0")
+        self._build()
+
+    def _build(self) -> None:
+        self.columnconfigure(1, weight=1)
+        self.columnconfigure(3, weight=1)
+        fields = (
+            (0, 0, "Upper ΔY", self.upper_dy_var),
+            (0, 2, "Upper ΔZ", self.upper_dz_var),
+            (1, 0, "Lower ΔY", self.lower_dy_var),
+            (1, 2, "Lower ΔZ", self.lower_dz_var),
+        )
+        commit_entries: list[ttk.Entry] = []
+        for row, column, label, var in fields:
+            ttk.Label(self, text=label).grid(row=row, column=column, sticky="w")
+            entry = ttk.Entry(self, textvariable=var, width=8)
+            entry.grid(
+                row=row,
+                column=column + 1,
+                sticky="ew",
+                padx=(6, 12),
+                pady=2,
+            )
+            commit_entries.append(entry)
+        for entry in commit_entries:
+            bind_entry_commit_events(
+                entry,
+                on_live_edit=lambda _event: None,
+                on_commit=self._on_entry_commit,
+            )
+        ttk.Button(self, text="Reset", command=self.reset_deltas).grid(
+            row=2,
+            column=0,
+            columnspan=4,
+            sticky="e",
+            pady=(6, 0),
+        )
+
+    def set_hardpoints(self, hardpoints: dict[PointID, np.ndarray]) -> None:
+        """Load the current hardpoints as the delta baseline."""
+        self.hardpoints = hardpoints
+        self.baseline_hardpoints = {
+            point_id: np.asarray(position, dtype=np.float64).copy()
+            for point_id, position in hardpoints.items()
+        }
+        self.updating = True
+        try:
+            self.upper_dy_var.set("0")
+            self.upper_dz_var.set("0")
+            self.lower_dy_var.set("0")
+            self.lower_dz_var.set("0")
+        finally:
+            self.updating = False
+
+    def reset_deltas(self) -> None:
+        """Restore hardpoints to the baseline and clear delta fields."""
+        if not self.baseline_hardpoints:
+            return
+        for point_id, position in self.baseline_hardpoints.items():
+            self.hardpoints[point_id] = np.asarray(position, dtype=np.float64).copy()
+        self.updating = True
+        try:
+            self.upper_dy_var.set("0")
+            self.upper_dz_var.set("0")
+            self.lower_dy_var.set("0")
+            self.lower_dz_var.set("0")
+        finally:
+            self.updating = False
+        self.on_change()
+
+    def _apply_current_entry_values(self) -> bool:
+        if self.updating or not self.baseline_hardpoints:
+            return False
+        parsed = {
+            "upper_dy": parse_float_entry(self.upper_dy_var.get(), 0.0),
+            "upper_dz": parse_float_entry(self.upper_dz_var.get(), 0.0),
+            "lower_dy": parse_float_entry(self.lower_dy_var.get(), 0.0),
+            "lower_dz": parse_float_entry(self.lower_dz_var.get(), 0.0),
+        }
+        for value in parsed.values():
+            if not value.is_valid or not value.is_complete:
+                return False
+        updated = apply_wishbone_inboard_delta(
+            self.baseline_hardpoints,
+            upper_dy_mm=float(parsed["upper_dy"].value),
+            upper_dz_mm=float(parsed["upper_dz"].value),
+            lower_dy_mm=float(parsed["lower_dy"].value),
+            lower_dz_mm=float(parsed["lower_dz"].value),
+            gui_coordinates=True,
+        )
+        for point_id, position in updated.items():
+            self.hardpoints[point_id] = position
+        return True
+
+    def _on_entry_commit(self, _event: tk.Event) -> None:
+        if self._apply_current_entry_values():
+            self.on_change()
 
 
 class HardpointTable(ttk.Frame):
