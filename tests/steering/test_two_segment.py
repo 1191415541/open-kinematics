@@ -12,12 +12,15 @@ from kinematics.steering import (
     WheelSteeringHardpoints3D,
     compare_two_segment_2d_and_3d,
     compare_two_segment_3d_analytic_and_numeric,
+    pinion_angle_from_rack_displacement,
     project_kingpin_axis_to_steering_top_view,
     project_point_to_steering_top_view,
+    rack_displacement_from_pinion_angle,
     solve_two_segment_from_left_wheel_angle,
     solve_two_segment_from_left_wheel_angle_3d,
     solve_two_segment_from_left_wheel_angle_3d_analytic,
     solve_two_segment_from_right_wheel_angle,
+    solve_two_segment_rack_and_pinion_3d_analytic,
     solve_two_segment_steering,
     solve_two_segment_steering_3d_analytic,
     sweep_two_segment_steering,
@@ -184,6 +187,73 @@ def test_zero_pitman_angle_keeps_both_wheels_at_design_angle():
     np.testing.assert_allclose(solution.left_wheel_angle_deg, 0.0, atol=1e-10)
     np.testing.assert_allclose(solution.right_wheel_angle_deg, 0.0, atol=1e-10)
     assert solution.max_abs_tie_rod_residual < 1e-9
+
+
+def test_pinion_angle_and_rack_displacement_are_inverse_operations():
+    pinion_pitch_radius_mm = 15.0
+    pinion_angle_deg = 12.0
+
+    displacement = rack_displacement_from_pinion_angle(
+        pinion_angle_deg,
+        pinion_pitch_radius_mm,
+    )
+
+    np.testing.assert_allclose(
+        pinion_angle_from_rack_displacement(
+            displacement,
+            pinion_pitch_radius_mm,
+        ),
+        pinion_angle_deg,
+        atol=1e-12,
+    )
+
+    with pytest.raises(ValueError, match="Pinion pitch radius must be positive"):
+        rack_displacement_from_pinion_angle(1.0, 0.0)
+    with pytest.raises(ValueError, match="Pinion pitch radius must be positive"):
+        pinion_angle_from_rack_displacement(1.0, -1.0)
+
+
+def test_rack_and_pinion_zero_travel_preserves_design_state():
+    hardpoints = symmetric_hardpoints_3d()
+
+    solution = solve_two_segment_rack_and_pinion_3d_analytic(
+        hardpoints,
+        rack_displacement_mm=0.0,
+    )
+
+    assert solution.converged
+    np.testing.assert_allclose(solution.left_wheel_angle_deg, 0.0, atol=1e-10)
+    np.testing.assert_allclose(solution.right_wheel_angle_deg, 0.0, atol=1e-10)
+    np.testing.assert_allclose(
+        solution.pitman_left_output_3d,
+        hardpoints.pitman.left_output,
+    )
+    np.testing.assert_allclose(
+        solution.pitman_right_output_3d,
+        hardpoints.pitman.right_output,
+    )
+
+
+def test_rack_and_pinion_translates_both_inner_tie_rod_joints():
+    hardpoints = symmetric_hardpoints_3d()
+    rack_displacement_mm = 2.0
+
+    solution = solve_two_segment_rack_and_pinion_3d_analytic(
+        hardpoints,
+        rack_displacement_mm=rack_displacement_mm,
+    )
+
+    expected_translation = np.array([0.0, rack_displacement_mm, 0.0])
+    assert solution.converged
+    assert solution.max_abs_tie_rod_residual < 1e-6
+    np.testing.assert_allclose(
+        solution.pitman_left_output_3d,
+        hardpoints.pitman.left_output + expected_translation,
+    )
+    np.testing.assert_allclose(
+        solution.pitman_right_output_3d,
+        hardpoints.pitman.right_output + expected_translation,
+    )
 
 
 def test_pitman_angle_solves_left_and_right_wheel_angles():

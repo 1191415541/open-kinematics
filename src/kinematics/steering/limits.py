@@ -19,6 +19,7 @@ from kinematics.steering.three_segment import (
     solve_three_segment_steering_3d_analytic,
 )
 from kinematics.steering.two_segment import (
+    solve_two_segment_rack_and_pinion_3d_analytic,
     solve_two_segment_steering,
     solve_two_segment_steering_3d_analytic,
 )
@@ -41,6 +42,24 @@ class SteeringTravelLimits:
 
     left_turn: SteeringLimitSolution
     right_turn: SteeringLimitSolution
+
+
+@dataclass(frozen=True)
+class RackSteeringTravelLimits:
+    """Reachable rack-travel endpoints and their steering states."""
+
+    minimum_displacement_mm: float
+    maximum_displacement_mm: float
+    minimum_state: TwoSegmentSteeringSolution
+    maximum_state: TwoSegmentSteeringSolution
+
+    def as_steering_limits(self) -> SteeringTravelLimits:
+        """Classify the two rack endpoints by average roadwheel turn direction."""
+        states = (self.minimum_state, self.maximum_state)
+        return SteeringTravelLimits(
+            left_turn=max(states, key=_average_wheel_angle),
+            right_turn=min(states, key=_average_wheel_angle),
+        )
 
 
 def _average_wheel_angle(solution: SteeringLimitSolution) -> float:
@@ -116,6 +135,77 @@ def _walk_pitman_direction(
     return states
 
 
+def _try_solve_rack(
+    hardpoints: TwoSegmentSteeringHardpoints3D,
+    rack_displacement_mm: float,
+    guess: tuple[float, float],
+) -> TwoSegmentSteeringSolution | None:
+    try:
+        return solve_two_segment_rack_and_pinion_3d_analytic(
+            hardpoints,
+            rack_displacement_mm,
+            guess,
+        )
+    except ValueError as exc:
+        if _is_unreachable_error(exc):
+            return None
+        raise
+
+
+def _refine_rack_limit(
+    hardpoints: TwoSegmentSteeringHardpoints3D,
+    good_displacement_mm: float,
+    good_state: TwoSegmentSteeringSolution,
+    bad_displacement_mm: float,
+    iterations: int,
+) -> tuple[float, TwoSegmentSteeringSolution]:
+    good_displacement = good_displacement_mm
+    bad_displacement = bad_displacement_mm
+    state = good_state
+    for _ in range(iterations):
+        candidate_displacement = 0.5 * (good_displacement + bad_displacement)
+        candidate = _try_solve_rack(
+            hardpoints,
+            candidate_displacement,
+            (state.left_wheel_angle_deg, state.right_wheel_angle_deg),
+        )
+        if candidate is None:
+            bad_displacement = candidate_displacement
+        else:
+            good_displacement = candidate_displacement
+            state = candidate
+    return good_displacement, state
+
+
+def _walk_rack_direction(
+    hardpoints: TwoSegmentSteeringHardpoints3D,
+    direction: float,
+    step_mm: float,
+    max_abs_displacement_mm: float,
+    refinement_steps: int,
+) -> tuple[float, TwoSegmentSteeringSolution]:
+    displacement = 0.0
+    state = solve_two_segment_rack_and_pinion_3d_analytic(hardpoints, displacement)
+    while abs(displacement + direction * step_mm) <= max_abs_displacement_mm:
+        candidate_displacement = displacement + direction * step_mm
+        candidate = _try_solve_rack(
+            hardpoints,
+            candidate_displacement,
+            (state.left_wheel_angle_deg, state.right_wheel_angle_deg),
+        )
+        if candidate is None:
+            return _refine_rack_limit(
+                hardpoints,
+                displacement,
+                state,
+                candidate_displacement,
+                refinement_steps,
+            )
+        displacement = candidate_displacement
+        state = candidate
+    return displacement, state
+
+
 def _try_solve_three_segment(
     geometry: ThreeSegmentInputGeometry,
     left_bellcrank_angle_deg: float,
@@ -177,8 +267,7 @@ def _walk_left_bellcrank_direction(
     states: list[ThreeSegmentSteeringSolution] = []
     last = zero
     while (
-        abs(last.left_bellcrank_angle_deg + direction * step_deg)
-        <= max_abs_angle_deg
+        abs(last.left_bellcrank_angle_deg + direction * step_deg) <= max_abs_angle_deg
     ):
         angle = last.left_bellcrank_angle_deg + direction * step_deg
         guess = (
@@ -276,6 +365,40 @@ def estimate_three_segment_steering_limits(
     )
 
 
+def estimate_rack_and_pinion_steering_limits(
+    hardpoints: TwoSegmentSteeringHardpoints3D,
+    *,
+    step_mm: float = 1.0,
+    max_abs_displacement_mm: float = 250.0,
+    refinement_steps: int = 24,
+) -> RackSteeringTravelLimits:
+    """Estimate the continuous reachable rack-travel range for current geometry."""
+    if step_mm <= 0.0:
+        raise ValueError("rack limit step_mm must be positive")
+    if max_abs_displacement_mm <= 0.0:
+        raise ValueError("rack max_abs_displacement_mm must be positive")
+    negative_displacement, negative_state = _walk_rack_direction(
+        hardpoints,
+        direction=-1.0,
+        step_mm=step_mm,
+        max_abs_displacement_mm=max_abs_displacement_mm,
+        refinement_steps=refinement_steps,
+    )
+    positive_displacement, positive_state = _walk_rack_direction(
+        hardpoints,
+        direction=1.0,
+        step_mm=step_mm,
+        max_abs_displacement_mm=max_abs_displacement_mm,
+        refinement_steps=refinement_steps,
+    )
+    return RackSteeringTravelLimits(
+        minimum_displacement_mm=negative_displacement,
+        maximum_displacement_mm=positive_displacement,
+        minimum_state=negative_state,
+        maximum_state=positive_state,
+    )
+
+
 def _outputs_from_limits(limits: SteeringTravelLimits) -> dict[str, float]:
     return {
         "max_left_turn_left_wheel_angle_deg": limits.left_turn.left_wheel_angle_deg,
@@ -297,3 +420,11 @@ def three_segment_steering_limit_outputs(
 ) -> dict[str, float]:
     """Return scalar output rows for current three-segment steering limits."""
     return _outputs_from_limits(estimate_three_segment_steering_limits(geometry))
+
+
+def rack_and_pinion_steering_limit_outputs(
+    hardpoints: TwoSegmentSteeringHardpoints3D,
+) -> dict[str, float]:
+    """Return roadwheel travel-limit outputs for a rack-and-pinion system."""
+    limits = estimate_rack_and_pinion_steering_limits(hardpoints)
+    return _outputs_from_limits(limits.as_steering_limits())

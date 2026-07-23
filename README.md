@@ -187,6 +187,19 @@ hardpoint format above, edit hardpoint coordinates live, preview top-view
 linkage motion, switch between pitman/left-wheel/right-wheel angle inputs,
 show scalar outputs, and manage multiple output curves.
 
+Launch the unified suspension/steering GUI with the same visualization extra:
+
+```bash
+uv run --extra viz kinematics gui
+```
+
+The suspension page can solve wheel-travel sweeps, manage output curves, and
+export structured Word (`.docx`) reports from the main menu. The report dialog
+can target suspension only, steering only, or a combined suspension-steering
+report, choose which preview/curve images to include, generate chaptered
+content with heading levels, include a Word table of contents, and finish with
+a summary table of kinematic parameter variation.
+
 ### 1. Visualising a geometry at 'design condition'
 
 You can generate a multi-view plot of your suspension geometry to verify the initial 'design condition' defined in your YAML file. This is useful for debugging your geometry definition.

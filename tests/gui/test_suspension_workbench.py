@@ -1,21 +1,27 @@
+import threading
 from pathlib import Path
-from types import SimpleNamespace
-from types import MethodType
+from types import MethodType, SimpleNamespace
 
 import numpy as np
 import pytest
-import threading
 
 from kinematics.core.enums import PointID
-from kinematics.gui.suspension import workbench as suspension_workbench
 from kinematics.gui.suspension import app as suspension_app
+from kinematics.gui.suspension import workbench as suspension_workbench
+from kinematics.gui.suspension.global_sensitivity import MorrisVariableStat
+from kinematics.gui.suspension.reporting import (
+    build_metric_range_rows,
+    export_suspension_report_docx,
+    summarize_suspension_curve,
+)
 from kinematics.gui.suspension.workbench import (
     DEFAULT_CURVE_X,
     DEFAULT_CURVE_Y,
+    OptimizationCancelledError,
     SuspensionCurve,
-    SuspensionOptimizationVariableAnalysisItem,
-    SuspensionOptimizationTarget,
     SuspensionOptimizationPairDeltaConstraint,
+    SuspensionOptimizationTarget,
+    SuspensionOptimizationVariableAnalysisItem,
     SuspensionSweepSettings,
     analyze_suspension_optimization_variables,
     build_wheel_travel_sweep,
@@ -24,13 +30,11 @@ from kinematics.gui.suspension.workbench import (
     load_suspension_project,
     optimize_suspension_hardpoints,
     solve_suspension_project,
-    suspension_metric_internal_to_gui,
-    suspension_pair_delta_constraint_residuals,
-    suspension_optimization_residuals,
     supported_suspension_type_keys,
+    suspension_metric_internal_to_gui,
+    suspension_optimization_residuals,
+    suspension_pair_delta_constraint_residuals,
 )
-from kinematics.gui.suspension.workbench import OptimizationCancelledError
-from kinematics.gui.suspension.global_sensitivity import MorrisVariableStat
 
 
 def test_build_wheel_travel_sweep_targets_wheel_center_z() -> None:
@@ -82,6 +86,78 @@ def test_solve_suspension_project_aliases_toe_to_roadwheel_angle(
     )
 
 
+def test_summarize_suspension_curve_reports_trend_and_range() -> None:
+    rows = [
+        {"wheel_travel_mm": -10.0, "camber_deg": -1.5},
+        {"wheel_travel_mm": 0.0, "camber_deg": -1.0},
+        {"wheel_travel_mm": 10.0, "camber_deg": -0.25},
+    ]
+
+    summary = summarize_suspension_curve(
+        rows,
+        x_output="wheel_travel_mm",
+        y_output="camber_deg",
+        label="Camber Sweep",
+    )
+
+    assert summary is not None
+    assert summary.trend == "increasing"
+    assert summary.has_turning_point is False
+    assert summary.crosses_zero is False
+    assert "Camber Sweep uses 3 solved steps" in summary.description()
+    assert "Camber [deg] ranges from -1.5 to -0.25" in summary.description()
+
+
+def test_build_metric_range_rows_filters_to_available_numeric_outputs() -> None:
+    rows = [
+        {
+            "camber_deg": -1.5,
+            "toe_deg": 0.2,
+            "solver_max_residual": 1e-7,
+        },
+        {
+            "camber_deg": -0.5,
+            "toe_deg": 0.4,
+            "solver_max_residual": 2e-7,
+        },
+    ]
+
+    ranges = build_metric_range_rows(rows)
+
+    assert ("Camber [deg]", -1.5, -0.5) in ranges
+    assert ("Toe [deg]", 0.2, 0.4) in ranges
+    assert ("Solver max residual", 1e-07, 2e-07) in ranges
+
+
+def test_export_suspension_report_docx_writes_word_file(
+    double_wishbone_geometry_file: Path,
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("docx")
+    project = load_suspension_project(double_wishbone_geometry_file)
+    project.settings = SuspensionSweepSettings(start=-10.0, stop=20.0, steps=4)
+    project.curves = [
+        SuspensionCurve(
+            x_output="wheel_travel_mm",
+            y_output="camber_deg",
+            label="Camber vs Travel",
+        )
+    ]
+    result = solve_suspension_project(project)
+    report_path = tmp_path / "suspension-report.docx"
+
+    export_suspension_report_docx(
+        report_path,
+        project=project,
+        sweep=result,
+        curves=[("wheel_travel_mm", "camber_deg", "Camber vs Travel")],
+        source_path=double_wishbone_geometry_file,
+    )
+
+    assert report_path.exists()
+    assert report_path.stat().st_size > 0
+
+
 def test_suspension_metric_internal_to_gui_flips_coordinate_outputs_only() -> None:
     assert suspension_metric_internal_to_gui("svic_x_mm", 120.0) == pytest.approx(
         -120.0
@@ -89,15 +165,15 @@ def test_suspension_metric_internal_to_gui_flips_coordinate_outputs_only() -> No
     assert suspension_metric_internal_to_gui("svsa_length_mm", 320.0) == pytest.approx(
         -320.0
     )
-    assert suspension_metric_internal_to_gui("fvic_y_mm", 45.0) == pytest.approx(
-        -45.0
-    )
+    assert suspension_metric_internal_to_gui("fvic_y_mm", 45.0) == pytest.approx(-45.0)
     assert suspension_metric_internal_to_gui("fvsa_length_mm", -210.0) == pytest.approx(
         210.0
     )
-    assert suspension_metric_internal_to_gui("camber_deg", -1.5) == pytest.approx(
-        -1.5
-    )
+    assert suspension_metric_internal_to_gui(
+        "roll_center_lateral_offset_mm",
+        40.0,
+    ) == pytest.approx(-40.0)
+    assert suspension_metric_internal_to_gui("camber_deg", -1.5) == pytest.approx(-1.5)
     assert suspension_metric_internal_to_gui("toe_deg", 0.25) == pytest.approx(0.25)
 
 
@@ -111,16 +187,34 @@ def test_solve_suspension_project_converts_coordinate_outputs_to_gui_convention(
     suspension = project.build_suspension()
     verified_any = False
     for row, state in zip(result.rows, result.states):
-        internal_metrics = suspension_workbench.compute_metrics_for_state_from_suspension(
-            state, suspension
+        internal_metrics = (
+            suspension_workbench.compute_metrics_for_state_from_suspension(
+                state, suspension
+            )
         )
-        for key in ("svic_x_mm", "fvic_y_mm", "svsa_length_mm", "fvsa_length_mm"):
+        for key in (
+            "svic_x_mm",
+            "fvic_y_mm",
+            "svsa_length_mm",
+            "fvsa_length_mm",
+            "roll_center_lateral_offset_mm",
+        ):
             internal_value = internal_metrics[key]
             if internal_value is None:
                 assert row[key] is None
                 continue
             verified_any = True
             assert row[key] == pytest.approx(-float(internal_value))
+        for key in (
+            "roll_center_height_mm",
+            "anti_pitch_pct",
+            "track_change_mm",
+        ):
+            internal_value = internal_metrics[key]
+            if internal_value is None:
+                assert row[key] is None
+                continue
+            assert row[key] == pytest.approx(float(internal_value))
         assert row["camber_deg"] == pytest.approx(float(internal_metrics["camber_deg"]))
 
     assert verified_any is True
@@ -325,9 +419,12 @@ def test_optimize_suspension_hardpoints_reduces_curve_delta_error(
     assert result.success
     assert result.final_cost < result.initial_cost
     assert any(
-        abs(result.applied_values[name] - project.hardpoints[PointID[name.rsplit("_", 1)[0]]][
-            {"x": 0, "y": 1, "z": 2}[name.rsplit("_", 1)[1]]
-        ])
+        abs(
+            result.applied_values[name]
+            - project.hardpoints[PointID[name.rsplit("_", 1)[0]]][
+                {"x": 0, "y": 1, "z": 2}[name.rsplit("_", 1)[1]]
+            ]
+        )
         > 1e-6
         for name in result.applied_values
     )
@@ -414,7 +511,9 @@ def test_analyze_suspension_optimization_variables_can_be_cancelled(
     monkeypatch.setattr(
         suspension_workbench,
         "run_morris_screening",
-        lambda **kwargs: (_ for _ in ()).throw(AssertionError("should stop before morris")),
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("should stop before morris")
+        ),
     )
 
     with pytest.raises(OptimizationCancelledError):
@@ -614,7 +713,10 @@ def test_optimize_suspension_hardpoints_reports_value_range_summary(
 
     assert result.target_summaries[0].target_mode == "value_range"
     assert result.target_summaries[0].target_delta == pytest.approx(0.0)
-    assert result.target_summaries[0].final_value <= result.target_summaries[0].initial_value
+    assert (
+        result.target_summaries[0].final_value
+        <= result.target_summaries[0].initial_value
+    )
 
 
 def test_optimize_suspension_hardpoints_reports_absolute_value_summary(
@@ -644,7 +746,10 @@ def test_optimize_suspension_hardpoints_reports_absolute_value_summary(
 
     assert result.target_summaries[0].target_mode == "absolute_value"
     assert result.target_summaries[0].target_delta == pytest.approx(0.0)
-    assert result.target_summaries[0].final_value <= result.target_summaries[0].initial_value
+    assert (
+        result.target_summaries[0].final_value
+        <= result.target_summaries[0].initial_value
+    )
 
 
 def test_optimize_suspension_hardpoints_accepts_pair_delta_constraints(
@@ -830,7 +935,9 @@ def test_analyze_suspension_optimization_variables_keeps_recommended_names_in_sy
     monkeypatch.setattr(
         suspension_workbench,
         "solve_suspension_project",
-        lambda _project: SimpleNamespace(rows=[{"camber_deg": 0.0}, {"camber_deg": 0.0}]),
+        lambda _project: SimpleNamespace(
+            rows=[{"camber_deg": 0.0}, {"camber_deg": 0.0}]
+        ),
     )
     monkeypatch.setattr(
         suspension_workbench,
@@ -909,17 +1016,24 @@ def test_analyze_suspension_optimization_variables_validates_recommended_subset(
     monkeypatch.setattr(
         suspension_workbench,
         "solve_suspension_project",
-        lambda _project: SimpleNamespace(rows=[{"camber_deg": 0.0}, {"camber_deg": 0.0}]),
+        lambda _project: SimpleNamespace(
+            rows=[{"camber_deg": 0.0}, {"camber_deg": 0.0}]
+        ),
     )
     monkeypatch.setattr(
         suspension_workbench,
         "run_morris_screening",
         lambda **kwargs: (
             [
-                MorrisVariableStat(variable_index=index, mu_star=1.0 - index * 0.1, sigma=0.0)
+                MorrisVariableStat(
+                    variable_index=index, mu_star=1.0 - index * 0.1, sigma=0.0
+                )
                 for index in range(len(variable_names))
             ],
-            np.asarray([1.0 - index * 0.1 for index in range(len(variable_names))], dtype=np.float64),
+            np.asarray(
+                [1.0 - index * 0.1 for index in range(len(variable_names))],
+                dtype=np.float64,
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -948,7 +1062,13 @@ def test_analyze_suspension_optimization_variables_validates_recommended_subset(
         max_rounds=6,
         convergence_tolerance=1e-3,
     ):
-        del current_project, targets, variable_delta_limit, solver_mode, pair_delta_constraints
+        del (
+            current_project,
+            targets,
+            variable_delta_limit,
+            solver_mode,
+            pair_delta_constraints,
+        )
         del progress_callback, cancel_event, max_rounds, convergence_tolerance
         calls.append(tuple(variable_names))
         cost_by_size = {
@@ -1083,9 +1203,7 @@ def test_render_optimization_output_writes_copyable_text() -> None:
         ]
     )
 
-    inserted_text = "".join(
-        args[1] for action, args in recorded if action == "insert"
-    )
+    inserted_text = "".join(args[1] for action, args in recorded if action == "insert")
     assert "Heading" in inserted_text
     assert "Summary line" in inserted_text
     assert "Recommended line" in inserted_text
@@ -1124,36 +1242,38 @@ def test_copy_optimization_output_flushes_clipboard_every_time() -> None:
 
 def test_select_recommended_optimization_variables_updates_checkboxes() -> None:
     page = object.__new__(suspension_app.SuspensionWorkbenchPage)
-    page.last_optimization_analysis = suspension_workbench.SuspensionOptimizationVariableAnalysisResult(
-        items=(
-            suspension_workbench.SuspensionOptimizationVariableAnalysisItem(
-                variable_name="TRACKROD_OUTBOARD_z",
-                morris_mu_star=0.2,
-                morris_sigma=0.01,
-                sobol_first_order=0.1,
-                sobol_total=0.2,
-                recommendation="recommended",
-                detail="High constrained global influence for current targets",
+    page.last_optimization_analysis = (
+        suspension_workbench.SuspensionOptimizationVariableAnalysisResult(
+            items=(
+                suspension_workbench.SuspensionOptimizationVariableAnalysisItem(
+                    variable_name="TRACKROD_OUTBOARD_z",
+                    morris_mu_star=0.2,
+                    morris_sigma=0.01,
+                    sobol_first_order=0.1,
+                    sobol_total=0.2,
+                    recommendation="recommended",
+                    detail="High constrained global influence for current targets",
+                ),
+                suspension_workbench.SuspensionOptimizationVariableAnalysisItem(
+                    variable_name="TRACKROD_INBOARD_z",
+                    morris_mu_star=0.001,
+                    morris_sigma=0.0,
+                    sobol_first_order=None,
+                    sobol_total=None,
+                    recommendation="suppress",
+                    detail="Low constrained global influence in Morris/Sobol screening",
+                ),
             ),
-            suspension_workbench.SuspensionOptimizationVariableAnalysisItem(
-                variable_name="TRACKROD_INBOARD_z",
-                morris_mu_star=0.001,
-                morris_sigma=0.0,
-                sobol_first_order=None,
-                sobol_total=None,
-                recommendation="suppress",
-                detail="Low constrained global influence in Morris/Sobol screening",
-            ),
-        ),
-        recommended_variable_names=("TRACKROD_OUTBOARD_z",),
-        residual_size=10,
-        variable_count=3,
-        constraint_rank=0,
-        effective_rank=3,
-        morris_trajectories=6,
-        sobol_base_samples=8,
-        sobol_direction_count=2,
-        method="constraint_parameterization+morris+sobol",
+            recommended_variable_names=("TRACKROD_OUTBOARD_z",),
+            residual_size=10,
+            variable_count=3,
+            constraint_rank=0,
+            effective_rank=3,
+            morris_trajectories=6,
+            sobol_base_samples=8,
+            sobol_direction_count=2,
+            method="constraint_parameterization+morris+sobol",
+        )
     )
 
     class FakeVar:
@@ -1275,14 +1395,12 @@ def test_bulk_optimization_variable_selection_helpers() -> None:
 def test_optimization_variable_style_name_groups_axes_by_hardpoint() -> None:
     page = object.__new__(suspension_app.SuspensionWorkbenchPage)
 
-    assert (
-        page._optimization_variable_style_name("TRACKROD_OUTBOARD_x")
-        == page._optimization_variable_style_name("TRACKROD_OUTBOARD_z")
-    )
-    assert (
-        page._optimization_variable_style_name("TRACKROD_OUTBOARD_x")
-        != page._optimization_variable_style_name("TRACKROD_INBOARD_x")
-    )
+    assert page._optimization_variable_style_name(
+        "TRACKROD_OUTBOARD_x"
+    ) == page._optimization_variable_style_name("TRACKROD_OUTBOARD_z")
+    assert page._optimization_variable_style_name(
+        "TRACKROD_OUTBOARD_x"
+    ) != page._optimization_variable_style_name("TRACKROD_INBOARD_x")
 
 
 def test_format_optimization_summary_line_uses_curve_value_target_label() -> None:
@@ -1362,7 +1480,7 @@ def test_default_carrier_project_solves_preview_state_without_metric_errors() ->
     assert "svic_x_mm" in result.rows[0]
 
 
-def test_default_carrier_project_keeps_steering_axis_cross_distances_through_sweep() -> None:
+def test_carrier_project_keeps_steering_axis_cross_distances_through_sweep() -> None:
     project = create_default_suspension_project("double_wishbone_carrier")
     project.settings = SuspensionSweepSettings(start=-40.0, stop=40.0, steps=9)
 

@@ -45,6 +45,12 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         calculate_fvsa_length,
         calculate_svsa_length,
     )
+    from kinematics.metrics.vehicle_geometry import (
+        calculate_anti_pitch_pct,
+        calculate_roll_center_height,
+        calculate_roll_center_lateral_offset,
+        calculate_track_change,
+    )
 
     def _ic_coord(attr: str, axis: Axis) -> Callable[["MetricContext"], float | None]:
         def extract(ctx: "MetricContext") -> float | None:
@@ -66,6 +72,13 @@ def _build_default_corner_metrics() -> tuple[MetricDefinition, ...]:
         MetricDefinition("fvic_y_mm", _ic_coord("front_view_ic", Axis.Y)),
         MetricDefinition("fvic_z_mm", _ic_coord("front_view_ic", Axis.Z)),
         MetricDefinition("fvsa_length_mm", calculate_fvsa_length),
+        MetricDefinition("roll_center_height_mm", calculate_roll_center_height),
+        MetricDefinition(
+            "roll_center_lateral_offset_mm",
+            calculate_roll_center_lateral_offset,
+        ),
+        MetricDefinition("anti_pitch_pct", calculate_anti_pitch_pct),
+        MetricDefinition("track_change_mm", calculate_track_change),
     )
 
 

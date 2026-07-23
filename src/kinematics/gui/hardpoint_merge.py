@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Mapping
 
 import numpy as np
 
@@ -64,6 +64,13 @@ STEERING_EXPORT_ALIASES: dict[str, str] = {
     "bellcrank_pivot": "bellcrank_pivot",
     "bellcrank_center_link_pickup": "bellcrank_center_link_pickup",
     "bellcrank_tie_rod_pickup": "bellcrank_tie_rod_pickup",
+}
+
+SUSPENSION_TO_STEERING_HARDPOINT_SOURCES: dict[str, tuple[str, ...]] = {
+    "wheel_kingpin_lower": ("kingpin_lower", "lower_ball_joint"),
+    "wheel_kingpin_upper": ("kingpin_upper", "upper_ball_joint"),
+    "wheel_tie_rod_pickup": ("tie_rod_outer",),
+    "pitman_output": ("tie_rod_inner",),
 }
 
 
@@ -130,6 +137,98 @@ def suspension_export_hardpoints(
     return items
 
 
+def steering_rows_from_suspension_hardpoints(
+    hardpoints: Mapping[PointID, np.ndarray],
+    *,
+    wheel_center: np.ndarray,
+    existing_rows: list[SteeringHardpointRow],
+) -> list[SteeringHardpointRow]:
+    """Map a suspension corner into editable two-segment steering rows.
+
+    Suspension export coordinates already use the steering GUI convention
+    (rear/right/up).  The derived wheel center is supplied separately because
+    it is not a suspension hardpoint.
+    """
+    suspension_items = suspension_export_hardpoints(dict(hardpoints))
+    positions_by_export_name = {
+        item.export_name: item.position for item in suspension_items
+    }
+    missing = sorted(
+        steering_name
+        for steering_name, source_names in (
+            SUSPENSION_TO_STEERING_HARDPOINT_SOURCES.items()
+        )
+        if not any(name in positions_by_export_name for name in source_names)
+    )
+    if missing:
+        raise ValueError(
+            "Suspension is missing steering hardpoints: " + ", ".join(missing)
+        )
+
+    imported_positions = {
+        steering_name: positions_by_export_name[
+            next(
+                source_name
+                for source_name in source_names
+                if source_name in positions_by_export_name
+            )
+        ]
+        for steering_name, source_names in (
+            SUSPENSION_TO_STEERING_HARDPOINT_SOURCES.items()
+        )
+    }
+    imported_positions["wheel_center"] = np.asarray(
+        [-float(wheel_center[0]), -float(wheel_center[1]), float(wheel_center[2])],
+        dtype=np.float64,
+    )
+
+    rows: list[SteeringHardpointRow] = []
+    remaining_positions = dict(imported_positions)
+    for row in existing_rows:
+        position = remaining_positions.pop(row.name, None)
+        if position is None:
+            rows.append(
+                SteeringHardpointRow(
+                    category=row.category,
+                    name=row.name,
+                    x=float(row.x),
+                    y=float(row.y),
+                    z=float(row.z),
+                )
+            )
+            continue
+        rows.append(
+            SteeringHardpointRow(
+                category=row.category,
+                name=row.name,
+                x=float(position[0]),
+                y=float(position[1]),
+                z=float(position[2]),
+            )
+        )
+
+    for name in (
+        "wheel_kingpin_lower",
+        "wheel_kingpin_upper",
+        "wheel_center",
+        "wheel_tie_rod_pickup",
+        "pitman_output",
+    ):
+        position = remaining_positions.pop(name, None)
+        if position is None:
+            continue
+        rows.append(
+            SteeringHardpointRow(
+                category="symmetric",
+                name=name,
+                x=float(position[0]),
+                y=float(position[1]),
+                z=float(position[2]),
+            )
+        )
+    return rows
+
+
 def steering_export_hardpoints(
     rows: list[SteeringHardpointRow],
 ) -> list[ExportHardpoint]:
@@ -157,7 +256,10 @@ def detect_hardpoint_conflicts(
     for export_name in sorted(set(suspension_by_name) & set(steering_by_name)):
         suspension_item = suspension_by_name[export_name]
         steering_item = steering_by_name[export_name]
-        if np.linalg.norm(suspension_item.position - steering_item.position) <= EPS_GEOMETRIC:
+        if (
+            np.linalg.norm(suspension_item.position - steering_item.position)
+            <= EPS_GEOMETRIC
+        ):
             continue
         conflicts.append(
             HardpointConflict(

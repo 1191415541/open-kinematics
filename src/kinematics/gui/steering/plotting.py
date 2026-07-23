@@ -109,6 +109,25 @@ def _draw_pitman(
     ax.scatter(pivot[0], pivot[1], color=color, alpha=alpha, s=28, zorder=5)
 
 
+def _draw_rack(
+    ax: Axes,
+    left_inner: Vec2,
+    right_inner: Vec2,
+    alpha: float,
+) -> None:
+    """Draw the lateral rack between the two inner tie-rod joints."""
+    color = PREVIEW_GEOMETRY_COLORS["pitman"]
+    _draw_segment(ax, left_inner, right_inner, color, alpha)
+    ax.scatter(
+        [left_inner[0], right_inner[0]],
+        [left_inner[1], right_inner[1]],
+        color=color,
+        alpha=alpha,
+        s=28,
+        zorder=5,
+    )
+
+
 def _draw_segment(ax: Axes, start: Vec2, end: Vec2, color: str, alpha: float) -> None:
     ax.plot(
         [start[0], end[0]],
@@ -229,6 +248,128 @@ def draw_steering_preview(
         wheel_width=wheel_width,
     )
     _draw_state(
+        ax,
+        hardpoints,
+        current_state,
+        alpha=1.0,
+        wheel_radius=wheel_radius,
+        wheel_width=wheel_width,
+    )
+    ax.figure.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
+    ax.set_position([0.0, 0.0, 1.0, 1.0])
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.set_axis_off()
+    ax.format_coord = lambda _x, _y: ""
+    fit_steering_preview(ax)
+    if preserve_view and had_data:
+        ax.set_xlim(previous_xlim)
+        ax.set_ylim(previous_ylim)
+
+
+def _draw_rack_and_pinion_state(
+    ax: Axes,
+    hardpoints: TwoSegmentSteeringHardpoints3D,
+    state: TwoSegmentSteeringSolution,
+    alpha: float,
+    wheel_radius: float,
+    wheel_width: float,
+) -> None:
+    geometry = hardpoints.to_2d_geometry()
+    _draw_wheel(
+        ax,
+        state.left_wheel_center,
+        state.left_wheel_angle_deg,
+        alpha,
+        wheel_radius,
+        wheel_width,
+    )
+    _draw_wheel(
+        ax,
+        state.right_wheel_center,
+        state.right_wheel_angle_deg,
+        alpha,
+        wheel_radius,
+        wheel_width,
+    )
+    _draw_rack(ax, state.pitman_left_output, state.pitman_right_output, alpha)
+    _draw_segment(
+        ax,
+        state.pitman_left_output,
+        state.left_tie_rod_pickup,
+        PREVIEW_GEOMETRY_COLORS["tie_rod"],
+        alpha,
+    )
+    _draw_segment(
+        ax,
+        state.pitman_right_output,
+        state.right_tie_rod_pickup,
+        PREVIEW_GEOMETRY_COLORS["tie_rod"],
+        alpha,
+    )
+    _draw_segment(
+        ax,
+        geometry.left_wheel.kingpin,
+        state.left_tie_rod_pickup,
+        PREVIEW_GEOMETRY_COLORS["knuckle_arm"],
+        alpha,
+    )
+    _draw_segment(
+        ax,
+        geometry.right_wheel.kingpin,
+        state.right_tie_rod_pickup,
+        PREVIEW_GEOMETRY_COLORS["knuckle_arm"],
+        alpha,
+    )
+    _draw_segment(
+        ax,
+        geometry.left_wheel.kingpin,
+        state.left_wheel_center,
+        PREVIEW_GEOMETRY_COLORS["wheel_radius"],
+        alpha,
+    )
+    _draw_segment(
+        ax,
+        geometry.right_wheel.kingpin,
+        state.right_wheel_center,
+        PREVIEW_GEOMETRY_COLORS["wheel_radius"],
+        alpha,
+    )
+    for wheel in (geometry.left_wheel, geometry.right_wheel):
+        ax.scatter(
+            wheel.kingpin[0],
+            wheel.kingpin[1],
+            marker="x",
+            color=PREVIEW_GEOMETRY_COLORS["kingpin"],
+            alpha=alpha,
+            s=42,
+            zorder=6,
+        )
+
+
+def draw_rack_and_pinion_steering_preview(
+    ax: Axes,
+    hardpoints: TwoSegmentSteeringHardpoints3D,
+    design_state: TwoSegmentSteeringSolution,
+    current_state: TwoSegmentSteeringSolution,
+    *,
+    preserve_view: bool = False,
+    wheel_radius: float = WHEEL_RADIUS,
+    wheel_width: float = WHEEL_WIDTH,
+) -> None:
+    """Draw design and current rack-and-pinion top-view steering geometry."""
+    previous_xlim = ax.get_xlim()
+    previous_ylim = ax.get_ylim()
+    had_data = ax.has_data()
+    ax.clear()
+    _draw_rack_and_pinion_state(
+        ax,
+        hardpoints,
+        design_state,
+        alpha=0.28,
+        wheel_radius=wheel_radius,
+        wheel_width=wheel_width,
+    )
+    _draw_rack_and_pinion_state(
         ax,
         hardpoints,
         current_state,

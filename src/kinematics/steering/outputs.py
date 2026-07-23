@@ -14,6 +14,8 @@ from kinematics.steering.geometry import (
 STEERING_OUTPUT_NAMES = (
     "input_value",
     "pitman_angle_deg",
+    "pinion_angle_deg",
+    "rack_displacement_mm",
     "left_bellcrank_angle_deg",
     "right_bellcrank_angle_deg",
     "left_wheel_angle_deg",
@@ -83,6 +85,8 @@ def outputs_from_solution(
     outputs = {
         "input_value": float(input_value),
         "pitman_angle_deg": solution.pitman_angle_deg,
+        "pinion_angle_deg": 0.0,
+        "rack_displacement_mm": 0.0,
         "left_bellcrank_angle_deg": 0.0,
         "right_bellcrank_angle_deg": 0.0,
         "left_wheel_angle_deg": solution.left_wheel_angle_deg,
@@ -117,6 +121,8 @@ def outputs_from_three_segment_solution(
     outputs = {
         "input_value": float(input_value),
         "pitman_angle_deg": 0.0,
+        "pinion_angle_deg": 0.0,
+        "rack_displacement_mm": 0.0,
         "left_bellcrank_angle_deg": solution.left_bellcrank_angle_deg,
         "right_bellcrank_angle_deg": solution.right_bellcrank_angle_deg,
         "left_wheel_angle_deg": solution.left_wheel_angle_deg,

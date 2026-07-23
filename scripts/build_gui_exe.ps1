@@ -34,6 +34,7 @@ if (-not (Test-Path $PythonPath)) {
     pyyaml `
     cma `
     matplotlib `
+    python-docx `
     tksheet
 & $PythonPath -m pip install --no-deps --editable .
 

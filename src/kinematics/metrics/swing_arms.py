@@ -7,15 +7,13 @@ center positions and the contact patch center.
 Definitions and sign conventions:
 
 SVSA (Side-View Swing Arm):
-    The horizontal (X-axis) distance from the contact patch center to
-    the side-view instant center (SVIC).
+    The signed Euclidean distance in the XZ plane from the contact patch
+    center to the side-view instant center (SVIC).
 
-        SVSA = SVIC_X - ContactPatch_X
+        SVSA = +/- sqrt((SVIC_X - CP_X)^2 + (SVIC_Z - CP_Z)^2)
 
-    Positive when the SVIC is ahead of (+X relative to) the contact
-    patch, which is the typical case for a conventional double-wishbone
-    layout.  Negative values indicate the SVIC is behind the contact
-    patch.
+    Positive when the SVIC is ahead of (+X relative to) the contact patch;
+    negative values indicate that it is behind.
 
 FVSA (Front-View Swing Arm):
     The Euclidean distance in the YZ plane from the contact patch center
@@ -47,9 +45,10 @@ def calculate_svsa_length(ctx: MetricContext) -> float | None:
     """
     Side-view swing arm length in mm.
 
-    The SVSA length is the horizontal distance (in X) from the contact
-    patch center to the side-view instant center. A positive value means
-    the IC is ahead of the contact patch; negative means behind.
+    The SVSA length is the signed Euclidean distance in the side-view XZ
+    plane from the contact patch center to the side-view instant center. A
+    positive value means the IC is ahead of the contact patch; negative
+    means behind.
 
     Returns None if the SVIC is undefined.
     """
@@ -57,16 +56,18 @@ def calculate_svsa_length(ctx: MetricContext) -> float | None:
     if svic is None:
         return None
     cp = ctx.contact_patch_center
-    return float(svic[Axis.X] - cp[Axis.X])
+    dx = float(svic[Axis.X] - cp[Axis.X])
+    dz = float(svic[Axis.Z] - cp[Axis.Z])
+    return float(np.hypot(dx, dz) * np.sign(dx))
 
 
 def calculate_fvsa_length(ctx: MetricContext) -> float | None:
     """
     Front-view swing arm length in mm.
 
-    The FVSA length is the lateral distance (in Y) from the contact
-    patch center to the front-view instant center. The sign follows
-    the vehicle Y axis (positive = towards vehicle left).
+    The FVSA length is the signed Euclidean distance in the front-view
+    YZ plane from the contact patch center to the front-view instant
+    center. Positive values place the instant center inboard.
 
     Returns None if the FVIC is undefined.
     """

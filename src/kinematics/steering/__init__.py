@@ -8,8 +8,8 @@ relationships are required.
 
 from kinematics.steering.csv_loader import load_two_segment_steering_hardpoints_csv
 from kinematics.steering.geometry import (
-    BellcrankHardpoints3D,
     BellcrankGeometry2D,
+    BellcrankHardpoints3D,
     PitmanArmGeometry2D,
     PitmanArmHardpoints3D,
     SteeringCoordinateSystem,
@@ -41,12 +41,15 @@ from kinematics.steering.three_segment import (
 from kinematics.steering.two_segment import (
     compare_two_segment_2d_and_3d,
     compare_two_segment_3d_analytic_and_numeric,
+    pinion_angle_from_rack_displacement,
+    rack_displacement_from_pinion_angle,
     solve_two_segment_from_left_wheel_angle,
     solve_two_segment_from_left_wheel_angle_3d,
     solve_two_segment_from_left_wheel_angle_3d_analytic,
     solve_two_segment_from_right_wheel_angle,
     solve_two_segment_from_right_wheel_angle_3d,
     solve_two_segment_from_right_wheel_angle_3d_analytic,
+    solve_two_segment_rack_and_pinion_3d_analytic,
     solve_two_segment_steering,
     solve_two_segment_steering_3d,
     solve_two_segment_steering_3d_analytic,
@@ -69,6 +72,8 @@ __all__ = [
     "TwoSegmentSteeringGeometry",
     "TwoSegmentSteeringSolution",
     "compare_two_segment_2d_and_3d",
+    "pinion_angle_from_rack_displacement",
+    "rack_displacement_from_pinion_angle",
     "WheelSteeringHardpoints3D",
     "WheelSteeringGeometry2D",
     "load_two_segment_steering_hardpoints_csv",
@@ -89,6 +94,7 @@ __all__ = [
     "solve_two_segment_from_right_wheel_angle",
     "solve_two_segment_from_right_wheel_angle_3d",
     "solve_two_segment_from_right_wheel_angle_3d_analytic",
+    "solve_two_segment_rack_and_pinion_3d_analytic",
     "solve_two_segment_steering",
     "solve_two_segment_steering_3d",
     "solve_two_segment_steering_3d_analytic",

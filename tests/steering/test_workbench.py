@@ -188,6 +188,40 @@ def test_solve_project_supports_all_input_modes():
     np.testing.assert_allclose(right_outputs["pitman_angle_deg"], 8.0, atol=1e-8)
 
 
+def test_rack_and_pinion_project_modes_produce_the_same_state():
+    project = default_steering_project()
+    project.pinion_pitch_radius_mm = 20.0
+    rack_displacement_mm = 2.0
+
+    project.input_mode = "rack_displacement"
+    project.input_value = rack_displacement_mm
+    rack_solution, rack_outputs = solve_steering_project(project, include_limits=False)
+
+    project.input_mode = "pinion_angle"
+    project.input_value = math.degrees(
+        rack_displacement_mm / project.pinion_pitch_radius_mm
+    )
+    pinion_solution, pinion_outputs = solve_steering_project(
+        project,
+        include_limits=False,
+    )
+
+    np.testing.assert_allclose(
+        pinion_solution.left_wheel_angle_deg,
+        rack_solution.left_wheel_angle_deg,
+        atol=1e-10,
+    )
+    np.testing.assert_allclose(
+        pinion_solution.right_wheel_angle_deg,
+        rack_solution.right_wheel_angle_deg,
+        atol=1e-10,
+    )
+    np.testing.assert_allclose(
+        pinion_outputs["rack_displacement_mm"], rack_displacement_mm
+    )
+    np.testing.assert_allclose(rack_outputs["pinion_angle_deg"], project.input_value)
+
+
 def test_two_segment_project_outputs_follow_three_dimensional_analytic_solver() -> None:
     project = default_steering_project()
     project.hardpoints[0].x = -10.311
@@ -405,9 +439,7 @@ def test_solve_project_outputs_ackermann_rate_from_wheelbase():
 
     _, outputs = solve_steering_project(project)
 
-    actual_ackerman = (
-        outputs["right_wheel_angle_deg"] - outputs["left_wheel_angle_deg"]
-    )
+    actual_ackerman = outputs["right_wheel_angle_deg"] - outputs["left_wheel_angle_deg"]
     inner_angle_deg = max(
         abs(outputs["left_wheel_angle_deg"]),
         abs(outputs["right_wheel_angle_deg"]),
@@ -437,9 +469,7 @@ def test_three_segment_project_outputs_ackermann_rate_from_wheelbase():
 
     _, outputs = solve_steering_project(project)
 
-    actual_ackerman = (
-        outputs["right_wheel_angle_deg"] - outputs["left_wheel_angle_deg"]
-    )
+    actual_ackerman = outputs["right_wheel_angle_deg"] - outputs["left_wheel_angle_deg"]
     inner_angle_deg = max(
         abs(outputs["left_wheel_angle_deg"]),
         abs(outputs["right_wheel_angle_deg"]),
@@ -529,8 +559,7 @@ def test_three_segment_sweep_skips_unreachable_wheel_angle_samples():
     assert rows[0]["input_value"] > project.sweep_min
     assert rows[-1]["input_value"] < project.sweep_max
     assert all(
-        abs(row["left_wheel_angle_deg"] - row["input_value"]) <= 1e-6
-        for row in rows
+        abs(row["left_wheel_angle_deg"] - row["input_value"]) <= 1e-6 for row in rows
     )
 
 

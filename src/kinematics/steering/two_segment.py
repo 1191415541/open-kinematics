@@ -61,9 +61,7 @@ def _circle_intersections(
 
     axis = delta / center_distance
     along = (
-        radius_a * radius_a
-        - radius_b * radius_b
-        + center_distance * center_distance
+        radius_a * radius_a - radius_b * radius_b + center_distance * center_distance
     ) / (2.0 * center_distance)
     height_sq = radius_a * radius_a - along * along
     height = float(np.sqrt(max(0.0, height_sq)))
@@ -295,9 +293,7 @@ def _pick_angle_candidate(
         raise ValueError("No valid steering arm position for this pitman angle")
     return min(
         candidates,
-        key=lambda candidate: abs(
-            _normalize_angle_rad(candidate - initial_guess_rad)
-        ),
+        key=lambda candidate: abs(_normalize_angle_rad(candidate - initial_guess_rad)),
     )
 
 
@@ -460,13 +456,11 @@ def solve_two_segment_steering_3d_analytic(
         tie_rod_length=left_design_length,
         initial_guess_rad=float(initial_guess[0]),
     )
-    right_angle_rad, right_center_3d, right_pickup_3d = (
-        _solve_wheel_pickup_3d_analytic(
-            wheel=hardpoints.right_wheel,
-            pitman_output=pitman_outputs_3d[1],
-            tie_rod_length=right_design_length,
-            initial_guess_rad=float(initial_guess[1]),
-        )
+    right_angle_rad, right_center_3d, right_pickup_3d = _solve_wheel_pickup_3d_analytic(
+        wheel=hardpoints.right_wheel,
+        pitman_output=pitman_outputs_3d[1],
+        tie_rod_length=right_design_length,
+        initial_guess_rad=float(initial_guess[1]),
     )
 
     left_residual = _tie_rod_residual_3d(
@@ -501,6 +495,106 @@ def solve_two_segment_steering_3d_analytic(
         right_tie_rod_pickup_3d=right_pickup_3d,
         pitman_left_output_3d=pitman_outputs_3d[0],
         pitman_right_output_3d=pitman_outputs_3d[1],
+    )
+
+
+def rack_displacement_from_pinion_angle(
+    pinion_angle_deg: float,
+    pinion_pitch_radius_mm: float,
+) -> float:
+    """Return rack travel for a no-slip pinion rotation."""
+    if pinion_pitch_radius_mm <= EPS_GEOMETRIC:
+        raise ValueError("Pinion pitch radius must be positive")
+    return float(np.deg2rad(pinion_angle_deg) * pinion_pitch_radius_mm)
+
+
+def pinion_angle_from_rack_displacement(
+    rack_displacement_mm: float,
+    pinion_pitch_radius_mm: float,
+) -> float:
+    """Return the no-slip pinion rotation needed for a rack displacement."""
+    if pinion_pitch_radius_mm <= EPS_GEOMETRIC:
+        raise ValueError("Pinion pitch radius must be positive")
+    return float(np.rad2deg(rack_displacement_mm / pinion_pitch_radius_mm))
+
+
+def solve_two_segment_rack_and_pinion_3d_analytic(
+    hardpoints: TwoSegmentSteeringHardpoints3D,
+    rack_displacement_mm: float,
+    initial_guess_deg: Sequence[float] = (0.0, 0.0),
+    residual_tolerance: float = 1e-6,
+) -> TwoSegmentSteeringSolution:
+    """Solve a two-segment steering system driven by lateral rack travel.
+
+    The existing left/right pitman-output hardpoints define the two inner tie-rod
+    joints at the design position. A rack displacement translates both joints
+    along the vehicle-right Y axis without rotating them.
+    """
+    initial_guess = np.deg2rad(np.asarray(initial_guess_deg, dtype=np.float64))
+    if initial_guess.shape != (2,):
+        raise ValueError("initial_guess_deg must contain left and right angles")
+
+    rack_translation = float(rack_displacement_mm) * SteeringCoordinateSystem.Y_RIGHT
+    rack_outputs_3d = (
+        hardpoints.pitman.left_output + rack_translation,
+        hardpoints.pitman.right_output + rack_translation,
+    )
+    left_design_length = float(
+        np.linalg.norm(
+            hardpoints.left_wheel.tie_rod_pickup - hardpoints.pitman.left_output
+        )
+    )
+    right_design_length = float(
+        np.linalg.norm(
+            hardpoints.right_wheel.tie_rod_pickup - hardpoints.pitman.right_output
+        )
+    )
+
+    left_angle_rad, left_center_3d, left_pickup_3d = _solve_wheel_pickup_3d_analytic(
+        wheel=hardpoints.left_wheel,
+        pitman_output=rack_outputs_3d[0],
+        tie_rod_length=left_design_length,
+        initial_guess_rad=float(initial_guess[0]),
+    )
+    right_angle_rad, right_center_3d, right_pickup_3d = _solve_wheel_pickup_3d_analytic(
+        wheel=hardpoints.right_wheel,
+        pitman_output=rack_outputs_3d[1],
+        tie_rod_length=right_design_length,
+        initial_guess_rad=float(initial_guess[1]),
+    )
+
+    left_residual = _tie_rod_residual_3d(
+        left_pickup_3d,
+        rack_outputs_3d[0],
+        left_design_length,
+    )
+    right_residual = _tie_rod_residual_3d(
+        right_pickup_3d,
+        rack_outputs_3d[1],
+        right_design_length,
+    )
+    max_residual = max(abs(left_residual), abs(right_residual))
+
+    return TwoSegmentSteeringSolution(
+        pitman_angle_deg=0.0,
+        left_wheel_angle_deg=float(np.rad2deg(left_angle_rad)),
+        right_wheel_angle_deg=float(np.rad2deg(right_angle_rad)),
+        left_wheel_center=left_center_3d[:2].copy(),
+        right_wheel_center=right_center_3d[:2].copy(),
+        left_tie_rod_pickup=left_pickup_3d[:2].copy(),
+        right_tie_rod_pickup=right_pickup_3d[:2].copy(),
+        pitman_left_output=rack_outputs_3d[0][:2].copy(),
+        pitman_right_output=rack_outputs_3d[1][:2].copy(),
+        left_tie_rod_residual=float(left_residual),
+        right_tie_rod_residual=float(right_residual),
+        converged=bool(max_residual <= residual_tolerance),
+        nfev=0,
+        left_wheel_center_3d=left_center_3d,
+        right_wheel_center_3d=right_center_3d,
+        left_tie_rod_pickup_3d=left_pickup_3d,
+        right_tie_rod_pickup_3d=right_pickup_3d,
+        pitman_left_output_3d=rack_outputs_3d[0],
+        pitman_right_output_3d=rack_outputs_3d[1],
     )
 
 
@@ -681,8 +775,7 @@ def compare_two_segment_3d_analytic_and_numeric(
             solve_analytic.left_wheel_angle_deg - solve_numeric.left_wheel_angle_deg
         ),
         right_wheel_angle_delta_deg=_normalize_angle_deg(
-            solve_analytic.right_wheel_angle_deg
-            - solve_numeric.right_wheel_angle_deg
+            solve_analytic.right_wheel_angle_deg - solve_numeric.right_wheel_angle_deg
         ),
         pitman_angle_delta_deg=_normalize_angle_deg(
             solve_analytic.pitman_angle_deg - solve_numeric.pitman_angle_deg
@@ -691,8 +784,7 @@ def compare_two_segment_3d_analytic_and_numeric(
             solve_analytic.left_tie_rod_residual - solve_numeric.left_tie_rod_residual
         ),
         right_tie_rod_residual_delta=(
-            solve_analytic.right_tie_rod_residual
-            - solve_numeric.right_tie_rod_residual
+            solve_analytic.right_tie_rod_residual - solve_numeric.right_tie_rod_residual
         ),
     )
 

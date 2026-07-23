@@ -22,8 +22,8 @@ from kinematics.gui.common import (
 from kinematics.gui.project import build_project_document, write_project_document
 from kinematics.steering.csv_loader import load_two_segment_steering_hardpoints_rows
 from kinematics.steering.geometry import (
-    BellcrankHardpoints3D,
     BellcrankGeometry2D,
+    BellcrankHardpoints3D,
     ThreeSegmentSteeringGeometry,
     ThreeSegmentSteeringHardpoints3D,
     ThreeSegmentSteeringSolution,
@@ -33,7 +33,9 @@ from kinematics.steering.geometry import (
     WheelSteeringHardpoints3D,
 )
 from kinematics.steering.limits import (
+    estimate_rack_and_pinion_steering_limits,
     estimate_two_segment_steering_limits,
+    rack_and_pinion_steering_limit_outputs,
     steering_limit_outputs,
     three_segment_steering_limit_outputs,
 )
@@ -52,12 +54,21 @@ from kinematics.steering.three_segment import (
     solve_three_segment_steering_3d_analytic,
 )
 from kinematics.steering.two_segment import (
+    pinion_angle_from_rack_displacement,
+    rack_displacement_from_pinion_angle,
     solve_two_segment_from_left_wheel_angle_3d_analytic,
     solve_two_segment_from_right_wheel_angle_3d_analytic,
+    solve_two_segment_rack_and_pinion_3d_analytic,
     solve_two_segment_steering_3d_analytic,
 )
 
-TWO_SEGMENT_INPUT_MODES = ("pitman_angle", "left_wheel_angle", "right_wheel_angle")
+RACK_AND_PINION_INPUT_MODES = ("pinion_angle", "rack_displacement")
+TWO_SEGMENT_INPUT_MODES = (
+    "pitman_angle",
+    "left_wheel_angle",
+    "right_wheel_angle",
+    *RACK_AND_PINION_INPUT_MODES,
+)
 THREE_SEGMENT_INPUT_MODES = (
     "left_bellcrank_angle",
     "right_bellcrank_angle",
@@ -88,6 +99,7 @@ __all__ = [
     "LINKAGE_TYPES",
     "OPTIMIZATION_VARIABLES",
     "OptimizationCancelledError",
+    "RACK_AND_PINION_INPUT_MODES",
     "SliderLimits",
     "SteeringCurve",
     "SteeringHardpointRow",
@@ -114,10 +126,12 @@ __all__ = [
     "set_pitman_arm_x_length",
     "set_pitman_x_position",
     "solve_steering_project",
+    "steering_project_limit_outputs",
     "sweep_steering_project",
     "three_segment_hardpoints_from_rows",
     "three_segment_geometry_from_rows",
 ]
+
 
 @dataclass(frozen=True)
 class SliderLimits:
@@ -138,6 +152,7 @@ class SteeringOptimizationResult:
     success: bool
     message: str
     applied_values: dict[str, float]
+
 
 def _is_unreachable_solve_error(exc: ValueError) -> bool:
     return str(exc).startswith(UNREACHABLE_SOLVE_PREFIXES)
@@ -268,6 +283,7 @@ class SteeringProject:
     wheel_radius: float = 180.0
     wheel_width: float = 120.0
     wheelbase: float = 2800.0
+    pinion_pitch_radius_mm: float = 15.0
     curves: list[SteeringCurve] = field(default_factory=list)
 
 
@@ -428,11 +444,29 @@ def input_angle_slider_limits(
     rows: list[SteeringHardpointRow],
     input_mode: str,
     linkage_type: str = "two_segment",
+    pinion_pitch_radius_mm: float = 15.0,
 ) -> SliderLimits:
     """Return slider limits for the selected steering input mode."""
     if linkage_type == "three_segment":
         return _three_segment_input_angle_slider_limits(rows, input_mode)
     hardpoints = hardpoints_from_rows(rows)
+    if input_mode in RACK_AND_PINION_INPUT_MODES:
+        limits = estimate_rack_and_pinion_steering_limits(hardpoints)
+        if input_mode == "rack_displacement":
+            return SliderLimits(
+                minimum=limits.minimum_displacement_mm,
+                maximum=limits.maximum_displacement_mm,
+            )
+        return SliderLimits(
+            minimum=pinion_angle_from_rack_displacement(
+                limits.minimum_displacement_mm,
+                pinion_pitch_radius_mm,
+            ),
+            maximum=pinion_angle_from_rack_displacement(
+                limits.maximum_displacement_mm,
+                pinion_pitch_radius_mm,
+            ),
+        )
     limits = estimate_two_segment_steering_limits(hardpoints)
     if input_mode == "pitman_angle":
         low = limits.right_turn.pitman_angle_deg
@@ -888,9 +922,7 @@ def solve_three_segment_project(
     """Solve a three-segment steering project state."""
     hardpoints = three_segment_hardpoints_from_rows(project.hardpoints)
     initial_left_bellcrank_guess = (
-        0.0
-        if previous_state is None
-        else previous_state.left_bellcrank_angle_deg
+        0.0 if previous_state is None else previous_state.left_bellcrank_angle_deg
     )
     initial_guess = (
         (0.0, 0.0, 0.0)
@@ -928,6 +960,18 @@ def solve_three_segment_project(
     raise ValueError(f"Unknown steering input mode '{project.input_mode}'")
 
 
+def steering_project_limit_outputs(project: SteeringProject) -> dict[str, float]:
+    """Return steering travel limits for the project's selected actuator."""
+    if project.linkage_type == "three_segment":
+        return three_segment_steering_limit_outputs(
+            three_segment_hardpoints_from_rows(project.hardpoints)
+        )
+    hardpoints = hardpoints_from_rows(project.hardpoints)
+    if project.input_mode in RACK_AND_PINION_INPUT_MODES:
+        return rack_and_pinion_steering_limit_outputs(hardpoints)
+    return steering_limit_outputs(hardpoints)
+
+
 def solve_steering_project(
     project: SteeringProject,
     *,
@@ -939,7 +983,7 @@ def solve_steering_project(
         hardpoints = three_segment_hardpoints_from_rows(project.hardpoints)
         solution = solve_three_segment_project(project, previous_state)
         limit_outputs = (
-            three_segment_steering_limit_outputs(hardpoints) if include_limits else None
+            steering_project_limit_outputs(project) if include_limits else None
         )
         return solution, outputs_from_three_segment_solution(
             solution,
@@ -948,6 +992,7 @@ def solve_steering_project(
             wheelbase=project.wheelbase,
         )
     hardpoints = hardpoints_from_rows(project.hardpoints)
+    actuator_outputs: dict[str, float] = {}
     if project.input_mode == "pitman_angle":
         solution = solve_two_segment_steering_3d_analytic(
             hardpoints,
@@ -963,13 +1008,42 @@ def solve_steering_project(
             hardpoints,
             project.input_value,
         )
+    elif project.input_mode == "pinion_angle":
+        rack_displacement = rack_displacement_from_pinion_angle(
+            project.input_value,
+            project.pinion_pitch_radius_mm,
+        )
+        solution = solve_two_segment_rack_and_pinion_3d_analytic(
+            hardpoints,
+            rack_displacement,
+        )
+        actuator_outputs = {
+            "pinion_angle_deg": float(project.input_value),
+            "rack_displacement_mm": rack_displacement,
+        }
+    elif project.input_mode == "rack_displacement":
+        pinion_angle = pinion_angle_from_rack_displacement(
+            project.input_value,
+            project.pinion_pitch_radius_mm,
+        )
+        solution = solve_two_segment_rack_and_pinion_3d_analytic(
+            hardpoints,
+            project.input_value,
+        )
+        actuator_outputs = {
+            "pinion_angle_deg": pinion_angle,
+            "rack_displacement_mm": float(project.input_value),
+        }
     else:
         raise ValueError(f"Unknown steering input mode '{project.input_mode}'")
-    limit_outputs = steering_limit_outputs(hardpoints) if include_limits else None
+    limit_outputs = steering_project_limit_outputs(project) if include_limits else None
+    extra_outputs = dict(actuator_outputs)
+    if limit_outputs is not None:
+        extra_outputs.update(limit_outputs)
     return solution, outputs_from_solution(
         solution,
         project.input_value,
-        limit_outputs,
+        extra_outputs or None,
         wheelbase=project.wheelbase,
     )
 
@@ -988,12 +1062,7 @@ def sweep_steering_project(
         values.append(current)
         current += project.sweep_step
     rows = []
-    if project.linkage_type == "three_segment":
-        limit_outputs = three_segment_steering_limit_outputs(
-            three_segment_hardpoints_from_rows(project.hardpoints)
-        )
-    else:
-        limit_outputs = steering_limit_outputs(hardpoints_from_rows(project.hardpoints))
+    limit_outputs = steering_project_limit_outputs(project)
     for value in values:
         try:
             _, outputs = solve_steering_project(
@@ -1020,6 +1089,7 @@ def project_to_dict(project: SteeringProject) -> dict[str, Any]:
             "wheel_radius": project.wheel_radius,
             "wheel_width": project.wheel_width,
             "wheelbase": project.wheelbase,
+            "pinion_pitch_radius_mm": project.pinion_pitch_radius_mm,
         },
         simulation={
             "input_mode": project.input_mode,
@@ -1060,6 +1130,7 @@ def project_from_dict(data: dict[str, Any]) -> SteeringProject:
         wheel_radius=float(data.get("wheel_radius", 180.0)),
         wheel_width=float(data.get("wheel_width", 120.0)),
         wheelbase=float(data.get("wheelbase", 2800.0)),
+        pinion_pitch_radius_mm=float(data.get("pinion_pitch_radius_mm", 15.0)),
         curves=[SteeringCurve(**curve) for curve in data.get("curves", [])],
     )
 
@@ -1090,6 +1161,7 @@ def _project_from_unified_dict(data: dict[str, Any]) -> SteeringProject:
         wheel_radius=float(parameters.get("wheel_radius", 180.0)),
         wheel_width=float(parameters.get("wheel_width", 120.0)),
         wheelbase=float(parameters.get("wheelbase", 2800.0)),
+        pinion_pitch_radius_mm=float(parameters.get("pinion_pitch_radius_mm", 15.0)),
         curves=[SteeringCurve(**curve) for curve in data.get("curves", [])],
     )
 

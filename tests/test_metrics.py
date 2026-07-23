@@ -1,7 +1,7 @@
 import numpy as np
 
 from kinematics.core.constants import TEST_TOLERANCE
-from kinematics.core.enums import PointID
+from kinematics.core.enums import Axis, PointID
 from kinematics.io.geometry_loader import load_geometry
 from kinematics.io.sweep_loader import parse_sweep_file
 from kinematics.main import solve_sweep
@@ -108,6 +108,139 @@ def test_front_view_metrics_are_invariant_to_rigid_x_translation(
         )
 
 
+def test_svsa_uses_signed_side_view_distance(
+    double_wishbone_geometry_file,
+    test_data_dir,
+) -> None:
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+
+    states, _ = solve_sweep(suspension, parse_sweep_file(test_data_dir / "sweep.yaml"))
+    state = next(
+        state
+        for state in states
+        if suspension.compute_side_view_instant_center(state) is not None
+    )
+    side_view_ic = suspension.compute_side_view_instant_center(state)
+    assert side_view_ic is not None
+    contact_patch = state.get(PointID.CONTACT_PATCH_CENTER)
+
+    dx = side_view_ic[Axis.X] - contact_patch[Axis.X]
+    dz = side_view_ic[Axis.Z] - contact_patch[Axis.Z]
+    assert abs(dz) > TEST_TOLERANCE
+    expected = np.sign(dx) * np.hypot(dx, dz)
+
+    metrics = compute_metrics_for_state_from_suspension(state, suspension)
+
+    np.testing.assert_allclose(
+        metrics["svsa_length_mm"],
+        expected,
+        atol=TEST_TOLERANCE,
+    )
+
+
+def test_roll_center_metrics_use_front_view_force_line(
+    double_wishbone_geometry_file,
+    test_data_dir,
+) -> None:
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+
+    states, _ = solve_sweep(suspension, parse_sweep_file(test_data_dir / "sweep.yaml"))
+    state = next(
+        state
+        for state in states
+        if suspension.compute_front_view_instant_center(state) is not None
+    )
+    front_view_ic = suspension.compute_front_view_instant_center(state)
+    assert front_view_ic is not None
+    contact_patch = state.get(PointID.CONTACT_PATCH_CENTER)
+    centerline_fraction = -contact_patch[Axis.Y] / (
+        front_view_ic[Axis.Y] - contact_patch[Axis.Y]
+    )
+    expected_roll_center = contact_patch + centerline_fraction * (
+        front_view_ic - contact_patch
+    )
+
+    metrics = compute_metrics_for_state_from_suspension(state, suspension)
+
+    np.testing.assert_allclose(
+        metrics["roll_center_height_mm"],
+        expected_roll_center[Axis.Z] - contact_patch[Axis.Z],
+        atol=TEST_TOLERANCE,
+    )
+    np.testing.assert_allclose(
+        metrics["roll_center_lateral_offset_mm"],
+        expected_roll_center[Axis.Y],
+        atol=TEST_TOLERANCE,
+    )
+
+
+def test_anti_pitch_uses_side_view_swing_arm_and_cg_geometry(
+    double_wishbone_geometry_file,
+    test_data_dir,
+) -> None:
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+    assert suspension.config is not None
+
+    states, _ = solve_sweep(suspension, parse_sweep_file(test_data_dir / "sweep.yaml"))
+    state = next(
+        state
+        for state in states
+        if suspension.compute_side_view_instant_center(state) is not None
+    )
+    side_view_ic = suspension.compute_side_view_instant_center(state)
+    assert side_view_ic is not None
+    contact_patch = state.get(PointID.CONTACT_PATCH_CENTER)
+    cg_position = np.asarray(suspension.config.cg_position, dtype=np.float64)
+    expected = (
+        -np.sign(contact_patch[Axis.X] - cg_position[Axis.X])
+        * (side_view_ic[Axis.Z] - contact_patch[Axis.Z])
+        / (side_view_ic[Axis.X] - contact_patch[Axis.X])
+        * suspension.config.wheelbase
+        / (cg_position[Axis.Z] - contact_patch[Axis.Z])
+        * 100.0
+    )
+
+    metrics = compute_metrics_for_state_from_suspension(state, suspension)
+
+    np.testing.assert_allclose(
+        metrics["anti_pitch_pct"],
+        expected,
+        atol=TEST_TOLERANCE,
+    )
+
+
+def test_track_change_is_measured_from_design_track(
+    double_wishbone_geometry_file,
+) -> None:
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+
+    state = suspension.initial_state().copy()
+    design_wheel_center = state.get(PointID.WHEEL_CENTER).copy()
+    lateral_shift_mm = 12.5
+    for point_id in (PointID.AXLE_INBOARD, PointID.AXLE_OUTBOARD):
+        state[point_id] = state.get(point_id) + np.array(
+            [0.0, lateral_shift_mm, 0.0],
+            dtype=np.float64,
+        )
+    DerivedPointsManager(suspension.derived_spec()).update_in_place(state.positions)
+    current_wheel_center = state.get(PointID.WHEEL_CENTER)
+
+    metrics = compute_metrics_for_state_from_suspension(state, suspension)
+    expected = 2.0 * (
+        abs(current_wheel_center[Axis.Y]) - abs(design_wheel_center[Axis.Y])
+    )
+
+    np.testing.assert_allclose(
+        metrics["track_change_mm"],
+        expected,
+        atol=TEST_TOLERANCE,
+    )
+
+
 def test_parallel_wishbone_planes_produce_null_ic_metrics(
     double_wishbone_geometry_file,
 ) -> None:
@@ -142,6 +275,10 @@ def test_parallel_wishbone_planes_produce_null_ic_metrics(
     assert metrics["fvic_y_mm"] is None
     assert metrics["fvic_z_mm"] is None
     assert metrics["fvsa_length_mm"] is None
+    assert metrics["roll_center_height_mm"] is None
+    assert metrics["roll_center_lateral_offset_mm"] is None
+    assert metrics["anti_pitch_pct"] is None
+    assert metrics["track_change_mm"] == 0.0
 
 
 def test_steering_axis_ground_intersection_uses_contact_patch_height(
@@ -229,8 +366,7 @@ def test_scrub_radius_uses_ground_plane_wheel_lateral_direction(
         scrub_radius,
         expected_scrub_radius,
         atol=TEST_TOLERANCE,
-        err_msg="Scrub radius should use wheel lateral direction"
-        " on the ground plane",
+        err_msg="Scrub radius should use wheel lateral direction on the ground plane",
     )
     assert not np.isclose(
         scrub_radius,
@@ -382,5 +518,9 @@ def test_default_corner_metric_catalog_matches_trusted_set() -> None:
         "fvic_y_mm",
         "fvic_z_mm",
         "fvsa_length_mm",
+        "roll_center_height_mm",
+        "roll_center_lateral_offset_mm",
+        "anti_pitch_pct",
+        "track_change_mm",
     ]
     assert column_names == expected

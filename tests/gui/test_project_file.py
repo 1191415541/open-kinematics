@@ -3,8 +3,8 @@ import json
 from kinematics.core.enums import PointID
 from kinematics.gui.suspension.workbench import (
     SuspensionCurve,
-    SuspensionOptimizationTarget,
     SuspensionOptimizationPairDeltaConstraint,
+    SuspensionOptimizationTarget,
     SuspensionSweepSettings,
     create_default_suspension_project,
     load_suspension_project,
@@ -150,7 +150,8 @@ def test_suspension_project_saves_and_loads_unified_json(tmp_path):
         "UPPER_WISHBONE_OUTBOARD_z",
     ]
     assert loaded.optimization.solver_mode == "cma_es_only"
-    assert [constraint.enabled for constraint in loaded.optimization.pair_delta_constraints] == [
+    pair_constraints = loaded.optimization.pair_delta_constraints
+    assert [constraint.enabled for constraint in pair_constraints] == [
         True,
         False,
     ]
@@ -194,6 +195,7 @@ def test_steering_project_saves_and_loads_unified_json(tmp_path):
         "wheel_radius": 310.0,
         "wheel_width": 220.0,
         "wheelbase": 2780.0,
+        "pinion_pitch_radius_mm": 15.0,
     }
     assert data["simulation"]["input_mode"] == "right_bellcrank_angle"
     assert data["hardpoints"][0]["name"] == "wheel_kingpin_lower"
@@ -207,4 +209,20 @@ def test_steering_project_saves_and_loads_unified_json(tmp_path):
     assert loaded.wheel_radius == 310.0
     assert loaded.wheel_width == 220.0
     assert loaded.wheelbase == 2780.0
+    assert loaded.pinion_pitch_radius_mm == 15.0
     assert loaded.curves[0].label == "left wheel"
+
+
+def test_rack_and_pinion_steering_project_round_trips_pinion_settings(tmp_path):
+    path = tmp_path / "rack-and-pinion.okproj.json"
+    project = default_steering_project()
+    project.input_mode = "pinion_angle"
+    project.input_value = 8.5
+    project.pinion_pitch_radius_mm = 13.5
+
+    save_steering_project(project, path)
+    loaded = load_steering_project(path)
+
+    assert loaded.input_mode == "pinion_angle"
+    assert loaded.input_value == 8.5
+    assert loaded.pinion_pitch_radius_mm == 13.5

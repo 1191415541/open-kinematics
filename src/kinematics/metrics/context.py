@@ -52,11 +52,35 @@ class MetricContext:
         return self.suspension.compute_front_view_instant_center(self.state)
 
     @cached_property
+    def front_view_roll_center(self) -> Vec3 | None:
+        """Return the front-view roll center on the vehicle centerline.
+
+        The roll center is the intersection of the line from this corner's
+        contact patch to its front-view instant center with Y = 0.  The
+        single-corner model assumes a mirrored opposite side, so this is the
+        axle roll center for a symmetric layout.
+        """
+        front_view_ic = self.front_view_ic
+        if front_view_ic is None:
+            return None
+        contact_patch = self.contact_patch_center
+        delta_y = float(front_view_ic[Axis.Y] - contact_patch[Axis.Y])
+        if abs(delta_y) <= EPS_GEOMETRIC:
+            return None
+        centerline_fraction = -float(contact_patch[Axis.Y]) / delta_y
+        return contact_patch + centerline_fraction * (front_view_ic - contact_patch)
+
+    @cached_property
     def wheel_center(self) -> Vec3:
         """
         Wheel center position.
         """
         return self.state.get(PointID.WHEEL_CENTER)
+
+    @cached_property
+    def design_wheel_center(self) -> Vec3:
+        """Wheel-center position at the suspension design condition."""
+        return self.suspension.initial_state().get(PointID.WHEEL_CENTER)
 
     @cached_property
     def contact_patch_center(self) -> Vec3:

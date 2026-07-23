@@ -18,19 +18,19 @@ from kinematics.gui.common import (
     parse_float_entry,
     parse_int_entry,
 )
+from kinematics.gui.steering.widgets import CurveManager
 from kinematics.gui.suspension.optimization import (
     SUSPENSION_OPTIMIZATION_METRICS,
     SUSPENSION_OPTIMIZATION_SOLVER_MODES,
     SUSPENSION_OPTIMIZATION_TARGET_MODES,
     SUSPENSION_OPTIMIZATION_TRENDS,
     SuspensionOptimizationConfig,
-    SuspensionOptimizationProgress,
-    SuspensionOptimizationVariableAnalysisResult,
     SuspensionOptimizationPairDeltaConstraint,
+    SuspensionOptimizationProgress,
     SuspensionOptimizationTarget,
+    SuspensionOptimizationVariableAnalysisResult,
     available_suspension_optimization_variables,
 )
-from kinematics.gui.steering.widgets import CurveManager
 from kinematics.gui.suspension.plotting import (
     SuspensionPreviewRenderer,
     draw_suspension_curve_plot,
@@ -43,11 +43,9 @@ from kinematics.gui.suspension.workbench import (
     SuspensionProject,
     SuspensionSweepResult,
     SuspensionSweepSettings,
-    suspension_gui_to_internal_vec3,
-    suspension_internal_to_gui_vec3,
+    analyze_suspension_optimization_variables,
     create_default_suspension_project,
     curve_specs_for_plot,
-    analyze_suspension_optimization_variables,
     load_suspension_hardpoints_csv,
     load_suspension_project,
     optimize_suspension_hardpoints,
@@ -56,6 +54,8 @@ from kinematics.gui.suspension.workbench import (
     solve_suspension_project,
     solve_suspension_project_at_travel,
     supported_suspension_type_keys,
+    suspension_gui_to_internal_vec3,
+    suspension_internal_to_gui_vec3,
 )
 
 PROJECT_FILETYPES = [("Kinematics project", "*.okproj.json")]
@@ -121,13 +121,13 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             value=str(self.project.config.wheel.tire.static_radius_mm)
         )
         self.optimization_running = False
-        self.optimization_queue: queue.Queue[
-            tuple[str, object]
-        ] | None = None
+        self.optimization_queue: queue.Queue[tuple[str, object]] | None = None
         self.optimization_thread: threading.Thread | None = None
         self.optimization_cancel_event: threading.Event | None = None
         self.pending_optimized_hardpoints = None
-        self.last_optimization_analysis: SuspensionOptimizationVariableAnalysisResult | None = None
+        self.last_optimization_analysis: (
+            SuspensionOptimizationVariableAnalysisResult | None
+        ) = None
         self.opt_variable_limit_var = tk.StringVar(
             value=str(self.project.optimization.variable_delta_limit)
         )
@@ -827,6 +827,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
 
     def refresh_curves(self) -> None:
         """Refresh managed suspension curve plots."""
+
         def draw_curves() -> None:
             if not self._sync_controls_to_project():
                 return
@@ -840,6 +841,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             draw_suspension_curve_plot(self.curve_ax, sweep.rows, curves)
             self.curve_canvas.draw_idle()
             self.status_var.set(f"Solved {len(sweep.rows)} steps")
+
         self.run_guarded(
             action=draw_curves,
             on_error=lambda exc: self.status_var.set(str(exc)),
@@ -1049,9 +1051,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
 
     def _bind_control_vars(self) -> None:
         self.bind_control_var_traces(
-            (
-                self.steered_var,
-            ),
+            (self.steered_var,),
             self._on_controls_changed,
         )
 
@@ -1130,7 +1130,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 float(current_settings.stop),
             ),
         }
-        parsed_steps = parse_int_entry(self.steps_var.get(), int(current_settings.steps))
+        parsed_steps = parse_int_entry(
+            self.steps_var.get(), int(current_settings.steps)
+        )
 
         for name, parsed in parsed_values.items():
             if not parsed.is_valid:
@@ -1307,10 +1309,11 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         variables = available_suspension_optimization_variables(self.project.hardpoints)
         selected = set(self.project.optimization.variable_names)
         self.opt_variable_vars = {
-            name: tk.BooleanVar(value=name in selected)
-            for name in variables
+            name: tk.BooleanVar(value=name in selected) for name in variables
         }
-        variable_list_frame = getattr(self, "opt_variable_list_frame", self.opt_variables_frame)
+        variable_list_frame = getattr(
+            self, "opt_variable_list_frame", self.opt_variables_frame
+        )
         for child in variable_list_frame.winfo_children():
             child.destroy()
         self._configure_optimization_variable_styles(variables)
@@ -1404,9 +1407,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             color = OPTIMIZATION_VARIABLE_COLOR_PALETTE[
                 index % len(OPTIMIZATION_VARIABLE_COLOR_PALETTE)
             ]
-            style_name = self._optimization_variable_style_name(
-                f"{hardpoint_name}_x"
-            )
+            style_name = self._optimization_variable_style_name(f"{hardpoint_name}_x")
             style.configure(style_name, foreground=color)
             style.map(
                 style_name,
@@ -1576,7 +1577,12 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             {
                 "kind": "summary",
                 "text": (
-                    f"Method: {self._optimization_solver_mode_label(str(getattr(result, 'solver_mode', 'dual_path')))}\n"
+                    "Method: "
+                    f"{
+                        self._optimization_solver_mode_label(
+                            str(getattr(result, 'solver_mode', 'dual_path'))
+                        )
+                    }\n"
                     f"Initial cost: {float(getattr(result, 'initial_cost')):.6g}\n"
                     f"Final cost: {float(getattr(result, 'final_cost')):.6g}\n"
                     f"Rounds: {int(getattr(result, 'rounds_completed'))}\n"
@@ -1639,9 +1645,12 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             ("suppress", "Suppress"),
         ):
             items = grouped_items[recommendation]
-            details = "\n\n".join(
-                self._format_optimization_analysis_item(item) for item in items
-            ) or "None"
+            details = (
+                "\n\n".join(
+                    self._format_optimization_analysis_item(item) for item in items
+                )
+                or "None"
+            )
             sections.append(
                 {
                     "kind": "group",
@@ -1682,7 +1691,10 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             key = constraint.key()
             ttk.Checkbutton(
                 self.opt_pair_constraints_frame,
-                text=f"{constraint.label} ({'/'.join(axis.upper() for axis in constraint.axes)})",
+                text=(
+                    f"{constraint.label} "
+                    f"({'/'.join(axis.upper() for axis in constraint.axes)})"
+                ),
                 variable=self.opt_pair_constraint_vars[key],
                 command=self._on_optimization_controls_changed,
             ).grid(
@@ -1748,6 +1760,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             self.result = preview
             self._draw_result_index(0, update_outputs=False)
             self.status_var.set(f"Preview travel {travel:.6g} mm")
+
         self.run_guarded(
             action=draw_preview,
             on_error=lambda exc: self.status_var.set(str(exc)),
@@ -1762,6 +1775,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
 
     def refresh(self) -> None:
         """Refresh preview/output at current travel and regenerate sweep curves."""
+
         def redraw_all() -> None:
             if not self._sync_controls_to_project():
                 return
@@ -1780,6 +1794,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
             self.result = preview
             self._draw_result_index(0)
             self.refresh_curves()
+
         self.run_guarded(
             action=redraw_all,
             on_error=lambda exc: self.status_var.set(str(exc)),

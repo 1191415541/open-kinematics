@@ -23,7 +23,7 @@ kinematics = "kinematics.cli:app"
 package = true
 
 [project.optional-dependencies]
-viz = ["matplotlib>=3.8"]
+viz = ["matplotlib>=3.8", "python-docx>=1.1.2"]
 cli = ["typer>=0.12"]
 
 [dependency-groups]

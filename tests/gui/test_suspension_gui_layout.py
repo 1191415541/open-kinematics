@@ -2,7 +2,11 @@ import inspect
 
 from kinematics import cli
 from kinematics.core.enums import PointID
-from kinematics.gui.app import KinematicsWorkbenchApp
+from kinematics.gui.app import (
+    KinematicsWorkbenchApp,
+    _ReportCurveSelector,
+    _ReportExportDialog,
+)
 from kinematics.gui.suspension import SuspensionWorkbenchPage
 from kinematics.gui.suspension.widgets import HardpointTable
 
@@ -22,6 +26,7 @@ def test_main_gui_shared_menu_manages_hardpoints_project_save_and_close() -> Non
     assert "Open Project" in source
     assert "Import Hardpoints" in source
     assert "Export Hardpoints" in source
+    assert "Export Report" in source
     assert "Export Combined Hardpoints" in source
     assert "Save Project" in source
     assert "Save Project As" in source
@@ -36,7 +41,9 @@ def test_main_gui_menu_dispatches_to_active_page() -> None:
     assert "self.pages" in source
     assert 'self._call_active_page("open_project")' in class_source
     assert 'self._call_active_page("save_project_as")' in class_source
+    assert "def export_report" in class_source
     assert "def export_combined_hardpoints" in class_source
+    assert "_ReportExportDialog" in class_source
 
 
 def test_suspension_page_exposes_load_solve_and_curve_controls() -> None:
@@ -58,9 +65,18 @@ def test_suspension_page_exposes_load_solve_and_curve_controls() -> None:
     assert "geometry_path_var" in controls_source
     assert "Suspension Parameters" in layout_source
     assert "workspace = ttk.PanedWindow(right, orient=tk.HORIZONTAL)" in layout_source
-    assert "workspace.add(workspace_left, weight=self.WORKSPACE_PREVIEW_WEIGHT)" in layout_source
-    assert "workspace.add(workspace_right, weight=self.WORKSPACE_SIDE_WEIGHT)" in layout_source
-    assert "controls = ttk.LabelFrame(workspace_left, text=\"Simulation Input\", padding=8)" in layout_source
+    assert (
+        "workspace.add(workspace_left, weight=self.WORKSPACE_PREVIEW_WEIGHT)"
+        in layout_source
+    )
+    assert (
+        "workspace.add(workspace_right, weight=self.WORKSPACE_SIDE_WEIGHT)"
+        in layout_source
+    )
+    assert (
+        'controls = ttk.LabelFrame(workspace_left, text="Simulation Input", padding=8)'
+        in layout_source
+    )
     assert "Wheelbase" in parameters_source
     assert "Tire width" in parameters_source
     assert "ttk.Notebook" in side_source
@@ -87,8 +103,8 @@ def test_suspension_hardpoint_table_is_compact_and_auto_sized() -> None:
     assert "tksheet.Sheet(" in source
     assert "show_row_index=False" in source
     assert "show_top_left=False" in source
-    assert 'width=420' in source
-    assert 'height=260' in source
+    assert "width=420" in source
+    assert "height=260" in source
     assert "enable_bindings(" in source
     assert "bulk_table_edit_validation(" in source
     assert "_display_name" in source
@@ -158,7 +174,9 @@ def test_suspension_numeric_entries_use_commit_refresh_and_not_trace_refresh() -
     assert "self.static_radius_var" not in trace_source
 
 
-def test_suspension_optimization_entries_use_commit_updates_without_trace_refresh() -> None:
+def test_suspension_optimization_entries_use_commit_updates_without_trace_refresh() -> (
+    None
+):
     optimization_source = inspect.getsource(
         SuspensionWorkbenchPage._build_optimization_content
     )
@@ -205,6 +223,38 @@ def test_suspension_page_has_open_save_and_save_as_project_actions() -> None:
     assert "imported_default_hardpoints" in load_source
     assert "imported_default_hardpoints" in import_source
     assert "restore_default_hardpoints" in class_source
+
+
+def test_main_gui_report_dialog_exposes_scope_and_image_options() -> None:
+    app_source = inspect.getsource(KinematicsWorkbenchApp)
+    dialog_source = inspect.getsource(_ReportExportDialog)
+    selector_source = inspect.getsource(_ReportCurveSelector)
+
+    assert "_ReportExportDialog" in app_source
+    assert 'label="Export Report"' in app_source
+    assert ".docx" in app_source
+    assert "Choose the report scope" in dialog_source
+    assert "curve combinations" in dialog_source
+    assert "add, remove, and reorder exported curves" in dialog_source
+    assert "Selected " in dialog_source
+    assert (
+        "curves always export with their own figures and descriptions" in dialog_source
+    )
+    assert "Scope" in dialog_source
+    assert "Images" in dialog_source
+    assert "Curves" in dialog_source
+    assert "Suspension" in dialog_source
+    assert "Steering" in dialog_source
+    assert "Suspension + Steering" in dialog_source
+    assert "Suspension Preview" in dialog_source
+    assert "Steering Preview" in dialog_source
+    assert "X Output" in selector_source
+    assert "Y Output" in selector_source
+    assert 'text="+"' in selector_source
+    assert 'text="-"' in selector_source
+    assert 'text="Up"' in selector_source
+    assert 'text="Down"' in selector_source
+    assert "Treeview" in selector_source
 
 
 def test_suspension_page_has_optimization_actions() -> None:

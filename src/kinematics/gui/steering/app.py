@@ -18,6 +18,7 @@ from kinematics.gui.common import OptimizationCancelledError, RefreshWorkflowMix
 from kinematics.gui.steering.file_actions import SteeringFileActions
 from kinematics.gui.steering.plotting import (
     draw_curve_plot,
+    draw_rack_and_pinion_steering_preview,
     draw_steering_preview,
     draw_three_segment_steering_preview,
     fit_steering_preview,
@@ -33,15 +34,13 @@ from kinematics.steering.limits import (
     steering_limit_outputs,
     three_segment_steering_limit_outputs,
 )
-from kinematics.steering.three_segment import solve_three_segment_steering
 from kinematics.steering.two_segment import (
-    solve_two_segment_from_left_wheel_angle,
-    solve_two_segment_from_right_wheel_angle,
     solve_two_segment_steering,
 )
 from kinematics.steering.workbench import (
     INPUT_MODES,
     LINKAGE_TYPES,
+    RACK_AND_PINION_INPUT_MODES,
     THREE_SEGMENT_INPUT_MODES,
     TWO_SEGMENT_INPUT_MODES,
     available_steering_outputs,
@@ -53,9 +52,10 @@ from kinematics.steering.workbench import (
     optimize_steering_hardpoints,
     parse_float_entry,
     solve_steering_project,
+    steering_project_limit_outputs,
     sweep_steering_project,
-    three_segment_hardpoints_from_rows,
     three_segment_geometry_from_rows,
+    three_segment_hardpoints_from_rows,
 )
 
 OPTIMIZATION_VARIABLE_OPTIONS = (
@@ -99,6 +99,9 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.wheel_radius_var = tk.StringVar(value=str(self.project.wheel_radius))
         self.wheel_width_var = tk.StringVar(value=str(self.project.wheel_width))
         self.wheelbase_var = tk.StringVar(value=str(self.project.wheelbase))
+        self.pinion_pitch_radius_var = tk.StringVar(
+            value=str(self.project.pinion_pitch_radius_mm)
+        )
         self.opt_inner_wheel_var = tk.StringVar(value="right")
         self.opt_inner_angle_var = tk.StringVar(value="10.0")
         self.opt_target_delta_var = tk.StringVar(value="-4.0")
@@ -162,6 +165,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
     def _limit_outputs_cache_signature(self) -> tuple[object, ...]:
         return (
             self.project.linkage_type,
+            self.project.input_mode,
+            self.project.pinion_pitch_radius_mm,
             self._hardpoint_signature(),
         )
 
@@ -169,6 +174,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         return (
             self.project.linkage_type,
             self.project.input_mode,
+            self.project.pinion_pitch_radius_mm,
             self._hardpoint_signature(),
         )
 
@@ -180,6 +186,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             self.project.sweep_max,
             self.project.sweep_step,
             self.project.wheelbase,
+            self.project.pinion_pitch_radius_mm,
             self._hardpoint_signature(),
         )
 
@@ -187,10 +194,10 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         key = self._limit_outputs_cache_signature()
         if key != self.limit_outputs_cache_key or self.limit_outputs_cache is None:
             if self.project.linkage_type == "three_segment":
-                hardpoints = three_segment_hardpoints_from_rows(
-                    self.project.hardpoints
-                )
+                hardpoints = three_segment_hardpoints_from_rows(self.project.hardpoints)
                 outputs = three_segment_steering_limit_outputs(hardpoints)
+            elif self.project.input_mode in RACK_AND_PINION_INPUT_MODES:
+                outputs = steering_project_limit_outputs(self.project)
             else:
                 hardpoints = hardpoints_from_rows(self.project.hardpoints)
                 outputs = steering_limit_outputs(hardpoints)
@@ -252,14 +259,24 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                     project_snapshot.hardpoints
                 )
                 limit_outputs = three_segment_steering_limit_outputs(hardpoints)
+            elif project_snapshot.input_mode in RACK_AND_PINION_INPUT_MODES:
+                limit_outputs = steering_project_limit_outputs(project_snapshot)
             else:
                 hardpoints = hardpoints_from_rows(project_snapshot.hardpoints)
                 limit_outputs = steering_limit_outputs(hardpoints)
-            slider_limits = input_angle_slider_limits(
-                project_snapshot.hardpoints,
-                project_snapshot.input_mode,
-                project_snapshot.linkage_type,
-            )
+            if project_snapshot.input_mode in RACK_AND_PINION_INPUT_MODES:
+                slider_limits = input_angle_slider_limits(
+                    project_snapshot.hardpoints,
+                    project_snapshot.input_mode,
+                    project_snapshot.linkage_type,
+                    project_snapshot.pinion_pitch_radius_mm,
+                )
+            else:
+                slider_limits = input_angle_slider_limits(
+                    project_snapshot.hardpoints,
+                    project_snapshot.input_mode,
+                    project_snapshot.linkage_type,
+                )
         except Exception as exc:  # noqa: BLE001 - surface in polling loop.
             self.background_refresh_queue.put(
                 ("background_error", refresh_generation, exc)
@@ -305,7 +322,9 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             except queue.Empty:
                 break
 
-            self.background_refresh_pending = max(0, self.background_refresh_pending - 1)
+            self.background_refresh_pending = max(
+                0, self.background_refresh_pending - 1
+            )
             kind = item[0]
             generation = item[1]
             if generation != self.background_refresh_generation:
@@ -321,6 +340,8 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 )
                 self.limit_outputs_cache_key = (
                     project_snapshot.linkage_type,
+                    project_snapshot.input_mode,
+                    project_snapshot.pinion_pitch_radius_mm,
                     tuple(
                         (row.category, row.name, row.x, row.y, row.z)
                         for row in project_snapshot.hardpoints
@@ -330,6 +351,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 self.slider_limits_cache_key = (
                     project_snapshot.linkage_type,
                     project_snapshot.input_mode,
+                    project_snapshot.pinion_pitch_radius_mm,
                     tuple(
                         (row.category, row.name, row.x, row.y, row.z)
                         for row in project_snapshot.hardpoints
@@ -352,6 +374,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                     project_snapshot.sweep_max,
                     project_snapshot.sweep_step,
                     project_snapshot.wheelbase,
+                    project_snapshot.pinion_pitch_radius_mm,
                     tuple(
                         (row.category, row.name, row.x, row.y, row.z)
                         for row in project_snapshot.hardpoints
@@ -367,7 +390,10 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 draw_curve_plot(self.curve_ax, rows, curves)
                 self.curve_canvas.draw_idle()
 
-        if self.background_refresh_queue.empty() and self.background_refresh_pending == 0:
+        if (
+            self.background_refresh_queue.empty()
+            and self.background_refresh_pending == 0
+        ):
             self.background_refresh_polling = False
             return
         self.root.after(50, self._poll_background_refresh)
@@ -483,7 +509,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             width=22,
         )
         self.input_mode_combo.grid(row=0, column=3, sticky="w", padx=(6, 12))
-        ttk.Label(parent, text="Value [deg]").grid(row=0, column=4, sticky="w")
+        ttk.Label(parent, text="Value").grid(row=0, column=4, sticky="w")
         value_entry = ttk.Entry(parent, textvariable=self.input_value_var, width=10)
         value_entry.grid(row=0, column=5, sticky="w", padx=(6, 12))
         refresh_commit_entries.append(value_entry)
@@ -520,6 +546,25 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 pady=(6, 0),
             )
             refresh_commit_entries.append(entry)
+        ttk.Label(parent, text="Pinion pitch R [mm]").grid(
+            row=1,
+            column=6,
+            sticky="w",
+            pady=(6, 0),
+        )
+        pinion_entry = ttk.Entry(
+            parent,
+            textvariable=self.pinion_pitch_radius_var,
+            width=8,
+        )
+        pinion_entry.grid(
+            row=1,
+            column=7,
+            sticky="w",
+            padx=(6, 0),
+            pady=(6, 0),
+        )
+        refresh_commit_entries.append(pinion_entry)
         self.bind_entry_commit_refresh(refresh_commit_entries)
 
     def _build_preview(self, parent: ttk.Frame) -> None:
@@ -671,6 +716,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.wheel_radius_var.set(str(self.project.wheel_radius))
         self.wheel_width_var.set(str(self.project.wheel_width))
         self.wheelbase_var.set(str(self.project.wheelbase))
+        self.pinion_pitch_radius_var.set(str(self.project.pinion_pitch_radius_mm))
         self.hardpoint_editor.set_rows(self.project.hardpoints)
         self._sync_pitman_controls()
         self._sync_input_slider_limits(self.project.input_value)
@@ -684,6 +730,11 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 self.project.hardpoints,
                 self.project.input_mode,
                 self.project.linkage_type,
+                *(
+                    (self.project.pinion_pitch_radius_mm,)
+                    if self.project.input_mode in RACK_AND_PINION_INPUT_MODES
+                    else ()
+                ),
             )
             self.slider_limits_cache_key = key
         limits = self.slider_limits_cache
@@ -699,6 +750,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.project.input_mode = self.input_mode_var.get()
         if self.project.input_mode != previous_input_mode:
             self.previous_three_segment_state = None
+            self._sync_pitman_controls()
         for attr, var in (
             ("input_value", self.input_value_var),
             ("sweep_min", self.sweep_min_var),
@@ -707,12 +759,16 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             ("wheel_radius", self.wheel_radius_var),
             ("wheel_width", self.wheel_width_var),
             ("wheelbase", self.wheelbase_var),
+            ("pinion_pitch_radius_mm", self.pinion_pitch_radius_var),
         ):
             parsed = parse_float_entry(var.get(), getattr(self.project, attr))
             if not parsed.is_valid:
                 self.output_table.set_error(f"Invalid numeric input: {attr}")
                 return False
             if not parsed.is_complete:
+                return False
+            if attr == "pinion_pitch_radius_mm" and parsed.value <= 0.0:
+                self.output_table.set_error("Pinion pitch radius must be positive")
                 return False
             setattr(self.project, attr, parsed.value)
         return True
@@ -741,12 +797,16 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.input_mode_var.set(self.project.input_mode)
         self.input_value_var.set(str(self.project.input_value))
         self.input_slider_var.set(self.project.input_value)
+        self.pinion_pitch_radius_var.set(str(self.project.pinion_pitch_radius_mm))
         self.hardpoint_editor.set_rows(self.project.hardpoints)
         self._sync_pitman_controls()
         self._sync_input_slider_limits(self.project.input_value)
 
     def _sync_pitman_controls(self) -> None:
-        if self.project.linkage_type == "two_segment":
+        if (
+            self.project.linkage_type == "two_segment"
+            and self.project.input_mode not in RACK_AND_PINION_INPUT_MODES
+        ):
             self.pitman_controls.set_rows(self.project.hardpoints)
             self.pitman_controls.state(["!disabled"])
             return
@@ -790,6 +850,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             self._draw_preview_state(state)
             self.preview_has_drawn = True
             self.preview_canvas.draw_idle()
+
         self.run_guarded(
             action=draw_preview,
             on_error=lambda exc: self.output_table.set_error(str(exc)),
@@ -964,6 +1025,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
 
     def refresh(self) -> None:
         """Refresh preview, outputs, and curves."""
+
         def redraw_all() -> None:
             if not self._sync_controls_to_project():
                 return
@@ -1010,6 +1072,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 or not self._has_valid_slider_limits_cache(),
                 need_curves=not self._has_valid_curve_rows_cache(),
             )
+
         self.run_guarded(
             action=redraw_all,
             on_error=lambda exc: self.output_table.set_error(str(exc)),
@@ -1037,6 +1100,25 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             )
             return
         hardpoints = hardpoints_from_rows(self.project.hardpoints)
+        if self.project.input_mode in RACK_AND_PINION_INPUT_MODES:
+            design_state = solve_steering_project(
+                replace(
+                    self.project,
+                    input_mode="rack_displacement",
+                    input_value=0.0,
+                ),
+                include_limits=False,
+            )[0]
+            draw_rack_and_pinion_steering_preview(
+                self.preview_ax,
+                hardpoints,
+                design_state,
+                state,
+                preserve_view=self.preview_has_drawn,
+                wheel_radius=self.project.wheel_radius,
+                wheel_width=self.project.wheel_width,
+            )
+            return
         design_state = solve_two_segment_steering(hardpoints, 0.0)
         draw_steering_preview(
             self.preview_ax,
@@ -1050,6 +1132,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
 
     def refresh_curves(self) -> None:
         """Refresh managed curve plots."""
+
         def draw_curves() -> None:
             if not self._sync_controls_to_project():
                 return
@@ -1072,6 +1155,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             )
             draw_curve_plot(self.curve_ax, rows, curves)
             self.curve_canvas.draw_idle()
+
         self.run_guarded(
             action=draw_curves,
             on_error=lambda exc: self.output_table.set_error(str(exc)),
