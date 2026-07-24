@@ -10,9 +10,12 @@ from kinematics.steering.workbench import (
     RACK_AND_PINION_INPUT_MODES,
     RACK_AND_PINION_LINKAGE_TYPE,
     THREE_SEGMENT_INPUT_MODES,
+    TWO_SEGMENT_INPUT_MODES,
     OptimizationCancelledError,
     SteeringCurve,
     available_steering_outputs,
+    bellcrank_lateral_distance,
+    bellcrank_x_position,
     copy_hardpoint_rows,
     curve_specs_for_plot,
     default_hardpoint_rows,
@@ -26,13 +29,18 @@ from kinematics.steering.workbench import (
     pitman_angle_slider_limits,
     pitman_arm_x_length,
     pitman_x_position,
+    rack_x_position,
     save_hardpoint_rows_csv,
     save_steering_project,
+    set_bellcrank_lateral_distance,
+    set_bellcrank_x_position,
     set_pitman_arm_x_length,
     set_pitman_x_position,
+    set_rack_x_position,
     solve_steering_project,
     sweep_steering_project,
     three_segment_geometry_from_rows,
+    three_segment_hardpoints_from_rows,
 )
 
 
@@ -126,6 +134,65 @@ def test_pitman_x_position_moves_pivot_and_outputs_and_updates_tie_rod_length():
     assert after.right_tie_rod_length != before.right_tie_rod_length
 
 
+def test_rack_x_position_moves_rack_ends_and_pinion_together():
+    project = default_steering_project(linkage_type=RACK_AND_PINION_LINKAGE_TYPE)
+    before = hardpoints_from_rows(project.hardpoints)
+    pivot_y = next(row.y for row in project.hardpoints if row.name == "pitman_pivot")
+    output_y = next(row.y for row in project.hardpoints if row.name == "pitman_output")
+
+    set_rack_x_position(project.hardpoints, -410.0)
+    after = hardpoints_from_rows(project.hardpoints)
+
+    assert rack_x_position(project.hardpoints) == -410.0
+    np.testing.assert_allclose(after.pitman.pivot[0], -410.0)
+    np.testing.assert_allclose(after.pitman.left_output[0], -410.0)
+    np.testing.assert_allclose(after.pitman.right_output[0], -410.0)
+    np.testing.assert_allclose(after.pitman.pivot[1], pivot_y)
+    np.testing.assert_allclose(after.pitman.left_output[1], output_y)
+    np.testing.assert_allclose(
+        after.left_wheel.wheel_center,
+        before.left_wheel.wheel_center,
+    )
+
+
+def test_bellcrank_geometry_controls_sync_x_and_lateral_distance():
+    project = default_steering_project(linkage_type="three_segment")
+    before = three_segment_hardpoints_from_rows(project.hardpoints)
+    center_offset_y = next(
+        row.y - next(r.y for r in project.hardpoints if r.name == "bellcrank_pivot")
+        for row in project.hardpoints
+        if row.name == "bellcrank_center_link_pickup"
+    )
+    tie_offset_y = next(
+        row.y - next(r.y for r in project.hardpoints if r.name == "bellcrank_pivot")
+        for row in project.hardpoints
+        if row.name == "bellcrank_tie_rod_pickup"
+    )
+
+    set_bellcrank_x_position(project.hardpoints, -300.0)
+    set_bellcrank_lateral_distance(project.hardpoints, 700.0)
+    after = three_segment_hardpoints_from_rows(project.hardpoints)
+
+    assert bellcrank_x_position(project.hardpoints) == -300.0
+    assert bellcrank_lateral_distance(project.hardpoints) == 700.0
+    np.testing.assert_allclose(after.left_bellcrank.pivot[0], -300.0)
+    np.testing.assert_allclose(after.right_bellcrank.pivot[0], -300.0)
+    np.testing.assert_allclose(after.left_bellcrank.pivot[1], -350.0)
+    np.testing.assert_allclose(after.right_bellcrank.pivot[1], 350.0)
+    np.testing.assert_allclose(
+        after.left_bellcrank.center_link_pickup[1],
+        -350.0 + center_offset_y,
+    )
+    np.testing.assert_allclose(
+        after.left_bellcrank.tie_rod_pickup[1],
+        -350.0 + tie_offset_y,
+    )
+    np.testing.assert_allclose(
+        after.left_wheel.wheel_center,
+        before.left_wheel.wheel_center,
+    )
+
+
 def test_pitman_arm_x_length_updates_left_and_right_output_x_from_pivot():
     project = default_steering_project()
 
@@ -215,13 +282,80 @@ def test_rack_and_pinion_is_a_first_class_linkage_type():
         )
         assert limits.minimum < 0.0 < limits.maximum
 
-    with pytest.raises(ValueError, match="rack-and-pinion input mode"):
+    with pytest.raises(ValueError, match="not available for linkage"):
         project.input_mode = "pitman_angle"
         solve_steering_project(project, include_limits=False)
 
 
+def test_rack_and_pinion_supports_wheel_angle_control():
+    project = default_steering_project(linkage_type=RACK_AND_PINION_LINKAGE_TYPE)
+    project.input_mode = "rack_displacement"
+    project.input_value = 2.0
+    forward_solution, forward_outputs = solve_steering_project(
+        project,
+        include_limits=False,
+    )
+    left_angle = forward_solution.left_wheel_angle_deg
+    right_angle = forward_solution.right_wheel_angle_deg
+
+    project.input_mode = "left_wheel_angle"
+    project.input_value = left_angle
+    left_solution, left_outputs = solve_steering_project(project, include_limits=False)
+    np.testing.assert_allclose(
+        left_solution.left_wheel_angle_deg,
+        left_angle,
+        atol=1e-8,
+    )
+    np.testing.assert_allclose(
+        left_outputs["rack_displacement_mm"],
+        2.0,
+        atol=1e-8,
+    )
+
+    project.input_mode = "right_wheel_angle"
+    project.input_value = right_angle
+    right_solution, right_outputs = solve_steering_project(
+        project,
+        include_limits=False,
+    )
+    np.testing.assert_allclose(
+        right_solution.right_wheel_angle_deg,
+        right_angle,
+        atol=1e-8,
+    )
+    np.testing.assert_allclose(
+        right_outputs["rack_displacement_mm"],
+        2.0,
+        atol=1e-8,
+    )
+
+
+def test_two_segment_input_modes_exclude_rack_controls():
+    assert "pinion_angle" not in TWO_SEGMENT_INPUT_MODES
+    assert "rack_displacement" not in TWO_SEGMENT_INPUT_MODES
+    assert "left_wheel_angle" in RACK_AND_PINION_INPUT_MODES
+    assert "right_wheel_angle" in RACK_AND_PINION_INPUT_MODES
+    assert [row.name for row in default_hardpoint_rows("two_segment")] == [
+        "wheel_kingpin_lower",
+        "wheel_kingpin_upper",
+        "wheel_center",
+        "wheel_tie_rod_pickup",
+        "pitman_output",
+        "pitman_pivot",
+    ]
+    assert [row.name for row in default_hardpoint_rows("three_segment")] == [
+        "wheel_kingpin_lower",
+        "wheel_kingpin_upper",
+        "wheel_center",
+        "wheel_tie_rod_pickup",
+        "bellcrank_pivot",
+        "bellcrank_center_link_pickup",
+        "bellcrank_tie_rod_pickup",
+    ]
+
+
 def test_rack_and_pinion_project_modes_produce_the_same_state():
-    project = default_steering_project()
+    project = default_steering_project(linkage_type=RACK_AND_PINION_LINKAGE_TYPE)
     project.pinion_pitch_radius_mm = 20.0
     rack_displacement_mm = 2.0
 
@@ -436,6 +570,17 @@ def test_solve_project_outputs_current_geometry_steering_limits():
     assert outputs["max_left_turn_right_wheel_angle_deg"] > 0.0
     assert outputs["max_right_turn_left_wheel_angle_deg"] < 0.0
     assert outputs["max_right_turn_right_wheel_angle_deg"] < 0.0
+    assert set(available_steering_outputs()).issubset(outputs)
+    for name in (
+        "left_wheel_center_z",
+        "right_tie_rod_pickup_z",
+        "pitman_left_output_x",
+        "max_abs_tie_rod_residual",
+        "center_link_residual",
+        "converged",
+        "nfev",
+    ):
+        assert name in outputs
 
 
 def test_three_segment_project_outputs_current_geometry_steering_limits():

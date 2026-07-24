@@ -13,11 +13,17 @@ from kinematics.gui.steering.hardpoint_sheet import HardpointEditor as _Hardpoin
 from kinematics.steering.workbench import (
     SteeringCurve,
     SteeringHardpointRow,
+    bellcrank_lateral_distance,
+    bellcrank_x_position,
     parse_float_entry,
     pitman_arm_x_length,
     pitman_x_position,
+    rack_x_position,
+    set_bellcrank_lateral_distance,
+    set_bellcrank_x_position,
     set_pitman_arm_x_length,
     set_pitman_x_position,
+    set_rack_x_position,
 )
 
 HardpointEditor = _HardpointEditor
@@ -125,6 +131,121 @@ class PitmanTransformControls(ttk.LabelFrame):
             self.on_change()
 
 
+class RackGeometryControls(ttk.LabelFrame):
+    """Controls for editing rack-and-pinion helper geometry."""
+
+    def __init__(
+        self,
+        master: tk.Misc,
+        on_change: Callable[[], None],
+    ) -> None:
+        super().__init__(master, text="Rack Geometry", padding=6)
+        self.on_change = on_change
+        self.rows: list[SteeringHardpointRow] = []
+        self.updating = False
+        self.x_var = tk.StringVar()
+        self._build()
+
+    def _build(self) -> None:
+        self.columnconfigure(1, weight=1)
+        ttk.Label(self, text="Steering gear X").grid(row=0, column=0, sticky="w")
+        entry = ttk.Entry(self, textvariable=self.x_var, width=12)
+        entry.grid(row=0, column=1, sticky="ew", padx=(6, 0), pady=2)
+        bind_entry_commit_events(
+            entry,
+            on_live_edit=lambda _event: None,
+            on_commit=self._on_entry_commit,
+        )
+
+    def set_rows(self, rows: list[SteeringHardpointRow]) -> None:
+        """Load current hardpoint rows into the rack geometry controls."""
+        self.rows = rows
+        self.updating = True
+        try:
+            self.x_var.set(str(rack_x_position(rows)))
+        finally:
+            self.updating = False
+
+    def _apply_current_entry_values(self) -> bool:
+        if self.updating or not self.rows:
+            return False
+        x_value = parse_float_entry(self.x_var.get(), rack_x_position(self.rows))
+        if not x_value.is_valid or not x_value.is_complete:
+            return False
+        set_rack_x_position(self.rows, x_value.value)
+        return True
+
+    def _on_entry_commit(self, _event: tk.Event) -> None:
+        if self._apply_current_entry_values():
+            self.on_change()
+
+
+class ThreeSegmentGeometryControls(ttk.LabelFrame):
+    """Controls for editing three-segment bellcrank helper geometry."""
+
+    def __init__(
+        self,
+        master: tk.Misc,
+        on_change: Callable[[], None],
+    ) -> None:
+        super().__init__(master, text="Bellcrank Geometry", padding=6)
+        self.on_change = on_change
+        self.rows: list[SteeringHardpointRow] = []
+        self.updating = False
+        self.x_var = tk.StringVar()
+        self.distance_var = tk.StringVar()
+        self._build()
+
+    def _build(self) -> None:
+        self.columnconfigure(1, weight=1)
+        for row_index, (label, var) in enumerate(
+            (
+                ("Bellcrank X", self.x_var),
+                ("L/R distance", self.distance_var),
+            )
+        ):
+            ttk.Label(self, text=label).grid(row=row_index, column=0, sticky="w")
+            entry = ttk.Entry(self, textvariable=var, width=12)
+            entry.grid(row=row_index, column=1, sticky="ew", padx=(6, 0), pady=2)
+            bind_entry_commit_events(
+                entry,
+                on_live_edit=lambda _event: None,
+                on_commit=self._on_entry_commit,
+            )
+
+    def set_rows(self, rows: list[SteeringHardpointRow]) -> None:
+        """Load current hardpoint rows into the bellcrank geometry controls."""
+        self.rows = rows
+        self.updating = True
+        try:
+            self.x_var.set(str(bellcrank_x_position(rows)))
+            self.distance_var.set(str(bellcrank_lateral_distance(rows)))
+        finally:
+            self.updating = False
+
+    def _apply_current_entry_values(self) -> bool:
+        if self.updating or not self.rows:
+            return False
+        x_value = parse_float_entry(self.x_var.get(), bellcrank_x_position(self.rows))
+        distance = parse_float_entry(
+            self.distance_var.get(),
+            bellcrank_lateral_distance(self.rows),
+        )
+        if not x_value.is_valid or not distance.is_valid:
+            return False
+        if not x_value.is_complete or not distance.is_complete:
+            return False
+        if distance.value <= 0.0:
+            return False
+        set_bellcrank_x_position(self.rows, x_value.value)
+        set_bellcrank_lateral_distance(self.rows, distance.value)
+        return True
+
+    def _on_entry_commit(self, _event: tk.Event) -> None:
+        if self._apply_current_entry_values():
+            self.on_change()
+
+
 class CurveManager(ttk.Frame):
     """Curve creation and deletion controls."""
 
@@ -206,6 +327,23 @@ class CurveManager(ttk.Frame):
         """Load curves into the manager."""
         self.curves = curves
         self._refresh()
+
+    def set_available_outputs(self, outputs: tuple[str, ...]) -> None:
+        """Update the selectable X/Y output catalog for curve plots."""
+        if not outputs:
+            return
+        previous_x = self.x_var.get()
+        previous_y = self.y_var.get()
+        self.outputs = outputs
+        for child in self.winfo_children():
+            if isinstance(child, ttk.Frame):
+                for widget in child.winfo_children():
+                    if isinstance(widget, ttk.Combobox):
+                        widget.configure(values=outputs)
+        if previous_x not in outputs:
+            self.x_var.set(outputs[0])
+        if previous_y not in outputs:
+            self.y_var.set(outputs[1] if len(outputs) > 1 else outputs[0])
 
     def add_curve(self) -> None:
         """Add a curve definition."""

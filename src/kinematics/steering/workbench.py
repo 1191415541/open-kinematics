@@ -59,16 +59,22 @@ from kinematics.steering.two_segment import (
     solve_two_segment_from_left_wheel_angle_3d_analytic,
     solve_two_segment_from_right_wheel_angle_3d_analytic,
     solve_two_segment_rack_and_pinion_3d_analytic,
+    solve_two_segment_rack_and_pinion_from_left_wheel_angle_3d_analytic,
+    solve_two_segment_rack_and_pinion_from_right_wheel_angle_3d_analytic,
     solve_two_segment_steering_3d_analytic,
 )
 
-RACK_AND_PINION_INPUT_MODES = ("pinion_angle", "rack_displacement")
+RACK_AND_PINION_WHEEL_INPUT_MODES = ("left_wheel_angle", "right_wheel_angle")
+RACK_AND_PINION_ACTUATOR_INPUT_MODES = ("pinion_angle", "rack_displacement")
+RACK_AND_PINION_INPUT_MODES = (
+    *RACK_AND_PINION_ACTUATOR_INPUT_MODES,
+    *RACK_AND_PINION_WHEEL_INPUT_MODES,
+)
 RACK_AND_PINION_LINKAGE_TYPE = "rack_and_pinion"
 TWO_SEGMENT_INPUT_MODES = (
     "pitman_angle",
     "left_wheel_angle",
     "right_wheel_angle",
-    *RACK_AND_PINION_INPUT_MODES,
 )
 THREE_SEGMENT_INPUT_MODES = (
     "left_bellcrank_angle",
@@ -78,6 +84,29 @@ THREE_SEGMENT_INPUT_MODES = (
 )
 INPUT_MODES = TWO_SEGMENT_INPUT_MODES
 LINKAGE_TYPES = ("two_segment", "three_segment", RACK_AND_PINION_LINKAGE_TYPE)
+TWO_SEGMENT_HARDPOINT_NAMES = (
+    "wheel_kingpin_lower",
+    "wheel_kingpin_upper",
+    "wheel_center",
+    "wheel_tie_rod_pickup",
+    "pitman_output",
+    "pitman_pivot",
+)
+THREE_SEGMENT_HARDPOINT_NAMES = (
+    "wheel_kingpin_lower",
+    "wheel_kingpin_upper",
+    "wheel_center",
+    "wheel_tie_rod_pickup",
+    "bellcrank_pivot",
+    "bellcrank_center_link_pickup",
+    "bellcrank_tie_rod_pickup",
+)
+RACK_AND_PINION_HARDPOINT_NAMES = TWO_SEGMENT_HARDPOINT_NAMES
+LINKAGE_HARDPOINT_NAMES: dict[str, tuple[str, ...]] = {
+    "two_segment": TWO_SEGMENT_HARDPOINT_NAMES,
+    "three_segment": THREE_SEGMENT_HARDPOINT_NAMES,
+    RACK_AND_PINION_LINKAGE_TYPE: RACK_AND_PINION_HARDPOINT_NAMES,
+}
 ThreeSegmentGeometryInput = (
     ThreeSegmentSteeringGeometry | ThreeSegmentSteeringHardpoints3D
 )
@@ -97,36 +126,50 @@ OPTIMIZATION_VARIABLES = (
 
 __all__ = [
     "INPUT_MODES",
+    "LINKAGE_HARDPOINT_NAMES",
     "LINKAGE_TYPES",
     "OPTIMIZATION_VARIABLES",
     "OptimizationCancelledError",
+    "RACK_AND_PINION_ACTUATOR_INPUT_MODES",
+    "RACK_AND_PINION_HARDPOINT_NAMES",
     "RACK_AND_PINION_INPUT_MODES",
     "RACK_AND_PINION_LINKAGE_TYPE",
+    "RACK_AND_PINION_WHEEL_INPUT_MODES",
     "SliderLimits",
     "SteeringCurve",
     "SteeringHardpointRow",
     "SteeringOptimizationResult",
     "SteeringProject",
+    "THREE_SEGMENT_HARDPOINT_NAMES",
     "THREE_SEGMENT_INPUT_MODES",
+    "TWO_SEGMENT_HARDPOINT_NAMES",
     "TWO_SEGMENT_INPUT_MODES",
     "available_steering_outputs",
     "copy_hardpoint_rows",
     "curve_specs_for_plot",
     "default_hardpoint_rows",
     "default_steering_project",
+    "hardpoint_names_for_linkage",
     "hardpoint_rows_from_csv",
     "hardpoints_from_rows",
     "input_angle_slider_limits",
+    "input_modes_for_linkage",
     "load_steering_project",
     "optimize_steering_hardpoints",
     "parse_float_entry",
+    "bellcrank_lateral_distance",
+    "bellcrank_x_position",
     "pitman_angle_slider_limits",
     "pitman_arm_x_length",
     "pitman_x_position",
+    "rack_x_position",
     "save_hardpoint_rows_csv",
     "save_steering_project",
+    "set_bellcrank_lateral_distance",
+    "set_bellcrank_x_position",
     "set_pitman_arm_x_length",
     "set_pitman_x_position",
+    "set_rack_x_position",
     "solve_steering_project",
     "steering_project_limit_outputs",
     "sweep_steering_project",
@@ -316,6 +359,25 @@ def _default_input_mode_for_linkage(linkage_type: str) -> str:
     return "pitman_angle"
 
 
+def input_modes_for_linkage(linkage_type: str) -> tuple[str, ...]:
+    """Return the control modes available for one steering linkage type."""
+    if linkage_type == "three_segment":
+        return THREE_SEGMENT_INPUT_MODES
+    if linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
+        return RACK_AND_PINION_INPUT_MODES
+    if linkage_type == "two_segment":
+        return TWO_SEGMENT_INPUT_MODES
+    raise ValueError(f"Unknown steering linkage type '{linkage_type}'")
+
+
+def hardpoint_names_for_linkage(linkage_type: str) -> tuple[str, ...]:
+    """Return the ordered hardpoint names shown for one linkage type."""
+    try:
+        return LINKAGE_HARDPOINT_NAMES[linkage_type]
+    except KeyError as exc:
+        raise ValueError(f"Unknown steering linkage type '{linkage_type}'") from exc
+
+
 def _required_hardpoint_row(
     rows: list[SteeringHardpointRow],
     name: str,
@@ -465,31 +527,38 @@ def input_angle_slider_limits(
     """Return slider limits for the selected steering input mode."""
     if linkage_type == "three_segment":
         return _three_segment_input_angle_slider_limits(rows, input_mode)
-    if (
-        linkage_type == RACK_AND_PINION_LINKAGE_TYPE
-        and input_mode not in RACK_AND_PINION_INPUT_MODES
-    ):
+    allowed_modes = input_modes_for_linkage(linkage_type)
+    if input_mode not in allowed_modes:
         raise ValueError(
-            "Rack-and-pinion steering requires a rack-and-pinion input mode"
+            f"Input mode '{input_mode}' is not available for linkage '{linkage_type}'"
         )
     hardpoints = hardpoints_from_rows(rows)
-    if input_mode in RACK_AND_PINION_INPUT_MODES:
+    if linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
         limits = estimate_rack_and_pinion_steering_limits(hardpoints)
         if input_mode == "rack_displacement":
             return SliderLimits(
                 minimum=limits.minimum_displacement_mm,
                 maximum=limits.maximum_displacement_mm,
             )
-        return SliderLimits(
-            minimum=pinion_angle_from_rack_displacement(
-                limits.minimum_displacement_mm,
-                pinion_pitch_radius_mm,
-            ),
-            maximum=pinion_angle_from_rack_displacement(
-                limits.maximum_displacement_mm,
-                pinion_pitch_radius_mm,
-            ),
-        )
+        if input_mode == "pinion_angle":
+            return SliderLimits(
+                minimum=pinion_angle_from_rack_displacement(
+                    limits.minimum_displacement_mm,
+                    pinion_pitch_radius_mm,
+                ),
+                maximum=pinion_angle_from_rack_displacement(
+                    limits.maximum_displacement_mm,
+                    pinion_pitch_radius_mm,
+                ),
+            )
+        steering_limits = limits.as_steering_limits()
+        if input_mode == "left_wheel_angle":
+            low = steering_limits.right_turn.left_wheel_angle_deg
+            high = steering_limits.left_turn.left_wheel_angle_deg
+        else:
+            low = steering_limits.right_turn.right_wheel_angle_deg
+            high = steering_limits.left_turn.right_wheel_angle_deg
+        return SliderLimits(minimum=min(low, high), maximum=max(low, high))
     limits = estimate_two_segment_steering_limits(hardpoints)
     if input_mode == "pitman_angle":
         low = limits.right_turn.pitman_angle_deg
@@ -766,6 +835,94 @@ def set_pitman_arm_x_length(
         raise
 
 
+def rack_x_position(rows: list[SteeringHardpointRow]) -> float:
+    """Return the rack / steering-gear longitudinal X position.
+
+    For the shared two-segment hardpoint model used by rack-and-pinion, the
+    design rack ends are stored as ``pitman_output`` and the pinion sits at
+    ``pitman_pivot``. The gear fore-aft location is the common X of that pair.
+    """
+    return pitman_x_position(rows)
+
+
+def set_rack_x_position(rows: list[SteeringHardpointRow], x_position: float) -> None:
+    """Move the rack ends and pinion pivot together along vehicle X."""
+    set_pitman_x_position(rows, x_position)
+
+
+def _bellcrank_rows(
+    rows: list[SteeringHardpointRow],
+) -> tuple[SteeringHardpointRow, SteeringHardpointRow, SteeringHardpointRow]:
+    return (
+        _required_hardpoint_row(rows, "bellcrank_pivot"),
+        _required_hardpoint_row(rows, "bellcrank_center_link_pickup"),
+        _required_hardpoint_row(rows, "bellcrank_tie_rod_pickup"),
+    )
+
+
+def bellcrank_x_position(rows: list[SteeringHardpointRow]) -> float:
+    """Return the left-side bellcrank pivot longitudinal X position."""
+    pivot, _center, _tie = _bellcrank_rows(rows)
+    return pivot.x
+
+
+def set_bellcrank_x_position(
+    rows: list[SteeringHardpointRow],
+    x_position: float,
+) -> None:
+    """Move both-side bellcrank points together along vehicle X.
+
+    The editable rows store only the left/symmetric side; the right side is
+    mirrored at solve time, so a single left-side X shift is a sync fore-aft
+    move for the full axle.
+    """
+    pivot, center, tie = _bellcrank_rows(rows)
+    snapshot = _row_snapshot(rows)
+    delta = float(x_position) - pivot.x
+    pivot.x += delta
+    center.x += delta
+    tie.x += delta
+    try:
+        three_segment_hardpoints_from_rows(rows)
+    except Exception:
+        _restore_row_snapshot(rows, snapshot)
+        raise
+
+
+def bellcrank_lateral_distance(rows: list[SteeringHardpointRow]) -> float:
+    """Return the left-to-right bellcrank pivot span in mm."""
+    pivot, _center, _tie = _bellcrank_rows(rows)
+    return 2.0 * abs(float(pivot.y))
+
+
+def set_bellcrank_lateral_distance(
+    rows: list[SteeringHardpointRow],
+    distance_mm: float,
+) -> None:
+    """Set the left-to-right bellcrank pivot span, preserving local offsets.
+
+    Pickup points keep their Y offsets relative to the pivot. The left-side
+    pivot is placed at ``-distance/2`` (or ``+distance/2`` if the current
+    layout is already on the right side).
+    """
+    if float(distance_mm) <= 0.0:
+        raise ValueError("Bellcrank lateral distance must be positive")
+    pivot, center, tie = _bellcrank_rows(rows)
+    snapshot = _row_snapshot(rows)
+    side_sign = -1.0 if pivot.y <= 0.0 else 1.0
+    new_pivot_y = side_sign * 0.5 * float(distance_mm)
+    center_offset_y = center.y - pivot.y
+    tie_offset_y = tie.y - pivot.y
+    pivot.y = new_pivot_y
+    center.y = new_pivot_y + center_offset_y
+    tie.y = new_pivot_y + tie_offset_y
+    try:
+        three_segment_hardpoints_from_rows(rows)
+    except Exception:
+        _restore_row_snapshot(rows, snapshot)
+        raise
+
+
 def hardpoints_from_rows(
     rows: list[SteeringHardpointRow],
 ) -> TwoSegmentSteeringHardpoints3D:
@@ -990,10 +1147,7 @@ def steering_project_limit_outputs(project: SteeringProject) -> dict[str, float]
             three_segment_hardpoints_from_rows(project.hardpoints)
         )
     hardpoints = hardpoints_from_rows(project.hardpoints)
-    if (
-        project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
-        or project.input_mode in RACK_AND_PINION_INPUT_MODES
-    ):
+    if project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
         return rack_and_pinion_steering_limit_outputs(hardpoints)
     return steering_limit_outputs(hardpoints)
 
@@ -1018,15 +1172,75 @@ def solve_steering_project(
             wheelbase=project.wheelbase,
         )
     hardpoints = hardpoints_from_rows(project.hardpoints)
-    if (
-        project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
-        and project.input_mode not in RACK_AND_PINION_INPUT_MODES
-    ):
+    allowed_modes = input_modes_for_linkage(project.linkage_type)
+    if project.input_mode not in allowed_modes:
         raise ValueError(
-            "Rack-and-pinion steering requires a rack-and-pinion input mode"
+            f"Input mode '{project.input_mode}' is not available for "
+            f"linkage '{project.linkage_type}'"
         )
     actuator_outputs: dict[str, float] = {}
-    if project.input_mode == "pitman_angle":
+    if project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
+        if project.input_mode == "pinion_angle":
+            rack_displacement = rack_displacement_from_pinion_angle(
+                project.input_value,
+                project.pinion_pitch_radius_mm,
+            )
+            solution = solve_two_segment_rack_and_pinion_3d_analytic(
+                hardpoints,
+                rack_displacement,
+            )
+            actuator_outputs = {
+                "pinion_angle_deg": float(project.input_value),
+                "rack_displacement_mm": rack_displacement,
+            }
+        elif project.input_mode == "rack_displacement":
+            pinion_angle = pinion_angle_from_rack_displacement(
+                project.input_value,
+                project.pinion_pitch_radius_mm,
+            )
+            solution = solve_two_segment_rack_and_pinion_3d_analytic(
+                hardpoints,
+                project.input_value,
+            )
+            actuator_outputs = {
+                "pinion_angle_deg": pinion_angle,
+                "rack_displacement_mm": float(project.input_value),
+            }
+        elif project.input_mode == "left_wheel_angle":
+            solution = solve_two_segment_rack_and_pinion_from_left_wheel_angle_3d_analytic(
+                hardpoints,
+                project.input_value,
+            )
+            rack_displacement = float(
+                solution.pitman_left_output_3d[1] - hardpoints.pitman.left_output[1]
+            )
+            actuator_outputs = {
+                "pinion_angle_deg": pinion_angle_from_rack_displacement(
+                    rack_displacement,
+                    project.pinion_pitch_radius_mm,
+                ),
+                "rack_displacement_mm": rack_displacement,
+            }
+        elif project.input_mode == "right_wheel_angle":
+            solution = (
+                solve_two_segment_rack_and_pinion_from_right_wheel_angle_3d_analytic(
+                    hardpoints,
+                    project.input_value,
+                )
+            )
+            rack_displacement = float(
+                solution.pitman_left_output_3d[1] - hardpoints.pitman.left_output[1]
+            )
+            actuator_outputs = {
+                "pinion_angle_deg": pinion_angle_from_rack_displacement(
+                    rack_displacement,
+                    project.pinion_pitch_radius_mm,
+                ),
+                "rack_displacement_mm": rack_displacement,
+            }
+        else:
+            raise ValueError(f"Unknown steering input mode '{project.input_mode}'")
+    elif project.input_mode == "pitman_angle":
         solution = solve_two_segment_steering_3d_analytic(
             hardpoints,
             project.input_value,
@@ -1041,32 +1255,6 @@ def solve_steering_project(
             hardpoints,
             project.input_value,
         )
-    elif project.input_mode == "pinion_angle":
-        rack_displacement = rack_displacement_from_pinion_angle(
-            project.input_value,
-            project.pinion_pitch_radius_mm,
-        )
-        solution = solve_two_segment_rack_and_pinion_3d_analytic(
-            hardpoints,
-            rack_displacement,
-        )
-        actuator_outputs = {
-            "pinion_angle_deg": float(project.input_value),
-            "rack_displacement_mm": rack_displacement,
-        }
-    elif project.input_mode == "rack_displacement":
-        pinion_angle = pinion_angle_from_rack_displacement(
-            project.input_value,
-            project.pinion_pitch_radius_mm,
-        )
-        solution = solve_two_segment_rack_and_pinion_3d_analytic(
-            hardpoints,
-            project.input_value,
-        )
-        actuator_outputs = {
-            "pinion_angle_deg": pinion_angle,
-            "rack_displacement_mm": float(project.input_value),
-        }
     else:
         raise ValueError(f"Unknown steering input mode '{project.input_mode}'")
     limit_outputs = steering_project_limit_outputs(project) if include_limits else None

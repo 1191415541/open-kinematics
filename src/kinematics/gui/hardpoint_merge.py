@@ -11,7 +11,10 @@ import numpy as np
 
 from kinematics.core.constants import EPS_GEOMETRIC
 from kinematics.core.enums import PointID
-from kinematics.steering.workbench import SteeringHardpointRow
+from kinematics.steering.workbench import (
+    SteeringHardpointRow,
+    hardpoint_names_for_linkage,
+)
 
 MergeChoice = Literal["suspension", "steering", "average"]
 
@@ -144,22 +147,30 @@ def steering_rows_from_suspension_hardpoints(
     *,
     wheel_center: np.ndarray,
     existing_rows: list[SteeringHardpointRow],
+    linkage_type: str = "two_segment",
 ) -> list[SteeringHardpointRow]:
-    """Map a suspension corner into editable two-segment steering rows.
+    """Map a suspension corner into editable steering rows for one linkage type.
 
     Suspension export coordinates already use the steering GUI convention
     (rear/right/up).  The derived wheel center is supplied separately because
-    it is not a suspension hardpoint.
+    it is not a suspension hardpoint.  Linkage-specific actuator hardpoints that
+    are not present in the suspension corner keep their existing values.
     """
+    allowed_names = set(hardpoint_names_for_linkage(linkage_type))
     suspension_items = suspension_export_hardpoints(dict(hardpoints))
     positions_by_export_name = {
         item.export_name: item.position for item in suspension_items
     }
-    missing = sorted(
-        steering_name
+    required_sources = {
+        steering_name: source_names
         for steering_name, source_names in (
             SUSPENSION_TO_STEERING_HARDPOINT_SOURCES.items()
         )
+        if steering_name in allowed_names
+    }
+    missing = sorted(
+        steering_name
+        for steering_name, source_names in required_sources.items()
         if not any(name in positions_by_export_name for name in source_names)
     )
     if missing:
@@ -175,18 +186,19 @@ def steering_rows_from_suspension_hardpoints(
                 if source_name in positions_by_export_name
             )
         ]
-        for steering_name, source_names in (
-            SUSPENSION_TO_STEERING_HARDPOINT_SOURCES.items()
-        )
+        for steering_name, source_names in required_sources.items()
     }
-    imported_positions["wheel_center"] = np.asarray(
-        [-float(wheel_center[0]), -float(wheel_center[1]), float(wheel_center[2])],
-        dtype=np.float64,
-    )
+    if "wheel_center" in allowed_names:
+        imported_positions["wheel_center"] = np.asarray(
+            [-float(wheel_center[0]), -float(wheel_center[1]), float(wheel_center[2])],
+            dtype=np.float64,
+        )
 
     rows: list[SteeringHardpointRow] = []
     remaining_positions = dict(imported_positions)
     for row in existing_rows:
+        if row.name not in allowed_names:
+            continue
         position = remaining_positions.pop(row.name, None)
         if position is None:
             rows.append(
@@ -209,15 +221,11 @@ def steering_rows_from_suspension_hardpoints(
             )
         )
 
-    for name in (
-        "wheel_kingpin_lower",
-        "wheel_kingpin_upper",
-        "wheel_center",
-        "wheel_tie_rod_pickup",
-        "pitman_output",
-    ):
+    for name in hardpoint_names_for_linkage(linkage_type):
         position = remaining_positions.pop(name, None)
         if position is None:
+            continue
+        if any(row.name == name for row in rows):
             continue
         rows.append(
             SteeringHardpointRow(

@@ -138,6 +138,9 @@ class SuspensionConfig(BaseModel):
         wheel: Wheel configuration parameters.
         cg_position: Center of gravity position in mm (required for anti-dive/squat).
         wheelbase: Wheelbase distance in mm.
+        brake_bias_front: Front-axle brake force fraction in [0, 1]. Used by
+            anti-pitch: the front axle is scaled by this value and the rear axle
+            by ``1 - brake_bias_front``.
         static_camber_deg: Design-condition camber in degrees. Negative tilts the
             top of the wheel inward.
         static_toe_deg: Design-condition toe in degrees. Positive is toe-in.
@@ -153,6 +156,7 @@ class SuspensionConfig(BaseModel):
     wheel: WheelConfig
     cg_position: PydanticVec3
     wheelbase: float
+    brake_bias_front: float = 1.0
     static_camber_deg: float = 0.0
     static_toe_deg: float = 0.0
     axle_length_mm: float = 150.0
@@ -169,4 +173,11 @@ class SuspensionConfig(BaseModel):
     def check_axle_length_mm(cls, v: float) -> float:
         if v <= 0:
             raise ValueError(f"axle_length_mm must be positive, got {v}")
+        return v
+
+    @field_validator("brake_bias_front")
+    @classmethod
+    def check_brake_bias_front(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError(f"brake_bias_front must be in [0, 1], got {v}")
         return v

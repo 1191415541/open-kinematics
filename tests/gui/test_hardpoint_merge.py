@@ -169,11 +169,12 @@ def test_imported_suspension_hardpoints_drive_rack_and_pinion_steering() -> None
     suspension_project = create_default_suspension_project()
     suspension = suspension_project.build_suspension()
     wheel_center = suspension.initial_state().get(PointID.WHEEL_CENTER)
-    steering_project = default_steering_project()
+    steering_project = default_steering_project(linkage_type="rack_and_pinion")
     steering_project.hardpoints = steering_rows_from_suspension_hardpoints(
         suspension_project.hardpoints,
         wheel_center=wheel_center,
         existing_rows=steering_project.hardpoints,
+        linkage_type="rack_and_pinion",
     )
     steering_project.input_mode = "pinion_angle"
     steering_project.input_value = 0.0
@@ -189,6 +190,7 @@ def test_imported_suspension_hardpoints_drive_rack_and_pinion_steering() -> None
     slider_limits = input_angle_slider_limits(
         steering_project.hardpoints,
         "pinion_angle",
+        "rack_and_pinion",
         pinion_pitch_radius_mm=steering_project.pinion_pitch_radius_mm,
     )
     assert slider_limits.minimum < 0.0 < slider_limits.maximum
@@ -227,11 +229,22 @@ def test_main_gui_imports_suspension_hardpoints_into_steering_page() -> None:
         def select(self, tab_id: str) -> None:
             self.selected_tab = tab_id
 
+    class FakeDialog:
+        result = "rack_and_pinion"
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+    class FakeRoot:
+        def wait_window(self, _dialog) -> None:
+            return None
+
     steering_page = FakeSteeringPage()
     suspension_page = FakeSuspensionPage()
     app = object.__new__(KinematicsWorkbenchApp)
     app.pages = {"steering-tab": steering_page}
     app.notebook = FakeNotebook()
+    app.root = FakeRoot()
     app._page_by_type = lambda page_type: (
         steering_page
         if page_type is SteeringWorkbenchApp
@@ -240,9 +253,16 @@ def test_main_gui_imports_suspension_hardpoints_into_steering_page() -> None:
         else None
     )
 
-    app.import_suspension_hardpoints_to_steering()
+    import kinematics.gui.app as gui_app
 
-    assert steering_page.project.linkage_type == "two_segment"
+    original_type = gui_app._SteeringLinkageTypeDialog
+    gui_app._SteeringLinkageTypeDialog = FakeDialog
+    try:
+        app.import_suspension_hardpoints_to_steering()
+    finally:
+        gui_app._SteeringLinkageTypeDialog = original_type
+
+    assert steering_page.project.linkage_type == "rack_and_pinion"
     assert steering_page.project.input_mode == "pinion_angle"
     assert steering_page.project.input_value == 0.0
     assert steering_page.project.static_radius_mm == pytest.approx(

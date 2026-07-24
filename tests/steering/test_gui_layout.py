@@ -29,10 +29,55 @@ def test_steering_suspension_parameters_use_shared_tire_fields():
 
 def test_steering_linkage_selector_includes_rack_and_pinion():
     source = inspect.getsource(SteeringWorkbenchApp._sync_input_mode_values)
+    visibility_source = inspect.getsource(
+        SteeringWorkbenchApp._sync_linkage_control_visibility
+    )
 
     assert "rack_and_pinion" in LINKAGE_TYPES
-    assert "RACK_AND_PINION_INPUT_MODES" in source
-    assert "RACK_AND_PINION_LINKAGE_TYPE" in source
+    assert "input_modes_for_linkage" in source
+    assert "pinion_pitch_label" in visibility_source
+    assert "RACK_AND_PINION_LINKAGE_TYPE" in visibility_source
+
+
+def test_steering_controls_hide_pinion_radius_for_non_rack_linkages():
+    source = inspect.getsource(SteeringWorkbenchApp._sync_linkage_control_visibility)
+    geometry_source = inspect.getsource(SteeringWorkbenchApp._sync_geometry_controls)
+
+    assert "grid_remove" in source
+    assert 'linkage_type == "two_segment"' in geometry_source
+    assert "RACK_AND_PINION_LINKAGE_TYPE" in geometry_source
+    assert 'linkage_type == "three_segment"' in geometry_source
+    assert "pack_forget" in geometry_source
+    assert "rack_controls" in geometry_source
+    assert "pitman_controls" in geometry_source
+    assert "three_segment_controls" in geometry_source
+
+
+def test_rack_geometry_controls_edit_steering_gear_x():
+    from kinematics.gui.steering.widgets import RackGeometryControls
+
+    build_source = inspect.getsource(RackGeometryControls._build)
+    class_source = inspect.getsource(RackGeometryControls)
+
+    assert "Steering gear X" in build_source
+    assert "on_live_edit=lambda _event: None" in build_source
+    assert "on_commit=self._on_entry_commit" in build_source
+    assert "set_rack_x_position" in class_source
+    assert "rack_x_position" in class_source
+
+
+def test_three_segment_geometry_controls_edit_bellcrank_x_and_distance():
+    from kinematics.gui.steering.widgets import ThreeSegmentGeometryControls
+
+    build_source = inspect.getsource(ThreeSegmentGeometryControls._build)
+    class_source = inspect.getsource(ThreeSegmentGeometryControls)
+
+    assert "Bellcrank X" in build_source
+    assert "L/R distance" in build_source
+    assert "on_live_edit=lambda _event: None" in build_source
+    assert "on_commit=self._on_entry_commit" in build_source
+    assert "set_bellcrank_x_position" in class_source
+    assert "set_bellcrank_lateral_distance" in class_source
 
 
 def test_slider_drag_uses_throttled_preview_refresh():

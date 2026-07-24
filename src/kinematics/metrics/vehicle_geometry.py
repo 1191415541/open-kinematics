@@ -41,13 +41,17 @@ def calculate_roll_center_lateral_offset(ctx: MetricContext) -> float | None:
 def calculate_anti_pitch_pct(ctx: MetricContext) -> float | None:
     """Return the signed anti-pitch percentage for the modeled axle.
 
-    The calculation assumes the axle carries all longitudinal tire force:
+    The geometric term assumes the axle carries 100% of longitudinal tire force,
+    then scales by the axle brake-force share:
 
         anti-pitch = -sign(CP_X - CG_X) * ((SVIC_Z - CP_Z) /
                       (SVIC_X - CP_X)) * wheelbase / CG_height
+                      * brake_force_share * 100
 
-    Positive values resist longitudinal load transfer.  The sign term derives
-    front/rear axle orientation from the contact patch relative to the CG.
+    ``brake_force_share`` is ``brake_bias_front`` for the front axle and
+    ``1 - brake_bias_front`` for the rear axle.  Positive values resist
+    longitudinal load transfer.  The sign term derives front/rear axle
+    orientation from the contact patch relative to the CG.
     """
     side_view_ic = ctx.side_view_ic
     if side_view_ic is None or ctx.wheelbase <= EPS_GEOMETRIC:
@@ -65,6 +69,13 @@ def calculate_anti_pitch_pct(ctx: MetricContext) -> float | None:
     ):
         return None
 
+    # Front axle sits ahead of the CG in vehicle coordinates used here:
+    # CP_X - CG_X < 0 (see geometry fixtures with front corner near X=0).
+    is_front_axle = axle_relative_to_cg < 0.0
+    brake_force_share = (
+        ctx.brake_bias_front if is_front_axle else (1.0 - ctx.brake_bias_front)
+    )
+
     side_view_slope = float(
         (side_view_ic[Axis.Z] - contact_patch[Axis.Z]) / longitudinal_span
     )
@@ -73,6 +84,7 @@ def calculate_anti_pitch_pct(ctx: MetricContext) -> float | None:
         * side_view_slope
         * ctx.wheelbase
         / cg_height
+        * brake_force_share
         * 100.0
     )
 

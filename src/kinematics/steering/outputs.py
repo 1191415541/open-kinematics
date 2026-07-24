@@ -28,15 +28,40 @@ STEERING_OUTPUT_NAMES = (
     "max_right_turn_right_wheel_angle_deg",
     "left_wheel_center_x",
     "left_wheel_center_y",
+    "left_wheel_center_z",
     "right_wheel_center_x",
     "right_wheel_center_y",
+    "right_wheel_center_z",
     "left_tie_rod_pickup_x",
     "left_tie_rod_pickup_y",
+    "left_tie_rod_pickup_z",
     "right_tie_rod_pickup_x",
     "right_tie_rod_pickup_y",
+    "right_tie_rod_pickup_z",
+    "pitman_left_output_x",
+    "pitman_left_output_y",
+    "pitman_left_output_z",
+    "pitman_right_output_x",
+    "pitman_right_output_y",
+    "pitman_right_output_z",
+    "center_link_residual",
     "left_tie_rod_residual",
     "right_tie_rod_residual",
+    "max_abs_tie_rod_residual",
+    "converged",
+    "nfev",
 )
+
+def _optional_point_component(
+    point_2d: object,
+    point_3d: object | None,
+    index: int,
+) -> float:
+    if point_3d is not None:
+        return float(point_3d[index])
+    if index < 2:
+        return float(point_2d[index])
+    return 0.0
 
 
 def _ackermann_rate_pct(
@@ -95,16 +120,102 @@ def outputs_from_solution(
             solution.left_wheel_angle_deg - solution.right_wheel_angle_deg
         ),
         "ackermann_rate_pct": _ackermann_rate_pct(solution, wheelbase),
-        "left_wheel_center_x": float(solution.left_wheel_center[0]),
-        "left_wheel_center_y": float(solution.left_wheel_center[1]),
-        "right_wheel_center_x": float(solution.right_wheel_center[0]),
-        "right_wheel_center_y": float(solution.right_wheel_center[1]),
-        "left_tie_rod_pickup_x": float(solution.left_tie_rod_pickup[0]),
-        "left_tie_rod_pickup_y": float(solution.left_tie_rod_pickup[1]),
-        "right_tie_rod_pickup_x": float(solution.right_tie_rod_pickup[0]),
-        "right_tie_rod_pickup_y": float(solution.right_tie_rod_pickup[1]),
+        "left_wheel_center_x": _optional_point_component(
+            solution.left_wheel_center,
+            solution.left_wheel_center_3d,
+            0,
+        ),
+        "left_wheel_center_y": _optional_point_component(
+            solution.left_wheel_center,
+            solution.left_wheel_center_3d,
+            1,
+        ),
+        "left_wheel_center_z": _optional_point_component(
+            solution.left_wheel_center,
+            solution.left_wheel_center_3d,
+            2,
+        ),
+        "right_wheel_center_x": _optional_point_component(
+            solution.right_wheel_center,
+            solution.right_wheel_center_3d,
+            0,
+        ),
+        "right_wheel_center_y": _optional_point_component(
+            solution.right_wheel_center,
+            solution.right_wheel_center_3d,
+            1,
+        ),
+        "right_wheel_center_z": _optional_point_component(
+            solution.right_wheel_center,
+            solution.right_wheel_center_3d,
+            2,
+        ),
+        "left_tie_rod_pickup_x": _optional_point_component(
+            solution.left_tie_rod_pickup,
+            solution.left_tie_rod_pickup_3d,
+            0,
+        ),
+        "left_tie_rod_pickup_y": _optional_point_component(
+            solution.left_tie_rod_pickup,
+            solution.left_tie_rod_pickup_3d,
+            1,
+        ),
+        "left_tie_rod_pickup_z": _optional_point_component(
+            solution.left_tie_rod_pickup,
+            solution.left_tie_rod_pickup_3d,
+            2,
+        ),
+        "right_tie_rod_pickup_x": _optional_point_component(
+            solution.right_tie_rod_pickup,
+            solution.right_tie_rod_pickup_3d,
+            0,
+        ),
+        "right_tie_rod_pickup_y": _optional_point_component(
+            solution.right_tie_rod_pickup,
+            solution.right_tie_rod_pickup_3d,
+            1,
+        ),
+        "right_tie_rod_pickup_z": _optional_point_component(
+            solution.right_tie_rod_pickup,
+            solution.right_tie_rod_pickup_3d,
+            2,
+        ),
+        "pitman_left_output_x": _optional_point_component(
+            solution.pitman_left_output,
+            solution.pitman_left_output_3d,
+            0,
+        ),
+        "pitman_left_output_y": _optional_point_component(
+            solution.pitman_left_output,
+            solution.pitman_left_output_3d,
+            1,
+        ),
+        "pitman_left_output_z": _optional_point_component(
+            solution.pitman_left_output,
+            solution.pitman_left_output_3d,
+            2,
+        ),
+        "pitman_right_output_x": _optional_point_component(
+            solution.pitman_right_output,
+            solution.pitman_right_output_3d,
+            0,
+        ),
+        "pitman_right_output_y": _optional_point_component(
+            solution.pitman_right_output,
+            solution.pitman_right_output_3d,
+            1,
+        ),
+        "pitman_right_output_z": _optional_point_component(
+            solution.pitman_right_output,
+            solution.pitman_right_output_3d,
+            2,
+        ),
+        "center_link_residual": 0.0,
         "left_tie_rod_residual": solution.left_tie_rod_residual,
         "right_tie_rod_residual": solution.right_tie_rod_residual,
+        "max_abs_tie_rod_residual": solution.max_abs_tie_rod_residual,
+        "converged": float(solution.converged),
+        "nfev": float(solution.nfev),
     }
     if extra_outputs is not None:
         outputs.update(extra_outputs)
@@ -131,16 +242,78 @@ def outputs_from_three_segment_solution(
             solution.left_wheel_angle_deg - solution.right_wheel_angle_deg
         ),
         "ackermann_rate_pct": _ackermann_rate_pct(solution, wheelbase),
-        "left_wheel_center_x": float(solution.left_wheel_center[0]),
-        "left_wheel_center_y": float(solution.left_wheel_center[1]),
-        "right_wheel_center_x": float(solution.right_wheel_center[0]),
-        "right_wheel_center_y": float(solution.right_wheel_center[1]),
-        "left_tie_rod_pickup_x": float(solution.left_tie_rod_pickup[0]),
-        "left_tie_rod_pickup_y": float(solution.left_tie_rod_pickup[1]),
-        "right_tie_rod_pickup_x": float(solution.right_tie_rod_pickup[0]),
-        "right_tie_rod_pickup_y": float(solution.right_tie_rod_pickup[1]),
+        "left_wheel_center_x": _optional_point_component(
+            solution.left_wheel_center,
+            solution.left_wheel_center_3d,
+            0,
+        ),
+        "left_wheel_center_y": _optional_point_component(
+            solution.left_wheel_center,
+            solution.left_wheel_center_3d,
+            1,
+        ),
+        "left_wheel_center_z": _optional_point_component(
+            solution.left_wheel_center,
+            solution.left_wheel_center_3d,
+            2,
+        ),
+        "right_wheel_center_x": _optional_point_component(
+            solution.right_wheel_center,
+            solution.right_wheel_center_3d,
+            0,
+        ),
+        "right_wheel_center_y": _optional_point_component(
+            solution.right_wheel_center,
+            solution.right_wheel_center_3d,
+            1,
+        ),
+        "right_wheel_center_z": _optional_point_component(
+            solution.right_wheel_center,
+            solution.right_wheel_center_3d,
+            2,
+        ),
+        "left_tie_rod_pickup_x": _optional_point_component(
+            solution.left_tie_rod_pickup,
+            solution.left_tie_rod_pickup_3d,
+            0,
+        ),
+        "left_tie_rod_pickup_y": _optional_point_component(
+            solution.left_tie_rod_pickup,
+            solution.left_tie_rod_pickup_3d,
+            1,
+        ),
+        "left_tie_rod_pickup_z": _optional_point_component(
+            solution.left_tie_rod_pickup,
+            solution.left_tie_rod_pickup_3d,
+            2,
+        ),
+        "right_tie_rod_pickup_x": _optional_point_component(
+            solution.right_tie_rod_pickup,
+            solution.right_tie_rod_pickup_3d,
+            0,
+        ),
+        "right_tie_rod_pickup_y": _optional_point_component(
+            solution.right_tie_rod_pickup,
+            solution.right_tie_rod_pickup_3d,
+            1,
+        ),
+        "right_tie_rod_pickup_z": _optional_point_component(
+            solution.right_tie_rod_pickup,
+            solution.right_tie_rod_pickup_3d,
+            2,
+        ),
+        "pitman_left_output_x": 0.0,
+        "pitman_left_output_y": 0.0,
+        "pitman_left_output_z": 0.0,
+        "pitman_right_output_x": 0.0,
+        "pitman_right_output_y": 0.0,
+        "pitman_right_output_z": 0.0,
+        "center_link_residual": solution.center_link_residual,
         "left_tie_rod_residual": solution.left_tie_rod_residual,
         "right_tie_rod_residual": solution.right_tie_rod_residual,
+        "max_abs_tie_rod_residual": solution.max_abs_link_residual,
+        "converged": float(solution.converged),
+        "nfev": float(solution.nfev),
     }
     if extra_outputs is not None:
         outputs.update(extra_outputs)

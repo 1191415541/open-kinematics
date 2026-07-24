@@ -28,6 +28,8 @@ from kinematics.gui.steering.widgets import (
     HardpointEditor,
     OutputTable,
     PitmanTransformControls,
+    RackGeometryControls,
+    ThreeSegmentGeometryControls,
 )
 from kinematics.steering.geometry import (
     ThreeSegmentSteeringSolution,
@@ -41,18 +43,15 @@ from kinematics.steering.two_segment import (
     solve_two_segment_steering,
 )
 from kinematics.steering.workbench import (
-    INPUT_MODES,
     LINKAGE_TYPES,
-    RACK_AND_PINION_INPUT_MODES,
     RACK_AND_PINION_LINKAGE_TYPE,
-    THREE_SEGMENT_INPUT_MODES,
-    TWO_SEGMENT_INPUT_MODES,
     available_steering_outputs,
     copy_hardpoint_rows,
     curve_specs_for_plot,
     default_steering_project,
     hardpoints_from_rows,
     input_angle_slider_limits,
+    input_modes_for_linkage,
     optimize_steering_hardpoints,
     parse_float_entry,
     solve_steering_project,
@@ -201,10 +200,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             if self.project.linkage_type == "three_segment":
                 hardpoints = three_segment_hardpoints_from_rows(self.project.hardpoints)
                 outputs = three_segment_steering_limit_outputs(hardpoints)
-            elif (
-                self.project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
-                or self.project.input_mode in RACK_AND_PINION_INPUT_MODES
-            ):
+            elif self.project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
                 outputs = steering_project_limit_outputs(self.project)
             else:
                 hardpoints = hardpoints_from_rows(self.project.hardpoints)
@@ -267,18 +263,12 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                     project_snapshot.hardpoints
                 )
                 limit_outputs = three_segment_steering_limit_outputs(hardpoints)
-            elif (
-                project_snapshot.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
-                or project_snapshot.input_mode in RACK_AND_PINION_INPUT_MODES
-            ):
+            elif project_snapshot.linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
                 limit_outputs = steering_project_limit_outputs(project_snapshot)
             else:
                 hardpoints = hardpoints_from_rows(project_snapshot.hardpoints)
                 limit_outputs = steering_limit_outputs(hardpoints)
-            if (
-                project_snapshot.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
-                or project_snapshot.input_mode in RACK_AND_PINION_INPUT_MODES
-            ):
+            if project_snapshot.linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
                 slider_limits = input_angle_slider_limits(
                     project_snapshot.hardpoints,
                     project_snapshot.input_mode,
@@ -470,6 +460,16 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             self._on_pitman_transform_changed,
         )
         self.pitman_controls.pack(fill=tk.X, pady=(8, 0))
+        self.rack_controls = RackGeometryControls(
+            left,
+            self._on_rack_transform_changed,
+        )
+        self.rack_controls.pack(fill=tk.X, pady=(8, 0))
+        self.three_segment_controls = ThreeSegmentGeometryControls(
+            left,
+            self._on_three_segment_transform_changed,
+        )
+        self.three_segment_controls.pack(fill=tk.X, pady=(8, 0))
 
         workspace = ttk.PanedWindow(right, orient=tk.HORIZONTAL)
         workspace.pack(fill=tk.BOTH, expand=True)
@@ -527,7 +527,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.input_mode_combo = ttk.Combobox(
             parent,
             textvariable=self.input_mode_var,
-            values=INPUT_MODES,
+            values=input_modes_for_linkage(self.project.linkage_type),
             state="readonly",
             width=22,
         )
@@ -569,26 +569,28 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 pady=(6, 0),
             )
             refresh_commit_entries.append(entry)
-        ttk.Label(parent, text="Pinion pitch R [mm]").grid(
+        self.pinion_pitch_label = ttk.Label(parent, text="Pinion pitch R [mm]")
+        self.pinion_pitch_label.grid(
             row=1,
             column=6,
             sticky="w",
             pady=(6, 0),
         )
-        pinion_entry = ttk.Entry(
+        self.pinion_pitch_entry = ttk.Entry(
             parent,
             textvariable=self.pinion_pitch_radius_var,
             width=8,
         )
-        pinion_entry.grid(
+        self.pinion_pitch_entry.grid(
             row=1,
             column=7,
             sticky="w",
             padx=(6, 0),
             pady=(6, 0),
         )
-        refresh_commit_entries.append(pinion_entry)
+        refresh_commit_entries.append(self.pinion_pitch_entry)
         self.bind_entry_commit_refresh(refresh_commit_entries)
+        self._sync_linkage_control_visibility()
 
     def _build_preview(self, parent: ttk.Frame) -> None:
         frame = ttk.Frame(parent)
@@ -741,6 +743,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.wheelbase_var.set(str(self.project.wheelbase))
         self.pinion_pitch_radius_var.set(str(self.project.pinion_pitch_radius_mm))
         self.hardpoint_editor.set_rows(self.project.hardpoints)
+        self._sync_linkage_control_visibility()
         self._sync_pitman_controls()
         self._sync_input_slider_limits(self.project.input_value)
         self.curve_manager.set_curves(self.project.curves)
@@ -753,11 +756,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
                 self.project.hardpoints,
                 self.project.input_mode,
                 self.project.linkage_type,
-                *(
-                    (self.project.pinion_pitch_radius_mm,)
-                    if self.project.input_mode in RACK_AND_PINION_INPUT_MODES
-                    else ()
-                ),
+                self.project.pinion_pitch_radius_mm,
             )
             self.slider_limits_cache_key = key
         limits = self.slider_limits_cache
@@ -773,6 +772,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.project.input_mode = self.input_mode_var.get()
         if self.project.input_mode != previous_input_mode:
             self.previous_three_segment_state = None
+            self._sync_linkage_control_visibility()
             self._sync_pitman_controls()
         for attr, var in (
             ("input_value", self.input_value_var),
@@ -800,16 +800,22 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         return True
 
     def _sync_input_mode_values(self) -> None:
-        if self.project.linkage_type == "three_segment":
-            modes = THREE_SEGMENT_INPUT_MODES
-        elif self.project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
-            modes = RACK_AND_PINION_INPUT_MODES
-        else:
-            modes = TWO_SEGMENT_INPUT_MODES
+        modes = input_modes_for_linkage(self.project.linkage_type)
         self.input_mode_combo.configure(values=modes)
         if self.project.input_mode not in modes:
             self.project.input_mode = modes[0]
             self.input_mode_var.set(self.project.input_mode)
+
+    def _sync_linkage_control_visibility(self) -> None:
+        show_pinion = self.project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
+        if show_pinion:
+            self.pinion_pitch_label.grid()
+            self.pinion_pitch_entry.grid()
+            self.pinion_pitch_entry.state(["!disabled"])
+        else:
+            self.pinion_pitch_label.grid_remove()
+            self.pinion_pitch_entry.grid_remove()
+        self._sync_geometry_controls()
 
     def _switch_linkage_type(self, linkage_type: str) -> None:
         self.project = default_steering_project(linkage_type=linkage_type)
@@ -826,18 +832,35 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         self.input_slider_var.set(self.project.input_value)
         self.pinion_pitch_radius_var.set(str(self.project.pinion_pitch_radius_mm))
         self.hardpoint_editor.set_rows(self.project.hardpoints)
-        self._sync_pitman_controls()
+        self._sync_linkage_control_visibility()
         self._sync_input_slider_limits(self.project.input_value)
 
-    def _sync_pitman_controls(self) -> None:
-        if (
-            self.project.linkage_type == "two_segment"
-            and self.project.input_mode not in RACK_AND_PINION_INPUT_MODES
-        ):
+    def _sync_geometry_controls(self) -> None:
+        linkage_type = self.project.linkage_type
+        if linkage_type == "two_segment":
             self.pitman_controls.set_rows(self.project.hardpoints)
-            self.pitman_controls.state(["!disabled"])
+            self.pitman_controls.pack(fill=tk.X, pady=(8, 0))
+            self.rack_controls.pack_forget()
+            self.three_segment_controls.pack_forget()
             return
-        self.pitman_controls.state(["disabled"])
+        if linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
+            self.rack_controls.set_rows(self.project.hardpoints)
+            self.rack_controls.pack(fill=tk.X, pady=(8, 0))
+            self.pitman_controls.pack_forget()
+            self.three_segment_controls.pack_forget()
+            return
+        if linkage_type == "three_segment":
+            self.three_segment_controls.set_rows(self.project.hardpoints)
+            self.three_segment_controls.pack(fill=tk.X, pady=(8, 0))
+            self.pitman_controls.pack_forget()
+            self.rack_controls.pack_forget()
+            return
+        self.pitman_controls.pack_forget()
+        self.rack_controls.pack_forget()
+        self.three_segment_controls.pack_forget()
+
+    def _sync_pitman_controls(self) -> None:
+        self._sync_geometry_controls()
 
     def _on_input_slider_changed(self, value: str) -> None:
         if self.updating_controls:
@@ -925,6 +948,18 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
         )
 
     def _on_pitman_transform_changed(self) -> None:
+        self._reset_refresh_caches()
+        self.background_refresh_generation += 1
+        self.hardpoint_editor.set_rows(self.project.hardpoints)
+        self.refresh()
+
+    def _on_rack_transform_changed(self) -> None:
+        self._reset_refresh_caches()
+        self.background_refresh_generation += 1
+        self.hardpoint_editor.set_rows(self.project.hardpoints)
+        self.refresh()
+
+    def _on_three_segment_transform_changed(self) -> None:
         self._reset_refresh_caches()
         self.background_refresh_generation += 1
         self.hardpoint_editor.set_rows(self.project.hardpoints)
@@ -1158,10 +1193,7 @@ class SteeringWorkbenchApp(RefreshWorkflowMixin, SteeringFileActions):
             )
             return
         hardpoints = hardpoints_from_rows(self.project.hardpoints)
-        if (
-            self.project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
-            or self.project.input_mode in RACK_AND_PINION_INPUT_MODES
-        ):
+        if self.project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
             assert isinstance(state, TwoSegmentSteeringSolution)
             design_state = solve_steering_project(
                 replace(

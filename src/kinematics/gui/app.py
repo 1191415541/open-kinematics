@@ -24,7 +24,13 @@ from kinematics.gui.reporting import (
 )
 from kinematics.gui.steering import SteeringWorkbenchApp
 from kinematics.gui.suspension import SuspensionWorkbenchPage
-from kinematics.steering.workbench import copy_hardpoint_rows, default_hardpoint_rows
+from kinematics.steering.workbench import (
+    LINKAGE_TYPES,
+    copy_hardpoint_rows,
+    default_hardpoint_rows,
+    default_steering_project,
+    input_modes_for_linkage,
+)
 
 
 class KinematicsWorkbenchApp:
@@ -230,28 +236,38 @@ class KinematicsWorkbenchApp:
         if not suspension_page._sync_controls_to_project():
             return
 
+        dialog = _SteeringLinkageTypeDialog(
+            self.root,
+            initial_linkage_type=steering_page.project.linkage_type,
+        )
+        self.root.wait_window(dialog)
+        if dialog.result is None:
+            return
+        linkage_type = dialog.result
+
         try:
             suspension = suspension_page.project.build_suspension()
             design_state = suspension.initial_state()
             wheel_center = design_state.get(PointID.WHEEL_CENTER)
-            existing_rows = (
-                steering_page.project.hardpoints
-                if steering_page.project.linkage_type == "two_segment"
-                else default_hardpoint_rows("two_segment")
-            )
+            if steering_page.project.linkage_type == linkage_type:
+                existing_rows = steering_page.project.hardpoints
+            else:
+                existing_rows = default_hardpoint_rows(linkage_type)
             steering_rows = steering_rows_from_suspension_hardpoints(
                 design_state.positions,
                 wheel_center=wheel_center,
                 existing_rows=existing_rows,
+                linkage_type=linkage_type,
             )
         except Exception as exc:
             messagebox.showerror("Suspension import failed", str(exc))
             return
 
         tire = suspension_page.project.config.wheel.tire
-        steering_page.project.linkage_type = "two_segment"
+        defaults = default_steering_project(linkage_type=linkage_type)
+        steering_page.project.linkage_type = linkage_type
         steering_page.project.hardpoints = steering_rows
-        steering_page.project.input_mode = "pinion_angle"
+        steering_page.project.input_mode = defaults.input_mode
         steering_page.project.input_value = 0.0
         steering_page.project.static_radius_mm = float(tire.static_radius_mm)
         steering_page.project.section_width = float(tire.section_width)
@@ -667,6 +683,95 @@ class _ReportExportDialog(tk.Toplevel):
                 else None
             ),
         )
+        self.destroy()
+
+    def _cancel(self) -> None:
+        self.result = None
+        self.destroy()
+
+
+class _SteeringLinkageTypeDialog(tk.Toplevel):
+    """Dialog that selects the target steering linkage type for import."""
+
+    LINKAGE_LABELS = {
+        "two_segment": "Two segment",
+        "three_segment": "Three segment",
+        "rack_and_pinion": "Rack and pinion",
+    }
+
+    def __init__(
+        self,
+        master: tk.Misc,
+        *,
+        initial_linkage_type: str = "two_segment",
+    ) -> None:
+        super().__init__(master)
+        self.title("Import to Steering")
+        self.transient(master)
+        self.resizable(False, False)
+        self.result: str | None = None
+        default = (
+            initial_linkage_type
+            if initial_linkage_type in LINKAGE_TYPES
+            else LINKAGE_TYPES[0]
+        )
+        self.linkage_type_var = tk.StringVar(value=default)
+        self._build()
+        self.protocol("WM_DELETE_WINDOW", self._cancel)
+        self.grab_set()
+        self.focus_set()
+
+    def _build(self) -> None:
+        body = ttk.Frame(self, padding=12)
+        body.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(
+            body,
+            text="Select the steering linkage type that should receive the suspension hardpoints.",
+            justify=tk.LEFT,
+            wraplength=360,
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(body, text="Linkage type").grid(
+            row=1,
+            column=0,
+            sticky="w",
+            pady=(12, 0),
+        )
+        values = [
+            f"{linkage} — {self.LINKAGE_LABELS.get(linkage, linkage)}"
+            for linkage in LINKAGE_TYPES
+        ]
+        display_var = tk.StringVar(
+            value=f"{self.linkage_type_var.get()} — "
+            f"{self.LINKAGE_LABELS.get(self.linkage_type_var.get(), self.linkage_type_var.get())}"
+        )
+        combo = ttk.Combobox(
+            body,
+            textvariable=display_var,
+            values=values,
+            state="readonly",
+            width=36,
+        )
+        combo.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(12, 0))
+
+        def _on_select(_event: object | None = None) -> None:
+            selected = display_var.get().split(" — ", 1)[0]
+            if selected in LINKAGE_TYPES:
+                self.linkage_type_var.set(selected)
+
+        combo.bind("<<ComboboxSelected>>", _on_select)
+        buttons = ttk.Frame(body)
+        buttons.grid(row=2, column=0, columnspan=2, sticky="e", pady=(16, 0))
+        ttk.Button(buttons, text="Cancel", command=self._cancel).pack(
+            side=tk.RIGHT,
+            padx=(6, 0),
+        )
+        ttk.Button(buttons, text="Import", command=self._accept).pack(side=tk.RIGHT)
+
+    def _accept(self) -> None:
+        linkage_type = self.linkage_type_var.get()
+        if linkage_type not in LINKAGE_TYPES:
+            return
+        self.result = linkage_type
         self.destroy()
 
     def _cancel(self) -> None:

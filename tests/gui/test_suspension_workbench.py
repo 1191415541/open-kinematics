@@ -59,6 +59,20 @@ def test_solve_suspension_project_returns_metrics_and_solver_rows(
     assert len(result.rows) == 4
     assert result.curve_options[0] == DEFAULT_CURVE_X
     assert DEFAULT_CURVE_Y in result.curve_options
+    for option in (
+        "svic_x_mm",
+        "svic_z_mm",
+        "svsa_length_mm",
+        "fvic_y_mm",
+        "fvic_z_mm",
+        "fvsa_length_mm",
+        "roll_center_height_mm",
+        "roll_center_lateral_offset_mm",
+        "anti_pitch_pct",
+        "track_change_mm",
+    ):
+        assert option in result.curve_options
+        assert option in result.rows[0]
     assert all(row["step"] == index for index, row in enumerate(result.rows))
     assert all(row["solver_converged"] for row in result.rows)
     assert {row["wheel_travel_mm"] for row in result.rows} == {

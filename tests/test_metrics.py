@@ -194,12 +194,19 @@ def test_anti_pitch_uses_side_view_swing_arm_and_cg_geometry(
     assert side_view_ic is not None
     contact_patch = state.get(PointID.CONTACT_PATCH_CENTER)
     cg_position = np.asarray(suspension.config.cg_position, dtype=np.float64)
+    axle_relative_to_cg = contact_patch[Axis.X] - cg_position[Axis.X]
+    brake_force_share = (
+        suspension.config.brake_bias_front
+        if axle_relative_to_cg < 0.0
+        else (1.0 - suspension.config.brake_bias_front)
+    )
     expected = (
-        -np.sign(contact_patch[Axis.X] - cg_position[Axis.X])
+        -np.sign(axle_relative_to_cg)
         * (side_view_ic[Axis.Z] - contact_patch[Axis.Z])
         / (side_view_ic[Axis.X] - contact_patch[Axis.X])
         * suspension.config.wheelbase
         / (cg_position[Axis.Z] - contact_patch[Axis.Z])
+        * brake_force_share
         * 100.0
     )
 
@@ -208,6 +215,50 @@ def test_anti_pitch_uses_side_view_swing_arm_and_cg_geometry(
     np.testing.assert_allclose(
         metrics["anti_pitch_pct"],
         expected,
+        atol=TEST_TOLERANCE,
+    )
+
+
+def test_anti_pitch_scales_with_front_brake_bias(
+    double_wishbone_geometry_file,
+    test_data_dir,
+) -> None:
+    suspension = load_geometry(double_wishbone_geometry_file)
+    assert isinstance(suspension, DoubleWishboneSuspension)
+    assert suspension.config is not None
+
+    states, _ = solve_sweep(suspension, parse_sweep_file(test_data_dir / "sweep.yaml"))
+    state = next(
+        state
+        for state in states
+        if suspension.compute_side_view_instant_center(state) is not None
+    )
+    full_bias_metrics = compute_metrics_for_state_from_suspension(state, suspension)
+    full_value = full_bias_metrics["anti_pitch_pct"]
+    assert full_value is not None
+
+    scaled_config = suspension.config.model_copy(update={"brake_bias_front": 0.6})
+    scaled_suspension = DoubleWishboneSuspension(
+        name=suspension.name,
+        version=suspension.version,
+        units=suspension.units,
+        hardpoints=suspension.hardpoints,
+        config=scaled_config,
+    )
+    scaled_metrics = compute_metrics_for_state_from_suspension(
+        state,
+        scaled_suspension,
+    )
+    scaled_value = scaled_metrics["anti_pitch_pct"]
+    assert scaled_value is not None
+
+    contact_patch = state.get(PointID.CONTACT_PATCH_CENTER)
+    cg_position = np.asarray(suspension.config.cg_position, dtype=np.float64)
+    is_front = float(contact_patch[Axis.X] - cg_position[Axis.X]) < 0.0
+    expected_share = 0.6 if is_front else 0.4
+    np.testing.assert_allclose(
+        scaled_value,
+        full_value * expected_share,
         atol=TEST_TOLERANCE,
     )
 

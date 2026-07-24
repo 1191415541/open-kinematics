@@ -40,7 +40,6 @@ from kinematics.gui.suspension.workbench import (
 from kinematics.steering.geometry import TwoSegmentSteeringSolution
 from kinematics.steering.two_segment import solve_two_segment_steering
 from kinematics.steering.workbench import (
-    RACK_AND_PINION_INPUT_MODES,
     RACK_AND_PINION_LINKAGE_TYPE,
     SteeringProject,
     hardpoints_from_rows,
@@ -74,8 +73,30 @@ STEERING_OUTPUT_LABELS = {
     "max_left_turn_right_wheel_angle_deg": "Max left turn right wheel [deg]",
     "max_right_turn_left_wheel_angle_deg": "Max right turn left wheel [deg]",
     "max_right_turn_right_wheel_angle_deg": "Max right turn right wheel [deg]",
+    "left_wheel_center_x": "Left wheel center X [mm]",
+    "left_wheel_center_y": "Left wheel center Y [mm]",
+    "left_wheel_center_z": "Left wheel center Z [mm]",
+    "right_wheel_center_x": "Right wheel center X [mm]",
+    "right_wheel_center_y": "Right wheel center Y [mm]",
+    "right_wheel_center_z": "Right wheel center Z [mm]",
+    "left_tie_rod_pickup_x": "Left tie rod pickup X [mm]",
+    "left_tie_rod_pickup_y": "Left tie rod pickup Y [mm]",
+    "left_tie_rod_pickup_z": "Left tie rod pickup Z [mm]",
+    "right_tie_rod_pickup_x": "Right tie rod pickup X [mm]",
+    "right_tie_rod_pickup_y": "Right tie rod pickup Y [mm]",
+    "right_tie_rod_pickup_z": "Right tie rod pickup Z [mm]",
+    "pitman_left_output_x": "Left rack/pitman output X [mm]",
+    "pitman_left_output_y": "Left rack/pitman output Y [mm]",
+    "pitman_left_output_z": "Left rack/pitman output Z [mm]",
+    "pitman_right_output_x": "Right rack/pitman output X [mm]",
+    "pitman_right_output_y": "Right rack/pitman output Y [mm]",
+    "pitman_right_output_z": "Right rack/pitman output Z [mm]",
+    "center_link_residual": "Center link residual",
     "left_tie_rod_residual": "Left tie rod residual",
     "right_tie_rod_residual": "Right tie rod residual",
+    "max_abs_tie_rod_residual": "Max abs link residual",
+    "converged": "Converged",
+    "nfev": "Solver nfev",
 }
 STEERING_SUMMARY_METRICS = (
     "left_wheel_angle_deg",
@@ -84,6 +105,7 @@ STEERING_SUMMARY_METRICS = (
     "ackermann_rate_pct",
     "left_tie_rod_residual",
     "right_tie_rod_residual",
+    "max_abs_tie_rod_residual",
 )
 
 
@@ -322,10 +344,7 @@ def render_steering_preview_png(
             wheel_radius=project.static_radius_mm,
             wheel_width=project.section_width,
         )
-    elif (
-        project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE
-        or project.input_mode in RACK_AND_PINION_INPUT_MODES
-    ):
+    elif project.linkage_type == RACK_AND_PINION_LINKAGE_TYPE:
         hardpoints = hardpoints_from_rows(project.hardpoints)
         design_state = solve_steering_project(
             replace(

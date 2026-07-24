@@ -160,6 +160,11 @@ class MetricContext:
         return self.config.wheelbase
 
     @cached_property
+    def brake_bias_front(self) -> float:
+        """Front-axle brake force fraction from configuration."""
+        return float(self.config.brake_bias_front)
+
+    @cached_property
     def cg_position(self) -> Vec3:
         """
         Center of gravity position from configuration.

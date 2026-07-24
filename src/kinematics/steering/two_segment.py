@@ -598,6 +598,124 @@ def solve_two_segment_rack_and_pinion_3d_analytic(
     )
 
 
+def _rack_displacements_for_wheel_target(
+    *,
+    wheel,
+    design_rack_output: Vec3,
+    tie_rod_length: float,
+    wheel_angle_deg: float,
+) -> tuple[float, ...]:
+    """Return rack displacements that place the driven wheel at a target angle."""
+    angle_rad = float(np.deg2rad(wheel_angle_deg))
+    _center, pickup = _rotate_wheel_state_3d(wheel, angle_rad)
+    axis = np.asarray(SteeringCoordinateSystem.Y_RIGHT, dtype=np.float64)
+    delta = np.asarray(pickup - design_rack_output, dtype=np.float64)
+    axis_dot = float(np.dot(delta, axis))
+    constant = float(np.dot(delta, delta) - tie_rod_length * tie_rod_length)
+    # |delta - d * axis|^2 = L^2  =>  d^2 - 2*(delta·axis)*d + |delta|^2 - L^2 = 0
+    discriminant = axis_dot * axis_dot - constant
+    if discriminant < -EPS_GEOMETRIC:
+        return ()
+    if discriminant <= EPS_GEOMETRIC:
+        return (axis_dot,)
+    root = float(np.sqrt(max(0.0, discriminant)))
+    first = axis_dot - root
+    second = axis_dot + root
+    if abs(first - second) <= EPS_GEOMETRIC:
+        return (first,)
+    return (first, second)
+
+
+def solve_two_segment_rack_and_pinion_from_left_wheel_angle_3d_analytic(
+    hardpoints: TwoSegmentSteeringHardpoints3D,
+    left_wheel_angle_deg: float,
+    residual_tolerance: float = 1e-6,
+) -> TwoSegmentSteeringSolution:
+    """Solve rack-and-pinion state from a driven left roadwheel angle."""
+    left_design_length = float(
+        np.linalg.norm(
+            hardpoints.left_wheel.tie_rod_pickup - hardpoints.pitman.left_output
+        )
+    )
+    candidates = _rack_displacements_for_wheel_target(
+        wheel=hardpoints.left_wheel,
+        design_rack_output=hardpoints.pitman.left_output,
+        tie_rod_length=left_design_length,
+        wheel_angle_deg=left_wheel_angle_deg,
+    )
+    if not candidates:
+        raise ValueError("No valid steering arm position for this wheel angle")
+    solutions: list[TwoSegmentSteeringSolution] = []
+    for displacement in candidates:
+        try:
+            solution = solve_two_segment_rack_and_pinion_3d_analytic(
+                hardpoints,
+                displacement,
+                initial_guess_deg=(left_wheel_angle_deg, 0.0),
+                residual_tolerance=residual_tolerance,
+            )
+        except ValueError as exc:
+            if str(exc).startswith("No valid steering arm position"):
+                continue
+            raise
+        if not solution.converged:
+            continue
+        solutions.append(solution)
+    if not solutions:
+        raise ValueError("No valid steering arm position for this wheel angle")
+    return min(
+        solutions,
+        key=lambda solution: abs(
+            solution.left_wheel_angle_deg - float(left_wheel_angle_deg)
+        ),
+    )
+
+
+def solve_two_segment_rack_and_pinion_from_right_wheel_angle_3d_analytic(
+    hardpoints: TwoSegmentSteeringHardpoints3D,
+    right_wheel_angle_deg: float,
+    residual_tolerance: float = 1e-6,
+) -> TwoSegmentSteeringSolution:
+    """Solve rack-and-pinion state from a driven right roadwheel angle."""
+    right_design_length = float(
+        np.linalg.norm(
+            hardpoints.right_wheel.tie_rod_pickup - hardpoints.pitman.right_output
+        )
+    )
+    candidates = _rack_displacements_for_wheel_target(
+        wheel=hardpoints.right_wheel,
+        design_rack_output=hardpoints.pitman.right_output,
+        tie_rod_length=right_design_length,
+        wheel_angle_deg=right_wheel_angle_deg,
+    )
+    if not candidates:
+        raise ValueError("No valid steering arm position for this wheel angle")
+    solutions: list[TwoSegmentSteeringSolution] = []
+    for displacement in candidates:
+        try:
+            solution = solve_two_segment_rack_and_pinion_3d_analytic(
+                hardpoints,
+                displacement,
+                initial_guess_deg=(0.0, right_wheel_angle_deg),
+                residual_tolerance=residual_tolerance,
+            )
+        except ValueError as exc:
+            if str(exc).startswith("No valid steering arm position"):
+                continue
+            raise
+        if not solution.converged:
+            continue
+        solutions.append(solution)
+    if not solutions:
+        raise ValueError("No valid steering arm position for this wheel angle")
+    return min(
+        solutions,
+        key=lambda solution: abs(
+            solution.right_wheel_angle_deg - float(right_wheel_angle_deg)
+        ),
+    )
+
+
 def _best_pitman_solution_3d(
     hardpoints: TwoSegmentSteeringHardpoints3D,
     target_angle_deg: float,

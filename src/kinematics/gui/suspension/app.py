@@ -111,6 +111,9 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         self.steps_var = tk.StringVar(value=str(self.project.settings.steps))
         self.steered_var = tk.BooleanVar(value=self.project.config.steered)
         self.wheelbase_var = tk.StringVar(value=str(self.project.config.wheelbase))
+        self.brake_bias_front_var = tk.StringVar(
+            value=str(self.project.config.brake_bias_front)
+        )
         self.cg_x_var = tk.StringVar(value=str(self.project.config.cg_position[0]))
         self.cg_y_var = tk.StringVar(value=str(self.project.config.cg_position[1]))
         self.cg_z_var = tk.StringVar(value=str(self.project.config.cg_position[2]))
@@ -310,6 +313,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
     def _build_parameters(self, parent: ttk.Frame) -> None:
         fields = (
             ("Wheelbase", self.wheelbase_var),
+            ("Brake bias front", self.brake_bias_front_var),
             ("CG X rearward", self.cg_x_var),
             ("CG Y rightward", self.cg_y_var),
             ("CG Z upward", self.cg_z_var),
@@ -1128,6 +1132,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
         cg_position = suspension_internal_to_gui_vec3(cfg.cg_position)
         self.steered_var.set(cfg.steered)
         self.wheelbase_var.set(str(cfg.wheelbase))
+        self.brake_bias_front_var.set(str(cfg.brake_bias_front))
         self.cg_x_var.set(str(cg_position[0]))
         self.cg_y_var.set(str(cg_position[1]))
         self.cg_z_var.set(str(cg_position[2]))
@@ -1196,6 +1201,10 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 self.wheelbase_var.get(),
                 float(current_cfg.wheelbase),
             ),
+            "brake_bias_front": parse_float_entry(
+                self.brake_bias_front_var.get(),
+                float(current_cfg.brake_bias_front),
+            ),
             "start": parse_float_entry(
                 self.start_var.get(),
                 float(current_settings.start),
@@ -1254,6 +1263,7 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 float(cg_position[2]),
             ),
             wheelbase=float(parsed_values["wheelbase"].value),
+            brake_bias_front=float(parsed_values["brake_bias_front"].value),
             static_camber_deg=float(parsed_values["static_camber_deg"].value),
             static_toe_deg=float(parsed_values["static_toe_deg"].value),
             axle_length_mm=float(parsed_values["axle_length_mm"].value),
@@ -1917,6 +1927,8 @@ class SuspensionWorkbenchPage(RefreshWorkflowMixin, ttk.Frame):
                 _kind, _generation, preview, sweep, travel = item
                 self.result = preview
                 self._draw_result_index(0)
+                if hasattr(self.curve_manager, "set_available_outputs"):
+                    self.curve_manager.set_available_outputs(sweep.curve_options)
                 curves = curve_specs_for_plot(
                     self.project.curves,
                     self.curve_manager.x_var.get(),
