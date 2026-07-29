@@ -405,7 +405,7 @@ class CsvWriter(BaseResultsWriter):
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write to CSV.
-        with open(self.output_path, "w", newline="") as csvfile:
+        with open(self.output_path, "w", newline="", encoding="utf-8") as csvfile:
             # Write metadata to top.
             for key, value in self.metadata.items():
                 csvfile.write(f"# {key}: {value}\n")

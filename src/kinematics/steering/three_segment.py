@@ -679,7 +679,33 @@ def solve_three_segment_steering_3d_semi_analytic(
     )
     results = _least_squares_results(residual, guesses)
     best = min(results, key=lambda result: float(np.linalg.norm(result.fun)))
-    right_bellcrank_angle_rad = _normalize_angle_rad(float(best.x[0]))
+    # Near a symmetric zero state the scalar distance residual can have a
+    # numerically flat derivative. Re-select the exact analytic branch when
+    # the requested residual accuracy is not met by the numeric stage.
+    if float(np.linalg.norm(best.fun)) > min(residual_tolerance, 1e-10):
+        analytic_candidates = _analytic_three_segment_candidates_3d(
+            hardpoints,
+            left_bellcrank_angle_deg,
+            initial_guess_deg,
+        )
+        if analytic_candidates:
+            numeric_angle = float(best.x[0])
+            best_analytic = min(
+                analytic_candidates,
+                key=lambda candidate: abs(
+                    _normalize_angle_deg(
+                        candidate.right_bellcrank_angle_deg
+                        - float(np.rad2deg(numeric_angle))
+                    )
+                ),
+            )
+            right_bellcrank_angle_rad = float(
+                np.deg2rad(best_analytic.right_bellcrank_angle_deg)
+            )
+        else:
+            right_bellcrank_angle_rad = _normalize_angle_rad(float(best.x[0]))
+    else:
+        right_bellcrank_angle_rad = _normalize_angle_rad(float(best.x[0]))
     _, right_bell_tie_3d = _rotate_bellcrank_state_3d(
         hardpoints.right_bellcrank,
         right_bellcrank_angle_rad,

@@ -50,7 +50,6 @@ from kinematics.main import solve_sweep
 from kinematics.metrics import compute_metrics_for_state_from_suspension
 from kinematics.points.derived.definitions import (
     apply_static_alignment_to_hardpoints,
-    axle_points_from_wheel_center,
     get_wheel_center,
 )
 from kinematics.solver import SolverInfo
@@ -1134,13 +1133,6 @@ def optimize_suspension_hardpoints(
         return result, float(np.linalg.norm(objective_residuals)), hardpoints, rows
 
     def run_cma_es_stage() -> np.ndarray:
-        if baseline_x.size <= 1:
-            emit_progress(
-                "solving",
-                "Skipping CMA-ES for a single optimization variable; "
-                "using local refine",
-            )
-            return baseline_x.copy()
         sigma0 = max(float(variable_delta_limit) / 3.0, 1e-3)
         strategy = cma.CMAEvolutionStrategy(
             baseline_x,
@@ -1182,7 +1174,20 @@ def optimize_suspension_hardpoints(
                 if cost < best_cost:
                     best_cost = cost
                     best_values = clipped.copy()
-            strategy.tell(candidates, costs)
+            try:
+                strategy.tell(candidates, costs)
+            except ValueError:
+                # cma 4.x can fail while initializing its diagonal scaling for
+                # a one-dimensional strategy. The evaluated population still
+                # provides a valid bounded fallback for this stage.
+                if baseline_x.size != 1:
+                    raise
+                emit_progress(
+                    "solving",
+                    "CMA-ES one-dimensional scaling unavailable; "
+                    "using evaluated candidate",
+                )
+                break
             emit_progress(
                 "solving",
                 f"CMA-ES iter {iteration}/{OPTIMIZATION_CMA_MAX_ITER}, "
