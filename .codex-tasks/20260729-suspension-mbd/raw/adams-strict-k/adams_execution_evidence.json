@@ -1,0 +1,87 @@
+{
+  "adams_version": "2024.1",
+  "analysis_mode": "kinematic",
+  "cases": [
+    {
+      "acf_sha256": "74b7dfa02595cf10b300b6679f212a0b3814c230ba249fcfd656cc1c1dbb29f4",
+      "case_id": "k-w-10-r-5",
+      "kinematic_log_marker": true,
+      "result_sha256": "fc3acd9507c543141b50e8b568f67b2ce19d27a7aed589ce16c09e65bba5aa0d",
+      "simulate_status": 0
+    },
+    {
+      "acf_sha256": "8c4bba176f7f97b1b3866d2565b6ea50f3242f6c7fea06756c7b5e08587e09ab",
+      "case_id": "k-w-10-r+0",
+      "kinematic_log_marker": true,
+      "result_sha256": "30e34998352493cd60973dddfd0bf7fe8656cd4b5b2365792fbc4cae3a0fe8c4",
+      "simulate_status": 0
+    },
+    {
+      "acf_sha256": "99b5ee0b9cbeb2e074dfb35ab31488323be2e0af9c34e3aea078b0834f00ee1e",
+      "case_id": "k-w-10-r+5",
+      "kinematic_log_marker": true,
+      "result_sha256": "203081b754d319ff508b4d9263d7110d031320594fece36cb951eeb381d9f749",
+      "simulate_status": 0
+    },
+    {
+      "acf_sha256": "3abc74d470d6aaa81ee56d024b36e7f8643bf094c1df75d1849c3ae61c211cd2",
+      "case_id": "k-w+0-r-5",
+      "kinematic_log_marker": true,
+      "result_sha256": "2852d426e511637256e6e6833f8682d695db02733b2c9e3391e79814782fac79",
+      "simulate_status": 0
+    },
+    {
+      "acf_sha256": "a370f576b5ec01425c29dcbe097a700ea12b10769b350ec12cceff28be15c333",
+      "case_id": "k-w+0-r+0",
+      "kinematic_log_marker": true,
+      "result_sha256": "b5b22b12c3db9bef762d3f3fd14d2de93c5987e2539ea1bd45b584c785fd71a2",
+      "simulate_status": 0
+    },
+    {
+      "acf_sha256": "277922024cafb3ce318b0068e875cb492acf68d0f5e86b8cf29886f6b2978868",
+      "case_id": "k-w+0-r+5",
+      "kinematic_log_marker": true,
+      "result_sha256": "1b5271ff6aafceffa01a58cb442042eee3a1faa10e1ec3dd03e0500a27c1e9b1",
+      "simulate_status": 0
+    },
+    {
+      "acf_sha256": "05e9f03b70b387a0df059eecabf6ae0a2ce141f120d5fcdefb7227bc4d31f4e9",
+      "case_id": "k-w+10-r-5",
+      "kinematic_log_marker": true,
+      "result_sha256": "6394bb64de2b01ff81568de697f22286ce89bb3f42fec73ce07b883aaf496ea4",
+      "simulate_status": 0
+    },
+    {
+      "acf_sha256": "dd72dbbba12497e22a33cf0c14471746440c7cd1bce541ba2b925a6a29f5dcd2",
+      "case_id": "k-w+10-r+0",
+      "kinematic_log_marker": true,
+      "result_sha256": "f366def8f71ac9c15e8c403f7fae40e5d4a60a235c5668e9f2b1725384feb1b2",
+      "simulate_status": 0
+    },
+    {
+      "acf_sha256": "053b4f577aa9b23d777383c3e134cfd9cf3b6dfa60cde44263bce821d9fa5fa0",
+      "case_id": "k-w+10-r+5",
+      "kinematic_log_marker": true,
+      "result_sha256": "09b64a83d3ca67c9288c91ece4b128bc510be40153199153222e4383a19b7f6e",
+      "simulate_status": 0
+    }
+  ],
+  "command_file_sha256": "05a5e8f0ebc8fed1b2ae49fa816058a2da321369504a529fcfa47133357a0418",
+  "compliance_matrix_flag": 0,
+  "compliance_objects_flag": 0,
+  "contact_contribution": false,
+  "contract": "strict-adams-k-v1",
+  "force_contribution": false,
+  "generated_source_hashes": {
+    "assembly_sha256": "d11920401e3f9421e7476144328c76cd259ab258cf4e98d999aa1718b1c9dd39",
+    "steering_sha256": "e44b71d2fb87a899dbe9b3d275e0cdcf917bbe1378444c84755c923c288ef740",
+    "suspension_sha256": "481f4b76689a778fd4effa26474365c067bfd1542fcbc294f067b63e999557c7"
+  },
+  "gravity_contribution": false,
+  "input_manifest_sha256": "cd7b76ae100128ee018dfff3c667ed338d45e611b1891eb013ea937fb6d7db80",
+  "kinematic_flag": 1,
+  "producer": "msc.adams-car.2024.1",
+  "runtime_directory": "C:\\Users\\zzy11\\AppData\\Local\\Temp\\suspension_mbd_strict_k_runtime_zhsuxdyx",
+  "schema_version": 1,
+  "state_count": 9
+}

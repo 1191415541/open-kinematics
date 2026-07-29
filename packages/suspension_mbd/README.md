@@ -24,16 +24,26 @@ The fixed local performance gates are available through
 
 ## Adams validation
 
-The `--full` gate requires an explicit non-proprietary numeric reference and an
-external runner. The runner receives the generated request JSON and output
-directory as its final two arguments (also exposed as
-`SUSPENSION_MBD_ADAMS_REQUEST` and `SUSPENSION_MBD_ADAMS_OUTPUT`) and must write
-`adams_results.json` or `adams_results.csv`. Results contain the three required
-groups `K_geometry`, `C_compliance`, and `static_load`; missing results or fields
-fail the gate instead of being treated as a profile-only pass.
+The strict K gate discovers Adams/Car 2024.1 through the environment, `PATH`, or
+the Windows uninstall registry and verifies the license with a real unattended
+`acar` product start. It creates temporary suspension and steering subsystem
+copies with kinematic joints, generates the fixed 3x3 wheel-travel/rack grid,
+and reruns every state with Adams Solver `simulate/kinematics`. The independent
+`suspension_mbd` result is generated from the same normalized hardpoint input;
+neither runner can read the other result.
 
 ```powershell
 uv run --project packages/suspension_mbd suspension-mbd validate-adams `
-  --profile adams-car-2024.1 --full --require-installed `
-  --reference .\adams-reference.json --runner .\run-adams.bat
+  --profile adams-car-2024.1 --strict-k --require-installed `
+  --evidence-dir .codex-tasks/20260729-suspension-mbd/raw/adams-strict-k
 ```
+
+The legacy `--full` command remains available for regression evidence, but its
+built-in C fields are left/right symmetry residuals rather than full compliance
+magnitudes and therefore do not constitute strict C/load acceptance.
+
+`--reference` and `--runner` override the built-in baseline and batch runner.
+An external runner receives the request JSON and output directory as its final
+two arguments (also exposed as `SUSPENSION_MBD_ADAMS_REQUEST` and
+`SUSPENSION_MBD_ADAMS_OUTPUT`) and writes `adams_results.json` or CSV. Missing
+groups or fields fail the gate instead of producing a profile-only pass.

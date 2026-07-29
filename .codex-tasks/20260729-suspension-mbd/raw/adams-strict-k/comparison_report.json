@@ -1,0 +1,827 @@
+{
+  "comparison": {
+    "case_count": 9,
+    "field_count": 90,
+    "fields": [
+      {
+        "absolute_error": 9.264817890652921e-08,
+        "adams": -267.0000000926482,
+        "case_id": "k-w+0-r+0",
+        "field": "left_wheel_center_x_mm",
+        "passed": true,
+        "reference": -267.0,
+        "tolerance": 0.534
+      },
+      {
+        "absolute_error": 4.745868409372633e-08,
+        "adams": -759.9999999525413,
+        "case_id": "k-w+0-r+0",
+        "field": "left_wheel_center_y_mm",
+        "passed": true,
+        "reference": -760.0,
+        "tolerance": 1.52
+      },
+      {
+        "absolute_error": 1.1937117960769683e-12,
+        "adams": 329.9999999999988,
+        "case_id": "k-w+0-r+0",
+        "field": "left_wheel_center_z_mm",
+        "passed": true,
+        "reference": 330.0,
+        "tolerance": 0.66
+      },
+      {
+        "absolute_error": 9.264806521969149e-08,
+        "adams": -267.00000009264807,
+        "case_id": "k-w+0-r+0",
+        "field": "right_wheel_center_x_mm",
+        "passed": true,
+        "reference": -267.0,
+        "tolerance": 0.534
+      },
+      {
+        "absolute_error": 4.745857040688861e-08,
+        "adams": 759.9999999525414,
+        "case_id": "k-w+0-r+0",
+        "field": "right_wheel_center_y_mm",
+        "passed": true,
+        "reference": 760.0,
+        "tolerance": 1.52
+      },
+      {
+        "absolute_error": 1.1368683772161603e-12,
+        "adams": 329.99999999999886,
+        "case_id": "k-w+0-r+0",
+        "field": "right_wheel_center_z_mm",
+        "passed": true,
+        "reference": 330.0,
+        "tolerance": 0.66
+      },
+      {
+        "absolute_error": 2.602660777088056e-08,
+        "adams": -2.602660777088056e-08,
+        "case_id": "k-w+0-r+0",
+        "field": "left_toe_deg",
+        "passed": true,
+        "reference": -0.0,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 1.4346149843470358e-08,
+        "adams": -1.4346149843470358e-08,
+        "case_id": "k-w+0-r+0",
+        "field": "left_camber_deg",
+        "passed": true,
+        "reference": -0.0,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 2.6026644347259395e-08,
+        "adams": -2.6026644347259395e-08,
+        "case_id": "k-w+0-r+0",
+        "field": "right_toe_deg",
+        "passed": true,
+        "reference": 0.0,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 1.434617528790781e-08,
+        "adams": -1.434617528790781e-08,
+        "case_id": "k-w+0-r+0",
+        "field": "right_camber_deg",
+        "passed": true,
+        "reference": 0.0,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 9.251817800759454e-08,
+        "adams": -268.6719853064574,
+        "case_id": "k-w+0-r+5",
+        "field": "left_wheel_center_x_mm",
+        "passed": true,
+        "reference": -268.6719852139392,
+        "tolerance": 0.5373439704278784
+      },
+      {
+        "absolute_error": 4.678747700381791e-08,
+        "adams": -760.6629974422368,
+        "case_id": "k-w+0-r+5",
+        "field": "left_wheel_center_y_mm",
+        "passed": true,
+        "reference": -760.6629974890243,
+        "tolerance": 1.5213259949780487
+      },
+      {
+        "absolute_error": 5.115907697472721e-13,
+        "adams": 329.9999999999989,
+        "case_id": "k-w+0-r+5",
+        "field": "left_wheel_center_z_mm",
+        "passed": true,
+        "reference": 329.99999999999943,
+        "tolerance": 0.6599999999999989
+      },
+      {
+        "absolute_error": 9.278971901949262e-08,
+        "adams": -265.34738495253,
+        "case_id": "k-w+0-r+5",
+        "field": "right_wheel_center_x_mm",
+        "passed": true,
+        "reference": -265.34738485974026,
+        "tolerance": 0.5306947697194805
+      },
+      {
+        "absolute_error": 4.813091436517425e-08,
+        "adams": 759.2745890497262,
+        "case_id": "k-w+0-r+5",
+        "field": "right_wheel_center_y_mm",
+        "passed": true,
+        "reference": 759.2745890978571,
+        "tolerance": 1.5185491781957141
+      },
+      {
+        "absolute_error": 5.115907697472721e-13,
+        "adams": 329.9999999999988,
+        "case_id": "k-w+0-r+5",
+        "field": "right_wheel_center_z_mm",
+        "passed": true,
+        "reference": 329.9999999999993,
+        "tolerance": 0.6599999999999987
+      },
+      {
+        "absolute_error": 0.0013046156646634444,
+        "adams": 2.1006178440910523,
+        "case_id": "k-w+0-r+5",
+        "field": "left_toe_deg",
+        "passed": true,
+        "reference": 2.101922459755716,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.013594664696900516,
+        "adams": 0.20358504080967094,
+        "case_id": "k-w+0-r+5",
+        "field": "left_camber_deg",
+        "passed": true,
+        "reference": 0.18999037611277042,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.001251254854877537,
+        "adams": -2.108729066442775,
+        "case_id": "k-w+0-r+5",
+        "field": "right_toe_deg",
+        "passed": true,
+        "reference": -2.1074778115878976,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.013690263219134136,
+        "adams": -0.19088150544395585,
+        "case_id": "k-w+0-r+5",
+        "field": "right_camber_deg",
+        "passed": true,
+        "reference": -0.20457176866309,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 9.278994639316807e-08,
+        "adams": -265.3473849525301,
+        "case_id": "k-w+0-r-5",
+        "field": "left_wheel_center_x_mm",
+        "passed": true,
+        "reference": -265.34738485974015,
+        "tolerance": 0.5306947697194803
+      },
+      {
+        "absolute_error": 4.813080067833653e-08,
+        "adams": -759.2745890497262,
+        "case_id": "k-w+0-r-5",
+        "field": "left_wheel_center_y_mm",
+        "passed": true,
+        "reference": -759.274589097857,
+        "tolerance": 1.518549178195714
+      },
+      {
+        "absolute_error": 5.684341886080801e-13,
+        "adams": 329.99999999999875,
+        "case_id": "k-w+0-r-5",
+        "field": "left_wheel_center_z_mm",
+        "passed": true,
+        "reference": 329.9999999999993,
+        "tolerance": 0.6599999999999987
+      },
+      {
+        "absolute_error": 9.251812116417568e-08,
+        "adams": -268.6719853064573,
+        "case_id": "k-w+0-r-5",
+        "field": "right_wheel_center_x_mm",
+        "passed": true,
+        "reference": -268.6719852139392,
+        "tolerance": 0.5373439704278784
+      },
+      {
+        "absolute_error": 4.678736331698019e-08,
+        "adams": 760.6629974422369,
+        "case_id": "k-w+0-r-5",
+        "field": "right_wheel_center_y_mm",
+        "passed": true,
+        "reference": 760.6629974890243,
+        "tolerance": 1.5213259949780487
+      },
+      {
+        "absolute_error": 6.252776074688882e-13,
+        "adams": 329.99999999999875,
+        "case_id": "k-w+0-r-5",
+        "field": "right_wheel_center_z_mm",
+        "passed": true,
+        "reference": 329.9999999999994,
+        "tolerance": 0.6599999999999988
+      },
+      {
+        "absolute_error": 0.0012512548546936841,
+        "adams": -2.1087290664426646,
+        "case_id": "k-w+0-r-5",
+        "field": "left_toe_deg",
+        "passed": true,
+        "reference": -2.107477811587971,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.013690263219090226,
+        "adams": -0.19088150544398105,
+        "case_id": "k-w+0-r-5",
+        "field": "left_camber_deg",
+        "passed": true,
+        "reference": -0.20457176866307128,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.0013046156647824603,
+        "adams": 2.1006178440909387,
+        "case_id": "k-w+0-r-5",
+        "field": "right_toe_deg",
+        "passed": true,
+        "reference": 2.101922459755721,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.013594664696839287,
+        "adams": 0.2035850408096331,
+        "case_id": "k-w+0-r-5",
+        "field": "right_camber_deg",
+        "passed": true,
+        "reference": 0.18999037611279382,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 9.453407301407424e-08,
+        "adams": -266.99296396615347,
+        "case_id": "k-w+10-r+0",
+        "field": "left_wheel_center_x_mm",
+        "passed": true,
+        "reference": -266.9929638716194,
+        "tolerance": 0.5339859277432388
+      },
+      {
+        "absolute_error": 4.6906279749237e-08,
+        "adams": -760.7526348614635,
+        "case_id": "k-w+10-r+0",
+        "field": "left_wheel_center_y_mm",
+        "passed": true,
+        "reference": -760.7526349083698,
+        "tolerance": 1.5215052698167397
+      },
+      {
+        "absolute_error": 1.1937117960769683e-12,
+        "adams": 339.99999999999886,
+        "case_id": "k-w+10-r+0",
+        "field": "left_wheel_center_z_mm",
+        "passed": true,
+        "reference": 340.00000000000006,
+        "tolerance": 0.6800000000000002
+      },
+      {
+        "absolute_error": 9.453401617065538e-08,
+        "adams": -266.99296396615335,
+        "case_id": "k-w+10-r+0",
+        "field": "right_wheel_center_x_mm",
+        "passed": true,
+        "reference": -266.99296387161934,
+        "tolerance": 0.5339859277432387
+      },
+      {
+        "absolute_error": 4.690605237556156e-08,
+        "adams": 760.7526348614637,
+        "case_id": "k-w+10-r+0",
+        "field": "right_wheel_center_y_mm",
+        "passed": true,
+        "reference": 760.7526349083697,
+        "tolerance": 1.5215052698167395
+      },
+      {
+        "absolute_error": 1.2505552149377763e-12,
+        "adams": 339.99999999999875,
+        "case_id": "k-w+10-r+0",
+        "field": "right_wheel_center_z_mm",
+        "passed": true,
+        "reference": 340.0,
+        "tolerance": 0.68
+      },
+      {
+        "absolute_error": 0.00024387430499933638,
+        "adams": 0.3438691608556332,
+        "case_id": "k-w+10-r+0",
+        "field": "left_toe_deg",
+        "passed": true,
+        "reference": 0.34362528655063385,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.00041494428072691436,
+        "adams": -0.20037037085696724,
+        "case_id": "k-w+10-r+0",
+        "field": "left_camber_deg",
+        "passed": true,
+        "reference": -0.20078531513769415,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.00024387430493000295,
+        "adams": 0.34386916085554664,
+        "case_id": "k-w+10-r+0",
+        "field": "right_toe_deg",
+        "passed": true,
+        "reference": 0.34362528655061664,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.0004149442807103998,
+        "adams": -0.20037037085700501,
+        "case_id": "k-w+10-r+0",
+        "field": "right_camber_deg",
+        "passed": true,
+        "reference": -0.20078531513771541,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 9.441777137908502e-08,
+        "adams": -268.6598592510201,
+        "case_id": "k-w+10-r+5",
+        "field": "left_wheel_center_x_mm",
+        "passed": true,
+        "reference": -268.65985915660235,
+        "tolerance": 0.5373197183132047
+      },
+      {
+        "absolute_error": 4.6201648729038425e-08,
+        "adams": -761.4008767977698,
+        "case_id": "k-w+10-r+5",
+        "field": "left_wheel_center_y_mm",
+        "passed": true,
+        "reference": -761.4008768439714,
+        "tolerance": 1.522801753687943
+      },
+      {
+        "absolute_error": 2.7853275241795927e-12,
+        "adams": 339.9999999999988,
+        "case_id": "k-w+10-r+5",
+        "field": "left_wheel_center_z_mm",
+        "passed": true,
+        "reference": 339.999999999996,
+        "tolerance": 0.679999999999992
+      },
+      {
+        "absolute_error": 9.467629524806398e-08,
+        "adams": -265.3453419954521,
+        "case_id": "k-w+10-r+5",
+        "field": "right_wheel_center_x_mm",
+        "passed": true,
+        "reference": -265.3453419007758,
+        "tolerance": 0.5306906838015516
+      },
+      {
+        "absolute_error": 4.757362148666289e-08,
+        "adams": 760.0423486570486,
+        "case_id": "k-w+10-r+5",
+        "field": "right_wheel_center_y_mm",
+        "passed": true,
+        "reference": 760.0423487046222,
+        "tolerance": 1.5200846974092446
+      },
+      {
+        "absolute_error": 7.389644451905042e-13,
+        "adams": 339.9999999999986,
+        "case_id": "k-w+10-r+5",
+        "field": "right_wheel_center_z_mm",
+        "passed": true,
+        "reference": 339.99999999999784,
+        "tolerance": 0.6799999999999957
+      },
+      {
+        "absolute_error": 3.632461337677029e-05,
+        "adams": 2.432700839725804,
+        "case_id": "k-w+10-r+5",
+        "field": "left_toe_deg",
+        "passed": true,
+        "reference": 2.432737164339181,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.018774176779682752,
+        "adams": 0.004703289678487953,
+        "case_id": "k-w+10-r+5",
+        "field": "left_camber_deg",
+        "passed": true,
+        "reference": -0.0140708871011948,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.002131308512134167,
+        "adams": -1.7525068096804377,
+        "case_id": "k-w+10-r+5",
+        "field": "right_toe_deg",
+        "passed": true,
+        "reference": -1.7503755011683035,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.009328673688115241,
+        "adams": -0.3925905015150953,
+        "case_id": "k-w+10-r+5",
+        "field": "right_camber_deg",
+        "passed": true,
+        "reference": -0.4019191752032105,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 9.467635209148284e-08,
+        "adams": -265.3453419954522,
+        "case_id": "k-w+10-r-5",
+        "field": "left_wheel_center_x_mm",
+        "passed": true,
+        "reference": -265.34534190077585,
+        "tolerance": 0.5306906838015517
+      },
+      {
+        "absolute_error": 4.757384886033833e-08,
+        "adams": -760.0423486570485,
+        "case_id": "k-w+10-r-5",
+        "field": "left_wheel_center_y_mm",
+        "passed": true,
+        "reference": -760.0423487046223,
+        "tolerance": 1.5200846974092448
+      },
+      {
+        "absolute_error": 1.0231815394945443e-12,
+        "adams": 339.9999999999988,
+        "case_id": "k-w+10-r-5",
+        "field": "left_wheel_center_z_mm",
+        "passed": true,
+        "reference": 339.9999999999978,
+        "tolerance": 0.6799999999999956
+      },
+      {
+        "absolute_error": 9.441748716199072e-08,
+        "adams": -268.65985925102007,
+        "case_id": "k-w+10-r-5",
+        "field": "right_wheel_center_x_mm",
+        "passed": true,
+        "reference": -268.6598591566026,
+        "tolerance": 0.5373197183132051
+      },
+      {
+        "absolute_error": 4.620142135536298e-08,
+        "adams": 761.4008767977699,
+        "case_id": "k-w+10-r-5",
+        "field": "right_wheel_center_y_mm",
+        "passed": true,
+        "reference": 761.4008768439713,
+        "tolerance": 1.5228017536879428
+      },
+      {
+        "absolute_error": 2.8421709430404007e-12,
+        "adams": 339.9999999999988,
+        "case_id": "k-w+10-r-5",
+        "field": "right_wheel_center_z_mm",
+        "passed": true,
+        "reference": 339.99999999999596,
+        "tolerance": 0.6799999999999919
+      },
+      {
+        "absolute_error": 0.002131308512215435,
+        "adams": -1.7525068096804917,
+        "case_id": "k-w+10-r-5",
+        "field": "left_toe_deg",
+        "passed": true,
+        "reference": -1.7503755011682762,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.009328673688157152,
+        "adams": -0.3925905015150953,
+        "case_id": "k-w+10-r-5",
+        "field": "left_camber_deg",
+        "passed": true,
+        "reference": -0.40191917520325243,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 3.632461343316962e-05,
+        "adams": 2.432700839725815,
+        "case_id": "k-w+10-r-5",
+        "field": "right_toe_deg",
+        "passed": true,
+        "reference": 2.4327371643392484,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.018774176779606386,
+        "adams": 0.004703289678449786,
+        "case_id": "k-w+10-r-5",
+        "field": "right_camber_deg",
+        "passed": true,
+        "reference": -0.0140708871011566,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 9.068128292710753e-08,
+        "adams": -267.0494722762579,
+        "case_id": "k-w-10-r+0",
+        "field": "left_wheel_center_x_mm",
+        "passed": true,
+        "reference": -267.04947218557663,
+        "tolerance": 0.5340989443711532
+      },
+      {
+        "absolute_error": 4.804951458936557e-08,
+        "adams": -758.8843638132397,
+        "case_id": "k-w-10-r+0",
+        "field": "left_wheel_center_y_mm",
+        "passed": true,
+        "reference": -758.8843638612892,
+        "tolerance": 1.5177687277225784
+      },
+      {
+        "absolute_error": 9.094947017729282e-13,
+        "adams": 319.9999999999991,
+        "case_id": "k-w-10-r+0",
+        "field": "left_wheel_center_z_mm",
+        "passed": true,
+        "reference": 320.0,
+        "tolerance": 0.64
+      },
+      {
+        "absolute_error": 9.068105555343209e-08,
+        "adams": -267.04947227625775,
+        "case_id": "k-w-10-r+0",
+        "field": "right_wheel_center_x_mm",
+        "passed": true,
+        "reference": -267.0494721855767,
+        "tolerance": 0.5340989443711534
+      },
+      {
+        "absolute_error": 4.804928721569013e-08,
+        "adams": 758.8843638132397,
+        "case_id": "k-w-10-r+0",
+        "field": "right_wheel_center_y_mm",
+        "passed": true,
+        "reference": 758.884363861289,
+        "tolerance": 1.517768727722578
+      },
+      {
+        "absolute_error": 1.3073986337985843e-12,
+        "adams": 319.99999999999875,
+        "case_id": "k-w-10-r+0",
+        "field": "right_wheel_center_z_mm",
+        "passed": true,
+        "reference": 320.00000000000006,
+        "tolerance": 0.6400000000000001
+      },
+      {
+        "absolute_error": 0.00021116717550517805,
+        "adams": -0.37955656246871483,
+        "case_id": "k-w-10-r+0",
+        "field": "left_toe_deg",
+        "passed": true,
+        "reference": -0.37976772964422,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.00043203475175165873,
+        "adams": 0.18731507482497012,
+        "case_id": "k-w-10-r+0",
+        "field": "left_camber_deg",
+        "passed": true,
+        "reference": 0.18688304007321846,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.00021116717548458341,
+        "adams": -0.37955656246882025,
+        "case_id": "k-w-10-r+0",
+        "field": "right_toe_deg",
+        "passed": true,
+        "reference": -0.37976772964430483,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.0004320347516600376,
+        "adams": 0.18731507482491913,
+        "case_id": "k-w-10-r+0",
+        "field": "right_camber_deg",
+        "passed": true,
+        "reference": 0.1868830400732591,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 9.055372629518388e-08,
+        "adams": -268.7260915898371,
+        "case_id": "k-w-10-r+5",
+        "field": "left_wheel_center_x_mm",
+        "passed": true,
+        "reference": -268.72609149928337,
+        "tolerance": 0.5374521829985668
+      },
+      {
+        "absolute_error": 4.737523795483867e-08,
+        "adams": -759.5633447362035,
+        "case_id": "k-w-10-r+5",
+        "field": "left_wheel_center_y_mm",
+        "passed": true,
+        "reference": -759.5633447835787,
+        "tolerance": 1.5191266895671574
+      },
+      {
+        "absolute_error": 7.389644451905042e-13,
+        "adams": 319.999999999999,
+        "case_id": "k-w-10-r+5",
+        "field": "left_wheel_center_z_mm",
+        "passed": true,
+        "reference": 319.99999999999824,
+        "tolerance": 0.6399999999999965
+      },
+      {
+        "absolute_error": 9.083726126846159e-08,
+        "adams": -265.3923332162794,
+        "case_id": "k-w-10-r+5",
+        "field": "right_wheel_center_x_mm",
+        "passed": true,
+        "reference": -265.3923331254421,
+        "tolerance": 0.5307846662508843
+      },
+      {
+        "absolute_error": 4.868593350693118e-08,
+        "adams": 758.1425861128369,
+        "case_id": "k-w-10-r+5",
+        "field": "right_wheel_center_y_mm",
+        "passed": true,
+        "reference": 758.1425861615228,
+        "tolerance": 1.5162851723230455
+      },
+      {
+        "absolute_error": 2.7284841053187847e-12,
+        "adams": 319.99999999999875,
+        "case_id": "k-w-10-r+5",
+        "field": "right_wheel_center_z_mm",
+        "passed": true,
+        "reference": 319.999999999996,
+        "tolerance": 0.639999999999992
+      },
+      {
+        "absolute_error": 0.002023987754334655,
+        "adams": 1.732949729840629,
+        "case_id": "k-w-10-r+5",
+        "field": "left_toe_deg",
+        "passed": true,
+        "reference": 1.7349737175949635,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.009179537093296386,
+        "adams": 0.38958910523197327,
+        "case_id": "k-w-10-r+5",
+        "field": "left_camber_deg",
+        "passed": true,
+        "reference": 0.3804095681386769,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 1.8235901393381937e-05,
+        "adams": -2.5007976652959663,
+        "case_id": "k-w-10-r+5",
+        "field": "right_toe_deg",
+        "passed": true,
+        "reference": -2.500779429394573,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.018994933219550002,
+        "adams": -0.0023961868741129455,
+        "case_id": "k-w-10-r+5",
+        "field": "right_camber_deg",
+        "passed": true,
+        "reference": -0.02139112009366295,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 9.083737495529931e-08,
+        "adams": -265.39233321627944,
+        "case_id": "k-w-10-r-5",
+        "field": "left_wheel_center_x_mm",
+        "passed": true,
+        "reference": -265.39233312544206,
+        "tolerance": 0.5307846662508842
+      },
+      {
+        "absolute_error": 4.868627456744434e-08,
+        "adams": -758.1425861128366,
+        "case_id": "k-w-10-r-5",
+        "field": "left_wheel_center_y_mm",
+        "passed": true,
+        "reference": -758.1425861615229,
+        "tolerance": 1.516285172323046
+      },
+      {
+        "absolute_error": 2.7284841053187847e-12,
+        "adams": 319.9999999999988,
+        "case_id": "k-w-10-r-5",
+        "field": "left_wheel_center_z_mm",
+        "passed": true,
+        "reference": 319.9999999999961,
+        "tolerance": 0.6399999999999921
+      },
+      {
+        "absolute_error": 9.055378313860274e-08,
+        "adams": -268.726091589837,
+        "case_id": "k-w-10-r-5",
+        "field": "right_wheel_center_x_mm",
+        "passed": true,
+        "reference": -268.7260914992832,
+        "tolerance": 0.5374521829985665
+      },
+      {
+        "absolute_error": 4.7375124268000945e-08,
+        "adams": 759.5633447362036,
+        "case_id": "k-w-10-r-5",
+        "field": "right_wheel_center_y_mm",
+        "passed": true,
+        "reference": 759.5633447835787,
+        "tolerance": 1.5191266895671574
+      },
+      {
+        "absolute_error": 4.547473508864641e-13,
+        "adams": 319.99999999999875,
+        "case_id": "k-w-10-r-5",
+        "field": "right_wheel_center_z_mm",
+        "passed": true,
+        "reference": 319.9999999999983,
+        "tolerance": 0.6399999999999966
+      },
+      {
+        "absolute_error": 1.8235901319663128e-05,
+        "adams": -2.500797665295975,
+        "case_id": "k-w-10-r-5",
+        "field": "left_toe_deg",
+        "passed": true,
+        "reference": -2.5007794293946555,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.01899493321956136,
+        "adams": -0.0023961868741002234,
+        "case_id": "k-w-10-r-5",
+        "field": "left_camber_deg",
+        "passed": true,
+        "reference": -0.021391120093661585,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.002023987754148582,
+        "adams": 1.7329497298406888,
+        "case_id": "k-w-10-r-5",
+        "field": "right_toe_deg",
+        "passed": true,
+        "reference": 1.7349737175948374,
+        "tolerance": 0.02
+      },
+      {
+        "absolute_error": 0.009179537093319534,
+        "adams": 0.38958910523197327,
+        "case_id": "k-w-10-r-5",
+        "field": "right_camber_deg",
+        "passed": true,
+        "reference": 0.38040956813865373,
+        "tolerance": 0.02
+      }
+    ],
+    "max_angle_error_deg": 0.01899493321956136,
+    "max_position_error_mm": 9.467635209148284e-08,
+    "passed": true
+  },
+  "contract": "strict-adams-k-v1",
+  "execution_evidence": ".codex-tasks\\20260729-suspension-mbd\\raw\\adams-strict-k\\adams_execution_evidence.json",
+  "manifest_sha256": "49a54cf3292dabe767a6f22d9cbee7e2622cb581d080f294af95d585573e4417",
+  "passed": true,
+  "schema_version": 1,
+  "state_count": 9
+}

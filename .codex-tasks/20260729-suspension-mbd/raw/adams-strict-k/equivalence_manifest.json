@@ -1,0 +1,136 @@
+{
+  "adams_snapshot_sha256": "d8efa6c78bdde333c3e2e24977cc3639844dcf76395139fab03948bb44ba46e3",
+  "contract": "strict-adams-k-v1",
+  "physical_input": {
+    "boundaries": {
+      "analysis_mode": "kinematic",
+      "compliance_matrix_flag": 0,
+      "compliance_objects_flag": 0,
+      "contact_contributes": false,
+      "elastic_forces_contribute": false,
+      "external_loads_contribute": false,
+      "gravity_contributes": false,
+      "kinematic_flag": 1
+    },
+    "coordinates": {
+      "adams": "+X forward,+Y right,+Z up",
+      "adams_to_suspension_mbd": [
+        [
+          -1,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0
+        ],
+        [
+          0,
+          0,
+          1
+        ]
+      ],
+      "angle_unit": "deg",
+      "length_unit": "mm",
+      "suspension_mbd": "+X rearward,+Y right,+Z up"
+    },
+    "drive": {
+      "kind": "wheel_center",
+      "pattern": "parallel",
+      "rack_displacement_mm": [
+        -5.0,
+        0.0,
+        5.0
+      ],
+      "state_count": 9,
+      "wheel_travel_mm": [
+        -10.0,
+        0.0,
+        10.0
+      ]
+    },
+    "hardpoints_mm": {
+      "lca_front": [
+        -67.0,
+        -400.0,
+        180.0
+      ],
+      "lca_outer": [
+        -267.0,
+        -750.0,
+        130.0
+      ],
+      "lca_rear": [
+        -467.0,
+        -450.0,
+        185.0
+      ],
+      "rack_center": [
+        -467.0,
+        0.0,
+        330.0
+      ],
+      "tierod_inner": [
+        -467.0,
+        -400.0,
+        330.0
+      ],
+      "tierod_outer": [
+        -417.0,
+        -750.0,
+        330.0
+      ],
+      "uca_front": [
+        -367.0,
+        -450.0,
+        555.0
+      ],
+      "uca_outer": [
+        -307.0,
+        -675.0,
+        555.0
+      ],
+      "uca_rear": [
+        -517.0,
+        -490.0,
+        560.0
+      ],
+      "wheel_center": [
+        -267.0,
+        -760.0,
+        330.0
+      ]
+    },
+    "initial_alignment_deg": {
+      "camber_left": 0.0,
+      "camber_right": 0.0,
+      "toe_left": 0.0,
+      "toe_right": 0.0
+    },
+    "rack_axis": [
+      0.0,
+      1.0,
+      0.0
+    ],
+    "wheel": {
+      "inertia_kg_mm2": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mass_kg": 1.0,
+      "radius_mm": 300.0
+    }
+  },
+  "schema_version": 1,
+  "source": {
+    "profile": "adams-car-2024.1",
+    "steering_sha256": "0db5fb82aeefefbb5c82aa567cb7aa4251971b4220c6c1fa23157efff5159f32",
+    "subsystem_id": "TR_Front_Suspension.sub",
+    "subsystem_sha256": "760e0aa2dcca65faf2ddd9ac24988137b2c31498fc786ef26ad348736ccf7237",
+    "template_id": "_double_wishbone.tpl",
+    "version": "2024.1"
+  },
+  "suspension_mbd_snapshot_sha256": "d8efa6c78bdde333c3e2e24977cc3639844dcf76395139fab03948bb44ba46e3"
+}

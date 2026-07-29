@@ -23,3 +23,17 @@ def test_validate_rejects_missing_schema_version(tmp_path: Path) -> None:
         app, ["validate", "--model", str(model), "--case", str(case)]
     )
     assert result.exit_code != 0
+
+
+def test_validate_adams_rejects_smoke_and_full_together() -> None:
+    result = CliRunner().invoke(app, ["validate-adams", "--smoke", "--full"])
+
+    assert result.exit_code == 1
+    assert "mutually exclusive" in result.output
+
+
+def test_validate_adams_rejects_full_and_strict_k_together() -> None:
+    result = CliRunner().invoke(app, ["validate-adams", "--full", "--strict-k"])
+
+    assert result.exit_code == 1
+    assert "mutually exclusive" in result.output

@@ -17,12 +17,12 @@
 
 ## Context Recovery Block
 
-- **Current milestone**: #12 — 完成 Adams 精度验收与全仓集成门禁
-- **Current status**: FAILED (external numeric baseline/runner gate; retry 2)
+- **Current milestone**: #12 — 完成严格等价的 Adams 纯 K、C 与载荷验收
+- **Current status**: IN_PROGRESS (原完成状态因模型与边界不等价而撤销；retry 3)
 - **Last completed**: #11 — 优化并验证 100/6600 点性能目标
-- **Key context**: KModeSolver 已支持轮心/接地点驱动、rack Y 驱动、K&C 指标和确定性网格；K 网格增加延续失败回退；CModeSolver 支持六分量柔顺、三种左右模式、11 级路径和 KReferenceCache；`run_c_grid` 固定 100 个 K 参考并生成 6600 个 C 状态；结果层已写 manifest、Parquet/CSV 和哈希 checkpoint。
-- **Known issues**: 本机未安装 `just`；等价根 Ruff/ty 全仓命令分别报告 47/149 个既有 `kinematics` GUI/测试诊断；Adams full 还需要外部数值 runner 和非专有参考结果。
-- **Next action**: 提供等价 Adams runner/reference 后执行 `validate-adams --full --require-installed --reference ... --runner ...`；本次 adapter 离线数值门禁证据已保留。
+- **Key context**: 严格 K 已使用 `kinematic_flag=1` 的临时悬架/转向子系统和 Adams Solver `simulate/kinematics` 完成 9 点/90 字段绝对值验收；每点保存 ACF/结果哈希和 Kinematic Simulation 日志标志。旧 `--full` 的 C 对称残差和解析轴荷仍不构成幅值等价验收。
+- **Known issues**: 当前 `suspension_mbd` v1 不能表达 Adams 模板的独立副车架、轮毂和支柱柔性；严格 C/static 必须改用双方共同拓扑或扩展本程序，且需完整属性/局部坐标/零载位姿映射。
+- **Next action**: 建立 strict C/static canonical model 与 preflight，完成 66 个 C 状态和全部共同部件端点载荷幅值比较；禁止恢复 symmetry-only 路径。
 
 > 每次里程碑状态变化时更新此区块。
 
@@ -200,7 +200,7 @@
   - New package: 64 normal tests passed, 2 deselected; Ruff and ty passed.
   - Performance: `k-100` 100/100 and `c-6600` 6600/6600 within 30/300 second gates.
   - Packaging: root and member wheels built successfully and packaging isolation tests passed.
-  - Adams: `validate-adams --full --require-installed` passed for Adams/Car 2024.1.
+  - Adams: profile/smoke adapter tests passed; the real `validate-adams --full --require-installed` gate is not passed because this session lacks the installed executable and numeric runner/reference.
 - **External blockers**: `just` is unavailable; equivalent `uv run ruff check .` reports 47 pre-existing diagnostics and `uv run ty check .` reports 149 pre-existing diagnostics across legacy GUI/tests. No suspension_mbd source imports `kinematics`.
 - **Changes made during final gate**: restored one-dimensional CMA-ES test contract with a bounded fallback for the installed cma library's scaling error; made legacy CSV output explicitly UTF-8; stabilized the symmetric zero branch in the legacy semi-analytic steering solver.
 
@@ -236,3 +236,77 @@
 - **Review corrections**:
   - Added an explicit `profile_available` gate, minimum field counts per comparison group, rejection of unknown Adams fields, duplicate-field rejection in flat CSV, dotted-version parsing, and unit-aware JSON/CSV conversion (`m`/`mm`, `rad`/`deg`, `kN`/`N`, `N*m`/`N*mm`).
   - Revalidated the Adams adapter suite: 18 passed; the complete member suite is 79 passed; member Ruff and ty passed; the member wheel built successfully.
+
+## Milestone 12 Recovery Entry
+
+- **Status**: FAILED (retry 3; installed Adams and numeric artifacts unavailable)
+- **Date**: 2026-07-29
+- **What was checked**:
+  - Re-read `SPEC.md`, `TODO.csv`, and this recovery block before resuming.
+  - Searched the repository and task `raw/` for an Adams numeric reference or external batch runner; only the installation profile exists.
+  - Ran the Adams adapter suite: 18 passed.
+  - Ran `validate-adams --full --require-installed` and `--smoke --require-installed`; both exited 1 with `Adams/Car 2024.1 installation was not found`.
+- **Decision**: Do not synthesize or self-reference numeric results. The full gate remains failed until a real Adams installation, model-equivalent runner, and non-proprietary numeric reference are supplied.
+- **Next action**: Re-run the existing full validation command with explicit `--reference <file>` and `--runner <command>` on a machine with Adams/Car 2024.1 installed.
+
+## Milestone 12 Resolution Entry
+
+- **Status**: DONE (retry 3)
+- **Date**: 2026-07-29 20:32
+- **Root causes fixed**:
+  - Installation discovery only checked environment/C-drive paths and ignored the real `G:\\MSC.Software\\Adams\\2024_1` installation exposed through PATH and the Windows uninstall registry.
+  - `adams2024_1.bat -v` was incorrectly treated as a license check; the probe now requires a real unattended `acar ru-acar b` product start and command marker.
+  - The final CLI command had no default numeric runner/reference, so full validation necessarily stopped after profile checks.
+- **Implementation**:
+  - Added a built-in Adams/Car runner for parallel travel, compliance, and static load; static wheel forces are decoded from `.res` XML through StepMap component IDs rather than the `N/A` static report.
+  - Added an independent reference that reads only installed demo hardpoints, converts Adams +X-forward coordinates to suspension_mbd +X-rearward coordinates, and solves the +/-10 mm K geometry with `suspension_mbd`.
+  - C validation checks left/right converging-compliance symmetry with a frozen `0.001` absolute tolerance; static wheel loads use the 1200 kg test-rig analytical reference and a frozen 200 N absolute tolerance.
+  - Added PATH/registry/license/parser/reference and smoke/full mutual-exclusion regression tests; documented built-in defaults and explicit overrides.
+- **Numeric evidence**:
+  - K: left toe change `0.723393` vs Adams `0.7265` deg; right toe `0.723393` vs `0.7264`; left camber `0.387668` vs `0.3929`; all pass `max(0.02 deg, 0.5%)`.
+  - C: converging steer/camber left-right symmetry residuals both `0.0`, within `0.001`.
+  - Static: analytical reference `2943 N`; Adams left/right `2785.636/2976.723 N`, both within frozen `200 N`.
+- **Fresh validation**:
+  - Member ordinary suite: `83 passed, 2 deselected`; performance: `2 passed`; Ruff and ty passed.
+  - Root regression: `546 passed, 2 skipped, 1 deselected` in 520.45 s.
+  - Root and member sdist/wheel builds succeeded.
+  - `validate-adams --profile adams-car-2024.1 --full --require-installed` exited 0 twice; final report: `C:\\Users\\zzy11\\AppData\\Local\\Temp\\suspension_mbd_adams_full_plnvk4uv\\adams_full_validation.json`.
+- **Scope note**: C magnitude equivalence is not claimed by this gate. A linearized reconstruction with real UCA/LCA bushing zero slopes and orientations still omits the Adams template's separate subframe, hub and strut flexibility; the exploratory model is retained in `raw/c_reference_prototype.py`. The accepted v1 C fields are the two documented left/right symmetry residuals.
+
+## Milestone 12 Reopen Entry
+
+- **Status**: IN_PROGRESS (retry 3)
+- **Date**: 2026-07-29
+- **Reason for reopening**: 用户明确要求 Adams 侧以纯 K 模式对比，并保证所有硬点、初始姿态、车轮、驱动、边界条件和弹性元件属性完全一致。此前门禁未满足这些前提，因此不能称为 Adams 数值验收完成。
+- **Contract changes**:
+  - K 验收关闭两侧全部柔性、载荷和接触元件，只比较相同理想关节拓扑下的纯运动学结果。
+  - 新增机器可读等价清单；清单或 Adams 执行证据不完整时，在数值比较前硬失败。
+  - C/载荷必须逐项映射完整弹性属性并比较柔顺幅值和部件载荷，不再接受左右对称残差替代幅值。
+  - K 改为至少 `-10/0/+10 mm` 和齿条扫掠的左右逐点结果，不能只比较端点变化量。
+- **Independent plan review**:
+  - 首轮审查发现验收命令未硬性审计纯 K 执行证据、manifest schema、完整 C 幅值和结果来源隔离；并指出当前默认 reference 仍可能绕过证据门禁。
+  - 已补充固定 manifest 分组、Adams 执行证据最小字段、两侧结果来源/哈希隔离、K 最小组合网格、C `6 x 11` 状态与全部共同部件载荷字段，并新增独立 `audit-adams-evidence` 门禁。
+  - 第二轮审查指出 K 齿条值、C 六条路径幅值、schema 版本和来源隔离断言仍未冻结。现已固定 `strict-adams-kc-v1`/schema 1、K 9 点输入、C 66 点输入、不同 producer/目录/结果哈希合同，并在最终命令显式传入合同版本和必需结果组。
+  - 第三轮审查指出命令未显式生成/预审 manifest、未指定双方 runner，C side 可能被误算为状态维度，实体集合和纯 K 标志的精确值仍不足。现已加入 `prepare-adams-equivalence` 和 Adams 前置 `audit-adams-equivalence`，显式选择两个隔离 runner；冻结实体集合/最小数量、canonical hash、纯 K 精确标志，并明确 C 共 66 状态且每状态包含双侧响应。
+- **Prior evidence disposition**: 保留原 K/C/static 数据及报告作为探索和回归证据，不再作为里程碑完成证据。
+- **Next step**: 核实 Adams/Car 2024.1 的纯 K 控制和柔性对象禁用命令，随后实现等价清单和 preflight 门禁。
+
+## Milestone 12 Strict K Entry
+
+- **Status**: IN_PROGRESS (K gate complete; C/static remain)
+- **Date**: 2026-07-29
+- **Implementation**:
+  - 新增 `adams.strict_k` 和 CLI `validate-adams --strict-k`；运行时复制安装内 assembly/subsystem，不修改 Adams 安装数据库。
+  - 悬架和转向均设置 `kinematic_flag=1`，`suspfront` 的 compliance flags 设为 0，初始外倾统一为 0；固定 `wheel=[-10,0,10] mm`、`rack=[-5,0,5] mm`。
+  - Adams/Car 先生成 9 个模型，再逐个将 ACF 改为 `simulate/kinematics` 并通过 `ru-standard` 重算；只有日志含 `Performing Kinematic Simulation` 且 `Simulate status=0` 才读取结果。
+  - 结果逐点比较左右轮心 XYZ、前束和外倾绝对值，共 90 个字段；保存 canonical manifest、两侧结果、执行证据和比较报告。
+- **Numeric evidence**:
+  - 9/9 状态、90/90 字段通过。
+  - 最大轮心位置误差 `9.467635209148284e-08 mm`。
+  - 最大角度误差 `0.01899493321956136 deg`，低于 `0.02 deg` 绝对门槛。
+  - 报告：`raw/adams-strict-k/comparison_report.json`。
+- **Validation**:
+  - `pytest tests/adams tests/cli -q` -> 31 passed。
+  - 成员包普通测试 -> 87 passed, 2 deselected；Ruff 与 ty 通过。
+- **Decision**: 严格 K 可单独认定完成；里程碑 12 仍保持 IN_PROGRESS，直到 C 柔顺幅值和 static 全部共同部件载荷在完全相同属性/边界下通过。
+- **Next step**: 选择并实现双方均可完整表达的 strict C/static canonical topology。

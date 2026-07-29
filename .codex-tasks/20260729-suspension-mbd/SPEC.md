@@ -119,7 +119,13 @@
 ## Adams Validation Contract
 
 - 里程碑 2 必须定位 Adams/Car 2024.1 可执行入口、许可证探测方式、自带双横臂前悬模板标识、数据库路径和批处理结果导出字段，并固化为本机 profile；缺失安装或许可证时本机验收命令必须明确失败，普通 CI 才允许通过 marker 排除。
-- 先建立理想关节 K 等价模型，再逐层加入相同的轮胎、弹簧预载、6x6 衬套、稳定杆和边界条件；禁止直接比较参数不等价的默认模板结果。
+- K 几何验收必须在 Adams/Car 中显式运行纯运动学模式；两侧只使用相同的理想关节拓扑和位移驱动，弹簧、减振器、衬套、轮胎、稳定杆、限位、重力及其他柔性或载荷元件对求解方程的贡献必须为零，不得用默认模板的准静态或柔顺分析代替纯 K。Adams 文件可保留未参与运动学方程的力元声明，但证据必须区分“已声明”和“参与求解”。
+- 比较前必须生成符合 `strict-adams-kc-v1`、schema version `1` 的机器可读 `equivalence_manifest.json`。仓库内的严格 Pydantic/JSON Schema 模型是字段级闭集并禁止未知、重复或缺失项；实体 ID 唯一，Adams 与 `suspension_mbd` 两份参数快照的 canonical hash 必须相等。固定拓扑至少包含 10 个刚体 ID（`chassis/rack/upper_arm_L/upper_arm_R/lower_arm_L/lower_arm_R/upright_L/upright_R/tie_rod_L/tie_rod_R`）、19 个硬点 ID（每侧 upper/lower front/rear/outer、tie inner/outer、wheel center，加唯一 rack center）和 17 个理想关节 ID（每侧 8 个连接及 rack guide）；C 模型至少包含稳定 ID 对齐的 8 个 A 臂安装衬套、2 个弹簧和 2 个轮胎，其他支持的弹性/载荷元件必须显式列出并设置 `enabled=false`，不得省略。每个记录固定包含单位与坐标变换、所属刚体/端点、初始位姿、车轮半径/质量/惯量/定位、齿条几何、约束自由度、驱动值、局部坐标、刚度、自由/零载位姿、预扭角、初始六分量预载和启用状态。缺字段、未知字段、ID 集合/数量不符、单位不一致、左右侧遗漏或 hash 不同均必须在启动 Adams 前失败。
+- 每次严格验收必须保存 `adams_execution_evidence.json`、`comparison_report.json` 和非专有来源清单。纯 K 执行证据固定要求 `analysis_mode="kinematic"`、`kinematic_flag=1`、`compliance_matrix_flag=0`、`compliance_objects_flag=0`、`force_contribution=false`、`gravity_contribution=false`、`contact_contribution=false`，并要求每个状态的 ACF 哈希、`Performing Kinematic Simulation` 日志标志和 `Simulate status=0`。证据还必须包含 Adams 版本、命令文件哈希、输入清单哈希、模型导出或日志证明及原始结果目录。证据审计必须独立于数值比较执行，缺失或自相矛盾即失败。
+- Adams runner 与 `suspension_mbd` 被测结果只能共享只读的规范化输入清单，不得读取、复制或反推对方的数值输出。编排器必须把两侧放在不同输出目录并只向每个 runner 传入输入清单和自身输出目录；来源清单固定记录不同的 producer ID（`msc.adams-car.2024.1` 与 `open-kinematics.suspension-mbd`）、相同输入哈希、各自命令/生成器哈希、互不相同且位于各自目录下的结果路径与结果哈希。审计拒绝相同 producer、相同/越界结果路径或任一侧声明读取对方结果。内置实现可以作为默认入口，但不得绕过该来源隔离审计。
+- C 与静态载荷验收必须在相同 K 基线之上逐层启用完全相同的弹簧、预载、6x6 衬套及局部坐标、轮胎、稳定杆、限位、质量、重力和边界条件。当前模型无法表达 Adams 模板中的副车架、轮毂或支柱柔性时，必须改用双方都能完整表达的等价模型；不得以左右对称残差或解析轴荷代替完整柔顺幅值和载荷等价验收。
+- K 固定使用轮心位移驱动、左右同向轮跳，`wheel_travel_mm=[-10,0,10]`、`rack_displacement_mm=[-5,0,5]` 的 3x3 笛卡尔网格，共 9 个状态；逐点比较左右轮心三维绝对位置、前束和外倾。状态数不等于 9、输入点不完全相同或只比较端点变化量均失败。
+- C 固定在 K 零点使用左轮单侧加载，右轮输入载荷为零；路径 ID 为 `fx/fy/fz/mx/my/mz`，力路径最大值均为 `500 N`，力矩路径最大值均为 `1000 N*mm`，每条路径使用 `linspace(-maximum,+maximum,11)`。状态主键只由 `(path_id, level_index)` 组成，共 66 个状态，side 不是额外状态维度；每个状态必须同时包含 left 和 right 两套响应字段，并明确记录 right input 为零。双侧字段均包括轮心三向位移、三向转角、前束、外倾、中心/割线柔顺率和 C-K 增量；静态载荷必须比较左右轮荷及每个共同建模弹性元件/连接端的局部六分量载荷。状态、字段或部件缺失均直接失败。
 - Adams 原始输出先缓存到任务目录 `raw/`；仓库只保存参数映射、非专有数值基准、来源清单和比较报告，不保存模板、数据库或可还原专有模型的文件。
 - 里程碑 2 在取得模板量级后冻结力和力矩绝对容差；里程碑 12 执行 K 几何、C 柔顺性和静态部件载荷三组完整验收。
 - 数值验收通过显式外部 runner 和非专有 reference 结果衔接 Adams；缺少 runner、reference、结果组或字段时必须失败，不能退化为 profile 契约通过。
@@ -163,14 +169,15 @@
 - [ ] `suspension_mbd` 可独立构建、安装和导入；根 wheel 不包含新包，新 wheel 不包含旧包；两个包源代码互无业务导入。
 - [ ] 所有 v1 schema、领域对象、求解功能、工况、结果与诊断满足本规格。
 - [ ] 100 点 K 与 6600 点 C 性能测试在本机达到 30 秒/300 秒目标，全部有效状态收敛。
-- [ ] Adams/Car 2024.1 自带双横臂前悬等价模型的 K、C、载荷结果满足精度阈值。
+- [ ] Adams/Car 2024.1 的纯 K 模型以及参数逐项等价的 C/载荷模型均有机器可读等价证据，完整结果满足精度阈值。
+- [ ] `equivalence_manifest.json`、纯 K 执行证据、来源清单和比较报告通过独立审计；K 恰有 9 个完整状态，C 恰有 66 个含双侧响应的完整状态，static 含全部共同元件端点载荷，三组结果均不得退化为摘要或对称残差。
 - [ ] 常规 CI 不依赖 Adams 许可证；本机 Adams 验收可一条命令无人值守执行。
-- [ ] 现有 `just check`、两个 wheel 构建、新包 lint/type/test、续算一致性、性能测试和 Adams 验收全部通过。
+- [ ] 根包回归、两个 wheel 构建、新包 lint/type/test、续算一致性、性能测试和 Adams 验收全部通过。
 
 ## Final Validation Command
 
 ```powershell
-just check && uv build && uv run --project packages/suspension_mbd ruff check packages/suspension_mbd && uv run --project packages/suspension_mbd ty check packages/suspension_mbd/src && uv run --project packages/suspension_mbd pytest packages/suspension_mbd/tests -m 'not adams and not performance' --strict-markers -q && uv build --project packages/suspension_mbd && uv run --project packages/suspension_mbd pytest packages/suspension_mbd/tests/performance -m performance --strict-markers -q && uv run --project packages/suspension_mbd suspension-mbd validate-adams --profile adams-car-2024.1 --full --require-installed
+uv run pytest tests/ -q && uv build && uv run --project packages/suspension_mbd ruff check packages/suspension_mbd && uv run --project packages/suspension_mbd ty check packages/suspension_mbd/src && uv run --project packages/suspension_mbd pytest packages/suspension_mbd/tests -m 'not adams and not performance' --strict-markers -q && uv build --project packages/suspension_mbd && uv run --project packages/suspension_mbd pytest packages/suspension_mbd/tests/performance -m performance --strict-markers -q && uv run --project packages/suspension_mbd suspension-mbd prepare-adams-equivalence --contract strict-adams-kc-v1 --schema-version 1 --output .codex-tasks/20260729-suspension-mbd/raw/adams-strict/equivalence_manifest.json && uv run --project packages/suspension_mbd suspension-mbd audit-adams-equivalence --contract strict-adams-kc-v1 --schema-version 1 --manifest .codex-tasks/20260729-suspension-mbd/raw/adams-strict/equivalence_manifest.json && uv run --project packages/suspension_mbd suspension-mbd validate-adams --profile adams-car-2024.1 --full --strict-equivalence --contract strict-adams-kc-v1 --schema-version 1 --manifest .codex-tasks/20260729-suspension-mbd/raw/adams-strict/equivalence_manifest.json --runner builtin:strict-adams-car --reference builtin:strict-suspension-mbd --require-installed --evidence-dir .codex-tasks/20260729-suspension-mbd/raw/adams-strict && uv run --project packages/suspension_mbd suspension-mbd audit-adams-evidence --contract strict-adams-kc-v1 --schema-version 1 --require-groups K_geometry,C_compliance,static_load --evidence-dir .codex-tasks/20260729-suspension-mbd/raw/adams-strict
 ```
 
 ## Demo Flow

@@ -53,18 +53,28 @@ def validate_adams(
     profile: str = typer.Option("adams-car-2024.1"),
     smoke: bool = typer.Option(False),
     full: bool = typer.Option(False),
+    strict_k: bool = typer.Option(
+        False,
+        "--strict-k",
+        help="Run the fixed 9-state Adams pure-kinematic equivalence gate.",
+    ),
     require_installed: bool = typer.Option(False, "--require-installed"),
     reference: Path | None = typer.Option(
         None,
         "--reference",
         exists=True,
         readable=True,
-        help="Non-proprietary JSON/CSV Adams reference results for --full.",
+        help="Override the built-in suspension_mbd reference for --full.",
     ),
     runner: str | None = typer.Option(
         None,
         "--runner",
-        help="External Adams runner command; request and output paths are appended.",
+        help="Override the built-in Adams/Car batch runner.",
+    ),
+    evidence_dir: Path | None = typer.Option(
+        None,
+        "--evidence-dir",
+        help="Directory for non-proprietary strict-K evidence.",
     ),
 ) -> None:
     """Validate the local Adams/Car profile and optional full contract."""
@@ -77,6 +87,8 @@ def validate_adams(
         require_installed=require_installed,
         reference=reference,
         runner=runner,
+        strict_k=strict_k,
+        evidence_dir=evidence_dir,
     )
     if not result.ok:
         typer.echo(result.message, err=True)
