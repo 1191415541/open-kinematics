@@ -7,6 +7,7 @@ from .elastic import (
     BushingElement,
     GravityElement,
     LinearSpringElement,
+    PointWrenchElement,
     StaticDamperElement,
     VerticalTireElement,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "ForceEvaluation",
     "GravityElement",
     "LinearSpringElement",
+    "PointWrenchElement",
     "StaticDamperElement",
     "VerticalTireElement",
 ]

@@ -148,8 +148,9 @@ class EquilibriumSolver:
                 solution = np.linalg.lstsq(kkt, rhs, rcond=1e-12)[0]
                 diagnostics.append("kkt_lstsq_fallback")
             increment = solution[:size]
-            multipliers = solution[size:]
-            new_stationarity = force + jacobian.T @ multipliers
+            multiplier_increment = solution[size:]
+            trial_multipliers = multipliers + multiplier_increment
+            new_stationarity = force + jacobian.T @ trial_multipliers
             if np.linalg.norm(increment) <= self.settings.increment_tolerance:
                 new_force_norm, new_moment_norm = _force_moment_norms(
                     new_stationarity, self.settings.moment_scale
@@ -166,7 +167,7 @@ class EquilibriumSolver:
                         constraint_norm,
                         new_force_norm,
                         new_moment_norm,
-                        multipliers,
+                        trial_multipliers,
                         tuple(sorted(active_events)),
                         tuple(diagnostics),
                     )
@@ -176,9 +177,11 @@ class EquilibriumSolver:
                 body: increment[index * 6 : (index + 1) * 6]
                 for index, body in enumerate(body_order)
             }
-            state, accepted = self._line_search(
+            state, multipliers, accepted = self._line_search(
                 state,
                 increments,
+                multipliers,
+                multiplier_increment,
                 system,
                 element_tuple,
                 external_wrenches_global,
@@ -248,44 +251,60 @@ class EquilibriumSolver:
         self,
         state: RigidBodyState,
         increments: dict[str, np.ndarray],
+        multipliers: np.ndarray,
+        multiplier_increment: np.ndarray,
         system: ConstraintSystem,
         elements: tuple[object, ...],
         external: dict[str, np.ndarray] | None,
         body_order: tuple[str, ...],
-    ) -> tuple[RigidBodyState, bool]:
+    ) -> tuple[RigidBodyState, np.ndarray, bool]:
+        """Accept a step against the full constrained KKT residual."""
         current_force, _ = evaluate_generalized_forces(
             state, elements, external, body_order
+        )
+        current_jacobian = system.jacobian(state, body_order)
+        current_force_norm, current_moment_norm = _force_moment_norms(
+            current_force + current_jacobian.T @ multipliers,
+            self.settings.moment_scale,
         )
         current_norm = max(
             float(np.max(np.abs(system.residual(state))))
             if system.constraints
             else 0.0,
-            float(np.max(np.abs(current_force))) if current_force.size else 0.0,
+            current_force_norm,
+            current_moment_norm,
         )
         for exponent in range(self.settings.line_search_steps):
             factor = 0.5**exponent
             candidate = state.retract(
                 {body: factor * delta for body, delta in increments.items()}
             )
+            candidate_multipliers = multipliers + factor * multiplier_increment
             force, _ = evaluate_generalized_forces(
                 candidate, elements, external, body_order
             )
             residual = system.residual(candidate)
+            jacobian = system.jacobian(candidate, body_order)
+            force_norm, moment_norm = _force_moment_norms(
+                force + jacobian.T @ candidate_multipliers,
+                self.settings.moment_scale,
+            )
             candidate_norm = max(
                 float(np.max(np.abs(residual))) if residual.size else 0.0,
-                float(np.max(np.abs(force))) if force.size else 0.0,
+                force_norm,
+                moment_norm,
             )
             if (
                 candidate_norm < current_norm
                 or candidate_norm < self.settings.force_tolerance
             ):
-                return candidate, True
+                return candidate, candidate_multipliers, True
             if (
                 np.linalg.norm(np.concatenate(tuple(increments.values())))
                 <= self.settings.increment_tolerance
             ):
-                return candidate, True
-        return state, False
+                return candidate, candidate_multipliers, True
+        return state, multipliers, False
 
 
 def _force_moment_norms(

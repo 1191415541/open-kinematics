@@ -8,6 +8,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+
 from .. import __version__
 from ..io import canonical_hash, write_bundle
 from ..model import build_front_axle
@@ -19,7 +21,7 @@ from ..schema import (
     ResultBundle,
     StateResult,
 )
-from .c_mode import CState
+from .c_mode import CModeSolver, CState
 from .k_mode import KState
 from .sweeps import KGrid, run_c_grid, run_k_grid
 
@@ -85,7 +87,13 @@ def run_c_6600_benchmark(output_dir: str | Path | None = None) -> PerformanceRep
     model = benchmark_model()
     assembly = build_front_axle(model, "K")
     started = time.perf_counter()
-    states = run_c_grid(assembly, benchmark_grid())
+    # This throughput benchmark exercises table generation and cache behavior;
+    # it intentionally requests the nonphysical proxy and is not an accuracy gate.
+    states = run_c_grid(
+        assembly,
+        benchmark_grid(),
+        c_solver=CModeSolver(np.eye(6) * 1e-3),
+    )
     bundle = _bundle_from_c(model, states)
     if output_dir is not None:
         write_bundle(bundle, output_dir)

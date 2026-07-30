@@ -38,9 +38,29 @@ uv run --project packages/suspension_mbd suspension-mbd validate-adams `
   --evidence-dir .codex-tasks/20260729-suspension-mbd/raw/adams-strict-k
 ```
 
-The legacy `--full` command remains available for regression evidence, but its
-built-in C fields are left/right symmetry residuals rather than full compliance
-magnitudes and therefore do not constitute strict C/load acceptance.
+The strict C gate writes and executes a native Adams Solver model from the
+same canonical hardpoints and element set: eight diagonal 6x6 inboard
+bushings, ideal outboard/tie-rod joints, a neutral locked rack, a left
+wheel-center six-axis wrench, and no gravity, contact, spring, damper, stop,
+or stock-template compliance objects. Each physical bushing is emitted as a
+reversed pair of half-rate native `BUSHING` elements so Adams' moving-J-frame
+asymmetry does not alter the shared 6x6 constitutive law. It compares all 66 load states across
+left/right wheel-center translation, rotation vector, toe, and camber.
+The native command first solves zero load, then preconditions to the negative
+endpoint before recording the 11-state negative-to-positive response sweep;
+this keeps the largest moment paths on a continuous quasi-static equilibrium
+branch.
+
+    uv run --project packages/suspension_mbd suspension-mbd validate-adams `
+      --profile adams-car-2024.1 --strict-c --require-installed `
+      --evidence-dir .codex-tasks/20260729-suspension-mbd/raw/adams-strict-c
+
+It is intentionally not a comparison against the stock TR template's complete
+ride system, whose springs, dampers, stops, and additional bushings are outside
+the current MBD element set. The legacy `--full` command also remains available
+for regression evidence, but its built-in C fields are left/right symmetry
+residuals rather than full compliance magnitudes and therefore do not
+constitute strict C/load acceptance.
 
 `--reference` and `--runner` override the built-in baseline and batch runner.
 An external runner receives the request JSON and output directory as its final

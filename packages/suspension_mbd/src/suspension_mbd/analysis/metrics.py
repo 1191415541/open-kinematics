@@ -8,8 +8,8 @@ from ..core.rigid_body import RigidBodyState
 from ..model import FrontAxleAssembly
 
 
-def _angle_deg(value: float) -> float:
-    return math.degrees(math.atan2(value, 1.0))
+def _angle_deg(y: float, x: float) -> float:
+    return math.degrees(math.atan2(y, x))
 
 
 def wheel_metrics(
@@ -22,8 +22,11 @@ def wheel_metrics(
     rotation = state.pose(body).rotation
     center = state.point_world(body, assembly.point(body, "wheel_center"))
     outward = -1.0 if normalized == "L" else 1.0
-    camber = outward * _angle_deg(rotation[1, 2] / max(abs(rotation[2, 2]), 1e-12))
-    toe = outward * _angle_deg(rotation[1, 0] / max(abs(rotation[0, 0]), 1e-12))
+    # Alignment angles are measured from the wheel's lateral/spindle axis.
+    # Using the upright's local Z/X axes couples them to steering rotation.
+    lateral_y = float(rotation[1, 1])
+    camber = -outward * _angle_deg(float(rotation[2, 1]), lateral_y)
+    toe = -outward * _angle_deg(float(rotation[0, 1]), lateral_y)
     return {
         f"{side_name}_wheel_center_x": float(center[0]),
         f"{side_name}_wheel_center_y": float(center[1]),

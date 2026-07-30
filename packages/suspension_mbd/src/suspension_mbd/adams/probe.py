@@ -224,7 +224,7 @@ def _run_version_probe(executable: Path) -> tuple[str | None, str]:
     try:
         with tempfile.TemporaryDirectory(prefix="suspension_mbd_adams_") as cwd:
             completed = subprocess.run(
-                ["cmd.exe", "/c", str(executable), "-v"],
+                [str(executable), "-v"],
                 cwd=cwd,
                 capture_output=True,
                 text=True,
@@ -260,11 +260,8 @@ def _run_license_probe(executable: Path) -> tuple[str, str]:
                 "exit confirm=yes\n",
                 encoding="ascii",
             )
-            command_line = subprocess.list2cmdline(
-                [str(executable), "acar", "ru-acar", "b", str(command_file)]
-            )
             completed = subprocess.run(
-                ["cmd.exe", "/d", "/s", "/c", command_line],
+                [str(executable), "acar", "ru-acar", "b", str(command_file)],
                 cwd=working_dir,
                 capture_output=True,
                 text=True,

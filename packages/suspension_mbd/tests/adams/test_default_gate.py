@@ -9,7 +9,9 @@ from suspension_mbd.adams.reference import build_default_reference
 from suspension_mbd.adams.runner import _maximum_minimum, _pair, _result_component
 
 
-def test_default_reference_solves_adams_hardpoints_independently(tmp_path: Path) -> None:
+def test_default_reference_solves_adams_hardpoints_independently(
+    tmp_path: Path,
+) -> None:
     database = tmp_path / "shared_car_database.cdb"
     subsystem_dir = database / "subsystems.tbl"
     subsystem_dir.mkdir(parents=True)
@@ -46,8 +48,12 @@ $ next section
 
     reference = build_default_reference(profile)
 
-    assert reference["K_geometry"]["left_toe_change_deg"] == pytest.approx(0.723393, abs=1e-5)
-    assert reference["K_geometry"]["left_camber_change_deg"] == pytest.approx(0.387668, abs=1e-5)
+    assert reference["K_geometry"]["left_toe_change_deg"] == pytest.approx(
+        0.723426, abs=1e-5
+    )
+    assert reference["K_geometry"]["left_camber_change_deg"] == pytest.approx(
+        0.387693, abs=1e-5
+    )
     assert reference["static_load"]["left_wheel_force_n"] == pytest.approx(2943.0)
 
 
@@ -69,4 +75,6 @@ Lateral compliance steer = -0.0030 -0.0030 deg/kN
 
     assert _maximum_minimum(report, "Left Toe Angle") == (0.3499, -0.3766)
     assert _pair(report, "Lateral compliance steer") == (-0.003, -0.003)
-    assert _result_component(result, "left_tire_forces", "normal") == pytest.approx(2785.636)
+    assert _result_component(result, "left_tire_forces", "normal") == pytest.approx(
+        2785.636
+    )

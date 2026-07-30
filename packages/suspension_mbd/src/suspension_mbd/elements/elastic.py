@@ -181,6 +181,46 @@ class BushingElement:
 
 
 @dataclass(frozen=True)
+class PointWrenchElement:
+    """A constant global wrench applied at a body-fixed point."""
+
+    name: str
+    body: str
+    point_local: np.ndarray
+    force_global: np.ndarray
+    moment_global: np.ndarray
+
+    def __post_init__(self) -> None:
+        point = np.asarray(self.point_local, dtype=float)
+        force = np.asarray(self.force_global, dtype=float)
+        moment = np.asarray(self.moment_global, dtype=float)
+        if (
+            point.shape != (3,)
+            or force.shape != (3,)
+            or moment.shape != (3,)
+            or not np.all(np.isfinite(np.concatenate((point, force, moment))))
+        ):
+            raise ElementError("point wrench must contain finite three-vectors")
+        object.__setattr__(self, "point_local", point.copy())
+        object.__setattr__(self, "force_global", force.copy())
+        object.__setattr__(self, "moment_global", moment.copy())
+
+    def evaluate(self, state: RigidBodyState) -> ForceEvaluation:
+        point = _point(state, self.body, self.point_local)
+        wrench = np.concatenate(
+            (
+                self.force_global,
+                np.cross(point, self.force_global) + self.moment_global,
+            )
+        )
+        return ForceEvaluation(
+            name=self.name,
+            energy=0.0,
+            body_wrenches_global={self.body: wrench},
+        )
+
+
+@dataclass(frozen=True)
 class VerticalTireElement:
     """Compression-only single-axis vertical tire at a wheel center."""
 

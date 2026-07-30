@@ -17,6 +17,7 @@ from ..analysis import KModeSolver
 from ..model import build_front_axle
 from ..schema import FrontAxleModel, MassSpec
 from .adapter import SmokeResult, Tolerance
+from .equivalent_model import write_equivalent_sources
 from .probe import AdamsProfile
 from .reference import _read_hardpoints
 
@@ -145,6 +146,9 @@ def build_equivalence_manifest(profile: AdamsProfile) -> dict[str, Any]:
             "angle_unit": "deg",
         },
         "hardpoints_mm": mapped,
+        "adams_template_hardpoints_mm": {
+            name: list(hardpoints[name]) for name in sorted(hardpoints)
+        },
         "initial_alignment_deg": {
             "camber_left": 0.0,
             "camber_right": 0.0,
@@ -177,20 +181,24 @@ def build_equivalence_manifest(profile: AdamsProfile) -> dict[str, Any]:
     }
     canonical = json.dumps(physical_input, sort_keys=True, separators=(",", ":"))
     canonical_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    source = {
+        "profile": profile.name,
+        "version": profile.version,
+        "template_id": profile.template_id,
+        "subsystem_id": profile.subsystem_id,
+        "subsystem_sha256": _sha256(subsystem),
+        "steering_sha256": _sha256(steering),
+    }
+    assembly = database / "assemblies.tbl" / "mdi_front_vehicle.asy"
+    if assembly.is_file():
+        source["assembly_sha256"] = _sha256(assembly)
     return {
         "contract": CONTRACT,
         "schema_version": SCHEMA_VERSION,
         "physical_input": physical_input,
         "adams_snapshot_sha256": canonical_hash,
         "suspension_mbd_snapshot_sha256": canonical_hash,
-        "source": {
-            "profile": profile.name,
-            "version": profile.version,
-            "template_id": profile.template_id,
-            "subsystem_id": profile.subsystem_id,
-            "subsystem_sha256": _sha256(subsystem),
-            "steering_sha256": _sha256(steering),
-        },
+        "source": source,
     }
 
 
@@ -250,7 +258,9 @@ def run_adams_pure_k(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Generate Adams/Car K models, rerun them with simulate/kinematics, and parse results."""
     runtime.mkdir(parents=True, exist_ok=True)
-    local_assembly, generated_hashes = _write_pure_k_sources(profile, runtime)
+    local_assembly, generated_hashes = _write_pure_k_sources(
+        profile, manifest, runtime
+    )
     command_file = runtime / "strict_k_generate.cmd"
     command_file.write_text(_generation_command(local_assembly), encoding="ascii")
     executable = Path(profile.executable or "")
@@ -423,73 +433,10 @@ def compare_k_states(
 
 
 def _write_pure_k_sources(
-    profile: AdamsProfile, runtime: Path
+    profile: AdamsProfile, manifest: dict[str, Any], runtime: Path
 ) -> tuple[Path, dict[str, str]]:
-    database = _database(profile)
-    source_suspension = database / "subsystems.tbl" / str(profile.subsystem_id)
-    source_steering = database / "subsystems.tbl" / "TR_Steering.sub"
-    source_assembly = (
-        Path(profile.home or "")
-        / "acar"
-        / "acar_concept.cdb"
-        / "assemblies.tbl"
-        / "Demo_Vehicle_Variants.asy"
-    )
-    suspension = runtime / "strict_front_suspension.sub"
-    steering = runtime / "strict_steering.sub"
-    assembly = runtime / "strict_suspension.asy"
-
-    suspension_text = source_suspension.read_text(encoding="utf-8", errors="strict")
-    suspension_text = _replace_exact(
-        suspension_text,
-        " 'kinematic_flag              '  'single    '   'integer'  0",
-        " 'kinematic_flag              '  'single    '   'integer'  1",
-        "suspension kinematic flag",
-    )
-    suspension_text = _replace_exact(
-        suspension_text,
-        " 'camber_angle                '  'left/right'   'real'     -0.5",
-        " 'camber_angle                '  'left/right'   'real'      0.0",
-        "suspension initial camber",
-    )
-    suspension.write_text(suspension_text, encoding="utf-8")
-
-    steering_text = source_steering.read_text(encoding="utf-8", errors="strict")
-    steering_text = _replace_exact(
-        steering_text,
-        " 'kinematic_flag              '  'single    '   'integer'  0",
-        " 'kinematic_flag              '  'single    '   'integer'  1",
-        "steering kinematic flag",
-    )
-    steering.write_text(steering_text, encoding="utf-8")
-
-    assembly_text = source_assembly.read_text(encoding="utf-8", errors="strict")
-    assembly_text = _replace_exact(
-        assembly_text,
-        "<acar_shared>/subsystems.tbl/TR_Front_Suspension.sub",
-        suspension.as_posix(),
-        "assembly suspension usage",
-    )
-    assembly_text = _replace_exact(
-        assembly_text,
-        "<acar_shared>/subsystems.tbl/TR_Steering.sub",
-        steering.as_posix(),
-        "assembly steering usage",
-    )
-    assembly_text = _replace_exact(
-        assembly_text,
-        "{suspfront}\n 'compliance_matrix_flag      '  'single    '   'integer'  1",
-        "{suspfront}\n 'compliance_matrix_flag      '  'single    '   'integer'  0\n"
-        " 'compliance_objects_flag     '  'single    '   'integer'  0\n"
-        " 'kinematic_flag              '  'single    '   'integer'  1",
-        "assembly suspfront flags",
-    )
-    assembly.write_text(assembly_text, encoding="utf-8")
-    return assembly, {
-        "assembly_sha256": _sha256(assembly),
-        "suspension_sha256": _sha256(suspension),
-        "steering_sha256": _sha256(steering),
-    }
+    generated = write_equivalent_sources(profile, manifest, runtime, mode="K")
+    return generated.assembly, generated.hashes
 
 
 def _generation_command(assembly: Path) -> str:
@@ -498,7 +445,6 @@ def _generation_command(assembly: Path) -> str:
         "variable set variable=.ACAR.variables.errorFlag integer=0",
         "acar files assembly open &",
         f' assembly_name="{assembly.as_posix()}" &',
-        " variant=suspfront &",
         " error_variable=.ACAR.variables.errorFlag",
     ]
     for wheel in WHEEL_VALUES_MM:
@@ -597,12 +543,11 @@ def _run_process(
     timeout: int,
     environment: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    command_line = subprocess.list2cmdline([str(executable), *arguments])
     env = os.environ.copy()
     if environment:
         env.update(environment)
     return subprocess.run(
-        ["cmd.exe", "/d", "/s", "/c", command_line],
+        [str(executable), *arguments],
         cwd=cwd,
         env=env,
         capture_output=True,

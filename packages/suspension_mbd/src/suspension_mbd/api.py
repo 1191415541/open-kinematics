@@ -20,6 +20,8 @@ from .schema import (
     BushingResult,
     CaseSpec,
     ComponentLoad,
+    CResponse,
+    Diagnostic,
     FrontAxleModel,
     Manifest,
     Pose,
@@ -29,6 +31,7 @@ from .schema import (
     SixVector,
     StateResult,
     Vec3,
+    WheelResponse,
 )
 from .schema.case import DisplacementControl, LoadControl
 from .solver import evaluate_generalized_forces
@@ -46,10 +49,16 @@ def run_case(
     case_hash = canonical_hash(case.model_dump(mode="json"))
     solver_hash = canonical_hash({"package": __version__, "mode": case.mode})
     checkpoint = (
-        CheckpointStore(case.checkpoint_path) if case.checkpoint_path is not None else None
+        CheckpointStore(case.checkpoint_path)
+        if case.checkpoint_path is not None
+        else None
     )
     if case.mode == "K":
-        controls = [control for control in case.controls if isinstance(control, DisplacementControl)]
+        controls = [
+            control
+            for control in case.controls
+            if isinstance(control, DisplacementControl)
+        ]
         axes = [_k_control_axis(control.target) for control in controls]
         values = [control.expanded() for control in controls]
         combinations = product(*values) if values else [()]
@@ -74,7 +83,9 @@ def run_case(
             bushing_results.extend(bushings)
             _checkpoint(checkpoint, result.case_id, model_hash, case_hash, solver_hash)
     else:
-        controls = [control for control in case.controls if isinstance(control, LoadControl)]
+        controls = [
+            control for control in case.controls if isinstance(control, LoadControl)
+        ]
         loads = _c_control_loads(controls, case.external_loads)
         engine = CModeSolver()
         for index, load in enumerate(loads):
@@ -85,6 +96,9 @@ def run_case(
                 case_id=f"{case.name}-{index:04d}",
             )
             states.append(_state_from_c(result))
+            loads, bushings = _collect_element_results(assembly, result)
+            component_loads.extend(loads)
+            bushing_results.extend(bushings)
             _checkpoint(checkpoint, result.case_id, model_hash, case_hash, solver_hash)
     states.sort(key=lambda state: state.state_id)
     provenance = Provenance(
@@ -142,7 +156,9 @@ def _c_control_loads(
         elif control.sweep is not None:
             axis = control.target.lower()
             if axis not in {"fx", "fy", "fz", "mx", "my", "mz"}:
-                raise ValueError(f"load sweep target must be a six-vector axis: {axis!r}")
+                raise ValueError(
+                    f"load sweep target must be a six-vector axis: {axis!r}"
+                )
             loads.extend(SixVector(**{axis: value}) for value in control.sweep.values())
     return tuple(loads)
 
@@ -166,12 +182,44 @@ def _state_from_k(result: KState) -> StateResult:
 
 
 def _state_from_c(result: CState) -> StateResult:
+    if result.equilibrium is None:
+        raise ValueError(
+            "linear C proxy results cannot be written as physical C states"
+        )
+    equilibrium = result.equilibrium
     return StateResult(
         state_id=result.case_id,
         mode="C",
+        drives={
+            "wheel_travel_left": result.wheel_travel_left,
+            "wheel_travel_right": result.wheel_travel_right,
+            "rack_displacement": result.rack_displacement,
+        },
         external_loads={"left": result.load_left, "right": result.load_right},
         metrics=result.c_minus_k,
-        converged=True,
+        poses={
+            "upright_left": _schema_pose(equilibrium.state.pose("upright_L")),
+            "upright_right": _schema_pose(equilibrium.state.pose("upright_R")),
+        },
+        c_response=CResponse(
+            wheel_left=_wheel_response(result.deformation_left),
+            wheel_right=_wheel_response(result.deformation_right),
+            secant_compliance_left=_matrix(result.secant_compliance_left),
+            secant_compliance_right=_matrix(result.secant_compliance_right),
+        ),
+        constraint_residual=equilibrium.constraint_residual,
+        force_residual=equilibrium.force_residual,
+        moment_residual=equilibrium.moment_residual,
+        converged=equilibrium.converged,
+        diagnostics=tuple(
+            Diagnostic(
+                code="c_equilibrium",
+                severity="warning",
+                message=message,
+                state_id=result.case_id,
+            )
+            for message in equilibrium.diagnostics
+        ),
     )
 
 
@@ -192,21 +240,24 @@ def _checkpoint(
 
 
 def _collect_element_results(
-    assembly: FrontAxleAssembly, result: KState
+    assembly: FrontAxleAssembly, result: KState | CState
 ) -> tuple[tuple[ComponentLoad, ...], tuple[BushingResult, ...]]:
+    equilibrium = result.equilibrium
+    if equilibrium is None:
+        raise ValueError("element loads require an equilibrium-backed result")
     loads: list[ComponentLoad] = []
     bushings: list[BushingResult] = []
     _force, evaluations = evaluate_generalized_forces(
-        result.equilibrium.state,
+        equilibrium.state,
         assembly.elements,
         body_order=tuple(
-            name for name, body in result.equilibrium.state.bodies.items() if not body.fixed
+            name for name, body in equilibrium.state.bodies.items() if not body.fixed
         ),
     )
     for evaluation in evaluations:
         for body, global_array in evaluation.body_wrenches_global.items():
             local_array = wrench_global_to_local(
-                result.equilibrium.state.pose(body), global_array
+                equilibrium.state.pose(body), global_array
             )
             loads.append(
                 ComponentLoad(
@@ -220,19 +271,35 @@ def _collect_element_results(
     for element in assembly.elements:
         if not isinstance(element, BushingElement):
             continue
-        deformation = element.deformation(result.equilibrium.state)
+        deformation = element.deformation(equilibrium.state)
         bushings.append(
             BushingResult(
                 state_id=result.case_id,
                 bushing=element.name,
                 deformation=_six_vector(deformation),
                 load=_six_vector(-element.stiffness @ deformation + element.preload),
-                strain_energy=0.5 * float(deformation @ element.stiffness @ deformation),
+                strain_energy=0.5
+                * float(deformation @ element.stiffness @ deformation),
                 stiffness_id=element.name,
                 zero_load_pose=_schema_pose(element.local_pose_a),
             )
         )
     return tuple(loads), tuple(bushings)
+
+
+def _wheel_response(value: SixVector) -> WheelResponse:
+    return WheelResponse(
+        x_mm=value.fx,
+        y_mm=value.fy,
+        z_mm=value.fz,
+        rx_rad=value.mx,
+        ry_rad=value.my,
+        rz_rad=value.mz,
+    )
+
+
+def _matrix(values: np.ndarray) -> tuple[tuple[float, ...], ...]:
+    return tuple(tuple(float(value) for value in row) for row in values)
 
 
 def _six_vector(values: Iterable[float]) -> SixVector:

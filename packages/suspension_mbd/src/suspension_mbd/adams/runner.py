@@ -20,11 +20,8 @@ def run_default_adams(
         raise ValueError("Adams executable is unavailable")
     command_file = output_dir / "suspension_mbd_adams_validation.cmd"
     command_file.write_text(_COMMAND_FILE, encoding="ascii")
-    command_line = subprocess.list2cmdline(
-        [profile.executable, "acar", "ru-acar", "b", str(command_file)]
-    )
     completed = subprocess.run(
-        ["cmd.exe", "/d", "/s", "/c", command_line],
+        [profile.executable, "acar", "ru-acar", "b", str(command_file)],
         cwd=output_dir,
         capture_output=True,
         text=True,

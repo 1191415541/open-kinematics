@@ -37,3 +37,10 @@ def test_validate_adams_rejects_full_and_strict_k_together() -> None:
 
     assert result.exit_code == 1
     assert "mutually exclusive" in result.output
+
+
+def test_validate_adams_rejects_strict_k_and_strict_c_together() -> None:
+    result = CliRunner().invoke(app, ["validate-adams", "--strict-k", "--strict-c"])
+
+    assert result.exit_code == 1
+    assert "mutually exclusive" in result.output

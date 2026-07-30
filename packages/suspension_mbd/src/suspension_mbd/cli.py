@@ -58,6 +58,11 @@ def validate_adams(
         "--strict-k",
         help="Run the fixed 9-state Adams pure-kinematic equivalence gate.",
     ),
+    strict_c: bool = typer.Option(
+        False,
+        "--strict-c",
+        help="Run the fixed 66-state native-Adams compliant equivalence gate.",
+    ),
     require_installed: bool = typer.Option(False, "--require-installed"),
     reference: Path | None = typer.Option(
         None,
@@ -74,7 +79,7 @@ def validate_adams(
     evidence_dir: Path | None = typer.Option(
         None,
         "--evidence-dir",
-        help="Directory for non-proprietary strict-K evidence.",
+        help="Directory for non-proprietary strict K/C evidence.",
     ),
 ) -> None:
     """Validate the local Adams/Car profile and optional full contract."""
@@ -88,6 +93,7 @@ def validate_adams(
         reference=reference,
         runner=runner,
         strict_k=strict_k,
+        strict_c=strict_c,
         evidence_dir=evidence_dir,
     )
     if not result.ok:

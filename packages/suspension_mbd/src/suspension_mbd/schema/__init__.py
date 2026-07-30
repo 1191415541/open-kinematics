@@ -32,10 +32,12 @@ from .model import FrontAxleModel, HardpointPair, MassSpec, RigidBodySpec
 from .result import (
     BushingResult,
     ComponentLoad,
+    CResponse,
     Diagnostic,
     Manifest,
     ResultBundle,
     StateResult,
+    WheelResponse,
 )
 
 __all__ = [
@@ -43,6 +45,7 @@ __all__ = [
     "BumpStop",
     "Bushing6x6",
     "BushingResult",
+    "CResponse",
     "CaseSpec",
     "ComponentLoad",
     "CoordinateSystem",
@@ -70,6 +73,7 @@ __all__ = [
     "UnitSystem",
     "Vec3",
     "VerticalTire",
+    "WheelResponse",
     "load_case",
     "load_model",
     "load_result",

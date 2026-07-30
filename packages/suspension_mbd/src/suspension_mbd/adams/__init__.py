@@ -5,6 +5,7 @@ from typing import Mapping
 
 from .adapter import AdamsBatchAdapter, Runner, RunnerExecution, SmokeResult, Tolerance
 from .probe import AdamsProfile, discover_profile, probe_profile
+from .strict_c import validate_strict_c
 from .strict_k import validate_strict_k
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "Tolerance",
     "discover_profile",
     "probe_profile",
+    "validate_strict_c",
     "validate_strict_k",
 ]
 
@@ -29,13 +31,14 @@ def validate_profile(
     reference: str | Path | Mapping[str, object] | None = None,
     runner: Runner | None = None,
     strict_k: bool = False,
+    strict_c: bool = False,
     evidence_dir: str | Path | None = None,
 ) -> SmokeResult:
     """Probe a named Adams profile and optionally execute a validation gate."""
-    if sum((smoke, full, strict_k)) > 1:
+    if sum((smoke, full, strict_k, strict_c)) > 1:
         return SmokeResult(
             ok=False,
-            message="--smoke, --full and --strict-k are mutually exclusive",
+            message="--smoke, --full, --strict-k and --strict-c are mutually exclusive",
         )
     result = probe_profile(profile)
     if not result.available:
@@ -50,6 +53,8 @@ def validate_profile(
         )
     if strict_k:
         return validate_strict_k(result, evidence_dir=evidence_dir)
+    if strict_c:
+        return validate_strict_c(result, evidence_dir=evidence_dir)
     if full:
         if reference is None:
             from .reference import build_default_reference

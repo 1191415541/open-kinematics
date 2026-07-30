@@ -103,6 +103,7 @@ def _state_row(row: Any) -> dict[str, Any]:
         "external_loads",
         "poses",
         "metrics",
+        "c_response",
         "tire_compression",
         "diagnostics",
     ):
