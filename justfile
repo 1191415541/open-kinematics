@@ -1,79 +1,84 @@
-# Setup development environment.
+# Synchronize every independently releasable workspace package.
+default: check
+
 setup:
-    uv venv
-    uv sync --all-extras --dev
-    uv pip install -e .
+    uv sync --all-packages --all-extras --all-groups
 
-# Install dependencies.
-install:
-    uv sync --all-extras --dev
-    uv pip install -e .
+install: setup
 
-# Install dependencies for CI (no optional extras like viz).
+# Install every optional dependency exercised by automated validation.
 install-ci:
-    uv sync --dev
-    uv pip install -e .
+    uv sync --all-packages --all-extras --all-groups
 
-# Clean.
+# Remove Python build and cache products without touching analysis evidence.
 clean:
     rm -rf .venv
     rm -rf .pytest_cache
     rm -rf .ruff_cache
-    rm -rf dist
-    rm -rf build
-    rm -rf *.egg-info
-    find . -type d -name __pycache__ -exec rm -rf {} +
+    find packages -type d -name __pycache__ -prune -exec rm -rf {} +
+    find packages -type d -name build -prune -exec rm -rf {} +
+    find packages -type d -name dist -prune -exec rm -rf {} +
+    find packages -type d -name '*.egg-info' -prune -exec rm -rf {} +
 
-# Testing.
-test:
-    uv run pytest tests/ --cov=. --cov-report=term --durations=0
+# Product regression gates.
+test-contracts:
+    uv run --package suspension-contracts pytest packages/suspension_contracts/tests
 
-# Regenerate e2e test reference files after geometry.yaml changes.
-regen-refs:
-    @echo "Regenerating e2e test reference files..."
-    uv run kinematics sweep --geometry tests/data/geometry.yaml --sweep tests/data/sweep.yaml --out tests/data/e2e/output.csv
-    uv run kinematics sweep --geometry tests/data/geometry.yaml --sweep tests/data/sweep.yaml --out tests/data/e2e/output.parquet
-    @echo "✓ Reference files regenerated successfully"
-    @echo "Run 'just test-e2e' to verify the new reference files work correctly"
+test-kinematics:
+    uv run --package suspension-kinematics pytest packages/suspension_kinematics/tests
 
-# Run the manual visualization test to generate a suspension animation.
-generate-animation-test:
-    uv run pytest tests/manual/test_run_with_viz.py -m manual -s
+test-multibody:
+    uv run --package suspension-multibody pytest packages/suspension_multibody/tests
 
-# Directly generate visualization without the test.
-generate-animation:
-    uv run kinematics sweep --geometry=tests/data/geometry.yaml --sweep=tests/data/sweep.yaml --out=results.csv --animation-out=anim.gif
+test: test-contracts test-kinematics test-multibody
 
-# Print CSE snippets for Jacobian functions (paste into src/kinematics/jacobians.py).
-generate-jacobians:
-    uv run python tools/generate_jacobians.py
-
-# Type check.
-type-check:
-    uv run ty check .
-
-# Linting.
+# Static gates over the workspace-defined scope.
 lint:
-    uv run ruff check .
+    uv run --all-packages ruff check .
 
-# Lint and type check.
-check:
-    just lint
-    just type-check
+type-check:
+    uv run --all-packages ty check .
 
-# Formatting.
+check: lint type-check build import-smoke cli-smoke
+
+# Build each independently releasable wheel.
+build:
+    uv build --package suspension-contracts
+    uv build --package suspension-kinematics
+    uv build --package suspension-multibody
+
+import-smoke:
+    uv run --package suspension-contracts python -c "import suspension_contracts"
+    uv run --package suspension-kinematics python -c "import suspension_kinematics"
+    uv run --package suspension-multibody python -c "import suspension_multibody"
+
+cli-smoke:
+    uv run --package suspension-kinematics suspension-kinematics --help
+    uv run --package suspension-multibody suspension-multibody --help
+
+# Regenerate kinematics end-to-end reference files after fixture changes.
+regen-refs:
+    uv run --package suspension-kinematics suspension-kinematics sweep --geometry packages/suspension_kinematics/tests/data/geometry.yaml --sweep packages/suspension_kinematics/tests/data/sweep.yaml --out packages/suspension_kinematics/tests/data/e2e/output.csv
+    uv run --package suspension-kinematics suspension-kinematics sweep --geometry packages/suspension_kinematics/tests/data/geometry.yaml --sweep packages/suspension_kinematics/tests/data/sweep.yaml --out packages/suspension_kinematics/tests/data/e2e/output.parquet
+
+generate-animation-test:
+    uv run --package suspension-kinematics pytest packages/suspension_kinematics/tests/manual/test_run_with_viz.py -m manual -s
+
+generate-animation:
+    mkdir -p packages/suspension_kinematics/artifacts/visualization
+    uv run --package suspension-kinematics suspension-kinematics sweep --geometry packages/suspension_kinematics/tests/data/geometry.yaml --sweep packages/suspension_kinematics/tests/data/sweep.yaml --out packages/suspension_kinematics/artifacts/visualization/results.csv --animation-out packages/suspension_kinematics/artifacts/visualization/animation.gif
+
+generate-jacobians:
+    uv run --package suspension-kinematics python packages/suspension_kinematics/tools/generate_jacobians.py
+
 format:
-    uv run ruff format .
+    uv run --all-packages ruff format .
 
-
-# Spell check source code and comments (includes British -> American English).
 spellcheck:
-    uv run codespell src/ tests/
+    uv run --all-packages codespell packages/suspension_contracts/src packages/suspension_contracts/tests packages/suspension_kinematics/src packages/suspension_kinematics/tests packages/suspension_multibody/src packages/suspension_multibody/tests
 
-# Spell check and fix issues automatically.
 spellcheck-fix:
-    uv run codespell --write-changes src/ tests/
+    uv run --all-packages codespell --write-changes packages/suspension_contracts/src packages/suspension_contracts/tests packages/suspension_kinematics/src packages/suspension_kinematics/tests packages/suspension_multibody/src packages/suspension_multibody/tests
 
-# Spell check and fix issues interactively.
 spellcheck-interactive:
-    uv run codespell --write-changes --interactive 3 src/ tests/
+    uv run --all-packages codespell --write-changes --interactive 3 packages/suspension_contracts/src packages/suspension_contracts/tests packages/suspension_kinematics/src packages/suspension_kinematics/tests packages/suspension_multibody/src packages/suspension_multibody/tests

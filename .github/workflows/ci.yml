@@ -34,9 +34,34 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        product: [contracts, kinematics, multibody]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - uses: extractions/setup-just@v2
       - run: just install-ci
-      - run: just test
+      - run: just test-${{ matrix.product }}
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: extractions/setup-just@v2
+      - run: just install-ci
+      - run: just build
+
+  smoke:
+    name: Import and CLI smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: extractions/setup-just@v2
+      - run: just install-ci
+      - run: just import-smoke
+      - run: just cli-smoke

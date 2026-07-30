@@ -179,3 +179,14 @@ AGENTS.md
 .gemini/
 GEMINI.md
 .ace-tool/
+
+# Local analysis outputs and tool evidence.
+/.codex-tasks/
+/artifacts/
+/packages/*/artifacts/
+/packages/*/.codex-tasks/
+/packages/*/strict_*.stdout.txt
+/packages/*/strict_*.stderr.txt
+
+# The virtual workspace owns the single tracked lockfile at its root.
+/packages/*/uv.lock
