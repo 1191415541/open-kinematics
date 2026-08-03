@@ -188,5 +188,9 @@ GEMINI.md
 /packages/*/strict_*.stdout.txt
 /packages/*/strict_*.stderr.txt
 
+# Local Adams diagnostic probes.
+/acar.log.*
+/probe_fourpost_*
+
 # The virtual workspace owns the single tracked lockfile at its root.
 /packages/*/uv.lock
