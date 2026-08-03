@@ -7,18 +7,108 @@ from .adapter import AdamsBatchAdapter, Runner, RunnerExecution, SmokeResult, To
 from .probe import AdamsProfile, discover_profile, probe_profile
 from .strict_c import validate_strict_c
 from .strict_k import validate_strict_k
+from .time_domain import (
+    AdamsResultChannel,
+    TimeHistory,
+    TimeHistoryTolerance,
+    compare_time_histories,
+    history_from_dynamic_bundle,
+    parse_adams_result_history,
+    read_time_history,
+    write_time_history,
+)
+from .time_domain_gate import (
+    AXLE_RESPONSE_CHANNELS,
+    AdamsTimeDomainAdapter,
+    TimeDomainGateResult,
+    TimeDomainRunner,
+    command_time_domain_runner,
+    validate_axle_time_domain,
+)
+from .vehicle_acceptance import (
+    HANDLING_CASES,
+    RIDE_CASES,
+    EngineeringTolerance,
+    VehicleAcceptanceCase,
+    default_vehicle_acceptance_matrix,
+    validate_vehicle_acceptance_matrix,
+)
+from .vehicle_handling import (
+    HANDLING_ADAMS_CHANNELS,
+    HandlingExecutionResult,
+    run_adams_car_handling_case,
+    validate_handling_execution,
+)
+from .vehicle_kc_time_domain import (
+    VEHICLE_KC_CHANNELS,
+    run_vehicle_kc_roll_adams,
+    validate_vehicle_kc_time_domain,
+)
+from .vehicle_reference import (
+    HANDLING_REFERENCE_CHANNELS,
+    REFERENCE_BUNDLE_CONTRACT,
+    RIDE_REFERENCE_CHANNELS,
+    VehicleReferenceBundle,
+    canonicalize_vehicle_history,
+    read_vehicle_reference_bundle,
+    write_vehicle_reference_bundle,
+)
+from .vehicle_ride import (
+    RIDE_ADAMS_CHANNELS,
+    RideExecutionResult,
+    run_adams_car_ride_case,
+    validate_ride_execution,
+)
 
 __all__ = [
     "AdamsBatchAdapter",
     "AdamsProfile",
+    "AdamsResultChannel",
+    "AdamsTimeDomainAdapter",
+    "AXLE_RESPONSE_CHANNELS",
+    "EngineeringTolerance",
+    "HANDLING_CASES",
+    "HANDLING_ADAMS_CHANNELS",
+    "HandlingExecutionResult",
+    "HANDLING_REFERENCE_CHANNELS",
+    "REFERENCE_BUNDLE_CONTRACT",
+    "RIDE_CASES",
+    "RIDE_ADAMS_CHANNELS",
+    "RideExecutionResult",
+    "RIDE_REFERENCE_CHANNELS",
     "Runner",
     "RunnerExecution",
     "SmokeResult",
+    "TimeHistory",
+    "TimeHistoryTolerance",
+    "TimeDomainGateResult",
+    "TimeDomainRunner",
     "Tolerance",
+    "VehicleAcceptanceCase",
+    "VehicleReferenceBundle",
+    "VEHICLE_KC_CHANNELS",
+    "compare_time_histories",
+    "canonicalize_vehicle_history",
+    "command_time_domain_runner",
     "discover_profile",
+    "default_vehicle_acceptance_matrix",
+    "history_from_dynamic_bundle",
+    "parse_adams_result_history",
     "probe_profile",
+    "read_time_history",
+    "read_vehicle_reference_bundle",
+    "run_vehicle_kc_roll_adams",
+    "run_adams_car_handling_case",
+    "run_adams_car_ride_case",
     "validate_strict_c",
     "validate_strict_k",
+    "validate_axle_time_domain",
+    "validate_vehicle_acceptance_matrix",
+    "validate_vehicle_kc_time_domain",
+    "validate_handling_execution",
+    "validate_ride_execution",
+    "write_vehicle_reference_bundle",
+    "write_time_history",
 ]
 
 

@@ -7,11 +7,15 @@ from .front_axle import (
     mirror_hardpoints,
     side_hardpoints,
 )
+from .mass import BodyMassProperties, body_mass_properties, mass_matrix
 
 __all__ = [
+    "BodyMassProperties",
     "Connection",
     "FrontAxleAssembly",
+    "body_mass_properties",
     "build_front_axle",
+    "mass_matrix",
     "mirror_hardpoints",
     "side_hardpoints",
 ]

@@ -10,6 +10,7 @@ import yaml
 from pydantic import BaseModel, ValidationError
 
 from .case import CaseSpec
+from .dynamic import DynamicCaseSpec, DynamicResultBundle
 from .model import FrontAxleModel
 from .result import ResultBundle
 
@@ -45,9 +46,19 @@ def load_case(path: str | Path) -> CaseSpec:
     return _validate(_read(path), CaseSpec, path)
 
 
+def load_dynamic_case(path: str | Path) -> DynamicCaseSpec:
+    """Load and validate a dynamic case YAML/JSON file."""
+    return _validate(_read(path), DynamicCaseSpec, path)
+
+
 def load_result(path: str | Path) -> ResultBundle:
     """Load and validate a result JSON file."""
     return _validate(_read(path), ResultBundle, path)
+
+
+def load_dynamic_result(path: str | Path) -> DynamicResultBundle:
+    """Load and validate a dynamic result JSON file."""
+    return _validate(_read(path), DynamicResultBundle, path)
 
 
 def _validate(data: Any, model: type[T], path: str | Path) -> T:

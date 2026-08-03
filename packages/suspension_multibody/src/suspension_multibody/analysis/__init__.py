@@ -1,5 +1,6 @@
 """K/C analysis API."""
 
+from .axle_dynamic import AxleTimeDomainSolver
 from .benchmarks import (
     PerformanceReport,
     benchmark_grid,
@@ -13,17 +14,27 @@ from .k_mode import KModeSolver, KState
 from .k_reference import KReferenceCache
 from .metrics import compute_k_metrics, wheel_metrics
 from .sweeps import CGrid, KGrid, run_c_grid, run_k_grid
+from .vehicle_correlation_model import (
+    Vehicle14DofParameters,
+    VehicleCorrelationRun,
+    simulate_vehicle_correlation_case,
+)
+from .vehicle_dynamic import VehicleTimeDomainSolver
 
 __all__ = [
     "CGrid",
     "CModeSolver",
     "CState",
+    "AxleTimeDomainSolver",
     "KGrid",
     "KModeSolver",
     "KReferenceCache",
     "KState",
     "LoadPath",
     "PerformanceReport",
+    "Vehicle14DofParameters",
+    "VehicleCorrelationRun",
+    "VehicleTimeDomainSolver",
     "benchmark_grid",
     "benchmark_model",
     "compute_k_metrics",
@@ -32,6 +43,7 @@ __all__ = [
     "run_k_grid",
     "run_k_100_benchmark",
     "secant_compliance",
+    "simulate_vehicle_correlation_case",
     "tangent_compliance",
     "validate_compliance",
     "wheel_metrics",

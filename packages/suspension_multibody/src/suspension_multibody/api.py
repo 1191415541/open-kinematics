@@ -11,10 +11,10 @@ from typing import Iterable
 import numpy as np
 
 from . import __version__
-from .analysis import CModeSolver, CState, KModeSolver, KState
+from .analysis import AxleTimeDomainSolver, CModeSolver, CState, KModeSolver, KState
 from .core import SE3, wrench_global_to_local
 from .elements import BushingElement
-from .io import CheckpointStore, canonical_hash, write_bundle
+from .io import CheckpointStore, canonical_hash, write_bundle, write_dynamic_bundle
 from .model import FrontAxleAssembly, build_front_axle
 from .schema import (
     BushingResult,
@@ -22,6 +22,8 @@ from .schema import (
     ComponentLoad,
     CResponse,
     Diagnostic,
+    DynamicCaseSpec,
+    DynamicResultBundle,
     FrontAxleModel,
     Manifest,
     Pose,
@@ -122,6 +124,23 @@ def run_case(
     )
     if output_dir is not None:
         write_bundle(bundle, output_dir)
+    return bundle
+
+
+def run_dynamic_case(
+    model: FrontAxleModel,
+    case: DynamicCaseSpec,
+    output_dir: str | Path | None = None,
+) -> DynamicResultBundle:
+    """Run one validated time-domain case and optionally write result files."""
+    if case.mode != "axle_dynamic":
+        from .analysis.vehicle_dynamic import VehicleTimeDomainSolver
+
+        bundle = VehicleTimeDomainSolver().run(model, case)
+    else:
+        bundle = AxleTimeDomainSolver().run(model, case)
+    if output_dir is not None:
+        write_dynamic_bundle(bundle, output_dir)
     return bundle
 
 

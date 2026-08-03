@@ -65,7 +65,22 @@ class RigidBodySpec(StrictModel):
     pose: Pose = Field(default_factory=Pose)
     mass: float = Field(default=0.0, ge=0)
     center_of_mass: Vec3 = Field(default_factory=Vec3)
+    inertia: tuple[tuple[float, ...], ...] = (
+        (1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        (0.0, 0.0, 1.0),
+    )
     fixed: bool = False
+
+    @field_validator("inertia", mode="before")
+    @classmethod
+    def _inertia_shape(cls, value: object) -> tuple[tuple[float, ...], ...]:
+        rows = tuple(tuple(float(item) for item in row) for row in value)  # type: ignore[union-attr]
+        if len(rows) != 3 or any(len(row) != 3 for row in rows):
+            raise ValueError("body inertia must be a 3x3 matrix")
+        if any(not math.isfinite(item) for row in rows for item in row):
+            raise ValueError("body inertia must contain finite values")
+        return rows
 
 
 class HardpointPair(StrictModel):

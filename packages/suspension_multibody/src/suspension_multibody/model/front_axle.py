@@ -146,6 +146,25 @@ def _body_with_points(name: str, points: dict[str, np.ndarray]) -> RigidBody:
     return RigidBody(name=name, pose=SE3.identity())
 
 
+def _with_body_specs(
+    bodies: dict[str, RigidBody], model: FrontAxleModel
+) -> dict[str, RigidBody]:
+    updated = dict(bodies)
+    for spec in model.bodies:
+        if spec.name not in updated:
+            raise ValueError(f"unknown runtime body in body spec {spec.name!r}")
+        body = updated[spec.name]
+        updated[spec.name] = RigidBody(
+            name=body.name,
+            pose=body.pose,
+            mass=spec.mass,
+            inertia=np.asarray(spec.inertia, dtype=float),
+            center_of_mass=spec.center_of_mass.as_array(),
+            fixed=body.fixed or spec.fixed,
+        )
+    return updated
+
+
 def _resolve_body(
     name: str, side: Literal["L", "R"], bodies: dict[str, RigidBody]
 ) -> str:
@@ -491,6 +510,7 @@ def build_front_axle(
     all_hardpoints["RACK_CENTER"] = Vec3(
         x=rack_point[0], y=rack_point[1], z=rack_point[2]
     )
+    bodies = _with_body_specs(bodies, model)
     state = RigidBodyState(bodies)
     runtime_elements = list(_runtime_elements(model, mode, bodies))
     if mode == "C":

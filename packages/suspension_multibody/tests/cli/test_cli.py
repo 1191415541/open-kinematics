@@ -12,6 +12,8 @@ def test_help_lists_validate_and_run() -> None:
     assert result.exit_code == 0
     assert "validate" in result.stdout
     assert "run" in result.stdout
+    assert "validate-dynamic" in result.stdout
+    assert "run-dynamic" in result.stdout
 
 
 def test_validate_rejects_missing_schema_version(tmp_path: Path) -> None:

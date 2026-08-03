@@ -17,15 +17,20 @@ class RigidBody:
     pose: SE3 = field(default_factory=SE3.identity)
     mass: float = 0.0
     inertia: Array = field(default_factory=lambda: np.eye(3))
+    center_of_mass: Array = field(default_factory=lambda: np.zeros(3))
     fixed: bool = False
 
     def __post_init__(self) -> None:
         inertia = np.asarray(self.inertia, dtype=float)
+        center_of_mass = np.asarray(self.center_of_mass, dtype=float)
         if inertia.shape != (3, 3) or not np.all(np.isfinite(inertia)):
             raise ValueError("inertia must be a finite 3x3 matrix")
+        if center_of_mass.shape != (3,) or not np.all(np.isfinite(center_of_mass)):
+            raise ValueError("center_of_mass must contain three finite values")
         if self.mass < 0 or not np.isfinite(self.mass):
             raise ValueError("mass must be finite and non-negative")
         object.__setattr__(self, "inertia", inertia.copy())
+        object.__setattr__(self, "center_of_mass", center_of_mass.copy())
 
 
 @dataclass(frozen=True)
@@ -71,6 +76,7 @@ class RigidBodyState:
                     pose=body.pose.retract(increment),
                     mass=body.mass,
                     inertia=body.inertia,
+                    center_of_mass=body.center_of_mass,
                     fixed=body.fixed,
                 )
         return RigidBodyState(updated)

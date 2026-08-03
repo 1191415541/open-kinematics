@@ -12,7 +12,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from .. import __version__
-from ..schema import ResultBundle
+from ..schema import DynamicResultBundle, ResultBundle
 
 META_KEY = "suspension_multibody_meta"
 FORMAT_VERSION = "1.0"
@@ -60,6 +60,42 @@ def write_bundle(
             _write_parquet(directory / f"{name}.parquet", rows, metadata)
         if "csv" in formats:
             _write_csv(directory / f"{name}.csv", rows)
+    return manifest_path
+
+
+def write_dynamic_bundle(
+    bundle: DynamicResultBundle,
+    output_dir: str | Path,
+    *,
+    formats: tuple[str, ...] = ("parquet", "csv"),
+) -> Path:
+    """Write a dynamic manifest and time-history tables."""
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    manifest_path = directory / "manifest.json"
+    manifest = bundle.manifest.model_dump(mode="json")
+    manifest["provenance"]["package_version"] = manifest["provenance"].get(
+        "package_version", __version__
+    )
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    rows = [_dynamic_sample_row(row) for row in bundle.samples]
+    diagnostics = [row.model_dump(mode="json") for row in bundle.diagnostics]
+    metadata = {
+        "format_version": FORMAT_VERSION,
+        "schema_version": "1",
+        "package_version": __version__,
+        "run_id": bundle.manifest.run_id,
+    }
+    for name, table_rows in {
+        "time_samples": rows,
+        "diagnostics": diagnostics,
+    }.items():
+        if "parquet" in formats:
+            _write_parquet(directory / f"{name}.parquet", table_rows, metadata)
+        if "csv" in formats:
+            _write_csv(directory / f"{name}.csv", table_rows)
     return manifest_path
 
 
@@ -123,4 +159,11 @@ def _bushing_row(row: Any) -> dict[str, Any]:
     data["deformation"] = json.dumps(data["deformation"], sort_keys=True)
     data["load"] = json.dumps(data["load"], sort_keys=True)
     data["zero_load_pose"] = json.dumps(data["zero_load_pose"], sort_keys=True)
+    return data
+
+
+def _dynamic_sample_row(row: Any) -> dict[str, Any]:
+    data = row.model_dump(mode="json")
+    for key in ("pose", "velocity", "acceleration", "loads", "metrics", "events"):
+        data[key] = json.dumps(data[key], sort_keys=True, default=str)
     return data
