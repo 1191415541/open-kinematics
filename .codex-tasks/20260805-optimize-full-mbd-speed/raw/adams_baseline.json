@@ -1,0 +1,8 @@
+{
+  "solver": "adams_car",
+  "case": "step_steer",
+  "wall_s": 69.06324160000077,
+  "sample_count": 501,
+  "end_time_s": 5.0,
+  "output_step_s": 0.01
+}

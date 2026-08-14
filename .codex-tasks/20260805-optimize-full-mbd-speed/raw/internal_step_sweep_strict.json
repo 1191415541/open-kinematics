@@ -1,0 +1,201 @@
+{
+  "case": "step_steer",
+  "contract": "full-mbd-internal-step-sweep-v1",
+  "end_time_s": 0.02,
+  "records": [
+    {
+      "event_count": 5,
+      "final_metrics": {
+        "body_accel_z": -8018.853312526779,
+        "body_heave": -20.591624616917375,
+        "body_pitch": 0.001779653895192526,
+        "body_roll": -2.4627068847891465e-05,
+        "lateral_acceleration": 46.434912462377575,
+        "load_transfer_front_minus_rear": 0.0,
+        "load_transfer_right_minus_left": 0.0,
+        "normal_load_front_axle": 0.0,
+        "normal_load_front_left": 0.0,
+        "normal_load_front_right": 0.0,
+        "normal_load_left_side": 0.0,
+        "normal_load_rear_axle": 0.0,
+        "normal_load_rear_left": 0.0,
+        "normal_load_rear_right": 0.0,
+        "normal_load_right_side": 0.0,
+        "normal_load_total": 0.0,
+        "steering_angle": 9.854720121535432e-17,
+        "yaw_rate": -0.00016443372201373527
+      },
+      "internal_step_s": 0.00025,
+      "max_corrector_iterations": 1,
+      "max_position_residual": 0.06763487413991243,
+      "max_velocity_residual": 9.208633855450898e-12,
+      "status": "OK",
+      "wall_s": 2.861084899996058
+    },
+    {
+      "event_count": 5,
+      "final_metrics": {
+        "body_accel_z": -8037.723482883015,
+        "body_heave": -20.602322141951916,
+        "body_pitch": 0.0017678275842675,
+        "body_roll": -3.0159746970807335e-05,
+        "lateral_acceleration": 43.8993975096911,
+        "load_transfer_front_minus_rear": 0.0,
+        "load_transfer_right_minus_left": 0.0,
+        "normal_load_front_axle": 0.0,
+        "normal_load_front_left": 0.0,
+        "normal_load_front_right": 0.0,
+        "normal_load_left_side": 0.0,
+        "normal_load_rear_axle": 0.0,
+        "normal_load_rear_left": 0.0,
+        "normal_load_rear_right": 0.0,
+        "normal_load_right_side": 0.0,
+        "normal_load_total": 0.0,
+        "steering_angle": 9.854720121535432e-17,
+        "yaw_rate": -0.00018553776856838818
+      },
+      "internal_step_s": 0.00025,
+      "max_corrector_iterations": 2,
+      "max_position_residual": 0.06768190248379824,
+      "max_velocity_residual": 1.0913936421275139e-11,
+      "status": "OK",
+      "wall_s": 4.137562600008096
+    },
+    {
+      "event_count": 5,
+      "final_metrics": {
+        "body_accel_z": -8194.715386948894,
+        "body_heave": -20.600690047957876,
+        "body_pitch": 0.0017582504977183204,
+        "body_roll": -3.010085036127059e-05,
+        "lateral_acceleration": 46.18607110948937,
+        "load_transfer_front_minus_rear": 0.0,
+        "load_transfer_right_minus_left": 0.0,
+        "normal_load_front_axle": 0.0,
+        "normal_load_front_left": 0.0,
+        "normal_load_front_right": 0.0,
+        "normal_load_left_side": 0.0,
+        "normal_load_rear_axle": 0.0,
+        "normal_load_rear_left": 0.0,
+        "normal_load_rear_right": 0.0,
+        "normal_load_right_side": 0.0,
+        "normal_load_total": 0.0,
+        "steering_angle": 9.854720121535432e-17,
+        "yaw_rate": -0.00018561516010226668
+      },
+      "internal_step_s": 0.00025,
+      "max_corrector_iterations": 3,
+      "max_position_residual": 0.0676518043563874,
+      "max_velocity_residual": 8.185452315956354e-12,
+      "status": "OK",
+      "wall_s": 5.0671142999926815
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.01, attempted step=6.25e-05",
+      "internal_step_s": 0.0005,
+      "max_corrector_iterations": 1,
+      "status": "FAILED",
+      "wall_s": 1.1159425000078045
+    },
+    {
+      "event_count": 6,
+      "final_metrics": {
+        "body_accel_z": 1803756.3184616435,
+        "body_heave": 61.47188820025658,
+        "body_pitch": 0.8375228895305533,
+        "body_roll": 0.14933695781659248,
+        "lateral_acceleration": 751688.9169380337,
+        "load_transfer_front_minus_rear": -990970.6938684006,
+        "load_transfer_right_minus_left": -43081.65716241684,
+        "normal_load_front_axle": 32951.021631371856,
+        "normal_load_front_left": 32951.021631371856,
+        "normal_load_front_right": 0.0,
+        "normal_load_left_side": 549977.1971467806,
+        "normal_load_rear_axle": 1023921.7154997725,
+        "normal_load_rear_left": 517026.17551540874,
+        "normal_load_rear_right": 506895.5399843637,
+        "normal_load_right_side": 506895.5399843637,
+        "normal_load_total": 1056872.7371311444,
+        "steering_angle": 9.854720121535432e-17,
+        "yaw_rate": -7.473480082963716
+      },
+      "internal_step_s": 0.0005,
+      "max_corrector_iterations": 2,
+      "max_position_residual": 0.006092890830586839,
+      "max_velocity_residual": 9.313225746154785e-10,
+      "status": "OK",
+      "wall_s": 7.108236300002318
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.007875, attempted step=6.25e-05",
+      "internal_step_s": 0.0005,
+      "max_corrector_iterations": 3,
+      "status": "FAILED",
+      "wall_s": 1.7291540000005625
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.005, attempted step=6.25e-05",
+      "internal_step_s": 0.001,
+      "max_corrector_iterations": 1,
+      "status": "FAILED",
+      "wall_s": 0.6858089000015752
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.0115, attempted step=6.25e-05",
+      "internal_step_s": 0.001,
+      "max_corrector_iterations": 2,
+      "status": "FAILED",
+      "wall_s": 4.202474099991377
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.00725, attempted step=6.25e-05",
+      "internal_step_s": 0.001,
+      "max_corrector_iterations": 3,
+      "status": "FAILED",
+      "wall_s": 2.220364699998754
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.004375, attempted step=6.25e-05",
+      "internal_step_s": 0.002,
+      "max_corrector_iterations": 1,
+      "status": "FAILED",
+      "wall_s": 1.7038612999895122
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.0115, attempted step=6.25e-05",
+      "internal_step_s": 0.002,
+      "max_corrector_iterations": 2,
+      "status": "FAILED",
+      "wall_s": 5.368353700003354
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.00725, attempted step=6.25e-05",
+      "internal_step_s": 0.002,
+      "max_corrector_iterations": 3,
+      "status": "FAILED",
+      "wall_s": 2.7841135999915423
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.00390625, attempted step=7.8125e-05",
+      "internal_step_s": 0.005,
+      "max_corrector_iterations": 1,
+      "status": "FAILED",
+      "wall_s": 1.044479499993031
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.0034375, attempted step=7.8125e-05",
+      "internal_step_s": 0.005,
+      "max_corrector_iterations": 2,
+      "status": "FAILED",
+      "wall_s": 1.0061530999955721
+    },
+    {
+      "error": "RuntimeError: constrained integration cannot maintain the position manifold at t=0.00703125, attempted step=7.8125e-05",
+      "internal_step_s": 0.005,
+      "max_corrector_iterations": 3,
+      "status": "FAILED",
+      "wall_s": 3.3166571000037948
+    }
+  ],
+  "reuse_constraint_linearization": false
+}

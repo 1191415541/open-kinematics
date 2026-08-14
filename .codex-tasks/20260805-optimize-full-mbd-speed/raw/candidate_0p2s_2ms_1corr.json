@@ -1,0 +1,37 @@
+{
+  "adams": {
+    "case": "step_steer",
+    "end_time_s": 5.0,
+    "output_step_s": 0.01,
+    "sample_count": 501,
+    "solver": "adams_car",
+    "wall_s": 69.06324160000077
+  },
+  "comparable_timing": false,
+  "contract": "full-mbd-performance-baseline-v1",
+  "full_mbd": {
+    "case": "step_steer",
+    "end_time_s": 0.2,
+    "event_count": 40,
+    "internal_step_s": 0.002,
+    "max_corrector_iterations": 1,
+    "max_position_residual": 0.015166341283133988,
+    "max_velocity_residual": 3.6420167749392283e-10,
+    "model_build_s": 0.0026336000009905547,
+    "output_step_s": 0.01,
+    "repeat_count": 1,
+    "reuse_constraint_linearization": false,
+    "sample_count": 21,
+    "solve_wall_median_s": 5.032072199999675,
+    "solve_wall_min_s": 5.032072199999675,
+    "solve_wall_s": 5.032072199999675,
+    "solve_wall_samples_s": [
+      5.032072199999675
+    ],
+    "solver": "full_mbd"
+  },
+  "hardware_note": "wall clock measured on the current Windows host; repeat before comparing releases",
+  "reference_bundle": "artifacts\\adams\\correlation-reference-real-si\\handling-pac2002-v1\\step_steer",
+  "speedup_ratio_adams_over_mbd": null,
+  "timing_note": "Adams record is a full 5 s run while the MBD record is a 2 ms probe; do not interpret the separate wall times as a solver speed comparison."
+}
