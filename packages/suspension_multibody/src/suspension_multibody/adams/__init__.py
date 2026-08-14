@@ -4,6 +4,25 @@ from pathlib import Path
 from typing import Mapping
 
 from .adapter import AdamsBatchAdapter, Runner, RunnerExecution, SmokeResult, Tolerance
+from .full_vehicle_correlation import full_vehicle_time_history
+from .full_vehicle_mbd_comparison import (
+    FULL_VEHICLE_HANDLING_CASES,
+    FULL_VEHICLE_MBD_COMPARISON_CONTRACT,
+    FULL_VEHICLE_PAIRING_FIELDS,
+    FullVehiclePairingAudit,
+    audit_full_vehicle_pairing,
+    compare_full_vehicle_mbd_case,
+    handling_case_names,
+    write_full_vehicle_mbd_report,
+)
+from .full_vehicle_model import (
+    AdamsFullVehicleInput,
+    AdamsPartData,
+    build_adams_vehicle_case,
+    build_adams_vehicle_model,
+    load_adams_full_vehicle_input,
+    steering_signal_from_manifest,
+)
 from .probe import AdamsProfile, discover_profile, probe_profile
 from .strict_c import validate_strict_c
 from .strict_k import validate_strict_k
@@ -107,6 +126,21 @@ __all__ = [
     "validate_vehicle_kc_time_domain",
     "validate_handling_execution",
     "validate_ride_execution",
+    "full_vehicle_time_history",
+    "AdamsFullVehicleInput",
+    "AdamsPartData",
+    "build_adams_vehicle_case",
+    "build_adams_vehicle_model",
+    "load_adams_full_vehicle_input",
+    "steering_signal_from_manifest",
+    "FULL_VEHICLE_HANDLING_CASES",
+    "FULL_VEHICLE_MBD_COMPARISON_CONTRACT",
+    "FULL_VEHICLE_PAIRING_FIELDS",
+    "FullVehiclePairingAudit",
+    "audit_full_vehicle_pairing",
+    "compare_full_vehicle_mbd_case",
+    "handling_case_names",
+    "write_full_vehicle_mbd_report",
     "write_vehicle_reference_bundle",
     "write_time_history",
 ]

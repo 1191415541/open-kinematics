@@ -22,6 +22,7 @@ class LinearSpring(StrictModel):
     free_length: float | None = Field(default=None, gt=0)
     reference_length: float | None = Field(default=None, gt=0)
     preload: float | None = None
+    force_curve: tuple[tuple[float, float], ...] = ()
 
     @field_validator("stiffness", "free_length", "reference_length")
     @classmethod
@@ -36,6 +37,18 @@ class LinearSpring(StrictModel):
         if value is not None and not math.isfinite(value):
             raise ValueError("spring preload must be finite")
         return value
+
+    @field_validator("force_curve")
+    @classmethod
+    def _curve(cls, value: tuple[tuple[float, float], ...]) -> tuple[tuple[float, float], ...]:
+        curve = tuple((float(x), float(y)) for x, y in value)
+        if curve and len(curve) < 2:
+            raise ValueError("spring force_curve requires at least two samples")
+        if any(not math.isfinite(x) or not math.isfinite(y) for x, y in curve):
+            raise ValueError("spring force_curve must contain finite samples")
+        if any(right[0] <= left[0] for left, right in zip(curve, curve[1:])):
+            raise ValueError("spring force_curve abscissas must be strictly increasing")
+        return curve
 
     @model_validator(mode="after")
     def _length_definition(self) -> LinearSpring:
@@ -59,6 +72,8 @@ class StaticDamper(StrictModel):
     gas_reference_force: float = 0.0
     preload: float = 0.0
     friction: float = Field(default=0.0, ge=0)
+    viscous_damping: float = Field(default=0.0, ge=0)
+    force_curve: tuple[tuple[float, float], ...] = ()
 
     @field_validator(
         "gas_stiffness",
@@ -66,12 +81,25 @@ class StaticDamper(StrictModel):
         "gas_reference_force",
         "preload",
         "friction",
+        "viscous_damping",
     )
     @classmethod
     def _finite(cls, value: float | None) -> float | None:
         if value is not None and not math.isfinite(value):
             raise ValueError("damper parameters must be finite")
         return value
+
+    @field_validator("force_curve")
+    @classmethod
+    def _curve(cls, value: tuple[tuple[float, float], ...]) -> tuple[tuple[float, float], ...]:
+        curve = tuple((float(x), float(y)) for x, y in value)
+        if curve and len(curve) < 2:
+            raise ValueError("damper force_curve requires at least two samples")
+        if any(not math.isfinite(x) or not math.isfinite(y) for x, y in curve):
+            raise ValueError("damper force_curve must contain finite samples")
+        if any(right[0] <= left[0] for left, right in zip(curve, curve[1:])):
+            raise ValueError("damper force_curve abscissas must be strictly increasing")
+        return curve
 
     @model_validator(mode="after")
     def _gas_reference(self) -> StaticDamper:
@@ -89,6 +117,14 @@ class Bushing6x6(StrictModel):
     pose_a: Pose = Field(default_factory=Pose)
     pose_b: Pose = Field(default_factory=Pose)
     stiffness: tuple[tuple[float, ...], ...]
+    damping: tuple[float, float, float, float, float, float] = (
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+    )
     preload: tuple[float, float, float, float, float, float] = (
         0.0,
         0.0,
@@ -117,6 +153,14 @@ class Bushing6x6(StrictModel):
         values = tuple(float(item) for item in value)  # type: ignore[union-attr]
         if len(values) != 6 or any(not math.isfinite(item) for item in values):
             raise ValueError("bushing preload must contain six finite values")
+        return values
+
+    @field_validator("damping")
+    @classmethod
+    def _damping_shape(cls, value: object) -> tuple[float, ...]:
+        values = tuple(float(item) for item in value)  # type: ignore[union-attr]
+        if len(values) != 6 or any(not math.isfinite(item) or item < 0.0 for item in values):
+            raise ValueError("bushing damping must contain six finite non-negative values")
         return values
 
     @field_validator("clocking_deg")
@@ -173,3 +217,16 @@ class BumpStop(StrictModel):
     clearance: float = Field(ge=0)
     stiffness: float = Field(ge=0)
     direction: Literal["bump", "rebound"] = "bump"
+    force_curve: tuple[tuple[float, float], ...] = ()
+
+    @field_validator("force_curve")
+    @classmethod
+    def _curve(cls, value: tuple[tuple[float, float], ...]) -> tuple[tuple[float, float], ...]:
+        curve = tuple((float(x), float(y)) for x, y in value)
+        if curve and len(curve) < 2:
+            raise ValueError("bump-stop force_curve requires at least two samples")
+        if any(not math.isfinite(x) or not math.isfinite(y) for x, y in curve):
+            raise ValueError("bump-stop force_curve must contain finite samples")
+        if any(right[0] <= left[0] for left, right in zip(curve, curve[1:])):
+            raise ValueError("bump-stop force_curve abscissas must be strictly increasing")
+        return curve

@@ -9,6 +9,7 @@ from .constraints import (
     PointCoincidence,
     PrismaticJoint,
     RevoluteJoint,
+    WeldJoint,
 )
 from .rank import RankDiagnostic, diagnose_rank, scale_jacobian
 from .reactions import ReactionResult, body_equilibrium_wrench, recover_reactions
@@ -41,6 +42,7 @@ __all__ = [
     "PointCoincidence",
     "PrismaticJoint",
     "RevoluteJoint",
+    "WeldJoint",
     "RankDiagnostic",
     "ReactionResult",
     "body_point_wrench",

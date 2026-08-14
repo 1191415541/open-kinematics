@@ -40,6 +40,12 @@ class EquilibriumSettings:
     regularization: float = 1e-9
     line_search_steps: int = 8
     moment_scale: float = 1000.0
+    # Local rotational increments are radians while translations are mm.  The
+    # KKT solve uses these scales to keep the two coordinate groups balanced.
+    rotation_coordinate_scale: float = 1.0e-3
+    translation_finite_difference_multiplier: float = 1000.0
+    max_translation_increment: float = 100.0
+    max_rotation_increment: float = 0.25
 
 
 def evaluate_generalized_forces(
@@ -132,22 +138,44 @@ class EquilibriumSolver:
                 state, element_tuple, external_wrenches_global, body_order
             )
             size = force_tangent.shape[0]
+            coordinate_scale = _coordinate_scale(
+                len(body_order), self.settings.rotation_coordinate_scale
+            )
+            wrench_scale = _wrench_scale(len(body_order), self.settings.moment_scale)
+            constraint_scale = _constraint_scale(jacobian)
+            # Solve in length-equivalent rotational coordinates and normalize
+            # force/moment and constraint rows.  This avoids the raw KKT matrix
+            # mixing N, N-mm, mm and rad by six orders of magnitude.
+            scaled_tangent = (
+                wrench_scale[:, None]
+                * (force_tangent + self.settings.regularization * np.eye(size))
+                * coordinate_scale[None, :]
+            )
+            scaled_jacobian_transpose = wrench_scale[:, None] * jacobian.T
+            scaled_jacobian = (
+                constraint_scale[:, None] * jacobian * coordinate_scale[None, :]
+            )
             kkt = np.block(
                 [
-                    [
-                        force_tangent + self.settings.regularization * np.eye(size),
-                        jacobian.T,
-                    ],
-                    [jacobian, np.zeros((jacobian.shape[0], jacobian.shape[0]))],
+                    [scaled_tangent, scaled_jacobian_transpose],
+                    [scaled_jacobian, np.zeros((jacobian.shape[0], jacobian.shape[0]))],
                 ]
             )
-            rhs = -np.concatenate((stationarity, constraint))
+            rhs = -np.concatenate(
+                (wrench_scale * stationarity, constraint_scale * constraint)
+            )
             try:
                 solution = np.linalg.solve(kkt, rhs)
             except np.linalg.LinAlgError:
                 solution = np.linalg.lstsq(kkt, rhs, rcond=1e-12)[0]
                 diagnostics.append("kkt_lstsq_fallback")
-            increment = solution[:size]
+            increment = coordinate_scale * solution[:size]
+            increment = _limit_equilibrium_increment(
+                increment,
+                body_order,
+                self.settings.max_translation_increment,
+                self.settings.max_rotation_increment,
+            )
             multiplier_increment = solution[size:]
             trial_multipliers = multipliers + multiplier_increment
             new_stationarity = force + jacobian.T @ trial_multipliers
@@ -235,7 +263,11 @@ class EquilibriumSolver:
             body = body_order[column // 6]
             local_index = column % 6
             delta = np.zeros(6)
-            delta[local_index] = step
+            delta[local_index] = step * (
+                self.settings.translation_finite_difference_multiplier
+                if local_index < 3
+                else 1.0
+            )
             plus = state.retract({body: delta})
             minus = state.retract({body: -delta})
             plus_force, _ = evaluate_generalized_forces(
@@ -244,7 +276,11 @@ class EquilibriumSolver:
             minus_force, _ = evaluate_generalized_forces(
                 minus, elements, external, body_order
             )
-            tangent[:, column] = (plus_force - minus_force) / (2 * step)
+            # Divide by the actual perturbation.  Translational coordinates
+            # intentionally use a larger finite-difference step than angular
+            # coordinates; using the base ``step`` here scales translational
+            # stiffness by the multiplier and corrupts the KKT Newton step.
+            tangent[:, column] = (plus_force - minus_force) / (2 * abs(delta[local_index]))
         return tangent
 
     def _line_search(
@@ -267,9 +303,11 @@ class EquilibriumSolver:
             current_force + current_jacobian.T @ multipliers,
             self.settings.moment_scale,
         )
+        current_constraint = system.residual(state)
+        current_constraint_scale = _constraint_scale(current_jacobian)
         current_norm = max(
-            float(np.max(np.abs(system.residual(state))))
-            if system.constraints
+            float(np.max(np.abs(current_constraint) * current_constraint_scale))
+            if current_constraint.size
             else 0.0,
             current_force_norm,
             current_moment_norm,
@@ -289,8 +327,11 @@ class EquilibriumSolver:
                 force + jacobian.T @ candidate_multipliers,
                 self.settings.moment_scale,
             )
+            candidate_constraint_scale = _constraint_scale(jacobian)
             candidate_norm = max(
-                float(np.max(np.abs(residual))) if residual.size else 0.0,
+                float(np.max(np.abs(residual) * candidate_constraint_scale))
+                if residual.size
+                else 0.0,
                 force_norm,
                 moment_norm,
             )
@@ -319,3 +360,45 @@ def _force_moment_norms(
     return float(np.max(np.abs(blocks[:, :3]))), float(
         np.max(np.abs(blocks[:, 3:])) / moment_scale
     )
+
+
+def _coordinate_scale(body_count: int, rotation_scale: float) -> np.ndarray:
+    """Return q = S z, with radians expressed as length-equivalent units."""
+    if rotation_scale <= 0.0 or not np.isfinite(rotation_scale):
+        raise ValueError("rotation_coordinate_scale must be finite and positive")
+    return np.tile(np.array([1.0, 1.0, 1.0, rotation_scale, rotation_scale, rotation_scale]), body_count)
+
+
+def _wrench_scale(body_count: int, moment_scale: float) -> np.ndarray:
+    """Normalize stationarity rows from N/N-mm to force-equivalent rows."""
+    if moment_scale <= 0.0 or not np.isfinite(moment_scale):
+        raise ValueError("moment_scale must be finite and positive")
+    return np.tile(np.array([1.0, 1.0, 1.0, 1.0 / moment_scale, 1.0 / moment_scale, 1.0 / moment_scale]), body_count)
+
+
+def _constraint_scale(jacobian: np.ndarray) -> np.ndarray:
+    """Normalize heterogeneous constraint rows by their local Jacobian size."""
+    if jacobian.size == 0:
+        return np.zeros(jacobian.shape[0])
+    return 1.0 / np.maximum(np.linalg.norm(jacobian, axis=1), 1.0)
+
+
+def _limit_equilibrium_increment(
+    increment: np.ndarray,
+    body_order: tuple[str, ...],
+    translation_limit: float,
+    rotation_limit: float,
+) -> np.ndarray:
+    """Apply a per-body trust region before the equilibrium line search."""
+    result = np.asarray(increment, dtype=float).copy()
+    for index, _body in enumerate(body_order):
+        block = result[index * 6 : (index + 1) * 6]
+        translation_norm = float(np.linalg.norm(block[:3]))
+        rotation_norm = float(np.linalg.norm(block[3:]))
+        factor = 1.0
+        if translation_norm > translation_limit:
+            factor = min(factor, translation_limit / translation_norm)
+        if rotation_norm > rotation_limit:
+            factor = min(factor, rotation_limit / rotation_norm)
+        result[index * 6 : (index + 1) * 6] = factor * block
+    return result

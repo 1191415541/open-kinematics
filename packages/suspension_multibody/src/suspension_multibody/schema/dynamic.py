@@ -62,6 +62,19 @@ class TimeSignal(StrictModel):
                 return value_left + ratio * (value_right - value_left)
         return self.values[-1]
 
+    def derivative_at(self, time: float) -> float:
+        """Return the piecewise-linear time derivative at ``time``."""
+        if self.constant is not None or self.interpolation == "hold":
+            return 0.0
+        if time < self.times[0] or time > self.times[-1]:
+            return 0.0
+        for left, right, value_left, value_right in zip(
+            self.times, self.times[1:], self.values, self.values[1:]
+        ):
+            if left <= time <= right:
+                return (value_right - value_left) / (right - left)
+        return 0.0
+
 
 class WrenchSignal(StrictModel):
     """Six-component wrench signal."""
@@ -121,14 +134,43 @@ class DynamicSolverSettings(StrictModel):
     start_time: float = 0.0
     end_time: float = Field(gt=0)
     step_size: float = Field(gt=0)
+    internal_step_size: float = Field(default=1e-3, gt=0)
+    min_internal_step_size: float = Field(default=1e-4, gt=0)
+    adaptive_substepping: bool = True
+    projection_failure_tolerance: float = Field(default=0.01, gt=0)
     output_step: float | None = Field(default=None, gt=0)
     integrator: Literal["semi_implicit_euler", "newmark", "generalized_alpha"] = (
         "semi_implicit_euler"
     )
     gravity: Vec3 = Vec3(x=0.0, y=0.0, z=-9810.0)
+    # Engineering coordinates use mm and N while body masses are kg.  The
+    # legacy value 1.0 preserves existing callers; Adams-compatible runs use
+    # 1000.0 so kg-mm spatial inertia and mm/s^2 acceleration produce N/N-mm.
+    mass_matrix_scale: float = Field(default=1.0, gt=0)
+    global_velocity_damping: float = Field(default=0.0, ge=0)
+    initial_force_ramp_time: float = Field(default=0.0, ge=0)
+    max_linear_acceleration: float = Field(default=1.0e9, gt=0)
+    max_angular_acceleration: float = Field(default=1.0e6, gt=0)
+    max_linear_velocity: float = Field(default=1.0e9, gt=0)
+    max_angular_velocity: float = Field(default=1.0e4, gt=0)
+    velocity_recovery_enabled: bool = False
+    velocity_recovery_linear_limit: float = Field(default=1.0e6, gt=0)
+    velocity_recovery_angular_limit: float = Field(default=1.0e4, gt=0)
     constraint_tolerance: float = Field(default=1e-7, gt=0)
     velocity_tolerance: float = Field(default=1e-6, gt=0)
     event_tolerance: float = Field(default=1e-6, gt=0)
+    constraint_stabilization_alpha: float = Field(default=8.0, ge=0)
+    constraint_stabilization_beta: float = Field(default=20.0, ge=0)
+    constraint_derivative_step: float = Field(default=1e-6, gt=0)
+    projection_translation_limit: float = Field(default=100.0, gt=0)
+    projection_rotation_limit: float = Field(default=0.25, gt=0)
+    projection_max_iterations: int = Field(default=30, ge=1, le=200)
+    projection_backtracking: int = Field(default=12, ge=1, le=30)
+    max_corrector_iterations: int = Field(default=3, ge=1, le=12)
+    reuse_constraint_linearization: bool = False
+    newmark_beta: float = Field(default=0.25, gt=0, le=0.5)
+    newmark_gamma: float = Field(default=0.5, gt=0, le=1.0)
+    generalized_alpha_rho_inf: float = Field(default=0.8, gt=0, le=1.0)
     allow_static_element_downgrade: bool = False
 
     @model_validator(mode="after")
@@ -151,6 +193,17 @@ class TireModelSpec(StrictModel):
     longitudinal_stiffness: float = Field(default=120_000.0, gt=0)
     friction_coefficient: float = Field(default=1.0, gt=0)
     relaxation_length: float = Field(default=0.0, ge=0)
+    vertical_damping: float = Field(default=5.0, ge=0)
+    minimum_slip_speed: float = Field(default=10.0, gt=0)
+    pneumatic_trail: float = Field(default=50.0, ge=0)
+    pac2002_coefficients: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("pac2002_coefficients")
+    @classmethod
+    def _finite_pac2002_coefficients(cls, value: dict[str, float]) -> dict[str, float]:
+        if any(not key or not math.isfinite(float(item)) for key, item in value.items()):
+            raise ValueError("PAC2002 coefficients must have finite numeric values")
+        return {str(key): float(item) for key, item in value.items()}
 
 
 class VehicleBodyModel(StrictModel):

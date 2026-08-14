@@ -1,7 +1,17 @@
 """Time-domain dynamics API."""
 
+from .actuators import RackDriveElement, WheelTorqueActuator, build_vehicle_actuators
+from .constrained import ConstrainedDynamicIntegrator
+from .contact import (
+    ContactTireElement,
+    RoadQuery,
+    RoadSurface,
+    TireContactResult,
+    evaluate_tire_contact,
+)
 from .forces import (
     DynamicContext,
+    DynamicElementAdapter,
     DynamicForceEvaluation,
     LinearVelocityDamperElement,
     StaticElementInDynamicError,
@@ -21,6 +31,16 @@ from .tires import (
 
 __all__ = [
     "DynamicContext",
+    "DynamicElementAdapter",
+    "ContactTireElement",
+    "RoadQuery",
+    "RoadSurface",
+    "TireContactResult",
+    "evaluate_tire_contact",
+    "RackDriveElement",
+    "WheelTorqueActuator",
+    "build_vehicle_actuators",
+    "ConstrainedDynamicIntegrator",
     "DynamicForceEvaluation",
     "DynamicIntegrator",
     "DynamicRigidBodyState",

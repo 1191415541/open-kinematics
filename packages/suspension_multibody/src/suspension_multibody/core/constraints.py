@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -10,6 +11,7 @@ import numpy as np
 from .rigid_body import RigidBodyState
 from .spatial import (
     Array,
+    cross3,
     quaternion_conjugate,
     quaternion_multiply,
     quaternion_to_rotation_vector,
@@ -17,16 +19,23 @@ from .spatial import (
 )
 
 
+def _normalize3(vector: Array) -> Array:
+    """Normalize a finite three-vector using scalar norm arithmetic."""
+    value = np.asarray(vector, dtype=float)
+    norm_squared = float(value @ value)
+    if norm_squared < 1e-24:
+        raise ValueError("constraint axis is singular")
+    return value / math.sqrt(norm_squared)
+
+
 def _basis_perpendicular(axis: Array) -> Array:
     """Return two orthonormal rows perpendicular to a unit axis."""
-    vector = np.asarray(axis, dtype=float)
-    vector = vector / np.linalg.norm(vector)
+    vector = _normalize3(axis)
     helper = (
         np.array([1.0, 0.0, 0.0]) if abs(vector[0]) < 0.8 else np.array([0.0, 1.0, 0.0])
     )
-    first = np.cross(vector, helper)
-    first /= np.linalg.norm(first)
-    second = np.cross(vector, first)
+    first = _normalize3(cross3(vector, helper))
+    second = cross3(vector, first)
     return np.vstack((first, second))
 
 
@@ -71,6 +80,38 @@ class BallJoint(PointCoincidence):
     """Ideal spherical joint."""
 
     name: str = "ball_joint"
+
+
+@dataclass(frozen=True)
+class WeldJoint(Constraint):
+    """Six-constraint rigid connection that preserves relative pose."""
+
+    body_a: str
+    point_a: Array
+    body_b: str
+    point_b: Array
+    name: str = "weld_joint"
+
+    def residual(self, state: RigidBodyState) -> Array:
+        point = state.point_world(self.body_a, self.point_a) - state.point_world(
+            self.body_b, self.point_b
+        )
+        relative = quaternion_multiply(
+            quaternion_conjugate(state.pose(self.body_a).quaternion),
+            state.pose(self.body_b).quaternion,
+        )
+        return np.concatenate((point, quaternion_to_rotation_vector(relative)))
+
+    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
+        pose_a = state.pose(self.body_a)
+        pose_b = state.pose(self.body_b)
+        relative_rotation = pose_a.rotation.T @ pose_b.rotation
+        rotation_a = np.hstack((np.zeros((3, 3)), -np.eye(3)))
+        rotation_b = np.hstack((np.zeros((3, 3)), relative_rotation))
+        return {
+            self.body_a: np.vstack((state.point_jacobian(self.body_a, self.point_a), rotation_a)),
+            self.body_b: np.vstack((-state.point_jacobian(self.body_b, self.point_b), rotation_b)),
+        }
 
 
 @dataclass(frozen=True)
@@ -124,18 +165,18 @@ class RevoluteJoint(Constraint):
         )
         axis_a = state.pose(self.body_a).rotation @ self.axis_a
         axis_b = state.pose(self.body_b).rotation @ self.axis_b
-        axis_a /= np.linalg.norm(axis_a)
-        axis_b /= np.linalg.norm(axis_b)
+        axis_a = _normalize3(axis_a)
+        axis_b = _normalize3(axis_b)
         basis = _basis_perpendicular(axis_a)
-        return np.concatenate((point, basis @ np.cross(axis_a, axis_b)))
+        return np.concatenate((point, basis @ cross3(axis_a, axis_b)))
 
     def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
         pose_a = state.pose(self.body_a)
         pose_b = state.pose(self.body_b)
         axis_a = pose_a.rotation @ self.axis_a
         axis_b = pose_b.rotation @ self.axis_b
-        axis_a /= np.linalg.norm(axis_a)
-        axis_b /= np.linalg.norm(axis_b)
+        axis_a = _normalize3(axis_a)
+        axis_b = _normalize3(axis_b)
         basis = _basis_perpendicular(axis_a)
         point_a_jac = state.point_jacobian(self.body_a, self.point_a)
         point_b_jac = state.point_jacobian(self.body_b, self.point_b)
@@ -166,8 +207,8 @@ class PrismaticJoint(Constraint):
         pose_b = state.pose(self.body_b)
         axis_a = pose_a.rotation @ self.axis_a
         axis_b = pose_b.rotation @ self.axis_b
-        axis_a /= np.linalg.norm(axis_a)
-        axis_b /= np.linalg.norm(axis_b)
+        axis_a = _normalize3(axis_a)
+        axis_b = _normalize3(axis_b)
         displacement = state.point_world(self.body_b, self.point_b) - state.point_world(
             self.body_a, self.point_a
         )
@@ -181,7 +222,7 @@ class PrismaticJoint(Constraint):
         return np.concatenate(
             (
                 basis @ displacement,
-                basis @ np.cross(axis_a, axis_b),
+                basis @ cross3(axis_a, axis_b),
                 [axis_a @ relative_vector],
             )
         )
@@ -191,8 +232,8 @@ class PrismaticJoint(Constraint):
         pose_b = state.pose(self.body_b)
         axis_a = pose_a.rotation @ self.axis_a
         axis_b = pose_b.rotation @ self.axis_b
-        axis_a /= np.linalg.norm(axis_a)
-        axis_b /= np.linalg.norm(axis_b)
+        axis_a = _normalize3(axis_a)
+        axis_b = _normalize3(axis_b)
         basis = _basis_perpendicular(axis_a)
         point_a_jac = state.point_jacobian(self.body_a, self.point_a)
         point_b_jac = state.point_jacobian(self.body_b, self.point_b)
@@ -231,13 +272,11 @@ class CoordinateDrive(Constraint):
     name: str = "coordinate_drive"
 
     def residual(self, state: RigidBodyState) -> Array:
-        axis = np.asarray(self.axis, dtype=float)
-        axis /= np.linalg.norm(axis)
+        axis = _normalize3(self.axis)
         return np.array([axis @ state.point_world(self.body, self.point) - self.target])
 
     def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        axis = np.asarray(self.axis, dtype=float)
-        axis /= np.linalg.norm(axis)
+        axis = _normalize3(self.axis)
         return {self.body: axis[None, :] @ state.point_jacobian(self.body, self.point)}
 
 
@@ -260,15 +299,24 @@ class ConstraintSystem:
         order = body_order or tuple(
             name for name, body in state.bodies.items() if not body.fixed
         )
-        blocks: list[Array] = []
+        blocks: list[tuple[dict[str, Array], int]] = []
+        total_rows = 0
         for constraint in self.constraints:
             local = constraint.jacobian(state)
-            blocks.append(
-                np.hstack(
-                    [
-                        local.get(name, np.zeros((len(constraint.residual(state)), 6)))
-                        for name in order
-                    ]
-                )
-            )
-        return np.vstack(blocks) if blocks else np.zeros((0, 6 * len(order)))
+            first_block = next(iter(local.values()), np.zeros((0, 0)))
+            row_count = int(first_block.shape[0])
+            blocks.append((local, row_count))
+            total_rows += row_count
+        if not blocks:
+            return np.zeros((0, 6 * len(order)))
+        result = np.zeros((total_rows, 6 * len(order)))
+        body_indices = {name: index for index, name in enumerate(order)}
+        row_offset = 0
+        for local, row_count in blocks:
+            row_slice = slice(row_offset, row_offset + row_count)
+            for name, block in local.items():
+                index = body_indices.get(name)
+                if index is not None:
+                    result[row_slice, index * 6 : (index + 1) * 6] = block
+            row_offset += row_count
+        return result

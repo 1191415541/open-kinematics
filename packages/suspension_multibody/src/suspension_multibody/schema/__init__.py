@@ -59,6 +59,14 @@ from .result import (
     StateResult,
     WheelResponse,
 )
+from .vehicle import (
+    DrivelineSpec,
+    RoadSurfaceSpec,
+    SteeringSystemSpec,
+    VehicleDynamicCase,
+    VehicleModel,
+    WheelSpec,
+)
 
 __all__ = [
     "AntiRollBar",
@@ -106,6 +114,12 @@ __all__ = [
     "WheelResponse",
     "WrenchInput",
     "WrenchSignal",
+    "DrivelineSpec",
+    "RoadSurfaceSpec",
+    "SteeringSystemSpec",
+    "VehicleDynamicCase",
+    "VehicleModel",
+    "WheelSpec",
     "load_case",
     "load_dynamic_case",
     "load_dynamic_result",

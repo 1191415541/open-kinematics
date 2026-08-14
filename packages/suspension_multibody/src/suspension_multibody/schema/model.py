@@ -112,6 +112,7 @@ class FrontAxleModel(StrictModel):
     stops: tuple[BumpStop, ...] = ()
     side: Literal["left", "right"] = "left"
     rack_axis: Vec3 = Vec3(x=0.0, y=1.0, z=0.0)
+    rack_fixed_to_chassis: bool = False
 
     @field_validator("hardpoints")
     @classmethod

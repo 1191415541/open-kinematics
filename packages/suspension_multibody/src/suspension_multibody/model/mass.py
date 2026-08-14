@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..core import RigidBody
-from ..core.spatial import skew
+from ..core.spatial import cross3, skew
 
 
 @dataclass(frozen=True)
@@ -59,3 +59,23 @@ def mass_matrix(
         start = 6 * index
         matrix[start : start + 6, start : start + 6] = block
     return matrix
+
+
+def spatial_bias_wrench(spatial_inertia: np.ndarray, local_twist: np.ndarray) -> np.ndarray:
+    """Return the Newton-Euler velocity bias for a body-frame twist."""
+    inertia = np.asarray(spatial_inertia, dtype=float)
+    twist = np.asarray(local_twist, dtype=float)
+    if inertia.shape != (6, 6) or twist.shape != (6,):
+        raise ValueError("spatial inertia and twist must have shapes (6, 6) and (6,)")
+    momentum = inertia @ twist
+    linear_momentum = momentum[:3]
+    angular_momentum = momentum[3:]
+    linear_velocity = twist[:3]
+    angular_velocity = twist[3:]
+    return np.concatenate(
+        (
+            cross3(angular_velocity, linear_momentum),
+            cross3(linear_velocity, linear_momentum)
+            + cross3(angular_velocity, angular_momentum),
+        )
+    )

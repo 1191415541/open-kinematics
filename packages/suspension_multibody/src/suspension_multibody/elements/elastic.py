@@ -9,9 +9,42 @@ import numpy as np
 from ..core.rigid_body import RigidBodyState
 from ..core.spatial import (
     SE3,
+    cross3,
     quaternion_to_rotation_vector,
 )
 from .base import ElementError, ForceEvaluation
+
+
+def _curve_value(curve: tuple[tuple[float, float], ...], coordinate: float) -> float:
+    """Evaluate a monotone piecewise-linear Adams force curve with extrapolation."""
+    if not curve:
+        raise ValueError("force curve is empty")
+    points = np.asarray(curve, dtype=float)
+    x = float(coordinate)
+    if x <= points[0, 0]:
+        left, right = points[0], points[1]
+    elif x >= points[-1, 0]:
+        left, right = points[-2], points[-1]
+    else:
+        index = int(np.searchsorted(points[:, 0], x, side="right")) - 1
+        left, right = points[index], points[index + 1]
+    slope = (right[1] - left[1]) / (right[0] - left[0])
+    return float(left[1] + slope * (x - left[0]))
+
+
+def _curve_slope(curve: tuple[tuple[float, float], ...], coordinate: float = 0.0) -> float:
+    """Return the local slope of a monotone piecewise-linear curve."""
+    if not curve:
+        return 0.0
+    points = np.asarray(curve, dtype=float)
+    if coordinate <= points[0, 0]:
+        left, right = points[0], points[1]
+    elif coordinate >= points[-1, 0]:
+        left, right = points[-2], points[-1]
+    else:
+        index = int(np.searchsorted(points[:, 0], coordinate, side="right")) - 1
+        left, right = points[index], points[index + 1]
+    return float((right[1] - left[1]) / (right[0] - left[0]))
 
 
 def _point(state: RigidBodyState, body: str, local: np.ndarray) -> np.ndarray:
@@ -26,7 +59,7 @@ def _add_wrench(
 
 
 def _point_wrench(point: np.ndarray, force: np.ndarray) -> np.ndarray:
-    return np.concatenate((force, np.cross(point, force)))
+    return np.concatenate((force, cross3(point, force)))
 
 
 @dataclass(frozen=True)
@@ -42,6 +75,7 @@ class LinearSpringElement:
     free_length: float | None = None
     reference_length: float | None = None
     preload: float = 0.0
+    force_curve: tuple[tuple[float, float], ...] = ()
 
     def __post_init__(self) -> None:
         if self.stiffness <= 0 or not np.isfinite(self.stiffness):
@@ -63,15 +97,21 @@ class LinearSpringElement:
             self.free_length if self.free_length is not None else self.reference_length
         )
         extension = length - reference  # type: ignore[operator]
-        scalar = self.stiffness * extension + self.preload
+        scalar = (
+            _curve_value(self.force_curve, extension) + self.preload
+            if self.force_curve
+            else self.stiffness * extension + self.preload
+        )
         force_b = -scalar * unit
         force_a = -force_b
+        slope = _curve_slope(self.force_curve, extension) if self.force_curve else self.stiffness
         transverse = scalar / length * (np.eye(3) - np.outer(unit, unit))
-        tangent_bb = -(self.stiffness * np.outer(unit, unit) + transverse)
+        tangent_bb = -(slope * np.outer(unit, unit) + transverse)
         tangent = np.block([[tangent_bb, -tangent_bb], [-tangent_bb, tangent_bb]])
         return ForceEvaluation(
             name=self.name,
-            energy=0.5 * self.stiffness * extension**2 + self.preload * extension,
+            energy=0.5 * self.stiffness * extension**2
+            + self.preload * extension,
             body_wrenches_global={
                 self.body_a: _point_wrench(point_a, force_a),
                 self.body_b: _point_wrench(point_b, force_b),
@@ -94,7 +134,9 @@ class StaticDamperElement:
     gas_reference_force: float = 0.0
     preload: float = 0.0
     friction: float = 0.0
+    viscous_damping: float = 0.0
     extension_sign: float = 1.0
+    force_curve: tuple[tuple[float, float], ...] = ()
 
     def evaluate(self, state: RigidBodyState) -> ForceEvaluation:
         point_a = _point(state, self.body_a, self.point_a)
@@ -132,18 +174,25 @@ class BushingElement:
     local_pose_a: SE3 = field(default_factory=SE3.identity)
     local_pose_b: SE3 = field(default_factory=SE3.identity)
     stiffness: np.ndarray = field(default_factory=lambda: np.eye(6))
+    damping: np.ndarray = field(default_factory=lambda: np.zeros((6, 6)))
     preload: np.ndarray = field(default_factory=lambda: np.zeros(6))
 
     def __post_init__(self) -> None:
         matrix = np.asarray(self.stiffness, dtype=float)
+        damping = np.asarray(self.damping, dtype=float)
         preload = np.asarray(self.preload, dtype=float)
         if matrix.shape != (6, 6) or not np.allclose(matrix, matrix.T, atol=1e-9):
             raise ElementError("bushing stiffness must be symmetric 6x6")
+        if damping.shape != (6, 6) or not np.allclose(damping, damping.T, atol=1e-9):
+            raise ElementError("bushing damping must be symmetric 6x6")
         if np.linalg.eigvalsh(matrix).min() < -1e-9:
             raise ElementError("bushing stiffness must be positive semidefinite")
+        if np.linalg.eigvalsh(damping).min() < -1e-9:
+            raise ElementError("bushing damping must be positive semidefinite")
         if preload.shape != (6,):
             raise ElementError("bushing preload must contain six values")
         object.__setattr__(self, "stiffness", matrix.copy())
+        object.__setattr__(self, "damping", damping.copy())
         object.__setattr__(self, "preload", preload.copy())
 
     def attachment_poses(self, state: RigidBodyState) -> tuple[SE3, SE3]:
@@ -161,7 +210,10 @@ class BushingElement:
 
     def evaluate(self, state: RigidBodyState) -> ForceEvaluation:
         pose_a, pose_b = self.attachment_poses(state)
-        deformation = self.deformation(state)
+        relative = pose_a.inverse().compose(pose_b)
+        deformation = np.concatenate(
+            (relative.translation, quaternion_to_rotation_vector(relative.quaternion))
+        )
         generalized = -self.stiffness @ deformation + self.preload
         force_global = pose_a.rotation @ generalized[:3]
         moment_global = pose_a.rotation @ generalized[3:]
@@ -210,7 +262,7 @@ class PointWrenchElement:
         wrench = np.concatenate(
             (
                 self.force_global,
-                np.cross(point, self.force_global) + self.moment_global,
+                cross3(point, self.force_global) + self.moment_global,
             )
         )
         return ForceEvaluation(
@@ -290,6 +342,7 @@ class BumpStopElement:
     clearance: float
     stiffness: float
     direction: str = "bump"
+    force_curve: tuple[tuple[float, float], ...] = ()
 
     def evaluate(self, state: RigidBodyState) -> ForceEvaluation:
         point_a = _point(state, self.body_a, self.point_a)
@@ -297,16 +350,22 @@ class BumpStopElement:
         distance_vector = point_b - point_a
         distance = float(np.linalg.norm(distance_vector))
         gap = distance - self.clearance
-        active = gap < 0
+        compression = max(0.0, -gap)
+        active = compression > 0.0
         if not active or self.stiffness <= 0:
             return ForceEvaluation(self.name, 0.0, active=False, event="stop_clear")
         if distance < 1e-12:
             raise ElementError("bump stop endpoints are coincident")
         unit = distance_vector / distance
-        force_b = self.stiffness * gap * unit
+        scalar = (
+            _curve_value(self.force_curve, compression)
+            if self.force_curve
+            else self.stiffness * compression
+        )
+        force_b = scalar * unit
         return ForceEvaluation(
             self.name,
-            0.5 * self.stiffness * gap**2,
+            0.5 * self.stiffness * compression**2,
             {
                 self.body_a: _point_wrench(point_a, -force_b),
                 self.body_b: _point_wrench(point_b, force_b),

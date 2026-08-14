@@ -9,6 +9,7 @@ from typing import Mapping
 import numpy as np
 
 from ..core import RigidBodyState
+from ..core.spatial import cross3
 
 
 def _copy_twists(values: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -82,13 +83,13 @@ class DynamicRigidBodyState:
     def point_velocity_global(self, body: str, point_local: np.ndarray) -> np.ndarray:
         """Return global velocity of a body-local point."""
         pose = self.pose_state.pose(body)
-        twist = self.velocity(body)
+        twist = self.velocities[body]
         point = np.asarray(point_local, dtype=float)
         if point.shape != (3,):
             raise ValueError("point must contain three values")
         linear = pose.rotation @ twist[:3]
         angular = pose.rotation @ twist[3:]
-        return linear + np.cross(angular, pose.rotation @ point)
+        return linear + cross3(angular, pose.rotation @ point)
 
     def retract(
         self,
@@ -107,6 +108,52 @@ class DynamicRigidBodyState:
             accelerations.update(_copy_twists(acceleration_updates))
         return DynamicRigidBodyState(
             self.pose_state.retract(dict(increments)),
+            velocities,
+            accelerations,
+            self.multipliers if multipliers is None else multipliers,
+            self.internal_states if internal_states is None else internal_states,
+        )
+
+    @classmethod
+    def _from_trusted_parts(
+        cls,
+        pose_state: RigidBodyState,
+        velocities: Mapping[str, np.ndarray],
+        accelerations: Mapping[str, np.ndarray],
+        multipliers: np.ndarray,
+        internal_states: Mapping[str, object],
+    ) -> DynamicRigidBodyState:
+        """Construct a solver trial state from already validated arrays."""
+        state = object.__new__(cls)
+        object.__setattr__(state, "pose_state", pose_state)
+        object.__setattr__(state, "velocities", MappingProxyType(dict(velocities)))
+        object.__setattr__(state, "accelerations", MappingProxyType(dict(accelerations)))
+        object.__setattr__(state, "multipliers", multipliers)
+        object.__setattr__(state, "internal_states", MappingProxyType(dict(internal_states)))
+        return state
+
+    def retract_unchecked(
+        self,
+        increments: Mapping[str, np.ndarray],
+        velocity_updates: Mapping[str, np.ndarray] | None = None,
+        acceleration_updates: Mapping[str, np.ndarray] | None = None,
+        multipliers: np.ndarray | None = None,
+        internal_states: Mapping[str, object] | None = None,
+    ) -> DynamicRigidBodyState:
+        """Apply trusted solver trial updates without repeated input validation."""
+        velocities = (
+            self.velocities
+            if velocity_updates is None
+            else {**self.velocities, **velocity_updates}
+        )
+        accelerations = (
+            self.accelerations
+            if acceleration_updates is None
+            else {**self.accelerations, **acceleration_updates}
+        )
+        pose_state = self.pose_state.retract_unchecked(dict(increments))
+        return self._from_trusted_parts(
+            pose_state,
             velocities,
             accelerations,
             self.multipliers if multipliers is None else multipliers,

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .spatial import SE3, Array, skew
+from .spatial import SE3, Array, cross3, skew
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,17 @@ class RigidBody:
             raise ValueError("mass must be finite and non-negative")
         object.__setattr__(self, "inertia", inertia.copy())
         object.__setattr__(self, "center_of_mass", center_of_mass.copy())
+
+    def _with_pose_unchecked(self, pose: SE3) -> RigidBody:
+        """Reuse validated immutable body data for an integrator trial pose."""
+        updated = object.__new__(type(self))
+        object.__setattr__(updated, "name", self.name)
+        object.__setattr__(updated, "pose", pose)
+        object.__setattr__(updated, "mass", self.mass)
+        object.__setattr__(updated, "inertia", self.inertia)
+        object.__setattr__(updated, "center_of_mass", self.center_of_mass)
+        object.__setattr__(updated, "fixed", self.fixed)
+        return updated
 
 
 @dataclass(frozen=True)
@@ -61,7 +72,10 @@ class RigidBodyState:
         if point.shape != (3,):
             raise ValueError("point must contain three values")
         rotation = pose.rotation
-        return np.hstack((rotation, -rotation @ skew(point)))
+        result = np.empty((3, 6))
+        result[:, :3] = rotation
+        result[:, 3:] = -rotation @ skew(point)
+        return result
 
     def retract(self, increments: dict[str, Array]) -> RigidBodyState:
         """Apply per-body local increments and return a new state."""
@@ -81,6 +95,21 @@ class RigidBodyState:
                 )
         return RigidBodyState(updated)
 
+    def retract_unchecked(self, increments: dict[str, Array]) -> RigidBodyState:
+        """Apply trusted trial increments without rebuilding mass metadata."""
+        if not increments:
+            return self
+        updated: dict[str, RigidBody] = {}
+        for name, body in self.bodies.items():
+            increment = increments.get(name)
+            if increment is None or body.fixed:
+                updated[name] = body
+            else:
+                updated[name] = body._with_pose_unchecked(
+                    body.pose._retract_unchecked(increment)
+                )
+        return RigidBodyState(updated)
+
 
 def body_point_wrench(
     state: RigidBodyState, body: str, point_local: Array, force: Array
@@ -91,5 +120,5 @@ def body_point_wrench(
     if force_array.shape != (3,):
         raise ValueError("force must contain three values")
     return np.concatenate(
-        (force_array, np.cross(point - state.pose(body).translation, force_array))
+        (force_array, cross3(point - state.pose(body).translation, force_array))
     )

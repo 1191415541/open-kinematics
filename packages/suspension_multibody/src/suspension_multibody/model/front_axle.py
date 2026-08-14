@@ -14,6 +14,7 @@ from ..core import (
     PrismaticJoint,
     RigidBody,
     RigidBodyState,
+    WeldJoint,
 )
 from ..elements import (
     AntiRollBarElement,
@@ -165,6 +166,22 @@ def _with_body_specs(
     return updated
 
 
+def _body_from_spec(name: str, spec: object) -> RigidBody:
+    """Create a body using the schema reference frame and mass properties."""
+    pose_spec = getattr(spec, "pose")
+    return RigidBody(
+        name=name,
+        pose=SE3(
+            pose_spec.translation.as_array(),
+            np.asarray(pose_spec.rotation.as_tuple(), dtype=float),
+        ),
+        mass=float(getattr(spec, "mass")),
+        inertia=np.asarray(getattr(spec, "inertia"), dtype=float),
+        center_of_mass=getattr(spec, "center_of_mass").as_array(),
+        fixed=bool(getattr(spec, "fixed")),
+    )
+
+
 def _resolve_body(
     name: str, side: Literal["L", "R"], bodies: dict[str, RigidBody]
 ) -> str:
@@ -206,6 +223,27 @@ def _pose(value: Pose, side: Literal["L", "R"]) -> SE3:
     return SE3(translation, np.asarray(value.rotation.as_tuple(), dtype=float))
 
 
+def _local_point(
+    bodies: dict[str, RigidBody], body: str, point_global: np.ndarray
+) -> np.ndarray:
+    """Convert an imported global hardpoint into a body-local point."""
+    return bodies[body].pose.inverse().transform_point(point_global)
+
+
+def _local_pose(
+    value: Pose,
+    side: Literal["L", "R"],
+    body: str,
+    bodies: dict[str, RigidBody],
+) -> SE3:
+    """Convert a schema attachment pose from vehicle to body coordinates."""
+    global_translation = _mirror_point(value.translation, side)
+    return SE3(
+        _local_point(bodies, body, global_translation),
+        np.asarray(value.rotation.as_tuple(), dtype=float),
+    )
+
+
 def _runtime_elements(
     model: FrontAxleModel,
     mode: Literal["K", "C"],
@@ -221,28 +259,33 @@ def _runtime_elements(
                 LinearSpringElement(
                     name=f"{spec.name}_{side}",
                     body_a=body_a,
-                    point_a=_mirror_point(spec.point_a, side),
+                    point_a=_local_point(bodies, body_a, _mirror_point(spec.point_a, side)),
                     body_b=body_b,
-                    point_b=_mirror_point(spec.point_b, side),
+                    point_b=_local_point(bodies, body_b, _mirror_point(spec.point_b, side)),
                     stiffness=spec.stiffness,
                     free_length=spec.free_length,
                     reference_length=spec.reference_length,
                     preload=spec.preload or 0.0,
+                    force_curve=spec.force_curve,
                 )
             )
         for spec in model.dampers:
+            body_a = _resolve_body(spec.body_a, side, bodies)
+            body_b = _resolve_body(spec.body_b, side, bodies)
             elements.append(
                 StaticDamperElement(
                     name=f"{spec.name}_{side}",
-                    body_a=_resolve_body(spec.body_a, side, bodies),
-                    point_a=_mirror_point(spec.point_a, side),
-                    body_b=_resolve_body(spec.body_b, side, bodies),
-                    point_b=_mirror_point(spec.point_b, side),
+                    body_a=body_a,
+                    point_a=_local_point(bodies, body_a, _mirror_point(spec.point_a, side)),
+                    body_b=body_b,
+                    point_b=_local_point(bodies, body_b, _mirror_point(spec.point_b, side)),
                     gas_stiffness=spec.gas_stiffness,
                     gas_reference_length=spec.gas_reference_length,
                     gas_reference_force=spec.gas_reference_force,
                     preload=spec.preload,
                     friction=spec.friction,
+                    viscous_damping=spec.viscous_damping,
+                    force_curve=spec.force_curve,
                 )
             )
         for spec in model.tires:
@@ -250,24 +293,29 @@ def _runtime_elements(
                 VerticalTireElement(
                     name=f"tire_{side}",
                     wheel_body=f"upright_{side}",
-                    wheel_center_local=_lookup(
-                        side_hardpoints(model.hardpoints, side), "wheel_center"
-                    ).as_array(),
+                    wheel_center_local=_local_point(
+                        bodies,
+                        f"upright_{side}",
+                        _lookup(side_hardpoints(model.hardpoints, side), "wheel_center").as_array(),
+                    ),
                     stiffness=spec.stiffness,
                     unloaded_radius=spec.unloaded_radius,
                 )
             )
         for spec in model.stops:
+            body_a = _resolve_body(spec.body_a, side, bodies)
+            body_b = _resolve_body(spec.body_b, side, bodies)
             elements.append(
                 BumpStopElement(
                     name=f"{spec.name}_{side}",
-                    body_a=_resolve_body(spec.body_a, side, bodies),
-                    point_a=_mirror_point(spec.point_a, side),
-                    body_b=_resolve_body(spec.body_b, side, bodies),
-                    point_b=_mirror_point(spec.point_b, side),
+                    body_a=body_a,
+                    point_a=_local_point(bodies, body_a, _mirror_point(spec.point_a, side)),
+                    body_b=body_b,
+                    point_b=_local_point(bodies, body_b, _mirror_point(spec.point_b, side)),
                     clearance=spec.clearance,
                     stiffness=spec.stiffness,
                     direction=spec.direction,
+                    force_curve=spec.force_curve,
                 )
             )
     for spec in model.anti_roll_bars:
@@ -275,23 +323,26 @@ def _runtime_elements(
             AntiRollBarElement(
                 name=spec.name,
                 left_body="upright_L",
-                left_point=spec.left_link_point.as_array(),
+                left_point=_local_point(bodies, "upright_L", spec.left_link_point.as_array()),
                 right_body="upright_R",
-                right_point=spec.right_link_point.as_array(),
+                right_point=_local_point(bodies, "upright_R", spec.right_link_point.as_array()),
                 stiffness=spec.torsional_stiffness,
             )
         )
     if mode == "C":
         for spec in model.bushings:
             for side in ("L", "R"):
+                body_a = _resolve_body(spec.body_a, side, bodies)
+                body_b = _resolve_body(spec.body_b, side, bodies)
                 elements.append(
                     BushingElement(
                         name=f"{spec.name}_{side}",
-                        body_a=_resolve_body(spec.body_a, side, bodies),
-                        body_b=_resolve_body(spec.body_b, side, bodies),
-                        local_pose_a=_pose(spec.pose_a, side),
-                        local_pose_b=_pose(spec.pose_b, side),
+                        body_a=body_a,
+                        body_b=body_b,
+                        local_pose_a=_local_pose(spec.pose_a, side, body_a, bodies),
+                        local_pose_b=_local_pose(spec.pose_b, side, body_b, bodies),
                         stiffness=np.asarray(spec.stiffness, dtype=float),
+                        damping=np.diag(np.asarray(spec.damping, dtype=float)),
                         preload=np.asarray(spec.preload, dtype=float),
                     )
                 )
@@ -313,9 +364,12 @@ def build_front_axle(
         for name, point in side_hardpoints(model.hardpoints, "R").items()
     }
     points: dict[tuple[str, str], np.ndarray] = {}
+    body_specs = {spec.name: spec for spec in model.bodies}
     bodies: dict[str, RigidBody] = {
         "chassis": RigidBody("chassis", fixed=True),
-        "rack": RigidBody("rack"),
+        "rack": _body_from_spec("rack", body_specs["rack"])
+        if "rack" in body_specs
+        else RigidBody("rack"),
     }
     connections: list[Connection] = []
     constraints: list[Constraint] = []
@@ -329,7 +383,11 @@ def build_front_axle(
         upright = f"upright_{side}"
         tie = f"tie_rod_{side}"
         for body in (uca, lca, upright, tie):
-            bodies[body] = _body_with_points(body, {})
+            bodies[body] = (
+                _body_from_spec(body, body_specs[body])
+                if body in body_specs
+                else _body_with_points(body, {})
+            )
         for name, point in side_points.items():
             all_hardpoints[f"{name}__{side}"] = Vec3(x=point[0], y=point[1], z=point[2])
         mount_data = (
@@ -343,31 +401,33 @@ def build_front_axle(
             (tie, "outer", "tie_outer", "tie_outer"),
             (upright, "wheel_center", "wheel_center", "wheel_center"),
         )
+        side_schema = {
+            key: Vec3(x=value[0], y=value[1], z=value[2])
+            for key, value in side_points.items()
+        }
         for body, label, role, _ in mount_data:
-            points[(body, label)] = _lookup(
-                {
-                    key: Vec3(x=value[0], y=value[1], z=value[2])
-                    for key, value in side_points.items()
-                },
-                role,
-            ).as_array()
+            global_point = _lookup(side_schema, role).as_array()
+            points[(body, label)] = _local_point(bodies, body, global_point)
         for label, role in (
             ("inner_front", "upper_front"),
             ("inner_rear", "upper_rear"),
         ):
-            p = points[(uca, label)]
+            global_point = _lookup(side_schema, role).as_array()
+            p = _local_point(bodies, uca, global_point)
             chassis_label = f"uca_{side}_{label}"
-            points[("chassis", chassis_label)] = p.copy()
+            points[("chassis", chassis_label)] = global_point.copy()
             if mode == "K":
                 joint = BallJoint(
-                    "chassis", p, uca, p, name=f"uca_mount_{side}_{label}"
+                    "chassis", global_point, uca, p, name=f"uca_mount_{side}_{label}"
                 )
                 constraints.append(joint)
                 ideal_constraints.append(joint)
                 kind: Literal["ideal", "bushing"] = "ideal"
             else:
                 ideal_constraints.append(
-                    BallJoint("chassis", p, uca, p, name=f"uca_mount_{side}_{label}")
+                    BallJoint(
+                        "chassis", global_point, uca, p, name=f"uca_mount_{side}_{label}"
+                    )
                 )
                 bushings.append(
                     BushingElement(
@@ -375,10 +435,12 @@ def build_front_axle(
                         "chassis",
                         uca,
                         local_pose_a=SE3(
-                            translation=p, quaternion=np.array([1.0, 0.0, 0.0, 0.0])
+                            translation=global_point,
+                            quaternion=np.array([1.0, 0.0, 0.0, 0.0]),
                         ),
                         local_pose_b=SE3(
-                            translation=p, quaternion=np.array([1.0, 0.0, 0.0, 0.0])
+                            translation=p,
+                            quaternion=np.array([1.0, 0.0, 0.0, 0.0]),
                         ),
                         stiffness=np.zeros((6, 6)),
                     )
@@ -398,19 +460,22 @@ def build_front_axle(
             ("inner_front", "lower_front"),
             ("inner_rear", "lower_rear"),
         ):
-            p = points[(lca, label)]
+            global_point = _lookup(side_schema, role).as_array()
+            p = _local_point(bodies, lca, global_point)
             chassis_label = f"lca_{side}_{label}"
-            points[("chassis", chassis_label)] = p.copy()
+            points[("chassis", chassis_label)] = global_point.copy()
             if mode == "K":
                 joint = BallJoint(
-                    "chassis", p, lca, p, name=f"lca_mount_{side}_{label}"
+                    "chassis", global_point, lca, p, name=f"lca_mount_{side}_{label}"
                 )
                 constraints.append(joint)
                 ideal_constraints.append(joint)
                 kind = "ideal"
             else:
                 ideal_constraints.append(
-                    BallJoint("chassis", p, lca, p, name=f"lca_mount_{side}_{label}")
+                    BallJoint(
+                        "chassis", global_point, lca, p, name=f"lca_mount_{side}_{label}"
+                    )
                 )
                 bushings.append(
                     BushingElement(
@@ -418,10 +483,12 @@ def build_front_axle(
                         "chassis",
                         lca,
                         local_pose_a=SE3(
-                            translation=p, quaternion=np.array([1.0, 0.0, 0.0, 0.0])
+                            translation=global_point,
+                            quaternion=np.array([1.0, 0.0, 0.0, 0.0]),
                         ),
                         local_pose_b=SE3(
-                            translation=p, quaternion=np.array([1.0, 0.0, 0.0, 0.0])
+                            translation=p,
+                            quaternion=np.array([1.0, 0.0, 0.0, 0.0]),
                         ),
                         stiffness=np.zeros((6, 6)),
                     )
@@ -436,12 +503,17 @@ def build_front_axle(
                     chassis_label,
                     label,
                 )
-            )
+        )
         for arm, outer_label in ((uca, "outer"), (lca, "outer")):
-            p = points[(arm, outer_label)]
+            role = "upper_outer" if arm == uca else "lower_outer"
+            global_point = _lookup(side_schema, role).as_array()
+            p = _local_point(bodies, arm, global_point)
             upright_label = f"{arm}_outer"
-            points[(upright, upright_label)] = p.copy()
-            joint = BallJoint(arm, p, upright, p, name=f"{arm}_outer_joint")
+            upright_point = _local_point(bodies, upright, global_point)
+            points[(upright, upright_label)] = upright_point.copy()
+            joint = BallJoint(
+                arm, p, upright, upright_point, name=f"{arm}_outer_joint"
+            )
             constraints.append(joint)
             ideal_constraints.append(joint)
             connections.append(
@@ -454,15 +526,19 @@ def build_front_axle(
                     upright_label,
                 )
             )
-        tie_inner = points[(tie, "inner")]
-        tie_outer = points[(tie, "outer")]
-        points["rack", f"tie_{side}"] = tie_inner.copy()
-        points[(upright, "tie_outer")] = tie_outer.copy()
+        tie_inner_global = _lookup(side_schema, "tie_inner").as_array()
+        tie_outer_global = _lookup(side_schema, "tie_outer").as_array()
+        tie_inner = _local_point(bodies, tie, tie_inner_global)
+        tie_outer = _local_point(bodies, tie, tie_outer_global)
+        rack_tie_inner = _local_point(bodies, "rack", tie_inner_global)
+        upright_tie_outer = _local_point(bodies, upright, tie_outer_global)
+        points["rack", f"tie_{side}"] = rack_tie_inner.copy()
+        points[(upright, "tie_outer")] = upright_tie_outer.copy()
         rack_joint = BallJoint(
-            "rack", tie_inner, tie, tie_inner, name=f"rack_tie_joint_{side}"
+            "rack", rack_tie_inner, tie, tie_inner, name=f"rack_tie_joint_{side}"
         )
         tie_joint = BallJoint(
-            tie, tie_outer, upright, tie_outer, name=f"tie_upright_joint_{side}"
+            tie, tie_outer, upright, upright_tie_outer, name=f"tie_upright_joint_{side}"
         )
         constraints.extend((rack_joint, tie_joint))
         ideal_constraints.extend((rack_joint, tie_joint))
@@ -490,21 +566,29 @@ def build_front_axle(
         {key: Vec3(x=value[0], y=value[1], z=value[2]) for key, value in left.items()},
         "rack_center",
     ).as_array()
-    points[("rack", "center")] = rack_point
-    # The rack is a guided rigid body: its only ideal degree of freedom is
-    # translation along the declared vehicle Y rack axis.  Without this
-    # guide, the two tie-rod ball joints leave rigid-body rotation modes
-    # unobservable and K-mode drives become rank-deficient.
+    rack_point_local = _local_point(bodies, "rack", rack_point)
+    points[("rack", "center")] = rack_point_local
     points[("chassis", "rack_center")] = rack_point.copy()
-    rack_guide = PrismaticJoint(
-        "chassis",
-        rack_point,
-        np.asarray(model.rack_axis.as_tuple(), dtype=float),
-        "rack",
-        rack_point,
-        np.asarray(model.rack_axis.as_tuple(), dtype=float),
-        name="rack_guide",
-    )
+    if model.rack_fixed_to_chassis:
+        rack_guide = WeldJoint(
+            "chassis",
+            rack_point,
+            "rack",
+            rack_point_local,
+            name="rack_fixed_to_chassis",
+        )
+    else:
+        # The rack is a guided rigid body: its only ideal degree of freedom is
+        # translation along the declared vehicle Y rack axis.
+        rack_guide = PrismaticJoint(
+            "chassis",
+            rack_point,
+            np.asarray(model.rack_axis.as_tuple(), dtype=float),
+            "rack",
+            rack_point_local,
+            np.asarray(model.rack_axis.as_tuple(), dtype=float),
+            name="rack_guide",
+        )
     constraints.append(rack_guide)
     ideal_constraints.append(rack_guide)
     all_hardpoints["RACK_CENTER"] = Vec3(
