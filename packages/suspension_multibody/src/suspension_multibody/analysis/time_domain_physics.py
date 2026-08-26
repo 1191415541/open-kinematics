@@ -11,7 +11,10 @@ from ..model import VehicleAssembly
 from .vehicle_physics import WheelLoadSummary, summarize_wheel_loads
 
 if TYPE_CHECKING:
-    from .full_vehicle_dynamic import FullVehicleDynamicRun, FullVehicleDynamicSample
+    from typing import Any
+
+    FullVehicleDynamicRun = Any
+    FullVehicleDynamicSample = Any
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,10 @@ from ..schema import VehicleModel
 from .vehicle_physics import RollCenterResult, compute_vehicle_roll_centers
 
 if TYPE_CHECKING:
-    from .full_vehicle_dynamic import FullVehicleDynamicRun, FullVehicleDynamicSample
+    from typing import Any
+
+    FullVehicleDynamicRun = Any
+    FullVehicleDynamicSample = Any
 
 
 _AXLES = ("front", "rear")

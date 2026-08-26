@@ -139,9 +139,12 @@ class DynamicSolverSettings(StrictModel):
     adaptive_substepping: bool = True
     projection_failure_tolerance: float = Field(default=0.01, gt=0)
     output_step: float | None = Field(default=None, gt=0)
-    integrator: Literal["semi_implicit_euler", "newmark", "generalized_alpha"] = (
-        "semi_implicit_euler"
-    )
+    integrator: Literal[
+        "quasi_static",
+        "semi_implicit_euler",
+        "newmark",
+        "generalized_alpha",
+    ] = "semi_implicit_euler"
     gravity: Vec3 = Vec3(x=0.0, y=0.0, z=-9810.0)
     # Engineering coordinates use mm and N while body masses are kg.  The
     # legacy value 1.0 preserves existing callers; Adams-compatible runs use

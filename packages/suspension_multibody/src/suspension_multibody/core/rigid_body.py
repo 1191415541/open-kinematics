@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .spatial import SE3, Array, cross3, skew
+from .spatial import SE3, Array, _point_jacobian_numba, cross3
 
 
 @dataclass(frozen=True)
@@ -67,15 +67,9 @@ class RigidBodyState:
 
     def point_jacobian(self, body: str, point_local: Array) -> Array:
         """Return point position derivative with respect to a local 6D increment."""
-        pose = self.pose(body)
+        rotation = self.pose(body).rotation
         point = np.asarray(point_local, dtype=float)
-        if point.shape != (3,):
-            raise ValueError("point must contain three values")
-        rotation = pose.rotation
-        result = np.empty((3, 6))
-        result[:, :3] = rotation
-        result[:, 3:] = -rotation @ skew(point)
-        return result
+        return _point_jacobian_numba(rotation, float(point[0]), float(point[1]), float(point[2]))
 
     def retract(self, increments: dict[str, Array]) -> RigidBodyState:
         """Apply per-body local increments and return a new state."""

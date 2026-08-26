@@ -6,8 +6,17 @@ from dataclasses import dataclass
 
 import numpy as np
 
+try:
+    from numba import njit
+except ImportError:  # pragma: no cover
+    def njit(*_args, **_kwargs):  # noqa: D103
+        def _decorator(func):
+            return func
+
+        return _decorator
+
 from ..core import RigidBody
-from ..core.spatial import cross3, skew
+from ..core.spatial import skew
 
 
 @dataclass(frozen=True)
@@ -61,21 +70,26 @@ def mass_matrix(
     return matrix
 
 
+@njit(nogil=True, fastmath=True)
+def _spatial_bias_wrench_numba(spatial_inertia: np.ndarray, twist: np.ndarray) -> np.ndarray:
+    """Return the Newton-Euler velocity bias for a body-frame twist."""
+    momentum = spatial_inertia @ twist
+    lm = momentum[:3]
+    am = momentum[3:]
+    lv = twist[:3]
+    av = twist[3:]
+    result = np.empty(6)
+    result[0] = av[1] * lm[2] - av[2] * lm[1]
+    result[1] = av[2] * lm[0] - av[0] * lm[2]
+    result[2] = av[0] * lm[1] - av[1] * lm[0]
+    result[3] = (lv[1] * lm[2] - lv[2] * lm[1]) + (av[1] * am[2] - av[2] * am[1])
+    result[4] = (lv[2] * lm[0] - lv[0] * lm[2]) + (av[2] * am[0] - av[0] * am[2])
+    result[5] = (lv[0] * lm[1] - lv[1] * lm[0]) + (av[0] * am[1] - av[1] * am[0])
+    return result
+
+
 def spatial_bias_wrench(spatial_inertia: np.ndarray, local_twist: np.ndarray) -> np.ndarray:
     """Return the Newton-Euler velocity bias for a body-frame twist."""
-    inertia = np.asarray(spatial_inertia, dtype=float)
-    twist = np.asarray(local_twist, dtype=float)
-    if inertia.shape != (6, 6) or twist.shape != (6,):
-        raise ValueError("spatial inertia and twist must have shapes (6, 6) and (6,)")
-    momentum = inertia @ twist
-    linear_momentum = momentum[:3]
-    angular_momentum = momentum[3:]
-    linear_velocity = twist[:3]
-    angular_velocity = twist[3:]
-    return np.concatenate(
-        (
-            cross3(angular_velocity, linear_momentum),
-            cross3(linear_velocity, linear_momentum)
-            + cross3(angular_velocity, angular_momentum),
-        )
+    return _spatial_bias_wrench_numba(
+        np.asarray(spatial_inertia, dtype=float), np.asarray(local_twist, dtype=float)
     )

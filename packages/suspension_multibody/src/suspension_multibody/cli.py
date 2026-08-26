@@ -78,6 +78,158 @@ def run_dynamic(
     typer.echo(f"{bundle.manifest.run_id}: {bundle.manifest.sample_count} sample(s)")
 
 
+@app.command("validate-axle-dynamics")
+def validate_axle_dynamics(
+    model: Path = typer.Option(
+        ..., exists=True, readable=True, help="Axle model YAML/JSON."
+    ),
+    case: Path = typer.Option(
+        ..., exists=True, readable=True, help="Axle case YAML/JSON."
+    ),
+) -> None:
+    """Validate closed SI axle-dynamics inputs."""
+    from .axle_dynamics import (
+        load_axle_dynamics_case,
+        load_axle_dynamics_model,
+    )
+
+    load_axle_dynamics_model(model)
+    load_axle_dynamics_case(case)
+    typer.echo("valid")
+
+
+@app.command("run-axle-dynamics")
+def run_axle_dynamics_command(
+    model: Path = typer.Option(
+        ..., exists=True, readable=True, help="Axle model YAML/JSON."
+    ),
+    case: Path = typer.Option(
+        ..., exists=True, readable=True, help="Axle case YAML/JSON."
+    ),
+    out: Path = typer.Option(..., help="Output directory."),
+) -> None:
+    """Run the native axle solver and retain success or failure evidence."""
+    from .axle_dynamics import (
+        NativeAxleError,
+        NativeKernelUnavailableError,
+        load_axle_dynamics_case,
+        load_axle_dynamics_model,
+        run_axle_dynamics,
+        write_axle_dynamics_artifact,
+    )
+
+    axle_model = load_axle_dynamics_model(model)
+    axle_case = load_axle_dynamics_case(case)
+    try:
+        result = run_axle_dynamics(axle_model, axle_case)
+    except (NativeAxleError, NativeKernelUnavailableError) as exc:
+        partial_result = getattr(exc, "partial_result", None)
+        manifest = write_axle_dynamics_artifact(
+            partial_result,
+            axle_model,
+            axle_case,
+            out,
+            failure=exc,
+        )
+        typer.echo(str(exc), err=True)
+        typer.echo(f"artifact: {manifest}", err=True)
+        raise typer.Exit(code=1) from exc
+    manifest = write_axle_dynamics_artifact(
+        result, axle_model, axle_case, out
+    )
+    typer.echo(f"{len(result.times_s)} sample(s): {manifest}")
+
+
+@app.command("create-axle-manifest")
+def create_axle_manifest_command(
+    model: Path = typer.Option(
+        ..., exists=True, readable=True, help="Axle model YAML/JSON."
+    ),
+    case: Path = typer.Option(
+        ..., exists=True, readable=True, help="Axle case YAML/JSON."
+    ),
+    settings: Path = typer.Option(
+        ...,
+        exists=True,
+        readable=True,
+        help="Role bindings and Adams execution settings YAML/JSON.",
+    ),
+    out: Path = typer.Option(..., help="Dynamic axle manifest JSON."),
+) -> None:
+    """Freeze the sole shared input for independent native and Adams runners."""
+    from .adams import (
+        create_dynamic_axle_manifest,
+        load_dynamic_axle_manifest_settings,
+        write_dynamic_axle_manifest,
+    )
+    from .axle_dynamics import (
+        load_axle_dynamics_case,
+        load_axle_dynamics_model,
+    )
+
+    manifest_settings = load_dynamic_axle_manifest_settings(settings)
+    manifest = create_dynamic_axle_manifest(
+        load_axle_dynamics_model(model),
+        load_axle_dynamics_case(case),
+        manifest_settings.role_bindings,
+        adams_solver=manifest_settings.adams_solver,
+        execution_environment=manifest_settings.execution_environment,
+        case_metadata=manifest_settings.case_metadata,
+    )
+    path = write_dynamic_axle_manifest(manifest, out)
+    typer.echo(f"{manifest.sha256}: {path}")
+
+
+@app.command("run-native-axle-evidence")
+def run_native_axle_evidence_command(
+    manifest: Path = typer.Option(
+        ..., exists=True, readable=True, help="Dynamic axle manifest JSON."
+    ),
+    out: Path = typer.Option(..., help="Independent native evidence directory."),
+    producer_id: str = typer.Option(
+        "open-kinematics.native",
+        help="Unique runner identity recorded in evidence.",
+    ),
+) -> None:
+    """Run the native solver plus step-halving and write strict evidence."""
+    from .adams import run_native_axle_manifest
+
+    path = run_native_axle_manifest(
+        manifest,
+        out,
+        producer_id=producer_id,
+    )
+    typer.echo(str(path))
+
+
+@app.command("compare-axle-adams")
+def compare_axle_adams_command(
+    manifest: Path = typer.Option(
+        ..., exists=True, readable=True, help="Dynamic axle manifest JSON."
+    ),
+    adams_evidence: Path = typer.Option(
+        ..., exists=True, readable=True, help="Independent Adams evidence JSON."
+    ),
+    native_evidence: Path = typer.Option(
+        ..., exists=True, readable=True, help="Independent native evidence JSON."
+    ),
+    out: Path = typer.Option(..., help="Comparison report JSON."),
+) -> None:
+    """Compare independently generated evidence without interpolation."""
+    from .adams import compare_axle_evidence
+
+    report = compare_axle_evidence(
+        manifest_path=manifest,
+        adams_evidence_path=adams_evidence,
+        native_evidence_path=native_evidence,
+        output_path=out,
+    )
+    if not report["passed"]:
+        typer.echo(f"{report['status']}: {out}", err=True)
+        raise typer.Exit(code=1)
+    typer.echo(f"PASS: {out}")
+
+
 @app.command("validate-adams")
 def validate_adams(
     profile: str = typer.Option("adams-car-2024.1"),

@@ -11,7 +11,14 @@ from typing import Iterable
 import numpy as np
 
 from . import __version__
-from .analysis import AxleTimeDomainSolver, CModeSolver, CState, KModeSolver, KState
+from .analysis import (
+    AxleTimeDomainSolver,
+    CModeSolver,
+    CState,
+    KModeSolver,
+    KState,
+    VehicleKCTimeDomainSolver,
+)
 from .core import SE3, wrench_global_to_local
 from .elements import BushingElement
 from .io import CheckpointStore, canonical_hash, write_bundle, write_dynamic_bundle
@@ -133,12 +140,20 @@ def run_dynamic_case(
     output_dir: str | Path | None = None,
 ) -> DynamicResultBundle:
     """Run one validated time-domain case and optionally write result files."""
-    if case.mode != "axle_dynamic":
-        from .analysis.vehicle_dynamic import VehicleTimeDomainSolver
-
-        bundle = VehicleTimeDomainSolver().run(model, case)
-    else:
+    if case.mode == "axle_dynamic" and case.solver.integrator == "quasi_static":
         bundle = AxleTimeDomainSolver().run(model, case)
+    elif case.mode == "vehicle_kc_dynamic":
+        bundle = VehicleKCTimeDomainSolver().run(model, case)
+    elif case.mode == "axle_dynamic":
+        raise ValueError(
+            "the legacy axle dynamics integrator was removed; "
+            "use suspension_multibody.axle_dynamics.run_axle_dynamics "
+            "with an explicit SI multibody model"
+        )
+    else:
+        raise ValueError(
+            "the incomplete legacy vehicle dynamics integrator was removed"
+        )
     if output_dir is not None:
         write_dynamic_bundle(bundle, output_dir)
     return bundle

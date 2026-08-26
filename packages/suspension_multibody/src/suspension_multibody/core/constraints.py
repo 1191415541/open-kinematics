@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
+
+try:
+    from numba import njit as _njit
+except ImportError:  # pragma: no cover
+    def _njit(*_args, **_kwargs):
+        def _decorator(func):
+            return func
+        return _decorator
 
 from .rigid_body import RigidBodyState
 from .spatial import (
@@ -19,13 +27,45 @@ from .spatial import (
 )
 
 
+@_njit(nogil=True, fastmath=True)
+def _point_coincidence_residual_numba(
+    ta: Array, ra: Array, pa: Array, tb: Array, rb: Array, pb: Array
+) -> Array:
+    """Residual is point_world(a, pa) minus point_world(b, pb)."""
+    pax = ta[0] + ra[0, 0] * pa[0] + ra[0, 1] * pa[1] + ra[0, 2] * pa[2]
+    pay = ta[1] + ra[1, 0] * pa[0] + ra[1, 1] * pa[1] + ra[1, 2] * pa[2]
+    paz = ta[2] + ra[2, 0] * pa[0] + ra[2, 1] * pa[1] + ra[2, 2] * pa[2]
+    pbx = tb[0] + rb[0, 0] * pb[0] + rb[0, 1] * pb[1] + rb[0, 2] * pb[2]
+    pby = tb[1] + rb[1, 0] * pb[0] + rb[1, 1] * pb[1] + rb[1, 2] * pb[2]
+    pbz = tb[2] + rb[2, 0] * pb[0] + rb[2, 1] * pb[1] + rb[2, 2] * pb[2]
+    result = np.empty(3)
+    result[0] = pax - pbx
+    result[1] = pay - pby
+    result[2] = paz - pbz
+    return result
+
+
+@_njit(nogil=True, fastmath=True)
+def _normalize3_numba(x: float, y: float, z: float) -> Array:
+    norm_squared = x * x + y * y + z * z
+    if norm_squared < 1e-24:
+        result = np.empty(3)
+        result[0] = 0.0
+        result[1] = 0.0
+        result[2] = 1.0
+        return result
+    inv = 1.0 / math.sqrt(norm_squared)
+    result = np.empty(3)
+    result[0] = x * inv
+    result[1] = y * inv
+    result[2] = z * inv
+    return result
+
+
 def _normalize3(vector: Array) -> Array:
     """Normalize a finite three-vector using scalar norm arithmetic."""
     value = np.asarray(vector, dtype=float)
-    norm_squared = float(value @ value)
-    if norm_squared < 1e-24:
-        raise ValueError("constraint axis is singular")
-    return value / math.sqrt(norm_squared)
+    return _normalize3_numba(float(value[0]), float(value[1]), float(value[2]))
 
 
 def _basis_perpendicular(axis: Array) -> Array:
@@ -64,8 +104,11 @@ class PointCoincidence(Constraint):
     name: str = "point_coincidence"
 
     def residual(self, state: RigidBodyState) -> Array:
-        return state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
+        pose_a = state.pose(self.body_a)
+        pose_b = state.pose(self.body_b)
+        return _point_coincidence_residual_numba(
+            pose_a.translation, pose_a.rotation, np.asarray(self.point_a, dtype=float),
+            pose_b.translation, pose_b.rotation, np.asarray(self.point_b, dtype=float),
         )
 
     def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
@@ -285,6 +328,20 @@ class ConstraintSystem:
     """Stack constraints into a deterministic residual/Jacobian matrix."""
 
     constraints: tuple[Constraint, ...]
+    _body_indices_cache: dict[str, int] = field(default_factory=dict, repr=False, compare=False)
+    _n_bodies_cache: int = field(default=0, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if not self._body_indices_cache and self.constraints:
+            # Pre-compute body indices from the first constraint's bodies
+            pass
+
+    def _get_body_indices(self, body_order: tuple[str, ...]) -> dict[str, int]:
+        if body_order and len(self._body_indices_cache) == len(body_order):
+            cached = self._body_indices_cache
+            if all(name in cached for name in body_order):
+                return cached
+        return {name: index for index, name in enumerate(body_order)}
 
     def residual(self, state: RigidBodyState) -> Array:
         if not self.constraints:
@@ -299,24 +356,25 @@ class ConstraintSystem:
         order = body_order or tuple(
             name for name, body in state.bodies.items() if not body.fixed
         )
-        blocks: list[tuple[dict[str, Array], int]] = []
+        body_indices = self._get_body_indices(order)
+        n_bodies = len(order)
+        local_blocks = [constraint.jacobian(state) for constraint in self.constraints]
         total_rows = 0
-        for constraint in self.constraints:
-            local = constraint.jacobian(state)
-            first_block = next(iter(local.values()), np.zeros((0, 0)))
-            row_count = int(first_block.shape[0])
-            blocks.append((local, row_count))
-            total_rows += row_count
-        if not blocks:
-            return np.zeros((0, 6 * len(order)))
-        result = np.zeros((total_rows, 6 * len(order)))
-        body_indices = {name: index for index, name in enumerate(order)}
+        for local in local_blocks:
+            first_block = next(iter(local.values()), None)
+            total_rows += int(first_block.shape[0]) if first_block is not None else 0
+        if total_rows == 0:
+            return np.zeros((0, 6 * n_bodies))
+        result = np.zeros((total_rows, 6 * n_bodies))
         row_offset = 0
-        for local, row_count in blocks:
-            row_slice = slice(row_offset, row_offset + row_count)
-            for name, block in local.items():
-                index = body_indices.get(name)
-                if index is not None:
-                    result[row_slice, index * 6 : (index + 1) * 6] = block
+        for local in local_blocks:
+            first_block = next(iter(local.values()), None)
+            row_count = int(first_block.shape[0]) if first_block is not None else 0
+            if row_count:
+                row_slice = slice(row_offset, row_offset + row_count)
+                for name, block in local.items():
+                    index = body_indices.get(name)
+                    if index is not None:
+                        result[row_slice, index * 6 : (index + 1) * 6] = block
             row_offset += row_count
         return result
