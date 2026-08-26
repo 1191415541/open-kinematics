@@ -5,11 +5,13 @@ description = "Quasi-static suspension K&C and load solver."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "numba>=0.67.0",
     "numpy>=2.2.0",
     "pyarrow>=21.0.0",
     "pydantic>=2.0",
     "pyyaml>=6.0.2",
     "scipy>=1.14.1",
+    "setuptools>=84.0.0",
     "suspension-contracts>=0.1.0,<0.2.0",
     "typer>=0.19.2",
 ]

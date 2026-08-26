@@ -27,7 +27,10 @@ test-contracts:
 test-kinematics:
     uv run --package suspension-kinematics pytest packages/suspension_kinematics/tests
 
-test-multibody:
+build-axle-native:
+    uv run python packages/suspension_multibody/scripts/build_axle_native.py
+
+test-multibody: build-axle-native
     uv run --package suspension-multibody pytest packages/suspension_multibody/tests
 
 test: test-contracts test-kinematics test-multibody
@@ -45,6 +48,7 @@ check: lint type-check build import-smoke cli-smoke
 build:
     uv build --package suspension-contracts
     uv build --package suspension-kinematics
+    uv run python packages/suspension_multibody/scripts/build_axle_native.py
     uv build --package suspension-multibody
 
 import-smoke:
