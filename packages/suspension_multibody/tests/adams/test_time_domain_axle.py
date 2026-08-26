@@ -61,7 +61,9 @@ def _model() -> FrontAxleModel:
 def _case() -> DynamicCaseSpec:
     return DynamicCaseSpec(
         mode="axle_dynamic",
-        solver=DynamicSolverSettings(end_time=0.02, step_size=0.01),
+        solver=DynamicSolverSettings(
+            end_time=0.02, step_size=0.01, integrator="quasi_static"
+        ),
         prescribed_motions=(
             PrescribedMotion(
                 target="wheel_travel_left",
