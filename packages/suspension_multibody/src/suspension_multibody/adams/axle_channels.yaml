@@ -1,0 +1,119 @@
+schema_version: 1
+world_axes:
+  x: vehicle_rearward
+  y: vehicle_rightward
+  z: upward
+rotation_sign: right_hand_rule
+required_role_bindings:
+  - sprung_body
+  - fixture_reference_marker
+  - left_wheel_center_marker
+  - right_wheel_center_marker
+  - left_wheel_spin_joint
+  - right_wheel_spin_joint
+  - left_spring
+  - right_spring
+  - left_damper
+  - right_damper
+  - left_tire
+  - right_tire
+channels:
+  sprung_body.heave:
+    unit: m
+    formula: dot(world_z,com_position-com_position_at_trim)
+  sprung_body.pitch:
+    unit: rad
+    formula: dot(world_y,log_so3(R_current*transpose(R_trim)))
+  sprung_body.roll:
+    unit: rad
+    formula: dot(world_x,log_so3(R_current*transpose(R_trim)))
+  sprung_body.heave_velocity:
+    unit: m/s
+    formula: dot(world_z,com_linear_velocity)
+  sprung_body.pitch_rate:
+    unit: rad/s
+    formula: dot(world_y,omega_world)
+  sprung_body.roll_rate:
+    unit: rad/s
+    formula: dot(world_x,omega_world)
+  sprung_body.heave_acceleration:
+    unit: m/s^2
+    formula: dot(world_z,com_linear_acceleration)
+  left.wheel_center_z:
+    unit: m
+    formula: dot(world_z,left_wheel_center_position-left_wheel_center_position_at_trim)
+  right.wheel_center_z:
+    unit: m
+    formula: dot(world_z,right_wheel_center_position-right_wheel_center_position_at_trim)
+  left.wheel_center_z_velocity:
+    unit: m/s
+    formula: dot(world_z,left_wheel_center_velocity)
+  right.wheel_center_z_velocity:
+    unit: m/s
+    formula: dot(world_z,right_wheel_center_velocity)
+  left.wheel_center_z_acceleration:
+    unit: m/s^2
+    formula: dot(world_z,left_wheel_center_acceleration)
+  right.wheel_center_z_acceleration:
+    unit: m/s^2
+    formula: dot(world_z,right_wheel_center_acceleration)
+  left.suspension_deflection:
+    unit: m
+    formula: dot(world_z,(left_wheel_center_position-sprung_body_position_at_left_reference)-trim_relative_vector)
+  right.suspension_deflection:
+    unit: m
+    formula: dot(world_z,(right_wheel_center_position-sprung_body_position_at_right_reference)-trim_relative_vector)
+  left.tire_normal_force:
+    unit: N
+    formula: dot(force_on_wheel,contact_frame_z)
+  right.tire_normal_force:
+    unit: N
+    formula: dot(force_on_wheel,contact_frame_z)
+  left.tire_longitudinal_force:
+    unit: N
+    formula: dot(force_on_wheel,contact_frame_x)
+  right.tire_longitudinal_force:
+    unit: N
+    formula: dot(force_on_wheel,contact_frame_x)
+  left.tire_lateral_force:
+    unit: N
+    formula: dot(force_on_wheel,contact_frame_y)
+  right.tire_lateral_force:
+    unit: N
+    formula: dot(force_on_wheel,contact_frame_y)
+  left.spring_force:
+    unit: N
+    formula: main_elastic_force+compression_stop_elastic_force+rebound_stop_elastic_force
+  right.spring_force:
+    unit: N
+    formula: main_elastic_force+compression_stop_elastic_force+rebound_stop_elastic_force
+  left.damper_force:
+    unit: N
+    formula: total_axial_force-main_elastic_force-compression_stop_elastic_force-rebound_stop_elastic_force
+  right.damper_force:
+    unit: N
+    formula: total_axial_force-main_elastic_force-compression_stop_elastic_force-rebound_stop_elastic_force
+  left.wheel_spin:
+    unit: rad/s
+    formula: dot(omega_wheel_world-omega_upright_world,left_spin_axis_world)
+  right.wheel_spin:
+    unit: rad/s
+    formula: dot(omega_wheel_world-omega_upright_world,right_spin_axis_world)
+  fixture.force_x:
+    unit: N
+    formula: dot(world_x,non_fixture_external_force-d_dt_total_moving_body_linear_momentum)
+  fixture.force_y:
+    unit: N
+    formula: dot(world_y,non_fixture_external_force-d_dt_total_moving_body_linear_momentum)
+  fixture.force_z:
+    unit: N
+    formula: dot(world_z,non_fixture_external_force-d_dt_total_moving_body_linear_momentum)
+  fixture.moment_x:
+    unit: N*m
+    formula: dot(world_x,non_fixture_external_moment-d_dt_total_moving_body_angular_momentum_about_fixture_reference_marker)
+  fixture.moment_y:
+    unit: N*m
+    formula: dot(world_y,non_fixture_external_moment-d_dt_total_moving_body_angular_momentum_about_fixture_reference_marker)
+  fixture.moment_z:
+    unit: N*m
+    formula: dot(world_z,non_fixture_external_moment-d_dt_total_moving_body_angular_momentum_about_fixture_reference_marker)

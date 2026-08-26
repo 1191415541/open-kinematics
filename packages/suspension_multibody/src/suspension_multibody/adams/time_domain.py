@@ -191,7 +191,7 @@ def write_time_history(history: TimeHistory, path: str | Path) -> Path:
     """Write the non-proprietary JSON interchange representation."""
     destination = Path(path)
     destination.write_text(
-        json.dumps(history.as_dict(), indent=2, sort_keys=True), encoding="utf-8"
+        json.dumps(history.as_dict(), indent=2, sort_keys=False), encoding="utf-8"
     )
     return destination
 

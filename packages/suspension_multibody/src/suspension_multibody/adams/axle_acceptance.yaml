@@ -1,0 +1,134 @@
+schema_version: 1
+status: frozen_before_first_real_adams_comparison
+comparison:
+  public_sample_rate_hz: 1000
+  interpolation: none
+  time_alignment: common_manifest_grid
+  nrmse:
+    formula: rms(candidate-reference)/max(reference_peak_to_peak,amplitude_floor)
+    maximum: 0.05
+  peak:
+    formula: abs(candidate_peak-reference_peak)/max(abs(reference_peak),amplitude_floor)
+    maximum: 0.05
+    timing_max_s: 0.001
+    multiple_peak_rule: compare_largest_absolute_peak_inside_frozen_window
+  harmonic:
+    method: least_squares_single_frequency
+    settle_rule: discard_max_10_cycles_or_2_seconds
+    analysis_cycles: 10
+    amplitude_relative_max: 0.05
+    phase_absolute_max_deg: 2.0
+  event:
+    contact_enter_exit_time_max_s: 0.0001
+    compare_pre_post_windows_s: 0.005
+  aggregation: every_core_channel_and_every_case_must_pass
+absolute_error_limits:
+  translation_m: 0.0001
+  linear_velocity_m_per_s: 0.001
+  linear_acceleration_m_per_s2: 0.05
+  angle_rad: 0.0003490658503988659
+  angular_velocity_rad_per_s: 0.0008726646259971648
+  force_n: 5.0
+  moment_n_m: 1.0
+amplitude_floors:
+  translation_m: 0.0001
+  linear_velocity_m_per_s: 0.001
+  linear_acceleration_m_per_s2: 0.05
+  angle_rad: 0.0003490658503988659
+  angular_velocity_rad_per_s: 0.0008726646259971648
+  force_n: 5.0
+  moment_n_m: 1.0
+core_channels:
+  - sprung_body.heave
+  - sprung_body.pitch
+  - sprung_body.roll
+  - sprung_body.heave_velocity
+  - sprung_body.pitch_rate
+  - sprung_body.roll_rate
+  - sprung_body.heave_acceleration
+  - left.wheel_center_z
+  - right.wheel_center_z
+  - left.wheel_center_z_velocity
+  - right.wheel_center_z_velocity
+  - left.wheel_center_z_acceleration
+  - right.wheel_center_z_acceleration
+  - left.suspension_deflection
+  - right.suspension_deflection
+  - left.tire_normal_force
+  - right.tire_normal_force
+  - left.tire_longitudinal_force
+  - right.tire_longitudinal_force
+  - left.tire_lateral_force
+  - right.tire_lateral_force
+  - left.spring_force
+  - right.spring_force
+  - left.damper_force
+  - right.damper_force
+  - left.wheel_spin
+  - right.wheel_spin
+  - fixture.force_x
+  - fixture.force_y
+  - fixture.force_z
+  - fixture.moment_x
+  - fixture.moment_y
+  - fixture.moment_z
+initialization_gate:
+  translation_m: 0.0001
+  angle_rad: 0.0003490658503988659
+  wheel_load_relative: 0.01
+  component_force_n: 5.0
+  component_moment_n_m: 1.0
+  constraint_position_m: 1.0e-8
+  constraint_velocity_m_per_s: 1.0e-7
+solver_internal_gates:
+  normalized_dynamics_residual: 1.0e-8
+  constraint_position_m: 1.0e-8
+  constraint_velocity_m_per_s: 1.0e-7
+  quaternion_norm_error: 1.0e-10
+  energy_normalization:
+    formula: max(abs(initial_mechanical_energy),peak_abs_cumulative_external_road_and_constraint_work,peak_sum_elastic_energy,energy_floor_j)
+    energy_floor_j: 1.0
+  smooth_case_definition: no_contact_active_set_change_and_all_inputs_are_c1
+  smooth_case_energy_closure_relative: 0.005
+  contact_event_case_energy_closure_relative: 0.02
+  analytic_conservative_energy_drift:
+    formula: max_abs(total_energy-initial_total_energy)/max(abs(initial_total_energy),energy_floor_j)
+    maximum: 1.0e-5
+  time_convergence:
+    state_nrmse_h_vs_h2_max: 0.01
+    load_nrmse_h_vs_h2_max: 0.02
+performance:
+  same_machine: true
+  same_physical_duration: true
+  same_public_output_grid: true
+  include_model_build: false
+  include_static_trim: true
+  include_result_serialization: false
+  warmup_runs: 1
+  measured_runs: 5
+  statistic: median_wall_time
+  target_ratio_to_adams_max: 1.0
+  record:
+    - cpu_model
+    - physical_core_count
+    - thread_count
+    - process_affinity
+    - compiler
+    - compiler_version
+    - optimization_flags
+    - floating_point_mode
+    - peak_rss
+case_matrix:
+  - {name: static_equilibrium, energy_class: smooth}
+  - {name: road_step_finite_rise, energy_class: smooth}
+  - {name: road_pulse, energy_class: smooth}
+  - {name: road_sine, energy_class: smooth}
+  - {name: single_wheel_road, energy_class: smooth}
+  - {name: in_phase_road, energy_class: smooth}
+  - {name: opposite_phase_road, energy_class: smooth}
+  - {name: braking, energy_class: smooth}
+  - {name: driving, energy_class: smooth}
+  - {name: lateral_or_steering, energy_class: smooth}
+  - {name: combined_load, energy_class: smooth}
+  - {name: tire_liftoff_and_recontact, energy_class: contact_event}
+  - {name: large_amplitude_high_frequency, energy_class: smooth}

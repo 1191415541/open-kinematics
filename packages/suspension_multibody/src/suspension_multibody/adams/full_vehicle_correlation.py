@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from ..analysis.full_vehicle_dynamic import FullVehicleDynamicRun
 from .time_domain import TimeHistory
 
 
 def full_vehicle_time_history(
-    run: FullVehicleDynamicRun,
+    run: Any,
     category: Literal["handling_stability", "ride"],
 ) -> TimeHistory:
     """Export the full solver's body and tire states using Adams channel names."""

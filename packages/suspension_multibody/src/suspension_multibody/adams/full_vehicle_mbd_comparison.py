@@ -9,9 +9,8 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
-from ..analysis.full_vehicle_dynamic import FullVehicleDynamicRun
 from ..schema import VehicleDynamicCase
 from .full_vehicle_correlation import full_vehicle_time_history
 from .time_domain import TimeHistory, TimeHistoryTolerance, compare_time_histories
@@ -259,7 +258,7 @@ def compare_full_vehicle_mbd_case(
     reference: VehicleReferenceBundle,
     case: VehicleDynamicCase,
     *,
-    run: FullVehicleDynamicRun | None = None,
+    run: Any | None = None,
     vehicle_manifest: Mapping[str, object] | None = None,
     tolerances: Mapping[str, TimeHistoryTolerance] | None = None,
 ) -> dict[str, object]:
