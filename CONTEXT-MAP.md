@@ -8,8 +8,18 @@ The root `uv.lock` is the workspace's only tracked dependency lockfile.
 
 - `suspension_contracts`: solver-independent, versioned Geometry Contract V1.
 - `suspension_kinematics`: daily suspension geometry design and optimization.
-- `suspension_multibody`: high-fidelity quasi-static K&C, load analysis, and
-  optional Adams validation.
+- `suspension_multibody`: high-fidelity quasi-static K&C, load analysis, the
+  native transient axle dynamics kernel, and optional Adams validation.
+
+## Native axle dynamics kernel
+
+`cpp/axle_dynamics/axle_kernel.cpp` builds a shared library into
+`packages/suspension_multibody/src/suspension_multibody/native/` and is reached
+only through `suspension_multibody.axle_dynamics`. Build it with
+`packages/suspension_multibody/scripts/build_axle_native.py`. Importing the
+package without the library succeeds; running a transient case raises
+`NativeKernelUnavailableError`. Design, results, and known limitations live in
+`packages/suspension_multibody/docs/axle_dynamics_*.md`.
 
 ## Dependency direction
 
