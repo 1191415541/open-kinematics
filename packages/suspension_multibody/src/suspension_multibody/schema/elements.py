@@ -109,7 +109,7 @@ class StaticDamper(StrictModel):
 
 
 class Bushing6x6(StrictModel):
-    """Local-frame linear 6x6 bushing with optional preload and clocking."""
+    """Local-frame six-axis bushing with optional nonlinear force curves."""
 
     name: str
     body_a: str
@@ -132,6 +132,14 @@ class Bushing6x6(StrictModel):
         0.0,
         0.0,
         0.0,
+    )
+    # 工程单位模型中，平移坐标为 mm、转角为 rad；力为 N、力矩为 N*mm。
+    force_curves: tuple[tuple[tuple[float, float], ...], ...] = ()
+    force_curve_interpolation: Literal["piecewise_linear", "akima"] = (
+        "piecewise_linear"
+    )
+    rotation_coordinates: Literal["rotation_vector", "cardan_xyz"] = (
+        "rotation_vector"
     )
     clocking_deg: float = 0.0
     symmetry_tolerance: float = 1e-9
@@ -162,6 +170,26 @@ class Bushing6x6(StrictModel):
         if len(values) != 6 or any(not math.isfinite(item) or item < 0.0 for item in values):
             raise ValueError("bushing damping must contain six finite non-negative values")
         return values
+
+    @field_validator("force_curves")
+    @classmethod
+    def _force_curves(
+        cls, value: object
+    ) -> tuple[tuple[tuple[float, float], ...], ...]:
+        curves = tuple(
+            tuple((float(x), float(y)) for x, y in curve)  # type: ignore[misc]
+            for curve in value  # type: ignore[union-attr]
+        )
+        if curves and len(curves) != 6:
+            raise ValueError("bushing force_curves must contain six axis curves")
+        for curve in curves:
+            if curve and len(curve) < 2:
+                raise ValueError("each bushing force curve requires at least two samples")
+            if any(not math.isfinite(x) or not math.isfinite(y) for x, y in curve):
+                raise ValueError("bushing force curves must contain finite samples")
+            if any(right[0] <= left[0] for left, right in zip(curve, curve[1:])):
+                raise ValueError("bushing force curve abscissas must be strictly increasing")
+        return curves
 
     @field_validator("clocking_deg")
     @classmethod

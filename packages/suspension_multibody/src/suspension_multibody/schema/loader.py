@@ -13,6 +13,7 @@ from .case import CaseSpec
 from .dynamic import DynamicCaseSpec, DynamicResultBundle
 from .model import FrontAxleModel
 from .result import ResultBundle
+from .vehicle import VehicleDynamicCase, VehicleModel
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -49,6 +50,16 @@ def load_case(path: str | Path) -> CaseSpec:
 def load_dynamic_case(path: str | Path) -> DynamicCaseSpec:
     """Load and validate a dynamic case YAML/JSON file."""
     return _validate(_read(path), DynamicCaseSpec, path)
+
+
+def load_vehicle_model(path: str | Path) -> VehicleModel:
+    """加载并校验整车模型 YAML/JSON 文件."""
+    return _validate(_read(path), VehicleModel, path)
+
+
+def load_vehicle_dynamic_case(path: str | Path) -> VehicleDynamicCase:
+    """加载并校验整车动态算例 YAML/JSON 文件."""
+    return _validate(_read(path), VehicleDynamicCase, path)
 
 
 def load_result(path: str | Path) -> ResultBundle:

@@ -8,7 +8,13 @@ import typer
 
 from . import __version__
 from .api import run_case, run_dynamic_case
-from .schema import load_case, load_dynamic_case, load_model
+from .schema import (
+    load_case,
+    load_dynamic_case,
+    load_model,
+    load_vehicle_dynamic_case,
+    load_vehicle_model,
+)
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -76,6 +82,65 @@ def run_dynamic(
     """Run one time-domain case and write structured results."""
     bundle = run_dynamic_case(load_model(model), load_dynamic_case(case), out)
     typer.echo(f"{bundle.manifest.run_id}: {bundle.manifest.sample_count} sample(s)")
+
+
+@app.command("validate-vehicle-dynamics")
+def validate_vehicle_dynamics(
+    model: Path = typer.Option(
+        ..., exists=True, readable=True, help="Full-vehicle model YAML/JSON."
+    ),
+    case: Path = typer.Option(
+        ..., exists=True, readable=True, help="Full-vehicle dynamic case YAML/JSON."
+    ),
+) -> None:
+    """Validate a full-vehicle native dynamics model and case."""
+    vehicle_model = load_vehicle_model(model)
+    vehicle_case = load_vehicle_dynamic_case(case)
+    if vehicle_case.vehicle.model_dump() != vehicle_model.model_dump():
+        raise typer.BadParameter("the case vehicle does not match the model file")
+    typer.echo("valid")
+
+
+@app.command("run-vehicle-dynamics")
+def run_vehicle_dynamics_command(
+    model: Path = typer.Option(
+        ..., exists=True, readable=True, help="Full-vehicle model YAML/JSON."
+    ),
+    case: Path = typer.Option(
+        ..., exists=True, readable=True, help="Full-vehicle dynamic case YAML/JSON."
+    ),
+    out: Path = typer.Option(..., help="Output directory."),
+) -> None:
+    """Run native full-vehicle dynamics and retain raw result evidence."""
+    from .axle_dynamics import NativeAxleError, NativeKernelUnavailableError
+    from .vehicle_dynamics import (
+        VehicleDynamicsResult,
+        run_vehicle_dynamics,
+        write_vehicle_dynamics_artifact,
+    )
+
+    vehicle_model = load_vehicle_model(model)
+    vehicle_case = load_vehicle_dynamic_case(case)
+    try:
+        result = run_vehicle_dynamics(vehicle_model, vehicle_case)
+    except (NativeAxleError, NativeKernelUnavailableError) as exc:
+        partial_result = getattr(exc, "partial_result", None)
+        artifact = write_vehicle_dynamics_artifact(
+            None if partial_result is None else VehicleDynamicsResult(
+                axle=partial_result
+            ),
+            vehicle_model,
+            vehicle_case,
+            out,
+            failure=exc,
+        )
+        typer.echo(str(exc), err=True)
+        typer.echo(f"artifact: {artifact}", err=True)
+        raise typer.Exit(code=1) from exc
+    artifact = write_vehicle_dynamics_artifact(
+        result, vehicle_model, vehicle_case, out
+    )
+    typer.echo(f"{len(result.times_s)} sample(s): {artifact}")
 
 
 @app.command("validate-axle-dynamics")

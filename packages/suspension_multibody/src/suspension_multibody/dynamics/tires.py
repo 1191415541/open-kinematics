@@ -148,6 +148,8 @@ class Pac2002TireModel(TireModel):
 
 def tire_model_from_spec(spec: TireModelSpec) -> TireModel:
     """Create a tire model from schema configuration."""
+    if spec.kind == "native_brush":
+        raise ValueError("native_brush is available only through the native vehicle solver")
     if spec.kind == "vertical_linear":
         return VerticalLinearTireModel(spec.vertical_stiffness)
     if spec.kind == "fiala":

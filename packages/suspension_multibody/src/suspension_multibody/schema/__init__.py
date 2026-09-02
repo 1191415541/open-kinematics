@@ -47,8 +47,16 @@ from .loader import (
     load_dynamic_result,
     load_model,
     load_result,
+    load_vehicle_dynamic_case,
+    load_vehicle_model,
 )
-from .model import FrontAxleModel, HardpointPair, MassSpec, RigidBodySpec
+from .model import (
+    FrontAxleModel,
+    HardpointPair,
+    IdealJointSpec,
+    MassSpec,
+    RigidBodySpec,
+)
 from .result import (
     BushingResult,
     ComponentLoad,
@@ -60,7 +68,9 @@ from .result import (
     WheelResponse,
 )
 from .vehicle import (
+    AerodynamicDragSpec,
     DrivelineSpec,
+    JointCoordinateCouplerSpec,
     RoadSurfaceSpec,
     SteeringSystemSpec,
     VehicleDynamicCase,
@@ -69,6 +79,7 @@ from .vehicle import (
 )
 
 __all__ = [
+    "AerodynamicDragSpec",
     "AntiRollBar",
     "BumpStop",
     "Bushing6x6",
@@ -87,7 +98,9 @@ __all__ = [
     "ExplicitSweep",
     "FrontAxleModel",
     "HardpointPair",
+    "IdealJointSpec",
     "InitialBodyState",
+    "JointCoordinateCouplerSpec",
     "LinearSpring",
     "LoadControl",
     "Manifest",
@@ -125,4 +138,6 @@ __all__ = [
     "load_dynamic_result",
     "load_model",
     "load_result",
+    "load_vehicle_dynamic_case",
+    "load_vehicle_model",
 ]

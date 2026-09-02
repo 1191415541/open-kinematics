@@ -9,7 +9,6 @@ import numpy as np
 from ..core.spatial import (
     quaternion_conjugate,
     quaternion_multiply,
-    quaternion_to_rotation_vector,
 )
 from ..elements import ElementError, ForceEvaluation
 from ..elements.elastic import (
@@ -155,7 +154,10 @@ def _evaluate_bushing_dynamic(
         quaternion_conjugate(quaternion_a), quaternion_b
     )
     deformation = np.concatenate(
-        (relative_translation, quaternion_to_rotation_vector(relative_quaternion))
+        (
+            relative_translation,
+            element.rotational_deformation(relative_quaternion),
+        )
     )
     velocity_a_global = state.point_velocity_global(
         element.body_a, local_pose_a.translation
@@ -163,21 +165,25 @@ def _evaluate_bushing_dynamic(
     velocity_b_global = state.point_velocity_global(
         element.body_b, local_pose_b.translation
     )
+    omega_a_local = rotation_a.T @ (
+        body_pose_a.rotation @ state.velocities[element.body_a][3:]
+    )
+    relative_omega = rotation_a.T @ (
+        body_pose_b.rotation @ state.velocities[element.body_b][3:]
+        - body_pose_a.rotation @ state.velocities[element.body_a][3:]
+    )
     relative_velocity = np.concatenate(
         (
-            rotation_a.T @ (velocity_b_global - velocity_a_global),
-            rotation_a.T
-            @ (
-                body_pose_b.rotation @ state.velocities[element.body_b][3:]
-                - body_pose_a.rotation @ state.velocities[element.body_a][3:]
-            ),
+            rotation_a.T @ (velocity_b_global - velocity_a_global)
+            - np.cross(omega_a_local, relative_translation),
+            element.rotational_rate(relative_quaternion, relative_omega),
         )
     )
-    generalized = (
-        -element.stiffness @ deformation
-        - element.damping @ relative_velocity
-        + element.preload
-    )
+    elastic = element.stiffness @ deformation
+    for index, curve in enumerate(element.force_curves):
+        if curve:
+            elastic[index] = _curve_value(curve, deformation[index])
+    generalized = -elastic - element.damping @ relative_velocity + element.preload
     force_global = rotation_a @ generalized[:3]
     moment_global = rotation_a @ generalized[3:]
     wrenches = {

@@ -175,9 +175,12 @@ def _build_wheel_actuator(
     return WheelTorqueActuator(
         name=f"torque_{wheel.name}",
         wheel=wheel.name,
-        wheel_body=wheel.body,
+        wheel_body=assembly.wheel_body_names[wheel.name],
         reaction_body=reaction_body,
-        spin_axis_local=wheel.spin_axis.as_array(),
+        spin_axis_local=(
+            assembly.wheel_rotations_local[wheel.name]
+            @ wheel.spin_axis.as_array()
+        ),
         drive_signal=drive_signal,
         brake_signal=brake_signal,
         maximum_drive_torque=driveline.maximum_drive_torque,

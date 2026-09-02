@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 import numpy as np
 
@@ -10,6 +11,7 @@ from ..core.rigid_body import RigidBodyState
 from ..core.spatial import (
     SE3,
     cross3,
+    quaternion_to_matrix,
     quaternion_to_rotation_vector,
 )
 from .base import ElementError, ForceEvaluation
@@ -45,6 +47,169 @@ def _curve_slope(curve: tuple[tuple[float, float], ...], coordinate: float = 0.0
         index = int(np.searchsorted(points[:, 0], coordinate, side="right")) - 1
         left, right = points[index], points[index + 1]
     return float((right[1] - left[1]) / (right[0] - left[0]))
+
+
+def _curve_integral(
+    curve: tuple[tuple[float, float], ...], coordinate: float
+) -> float:
+    """Integrate a piecewise-linear curve from zero to a coordinate."""
+    if not curve or coordinate == 0.0:
+        return 0.0
+    points = np.asarray(curve, dtype=float)
+    lower, upper = (
+        (0.0, float(coordinate))
+        if coordinate > 0.0
+        else (float(coordinate), 0.0)
+    )
+    total = 0.0
+    left = lower
+    while left < upper:
+        if left < points[0, 0]:
+            right = min(upper, points[0, 0])
+            total += points[0, 1] * (right - left)
+        elif left >= points[-1, 0]:
+            right = upper
+            total += points[-1, 1] * (right - left)
+        else:
+            index = int(np.searchsorted(points[:, 0], left, side="right"))
+            right = min(upper, points[index, 0])
+            left_force = _curve_value(curve, left)
+            right_force = _curve_value(curve, right)
+            total += 0.5 * (left_force + right_force) * (right - left)
+        if right <= left:
+            break
+        left = right
+    return total if coordinate > 0.0 else -total
+
+
+def _akima_slopes(curve: tuple[tuple[float, float], ...]) -> np.ndarray:
+    """Return nodal slopes for the Adams/Native five-point Akima spline."""
+    points = np.asarray(curve, dtype=float)
+    count = len(points)
+    slopes = np.zeros(count, dtype=float)
+    if count < 2:
+        return slopes
+    secants = np.diff(points[:, 1]) / np.diff(points[:, 0])
+    if count == 2:
+        slopes[:] = secants[0]
+        return slopes
+    extended = np.zeros(count + 3, dtype=float)
+    extended[2 : count + 1] = secants
+    extended[1] = 2.0 * extended[2] - extended[3]
+    extended[0] = 2.0 * extended[1] - extended[2]
+    extended[count + 1] = 2.0 * extended[count] - extended[count - 1]
+    extended[count + 2] = 2.0 * extended[count + 1] - extended[count]
+    for index in range(count):
+        weight_left = abs(extended[index + 3] - extended[index + 2])
+        weight_right = abs(extended[index + 1] - extended[index])
+        denominator = weight_left + weight_right
+        slopes[index] = (
+            (weight_left * extended[index + 1]
+             + weight_right * extended[index + 2]) / denominator
+            if denominator > 0.0
+            else 0.5 * (extended[index + 1] + extended[index + 2])
+        )
+    return slopes
+
+
+def _akima_value_slope(
+    curve: tuple[tuple[float, float], ...],
+    coordinate: float,
+    slopes: np.ndarray | None = None,
+) -> tuple[float, float]:
+    """Evaluate an Akima curve and its derivative with Native's extrapolation."""
+    if not curve:
+        return 0.0, 0.0
+    points = np.asarray(curve, dtype=float)
+    if len(points) == 1 or coordinate <= points[0, 0]:
+        return float(points[0, 1]), 0.0
+    if coordinate >= points[-1, 0]:
+        return float(points[-1, 1]), 0.0
+    nodal_slopes = _akima_slopes(curve) if slopes is None else slopes
+    index = int(np.searchsorted(points[:, 0], coordinate, side="left"))
+    x0, x1 = points[index - 1, 0], points[index, 0]
+    y0, y1 = points[index - 1, 1], points[index, 1]
+    span = x1 - x0
+    u = (coordinate - x0) / span
+    u2 = u * u
+    u3 = u2 * u
+    h00 = 2.0 * u3 - 3.0 * u2 + 1.0
+    h10 = u3 - 2.0 * u2 + u
+    h01 = -2.0 * u3 + 3.0 * u2
+    h11 = u3 - u2
+    value = (
+        h00 * y0
+        + h10 * span * nodal_slopes[index - 1]
+        + h01 * y1
+        + h11 * span * nodal_slopes[index]
+    )
+    derivative = (
+        (6.0 * u2 - 6.0 * u) / span * y0
+        + (3.0 * u2 - 4.0 * u + 1.0) * nodal_slopes[index - 1]
+        + (-6.0 * u2 + 6.0 * u) / span * y1
+        + (3.0 * u2 - 2.0 * u) * nodal_slopes[index]
+    )
+    return float(value), float(derivative)
+
+
+def _integrate_akima_segment(
+    y0: float,
+    y1: float,
+    slope0: float,
+    slope1: float,
+    span: float,
+    lower_u: float,
+    upper_u: float,
+) -> float:
+    def primitive(u: float) -> float:
+        u2 = u * u
+        u3 = u2 * u
+        u4 = u3 * u
+        return (
+            y0 * (0.5 * u4 - u3 + u)
+            + span * slope0 * (0.25 * u4 - (2.0 / 3.0) * u3 + 0.5 * u2)
+            + y1 * (-0.5 * u4 + u3)
+            + span * slope1 * (0.25 * u4 - (1.0 / 3.0) * u3)
+        )
+
+    return span * (primitive(upper_u) - primitive(lower_u))
+
+
+def _akima_integral(
+    curve: tuple[tuple[float, float], ...], coordinate: float
+) -> float:
+    """Integrate the Akima curve from zero with constant end extrapolation."""
+    if not curve or coordinate == 0.0:
+        return 0.0
+    points = np.asarray(curve, dtype=float)
+    nodal_slopes = _akima_slopes(curve)
+    lower, upper = min(0.0, coordinate), max(0.0, coordinate)
+    total = 0.0
+    left = lower
+    while left < upper:
+        if left < points[0, 0]:
+            right = min(upper, points[0, 0])
+            total += points[0, 1] * (right - left)
+        elif left >= points[-1, 0]:
+            total += points[-1, 1] * (upper - left)
+            break
+        else:
+            index = int(np.searchsorted(points[:, 0], left, side="right"))
+            right = min(upper, points[index, 0])
+            span = points[index, 0] - points[index - 1, 0]
+            total += _integrate_akima_segment(
+                points[index - 1, 1],
+                points[index, 1],
+                nodal_slopes[index - 1],
+                nodal_slopes[index],
+                span,
+                (left - points[index - 1, 0]) / span,
+                (right - points[index - 1, 0]) / span,
+            )
+        if right <= left:
+            break
+        left = right
+    return total if coordinate >= 0.0 else -total
 
 
 def _point(state: RigidBodyState, body: str, local: np.ndarray) -> np.ndarray:
@@ -108,10 +273,14 @@ class LinearSpringElement:
         transverse = scalar / length * (np.eye(3) - np.outer(unit, unit))
         tangent_bb = -(slope * np.outer(unit, unit) + transverse)
         tangent = np.block([[tangent_bb, -tangent_bb], [-tangent_bb, tangent_bb]])
+        elastic_energy = (
+            _curve_integral(self.force_curve, extension)
+            if self.force_curve
+            else 0.5 * self.stiffness * extension**2
+        )
         return ForceEvaluation(
             name=self.name,
-            energy=0.5 * self.stiffness * extension**2
-            + self.preload * extension,
+            energy=elastic_energy + self.preload * extension,
             body_wrenches_global={
                 self.body_a: _point_wrench(point_a, force_a),
                 self.body_b: _point_wrench(point_b, force_b),
@@ -166,7 +335,7 @@ class StaticDamperElement:
 
 @dataclass(frozen=True)
 class BushingElement:
-    """Local-frame linear 6x6 bushing between two body attachment frames."""
+    """Local-frame six-axis bushing between two body attachment frames."""
 
     name: str
     body_a: str
@@ -176,6 +345,13 @@ class BushingElement:
     stiffness: np.ndarray = field(default_factory=lambda: np.eye(6))
     damping: np.ndarray = field(default_factory=lambda: np.zeros((6, 6)))
     preload: np.ndarray = field(default_factory=lambda: np.zeros(6))
+    force_curves: tuple[tuple[tuple[float, float], ...], ...] = ()
+    force_curve_interpolation: Literal["piecewise_linear", "akima"] = (
+        "piecewise_linear"
+    )
+    rotation_coordinates: Literal["rotation_vector", "cardan_xyz"] = (
+        "rotation_vector"
+    )
 
     def __post_init__(self) -> None:
         matrix = np.asarray(self.stiffness, dtype=float)
@@ -191,9 +367,31 @@ class BushingElement:
             raise ElementError("bushing damping must be positive semidefinite")
         if preload.shape != (6,):
             raise ElementError("bushing preload must contain six values")
+        if self.rotation_coordinates not in ("rotation_vector", "cardan_xyz"):
+            raise ElementError(
+                "bushing rotation_coordinates must be rotation_vector or cardan_xyz"
+            )
+        if self.force_curve_interpolation not in ("piecewise_linear", "akima"):
+            raise ElementError(
+                "bushing force_curve_interpolation must be piecewise_linear or akima"
+            )
+        curves = tuple(
+            tuple((float(x), float(y)) for x, y in curve)
+            for curve in self.force_curves
+        )
+        if curves and len(curves) != 6:
+            raise ElementError("bushing force_curves must contain six axis curves")
+        for curve in curves:
+            if curve and len(curve) < 2:
+                raise ElementError("each bushing force curve requires at least two samples")
+            if any(not np.isfinite(x) or not np.isfinite(y) for x, y in curve):
+                raise ElementError("bushing force curves must contain finite samples")
+            if any(right[0] <= left[0] for left, right in zip(curve, curve[1:])):
+                raise ElementError("bushing force curve abscissas must be strictly increasing")
         object.__setattr__(self, "stiffness", matrix.copy())
         object.__setattr__(self, "damping", damping.copy())
         object.__setattr__(self, "preload", preload.copy())
+        object.__setattr__(self, "force_curves", curves)
 
     def attachment_poses(self, state: RigidBodyState) -> tuple[SE3, SE3]:
         return (
@@ -205,16 +403,60 @@ class BushingElement:
         pose_a, pose_b = self.attachment_poses(state)
         relative = pose_a.inverse().compose(pose_b)
         return np.concatenate(
-            (relative.translation, quaternion_to_rotation_vector(relative.quaternion))
+            (relative.translation, self.rotational_deformation(relative.quaternion))
+        )
+
+    def rotational_deformation(self, relative_quaternion: np.ndarray) -> np.ndarray:
+        if self.rotation_coordinates == "rotation_vector":
+            return quaternion_to_rotation_vector(relative_quaternion)
+        relative_rotation = quaternion_to_matrix(relative_quaternion)
+        cosine_y = float(np.hypot(relative_rotation[0, 0], relative_rotation[0, 1]))
+        if cosine_y <= 1.0e-10:
+            raise ElementError("cardan_xyz bushing reached its gimbal singularity")
+        return np.array(
+            [
+                np.arctan2(-relative_rotation[1, 2], relative_rotation[2, 2]),
+                np.arctan2(relative_rotation[0, 2], cosine_y),
+                np.arctan2(-relative_rotation[0, 1], relative_rotation[0, 0]),
+            ],
+            dtype=float,
+        )
+
+    def rotational_rate(
+        self, relative_quaternion: np.ndarray, relative_omega: np.ndarray
+    ) -> np.ndarray:
+        if self.rotation_coordinates == "rotation_vector":
+            return np.asarray(relative_omega, dtype=float)
+        angles = self.rotational_deformation(relative_quaternion)
+        sine_x, cosine_x = np.sin(angles[0]), np.cos(angles[0])
+        sine_y, cosine_y = np.sin(angles[1]), np.cos(angles[1])
+        if abs(cosine_y) <= 1.0e-10:
+            raise ElementError("cardan_xyz bushing reached its gimbal singularity")
+        y_rate = cosine_x * relative_omega[1] + sine_x * relative_omega[2]
+        z_rate = (
+            -sine_x * relative_omega[1] + cosine_x * relative_omega[2]
+        ) / cosine_y
+        return np.array(
+            [relative_omega[0] - sine_y * z_rate, y_rate, z_rate], dtype=float
         )
 
     def evaluate(self, state: RigidBodyState) -> ForceEvaluation:
         pose_a, pose_b = self.attachment_poses(state)
         relative = pose_a.inverse().compose(pose_b)
         deformation = np.concatenate(
-            (relative.translation, quaternion_to_rotation_vector(relative.quaternion))
+            (relative.translation, self.rotational_deformation(relative.quaternion))
         )
-        generalized = -self.stiffness @ deformation + self.preload
+        elastic = self.stiffness @ deformation
+        curve_slopes: dict[int, float] = {}
+        for index, curve in enumerate(self.force_curves):
+            if curve:
+                if self.force_curve_interpolation == "akima":
+                    elastic[index], curve_slopes[index] = _akima_value_slope(
+                        curve, deformation[index]
+                    )
+                else:
+                    elastic[index] = _curve_value(curve, deformation[index])
+        generalized = -elastic + self.preload
         force_global = pose_a.rotation @ generalized[:3]
         moment_global = pose_a.rotation @ generalized[3:]
         wrenches = {
@@ -223,12 +465,30 @@ class BushingElement:
             self.body_b: _point_wrench(pose_b.translation, force_global)
             + np.concatenate((np.zeros(3), moment_global)),
         }
+        matrix_elastic = self.stiffness @ deformation
+        elastic_energy = 0.5 * float(deformation @ matrix_elastic)
+        for index, curve in enumerate(self.force_curves):
+            if curve:
+                elastic_energy += (
+                    _akima_integral(curve, deformation[index])
+                    if self.force_curve_interpolation == "akima"
+                    else _curve_integral(curve, deformation[index])
+                )
+                elastic_energy -= 0.5 * deformation[index] * matrix_elastic[index]
+        tangent = -self.stiffness.copy()
+        for index, curve in enumerate(self.force_curves):
+            if curve:
+                tangent[index, index] = -(
+                    curve_slopes[index]
+                    if self.force_curve_interpolation == "akima"
+                    else _curve_slope(curve, deformation[index])
+                )
         return ForceEvaluation(
             name=self.name,
-            energy=0.5 * float(deformation @ self.stiffness @ deformation)
+            energy=elastic_energy
             - float(self.preload @ deformation),
             body_wrenches_global=wrenches,
-            tangent=-self.stiffness,
+            tangent=tangent,
         )
 
 
@@ -352,7 +612,7 @@ class BumpStopElement:
         gap = distance - self.clearance
         compression = max(0.0, -gap)
         active = compression > 0.0
-        if not active or self.stiffness <= 0:
+        if not active or (self.stiffness <= 0 and not self.force_curve):
             return ForceEvaluation(self.name, 0.0, active=False, event="stop_clear")
         if distance < 1e-12:
             raise ElementError("bump stop endpoints are coincident")
@@ -363,16 +623,22 @@ class BumpStopElement:
             else self.stiffness * compression
         )
         force_b = scalar * unit
+        elastic_energy = (
+            _curve_integral(self.force_curve, compression)
+            if self.force_curve
+            else 0.5 * self.stiffness * compression**2
+        )
+        tangent = _curve_slope(self.force_curve, compression) if self.force_curve else self.stiffness
         return ForceEvaluation(
             self.name,
-            0.5 * self.stiffness * compression**2,
+            elastic_energy,
             {
                 self.body_a: _point_wrench(point_a, -force_b),
                 self.body_b: _point_wrench(point_b, force_b),
             },
             active=True,
             event="stop_contact",
-            tangent=np.array([[self.stiffness]]),
+            tangent=np.array([[tangent]]),
         )
 
 

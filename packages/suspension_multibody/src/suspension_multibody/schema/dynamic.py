@@ -137,6 +137,9 @@ class DynamicSolverSettings(StrictModel):
     internal_step_size: float = Field(default=1e-3, gt=0)
     min_internal_step_size: float = Field(default=1e-4, gt=0)
     adaptive_substepping: bool = True
+    # Adams GSTIFF 的 integration error 是时间积分误差，不是约束或
+    # Newton 收敛阈值；单独建模以保证两者可以分别对齐。
+    integration_error_tolerance: float | None = Field(default=None, gt=0)
     projection_failure_tolerance: float = Field(default=0.01, gt=0)
     output_step: float | None = Field(default=None, gt=0)
     integrator: Literal[
@@ -160,6 +163,8 @@ class DynamicSolverSettings(StrictModel):
     velocity_recovery_linear_limit: float = Field(default=1.0e6, gt=0)
     velocity_recovery_angular_limit: float = Field(default=1.0e4, gt=0)
     constraint_tolerance: float = Field(default=1e-7, gt=0)
+    # Adams 初始结果可能保留比 native 位置精度更宽的角度级数值误差。
+    initial_state_angle_tolerance_rad: float | None = Field(default=None, gt=0)
     velocity_tolerance: float = Field(default=1e-6, gt=0)
     event_tolerance: float = Field(default=1e-6, gt=0)
     constraint_stabilization_alpha: float = Field(default=8.0, ge=0)
@@ -188,18 +193,29 @@ class DynamicSolverSettings(StrictModel):
 class TireModelSpec(StrictModel):
     """Dynamic tire model selection and core parameters."""
 
-    kind: Literal["vertical_linear", "fiala", "pac2002"] = "vertical_linear"
+    kind: Literal["vertical_linear", "fiala", "pac2002", "native_brush"] = "vertical_linear"
     parameter_source: Literal["user", "adams_builtin"] = "user"
     unloaded_radius: float = Field(default=300.0, gt=0)
+    maximum_compression: float | None = Field(default=None, gt=0)
     vertical_stiffness: float = Field(default=200.0, gt=0)
     cornering_stiffness: float = Field(default=80_000.0, gt=0)
     longitudinal_stiffness: float = Field(default=120_000.0, gt=0)
     friction_coefficient: float = Field(default=1.0, gt=0)
     relaxation_length: float = Field(default=0.0, ge=0)
+    detached_relaxation_s: float = Field(default=0.05, gt=0)
     vertical_damping: float = Field(default=5.0, ge=0)
     minimum_slip_speed: float = Field(default=10.0, gt=0)
     pneumatic_trail: float = Field(default=50.0, ge=0)
     pac2002_coefficients: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _valid_compression_limit(self) -> TireModelSpec:
+        if (
+            self.maximum_compression is not None
+            and self.maximum_compression >= self.unloaded_radius
+        ):
+            raise ValueError("maximum_compression must be below unloaded_radius")
+        return self
 
     @field_validator("pac2002_coefficients")
     @classmethod

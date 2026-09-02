@@ -11,6 +11,13 @@ from .schema import (
     SchemaVersion,
     load_case,
     load_model,
+    load_vehicle_dynamic_case,
+    load_vehicle_model,
+)
+from .vehicle_dynamics import (
+    VehicleDynamicsResult,
+    run_vehicle_dynamics,
+    write_vehicle_dynamics_artifact,
 )
 
 __all__ = [
@@ -19,8 +26,13 @@ __all__ = [
     "Manifest",
     "ResultBundle",
     "SchemaVersion",
+    "VehicleDynamicsResult",
     "__version__",
     "load_case",
     "load_model",
+    "load_vehicle_dynamic_case",
+    "load_vehicle_model",
     "run_case",
+    "run_vehicle_dynamics",
+    "write_vehicle_dynamics_artifact",
 ]
