@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import json
 import platform
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -16,9 +17,21 @@ from .result import (
     AxleRunDiagnostics,
     AxleRunPerformance,
 )
-from .schema import AxleDynamicsCase, AxleDynamicsModel
+from .schema import (
+    PAC2002_PARAMETER_DEFAULTS,
+    PAC2002_PARAMETER_NAMES,
+    AxleDynamicsCase,
+    AxleDynamicsModel,
+)
 
 _NATIVE_KERNEL_ABI_VERSION = 14
+_NATIVE_VEHICLE_KERNEL_ABI_VERSION = 21
+
+
+def _is_right_tire_name(name: str) -> bool:
+    """识别源模型中常见的右侧轮胎命名，不依赖固定完整名称."""
+    normalized = name.strip().lower().replace("-", "_")
+    return normalized.endswith(("_right", "_r", "right"))
 
 
 class NativeKernelUnavailableError(RuntimeError):
@@ -189,6 +202,132 @@ class _AxleOutput(ctypes.Structure):
     ]
 
 
+class _VehicleInput(ctypes.Structure):
+    _fields_ = [
+        ("struct_size", ctypes.c_size_t),
+        ("abi_version", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32),
+        ("axle", _AxleInput),
+        ("steering_count", ctypes.c_size_t),
+        ("steering_type", ctypes.POINTER(ctypes.c_int)),
+        ("steering_body", ctypes.POINTER(ctypes.c_int)),
+        ("steering_reaction_body", ctypes.POINTER(ctypes.c_int)),
+        ("steering_point_local", ctypes.POINTER(ctypes.c_double)),
+        ("steering_reaction_point_local", ctypes.POINTER(ctypes.c_double)),
+        ("steering_axis_local", ctypes.POINTER(ctypes.c_double)),
+        ("steering_reference_quaternion", ctypes.POINTER(ctypes.c_double)),
+        ("steering_target_angle", ctypes.POINTER(ctypes.c_double)),
+        ("steering_target_rate", ctypes.POINTER(ctypes.c_double)),
+        ("steering_stiffness", ctypes.POINTER(ctypes.c_double)),
+        ("steering_damping", ctypes.POINTER(ctypes.c_double)),
+        ("road_kind", ctypes.c_int),
+        ("road_origin_x", ctypes.c_double),
+        ("road_origin_z", ctypes.c_double),
+        ("road_amplitude", ctypes.c_double),
+        ("road_wavelength", ctypes.c_double),
+        ("road_phase", ctypes.c_double),
+        ("road_bump_start", ctypes.c_double),
+        ("road_bump_length", ctypes.c_double),
+        ("road_corner_scale", ctypes.POINTER(ctypes.c_double)),
+        ("brake_torque", ctypes.POINTER(ctypes.c_double)),
+        ("static_gauge_body", ctypes.c_size_t),
+        ("static_gauge_dof_mask", ctypes.c_uint32),
+        ("static_trim_then_release", ctypes.c_int),
+        ("tire_frame_body", ctypes.POINTER(ctypes.c_int)),
+        ("tire_frame_center_local", ctypes.POINTER(ctypes.c_double)),
+        ("tire_model_kind", ctypes.POINTER(ctypes.c_int)),
+        ("tire_pac2002_parameters", ctypes.POINTER(ctypes.c_double)),
+        ("tire_pac2002_mirror", ctypes.POINTER(ctypes.c_int)),
+        ("vehicle_spring_elastic_curve_offset", ctypes.POINTER(ctypes.c_int)),
+        ("vehicle_spring_elastic_curve_count", ctypes.POINTER(ctypes.c_int)),
+        ("vehicle_spring_elastic_curve_deflection", ctypes.POINTER(ctypes.c_double)),
+        ("vehicle_spring_elastic_curve_force", ctypes.POINTER(ctypes.c_double)),
+        ("vehicle_spring_compression_stop_curve_offset", ctypes.POINTER(ctypes.c_int)),
+        ("vehicle_spring_compression_stop_curve_count", ctypes.POINTER(ctypes.c_int)),
+        ("vehicle_spring_compression_stop_curve_penetration", ctypes.POINTER(ctypes.c_double)),
+        ("vehicle_spring_compression_stop_curve_force", ctypes.POINTER(ctypes.c_double)),
+        ("vehicle_spring_rebound_stop_curve_offset", ctypes.POINTER(ctypes.c_int)),
+        ("vehicle_spring_rebound_stop_curve_count", ctypes.POINTER(ctypes.c_int)),
+        ("vehicle_spring_rebound_stop_curve_penetration", ctypes.POINTER(ctypes.c_double)),
+        ("vehicle_spring_rebound_stop_curve_force", ctypes.POINTER(ctypes.c_double)),
+        ("vehicle_bushing_force_curve_offset", ctypes.POINTER(ctypes.c_int)),
+        ("vehicle_bushing_force_curve_count", ctypes.POINTER(ctypes.c_int)),
+        ("vehicle_bushing_force_curve_coordinate", ctypes.POINTER(ctypes.c_double)),
+        ("vehicle_bushing_force_curve_force", ctypes.POINTER(ctypes.c_double)),
+        ("constraint_axis_a_secondary", ctypes.POINTER(ctypes.c_double)),
+        ("constraint_axis_b_secondary", ctypes.POINTER(ctypes.c_double)),
+        ("constraint_convel_angle_target", ctypes.POINTER(ctypes.c_double)),
+        ("static_rotation_gauge_count", ctypes.c_size_t),
+        ("static_rotation_gauge_body", ctypes.POINTER(ctypes.c_int)),
+        ("static_rotation_gauge_axis_local", ctypes.POINTER(ctypes.c_double)),
+        ("initial_state_angle_tolerance", ctypes.c_double),
+        ("bushing_rotation_coordinates", ctypes.POINTER(ctypes.c_int)),
+        ("coordinate_coupler_count", ctypes.c_size_t),
+        ("coordinate_coupler_joint_a", ctypes.POINTER(ctypes.c_int)),
+        ("coordinate_coupler_coordinate_a", ctypes.POINTER(ctypes.c_int)),
+        ("coordinate_coupler_scale_a", ctypes.POINTER(ctypes.c_double)),
+        ("coordinate_coupler_joint_b", ctypes.POINTER(ctypes.c_int)),
+        ("coordinate_coupler_coordinate_b", ctypes.POINTER(ctypes.c_int)),
+        ("coordinate_coupler_scale_b", ctypes.POINTER(ctypes.c_double)),
+        ("aerodynamic_drag_count", ctypes.c_size_t),
+        ("aerodynamic_drag_body", ctypes.POINTER(ctypes.c_int)),
+        ("aerodynamic_drag_application_point", ctypes.POINTER(ctypes.c_double)),
+        ("aerodynamic_drag_forward_axis", ctypes.POINTER(ctypes.c_double)),
+        ("aerodynamic_drag_coefficient", ctypes.POINTER(ctypes.c_double)),
+        ("tire_drive_torque_body", ctypes.POINTER(ctypes.c_int)),
+        ("tire_drive_torque_reaction_body", ctypes.POINTER(ctypes.c_int)),
+        ("tire_drive_torque_axis_local", ctypes.POINTER(ctypes.c_double)),
+        ("bushing_force_curve_interpolation", ctypes.POINTER(ctypes.c_int)),
+    ]
+
+
+class _VehicleOutput(ctypes.Structure):
+    _fields_ = [
+        ("struct_size", ctypes.c_size_t),
+        ("abi_version", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32),
+        ("axle", _AxleOutput),
+        ("steering_output", ctypes.POINTER(ctypes.c_double)),
+        ("steering_output_capacity", ctypes.c_size_t),
+    ]
+
+
+@dataclass(frozen=True)
+class _VehicleSteeringBuffers:
+    names: tuple[str, ...]
+    actuator_type: np.ndarray
+    body: np.ndarray
+    reaction_body: np.ndarray
+    point_local: np.ndarray
+    reaction_point_local: np.ndarray
+    axis_local: np.ndarray
+    reference_quaternion: np.ndarray
+    target: np.ndarray
+    target_rate: np.ndarray
+    stiffness: np.ndarray
+    damping: np.ndarray
+    output: np.ndarray
+
+
+@dataclass(frozen=True)
+class _VehicleRoadBuffers:
+    kind: int
+    origin_x: float
+    origin_z: float
+    amplitude: float
+    wavelength: float
+    phase: float
+    bump_start: float
+    bump_length: float
+    corner_scale: np.ndarray
+
+
+@dataclass(frozen=True)
+class _NativeRun:
+    result: AxleDynamicsResult
+    steering_output: np.ndarray | None = None
+
+
 def _ptr(array: np.ndarray, ctype: type[ctypes.c_double] | type[ctypes.c_int]):
     return array.ctypes.data_as(ctypes.POINTER(ctype))
 
@@ -232,6 +371,23 @@ def _load_library() -> ctypes.CDLL:
         ctypes.c_size_t,
     ]
     library.axle_run.restype = ctypes.c_int
+    library.vehicle_kernel_abi_version.argtypes = []
+    library.vehicle_kernel_abi_version.restype = ctypes.c_int
+    if (
+        library.vehicle_kernel_abi_version()
+        != _NATIVE_VEHICLE_KERNEL_ABI_VERSION
+    ):
+        raise NativeKernelUnavailableError(
+            "native vehicle kernel ABI is not version "
+            f"{_NATIVE_VEHICLE_KERNEL_ABI_VERSION}"
+        )
+    library.vehicle_run.argtypes = [
+        ctypes.POINTER(_VehicleInput),
+        ctypes.POINTER(_VehicleOutput),
+        ctypes.c_char_p,
+        ctypes.c_size_t,
+    ]
+    library.vehicle_run.restype = ctypes.c_int
     return library
 
 
@@ -267,9 +423,21 @@ def _body_wrench_matrix(
     return np.ascontiguousarray(values)
 
 
-def run_axle_dynamics(
-    model: AxleDynamicsModel, case: AxleDynamicsCase
-) -> AxleDynamicsResult:
+def _run_native(
+    model: AxleDynamicsModel,
+    case: AxleDynamicsCase,
+    *,
+    steering: _VehicleSteeringBuffers | None = None,
+    road: _VehicleRoadBuffers | None = None,
+    brake_torque: dict[str, tuple[float, ...]] | None = None,
+    static_gauge_body: str | None = None,
+    static_gauge_dof_mask: int = 0,
+    static_trim_then_release: bool = False,
+    initial_state_angle_tolerance_rad: float | None = None,
+    static_rotation_gauges: tuple[
+        tuple[str, tuple[float, float, float]], ...
+    ] = (),
+) -> _NativeRun:
     """Run one validated SI axle case through the native C++ kernel."""
     body_names = tuple(body.name for body in model.bodies)
     body_index = {name: index for index, name in enumerate(body_names)}
@@ -304,6 +472,7 @@ def run_axle_dynamics(
         "universal": 4,
         "cylindrical": 5,
         "inplane": 6,
+        "constant_velocity": 7,
     }
     constraint_type = np.ascontiguousarray(
         [joint_kind[joint.kind] for joint in model.joints], dtype=np.int32
@@ -325,6 +494,43 @@ def run_axle_dynamics(
     )
     constraint_axis_b = np.ascontiguousarray(
         [joint.axis_b for joint in model.joints], dtype=np.float64
+    )
+    constraint_axis_a_secondary = np.ascontiguousarray(
+        [joint.axis_a_secondary for joint in model.joints], dtype=np.float64
+    )
+    constraint_axis_b_secondary = np.ascontiguousarray(
+        [joint.axis_b_secondary for joint in model.joints], dtype=np.float64
+    )
+    constraint_convel_angle_target = np.ascontiguousarray(
+        [joint.constant_velocity_angle_target for joint in model.joints],
+        dtype=np.float64,
+    )
+    joint_index = {joint.name: index for index, joint in enumerate(model.joints)}
+    coordinate_coupler_joint_a = np.ascontiguousarray(
+        [joint_index[coupler.joint_a] for coupler in model.coordinate_couplers],
+        dtype=np.int32,
+    )
+    coordinate_coupler_coordinate_a = np.ascontiguousarray(
+        [0 if coupler.coordinate_a == "rotation" else 1
+         for coupler in model.coordinate_couplers],
+        dtype=np.int32,
+    )
+    coordinate_coupler_scale_a = np.ascontiguousarray(
+        [coupler.scale_a for coupler in model.coordinate_couplers],
+        dtype=np.float64,
+    )
+    coordinate_coupler_joint_b = np.ascontiguousarray(
+        [joint_index[coupler.joint_b] for coupler in model.coordinate_couplers],
+        dtype=np.int32,
+    )
+    coordinate_coupler_coordinate_b = np.ascontiguousarray(
+        [0 if coupler.coordinate_b == "rotation" else 1
+         for coupler in model.coordinate_couplers],
+        dtype=np.int32,
+    )
+    coordinate_coupler_scale_b = np.ascontiguousarray(
+        [coupler.scale_b for coupler in model.coordinate_couplers],
+        dtype=np.float64,
     )
     spring_a = np.ascontiguousarray(
         [body_index[spring.body_a] for spring in model.springs], dtype=np.int32
@@ -399,6 +605,74 @@ def run_axle_dynamics(
     spring_curve_force = np.ascontiguousarray(
         damper_force_points or [0.0], dtype=np.float64
     )
+
+    def _flatten_length_force_curves(
+        curves: list[tuple[tuple[float, float], ...]]
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        offsets: list[int] = []
+        counts: list[int] = []
+        abscissa: list[float] = []
+        force: list[float] = []
+        for curve in curves:
+            offsets.append(len(abscissa))
+            counts.append(len(curve))
+            abscissa.extend(float(item[0]) for item in curve)
+            force.extend(float(item[1]) for item in curve)
+        return (
+            np.ascontiguousarray(offsets or [0], dtype=np.int32),
+            np.ascontiguousarray(counts or [0], dtype=np.int32),
+            np.ascontiguousarray(abscissa or [0.0], dtype=np.float64),
+            np.ascontiguousarray(force or [0.0], dtype=np.float64),
+        )
+
+    (
+        elastic_curve_offset,
+        elastic_curve_count,
+        elastic_curve_deflection,
+        elastic_curve_force,
+    ) = _flatten_length_force_curves(
+        [
+            tuple(
+                zip(
+                    spring.elastic_curve_deflection_m,
+                    spring.elastic_curve_force_n,
+                )
+            )
+            for spring in model.springs
+        ]
+    )
+    (
+        compression_stop_curve_offset,
+        compression_stop_curve_count,
+        compression_stop_curve_penetration,
+        compression_stop_curve_force,
+    ) = _flatten_length_force_curves(
+        [
+            tuple(
+                zip(
+                    spring.compression_stop_curve_penetration_m,
+                    spring.compression_stop_curve_force_n,
+                )
+            )
+            for spring in model.springs
+        ]
+    )
+    (
+        rebound_stop_curve_offset,
+        rebound_stop_curve_count,
+        rebound_stop_curve_penetration,
+        rebound_stop_curve_force,
+    ) = _flatten_length_force_curves(
+        [
+            tuple(
+                zip(
+                    spring.rebound_stop_curve_penetration_m,
+                    spring.rebound_stop_curve_force_n,
+                )
+            )
+            for spring in model.springs
+        ]
+    )
     bushing_a = np.ascontiguousarray(
         [body_index[bushing.body_a] for bushing in model.bushings], dtype=np.int32
     )
@@ -437,6 +711,45 @@ def run_axle_dynamics(
         [bushing.preload_in_frame_a_n_n_m for bushing in model.bushings],
         dtype=np.float64,
     )
+    bushing_rotation_coordinates = np.ascontiguousarray(
+        [
+            1 if bushing.rotation_coordinates == "cardan_xyz" else 0
+            for bushing in model.bushings
+        ],
+        dtype=np.int32,
+    )
+    bushing_curve_offset: list[int] = []
+    bushing_curve_count: list[int] = []
+    bushing_curve_coordinate: list[float] = []
+    bushing_curve_force: list[float] = []
+    for bushing in model.bushings:
+        curves = bushing.force_curves or ((),) * 6
+        if len(curves) != 6:
+            raise ValueError("bushing force_curves must contain six axis curves")
+        for curve in curves:
+            bushing_curve_offset.append(len(bushing_curve_coordinate))
+            bushing_curve_count.append(len(curve))
+            bushing_curve_coordinate.extend(item[0] for item in curve)
+            bushing_curve_force.extend(item[1] for item in curve)
+    vehicle_bushing_curve_offset = np.ascontiguousarray(
+        bushing_curve_offset or [0], dtype=np.int32
+    )
+    vehicle_bushing_curve_count = np.ascontiguousarray(
+        bushing_curve_count or [0], dtype=np.int32
+    )
+    vehicle_bushing_curve_coordinate = np.ascontiguousarray(
+        bushing_curve_coordinate or [0.0], dtype=np.float64
+    )
+    vehicle_bushing_curve_force = np.ascontiguousarray(
+        bushing_curve_force or [0.0], dtype=np.float64
+    )
+    bushing_force_curve_interpolation = np.ascontiguousarray(
+        [
+            1 if bushing.force_curve_interpolation == "akima" else 0
+            for bushing in model.bushings
+        ],
+        dtype=np.int32,
+    )
     anti_roll_a = np.ascontiguousarray(
         [body_index[bar.body_a] for bar in model.anti_roll_bars], dtype=np.int32
     )
@@ -461,6 +774,48 @@ def run_axle_dynamics(
     )
     tire_center = np.ascontiguousarray(
         [tire.center_local_m for tire in model.tires], dtype=np.float64
+    )
+    tire_frame_body = np.ascontiguousarray(
+        [body_index[tire.frame_body or tire.body] for tire in model.tires],
+        dtype=np.int32,
+    )
+    tire_frame_center = np.ascontiguousarray(
+        [
+            (
+                tire.frame_center_local_m
+                if tire.frame_center_local_m is not None
+                else tire.center_local_m
+            )
+            for tire in model.tires
+        ],
+        dtype=np.float64,
+    )
+    tire_drive_torque_body = np.ascontiguousarray(
+        [
+            body_index[tire.drive_torque_body]
+            if tire.drive_torque_body is not None
+            else -1
+            for tire in model.tires
+        ],
+        dtype=np.int32,
+    )
+    tire_drive_torque_reaction_body = np.ascontiguousarray(
+        [
+            body_index[tire.drive_torque_reaction_body]
+            if tire.drive_torque_reaction_body is not None
+            else -1
+            for tire in model.tires
+        ],
+        dtype=np.int32,
+    )
+    tire_drive_torque_axis_local = np.ascontiguousarray(
+        [
+            tire.drive_torque_axis_local
+            if tire.drive_torque_axis_local is not None
+            else (0.0, 0.0, 0.0)
+            for tire in model.tires
+        ],
+        dtype=np.float64,
     )
     tire_spin_axis = np.ascontiguousarray(
         [tire.spin_axis_local for tire in model.tires], dtype=np.float64
@@ -501,11 +856,77 @@ def run_axle_dynamics(
     tire_detached_relaxation = np.ascontiguousarray(
         [tire.detached_relaxation_s for tire in model.tires]
     )
+    aerodynamic_drags = tuple(getattr(model, "aerodynamic_drags", ()))
+    aerodynamic_drag_body = np.ascontiguousarray(
+        [body_index[drag.body] for drag in aerodynamic_drags], dtype=np.int32
+    )
+    aerodynamic_drag_application_point = np.ascontiguousarray(
+        [drag.application_point_m for drag in aerodynamic_drags], dtype=np.float64
+    )
+    aerodynamic_drag_forward_axis = np.ascontiguousarray(
+        [drag.forward_axis_local for drag in aerodynamic_drags], dtype=np.float64
+    )
+    aerodynamic_drag_coefficient = np.ascontiguousarray(
+        [drag.coefficient_n_s2_per_m2 for drag in aerodynamic_drags],
+        dtype=np.float64,
+    )
+    tire_model_kind = np.ascontiguousarray(
+        [
+            (
+                (
+                    2
+                    if (
+                        tire.model_kind == "pac2002_pure_slip"
+                        and getattr(tire, "pac2002_parameter_source", "user")
+                        == "adams_builtin"
+                    )
+                    else 1
+                    if tire.model_kind == "pac2002_pure_slip"
+                    else 0
+                )
+            )
+            for tire in model.tires
+        ],
+        dtype=np.int32,
+    )
+    tire_pac2002_parameters = np.ascontiguousarray(
+        [
+            [
+                float(
+                    tire.pac2002_coefficients.get(
+                        name, PAC2002_PARAMETER_DEFAULTS[name]
+                    )
+                )
+                for name in PAC2002_PARAMETER_NAMES
+            ]
+            for tire in model.tires
+        ],
+        dtype=np.float64,
+    )
+    tire_pac2002_mirror = np.ascontiguousarray(
+        [
+            int(
+                tire.model_kind == "pac2002_pure_slip"
+                and getattr(tire, "pac2002_parameter_source", "user")
+                == "adams_builtin"
+                and (
+                    tire.pac2002_mirror
+                    if tire.pac2002_mirror is not None
+                    else _is_right_tire_name(tire.name)
+                )
+            )
+            for tire in model.tires
+        ],
+        dtype=np.int32,
+    )
     times = np.ascontiguousarray(case.times_s, dtype=np.float64)
     body_wrench = _body_wrench_matrix(case, body_names)
     road_z = _signal_matrix(case, tire_names, case.road_height_m)
     road_v = _signal_matrix(case, tire_names, case.road_velocity_m_per_s)
     wheel_torque = _signal_matrix(case, tire_names, case.wheel_torque_n_m)
+    brake_torque_matrix = _signal_matrix(
+        case, tire_names, {} if brake_torque is None else brake_torque
+    )
 
     states = np.full(
         (len(times), len(body_names), 19), np.nan, dtype=np.float64
@@ -529,7 +950,7 @@ def run_axle_dynamics(
     # performance record spans the first two tail rows after public samples.
     diagnostics = np.full((len(times) + 2, 16), np.nan, dtype=np.float64)
     tire_output = np.full(
-        (len(times), len(tire_names), 12), np.nan, dtype=np.float64
+        (len(times), len(tire_names), 15), np.nan, dtype=np.float64
     )
     energy = np.full((len(times), 21), np.nan, dtype=np.float64)
     event_capacity = max(16, len(times) * max(1, len(tire_names)) * 4)
@@ -540,7 +961,7 @@ def run_axle_dynamics(
     )
     contact_event_count = ctypes.c_size_t(0)
     settings = case.solver
-    native_input = _AxleInput(
+    axle_input = _AxleInput(
         len(body_names),
         _ptr(mass, ctypes.c_double),
         _ptr(inertia, ctypes.c_double),
@@ -643,6 +1064,155 @@ def run_axle_dynamics(
         settings.dynamics_tolerance,
         settings.increment_tolerance,
     )
+    vehicle_mode = (
+        steering is not None
+        or road is not None
+        or brake_torque is not None
+        or static_gauge_body is not None
+        or static_gauge_dof_mask != 0
+        or bool(static_rotation_gauges)
+        or bool(model.coordinate_couplers)
+        or np.any(bushing_rotation_coordinates != 0)
+    )
+    if not vehicle_mode and any(
+        joint.kind == "constant_velocity" for joint in model.joints
+    ):
+        raise ValueError(
+            "constant_velocity joints require the versioned vehicle native interface"
+        )
+    has_vehicle_force_curves = any(
+        spring.elastic_curve_deflection_m
+        or spring.compression_stop_curve_penetration_m
+        or spring.rebound_stop_curve_penetration_m
+        for spring in model.springs
+    ) or any(bushing.force_curves for bushing in model.bushings)
+    if has_vehicle_force_curves and not vehicle_mode:
+        raise ValueError(
+            "elastic and stop force curves require the versioned vehicle native interface"
+        )
+    if not vehicle_mode and np.any(tire_model_kind != 0):
+        raise ValueError(
+            "pac2002_pure_slip requires the versioned vehicle native interface"
+        )
+    road_input = road
+    if road_input is None:
+        road_input = _VehicleRoadBuffers(
+            kind=0,
+            origin_x=0.0,
+            origin_z=0.0,
+            amplitude=0.0,
+            wavelength=1.0,
+            phase=0.0,
+            bump_start=0.0,
+            bump_length=1.0,
+            corner_scale=np.ones(4, dtype=np.float64),
+        )
+    native_input: _AxleInput | _VehicleInput = axle_input
+    if vehicle_mode:
+        if static_gauge_dof_mask < 0 or static_gauge_dof_mask & ~0x3F:
+            raise ValueError("static_gauge_dof_mask must use pose bits 0 through 5")
+        if static_gauge_body is None:
+            if static_gauge_dof_mask != 0:
+                raise ValueError(
+                    "static_gauge_body is required when static gauge bits are set"
+                )
+            static_gauge_body_index = 0
+        else:
+            try:
+                static_gauge_body_index = body_index[static_gauge_body]
+            except KeyError as exc:
+                raise ValueError(
+                    f"static gauge references unknown body {static_gauge_body!r}"
+                ) from exc
+        static_rotation_gauge_body = np.ascontiguousarray(
+            [body_index[name] for name, _ in static_rotation_gauges],
+            dtype=np.int32,
+        )
+        static_rotation_gauge_axis_local = np.ascontiguousarray(
+            [axis for _, axis in static_rotation_gauges],
+            dtype=np.float64,
+        ).reshape((-1, 3))
+        steering_count = 0 if steering is None else len(steering.names)
+        native_input = _VehicleInput(
+            ctypes.sizeof(_VehicleInput),
+            _NATIVE_VEHICLE_KERNEL_ABI_VERSION,
+            0,
+            axle_input,
+            steering_count,
+            (None if steering is None else _ptr(steering.actuator_type, ctypes.c_int)),
+            (None if steering is None else _ptr(steering.body, ctypes.c_int)),
+            (None if steering is None else _ptr(steering.reaction_body, ctypes.c_int)),
+            (None if steering is None else _ptr(steering.point_local, ctypes.c_double)),
+            (None if steering is None else _ptr(steering.reaction_point_local, ctypes.c_double)),
+            (None if steering is None else _ptr(steering.axis_local, ctypes.c_double)),
+            (None if steering is None else _ptr(steering.reference_quaternion, ctypes.c_double)),
+            (None if steering is None else _ptr(steering.target, ctypes.c_double)),
+            (None if steering is None else _ptr(steering.target_rate, ctypes.c_double)),
+            (None if steering is None else _ptr(steering.stiffness, ctypes.c_double)),
+            (None if steering is None else _ptr(steering.damping, ctypes.c_double)),
+            road_input.kind,
+            road_input.origin_x,
+            road_input.origin_z,
+            road_input.amplitude,
+            road_input.wavelength,
+            road_input.phase,
+            road_input.bump_start,
+            road_input.bump_length,
+            _ptr(road_input.corner_scale, ctypes.c_double),
+            _ptr(brake_torque_matrix, ctypes.c_double),
+            static_gauge_body_index,
+            static_gauge_dof_mask,
+            int(static_trim_then_release),
+            _ptr(tire_frame_body, ctypes.c_int),
+            _ptr(tire_frame_center, ctypes.c_double),
+            _ptr(tire_model_kind, ctypes.c_int),
+            _ptr(tire_pac2002_parameters, ctypes.c_double),
+            _ptr(tire_pac2002_mirror, ctypes.c_int),
+            _ptr(elastic_curve_offset, ctypes.c_int),
+            _ptr(elastic_curve_count, ctypes.c_int),
+            _ptr(elastic_curve_deflection, ctypes.c_double),
+            _ptr(elastic_curve_force, ctypes.c_double),
+            _ptr(compression_stop_curve_offset, ctypes.c_int),
+            _ptr(compression_stop_curve_count, ctypes.c_int),
+            _ptr(compression_stop_curve_penetration, ctypes.c_double),
+            _ptr(compression_stop_curve_force, ctypes.c_double),
+            _ptr(rebound_stop_curve_offset, ctypes.c_int),
+            _ptr(rebound_stop_curve_count, ctypes.c_int),
+            _ptr(rebound_stop_curve_penetration, ctypes.c_double),
+            _ptr(rebound_stop_curve_force, ctypes.c_double),
+            _ptr(vehicle_bushing_curve_offset, ctypes.c_int),
+            _ptr(vehicle_bushing_curve_count, ctypes.c_int),
+            _ptr(vehicle_bushing_curve_coordinate, ctypes.c_double),
+            _ptr(vehicle_bushing_curve_force, ctypes.c_double),
+            _ptr(constraint_axis_a_secondary, ctypes.c_double),
+            _ptr(constraint_axis_b_secondary, ctypes.c_double),
+            _ptr(constraint_convel_angle_target, ctypes.c_double),
+            len(static_rotation_gauges),
+            _ptr(static_rotation_gauge_body, ctypes.c_int),
+            _ptr(static_rotation_gauge_axis_local, ctypes.c_double),
+            (
+                settings.local_angle_tolerance
+                if initial_state_angle_tolerance_rad is None
+                else initial_state_angle_tolerance_rad
+            ),
+            _ptr(bushing_rotation_coordinates, ctypes.c_int),
+            len(model.coordinate_couplers),
+            _ptr(coordinate_coupler_joint_a, ctypes.c_int),
+            _ptr(coordinate_coupler_coordinate_a, ctypes.c_int),
+            _ptr(coordinate_coupler_scale_a, ctypes.c_double),
+            _ptr(coordinate_coupler_joint_b, ctypes.c_int),
+            _ptr(coordinate_coupler_coordinate_b, ctypes.c_int),
+            _ptr(coordinate_coupler_scale_b, ctypes.c_double),
+            len(aerodynamic_drags),
+            _ptr(aerodynamic_drag_body, ctypes.c_int),
+            _ptr(aerodynamic_drag_application_point, ctypes.c_double),
+            _ptr(aerodynamic_drag_forward_axis, ctypes.c_double),
+            _ptr(aerodynamic_drag_coefficient, ctypes.c_double),
+            _ptr(tire_drive_torque_body, ctypes.c_int),
+            _ptr(tire_drive_torque_reaction_body, ctypes.c_int),
+            _ptr(tire_drive_torque_axis_local, ctypes.c_double),
+            _ptr(bushing_force_curve_interpolation, ctypes.c_int),
+        )
     library = _load_library()
     while True:
         native_output = _AxleOutput(
@@ -667,12 +1237,32 @@ def run_axle_dynamics(
             ctypes.pointer(contact_event_count),
         )
         error_buffer = ctypes.create_string_buffer(4096)
-        status = library.axle_run(
-            ctypes.byref(native_input),
-            ctypes.byref(native_output),
-            error_buffer,
-            len(error_buffer),
-        )
+        if not vehicle_mode:
+            status = library.axle_run(
+                ctypes.byref(native_input),
+                ctypes.byref(native_output),
+                error_buffer,
+                len(error_buffer),
+            )
+        else:
+            vehicle_output = _VehicleOutput(
+                ctypes.sizeof(_VehicleOutput),
+                _NATIVE_VEHICLE_KERNEL_ABI_VERSION,
+                0,
+                native_output,
+                (
+                    None
+                    if steering is None
+                    else _ptr(steering.output, ctypes.c_double)
+                ),
+                0 if steering is None else steering.output.size,
+            )
+            status = library.vehicle_run(
+                ctypes.byref(native_input),
+                ctypes.byref(vehicle_output),
+                error_buffer,
+                len(error_buffer),
+            )
         if status != 10 or contact_event_count.value <= event_capacity:
             break
         event_capacity = int(contact_event_count.value)
@@ -800,4 +1390,16 @@ def run_axle_dynamics(
                 else None
             ),
         )
-    return build_result(len(times))
+    return _NativeRun(
+        result=build_result(len(times)),
+        steering_output=(
+            None if steering is None else steering.output.copy()
+        ),
+    )
+
+
+def run_axle_dynamics(
+    model: AxleDynamicsModel, case: AxleDynamicsCase
+) -> AxleDynamicsResult:
+    """Run one validated SI axle case through the native C++ kernel."""
+    return _run_native(model, case).result

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #if defined(_WIN32)
 #define AXLE_API __declspec(dllexport)
@@ -21,7 +22,9 @@ enum AxleConstraintType {
     // Shared axis line, free to slide along and spin about it: four rows.
     AXLE_CYLINDRICAL = 5,
     // Point of body B constrained to the plane of body A: one row.
-    AXLE_INPLANE = 6
+    AXLE_INPLANE = 6,
+    // Adams CONVEL: coincident centers plus the constant-velocity relation.
+    AXLE_CONVEL = 7
 };
 
 struct AxleInput {
@@ -188,11 +191,199 @@ struct AxleOutput {
     std::size_t* contact_event_count;
 };
 
+enum VehicleSteeringActuatorType {
+    VEHICLE_STEERING_TRANSLATION = 0,
+    VEHICLE_STEERING_ROTATION = 1,
+    // 受约束的转角输入；目标进入 KKT 约束，不通过高刚度力近似。
+    VEHICLE_STEERING_PRESCRIBED_ROTATION = 2,
+    // 受约束的齿条平移输入；目标进入 KKT 约束。
+    VEHICLE_STEERING_PRESCRIBED_TRANSLATION = 3
+};
+
+enum VehicleTireModelKind {
+    VEHICLE_TIRE_NATIVE_BRUSH = 0,
+    // 使用当前项目实现的 PAC2002 纯滑移/联合滑移与松弛项；
+    // 为保持历史行为，零滑移处移除校准偏置。
+    VEHICLE_TIRE_PAC2002_PURE_SLIP = 1,
+    // Adams 内置 PAC2002 源模式。按照 PAC2002/Chrono 的 Fx0/Fy0
+    // 定义保留 PH*/PV* 在零滑移处产生的源偏置。
+    VEHICLE_TIRE_PAC2002_ADAMS_SOURCE = 2
+};
+
+enum VehicleBushingRotationCoordinates {
+    VEHICLE_BUSHING_ROTATION_VECTOR = 0,
+    VEHICLE_BUSHING_CARDAN_XYZ = 1
+};
+
+// 前 83 个位置保持历史布局，其余参数追加在末尾；旧参数位置不能改变。
+enum { VEHICLE_PAC2002_PARAMETER_COUNT = 167 };
+
+// The vehicle ABI deliberately wraps the stable axle ABI instead of
+// appending fields to AxleInput.  This keeps existing ctypes callers binary
+// compatible while leaving room for versioned vehicle-only inputs.
+struct VehicleInput {
+    std::size_t struct_size;
+    std::uint32_t abi_version;
+    std::uint32_t reserved;
+    AxleInput axle;
+
+    // One actuator per steerable body. Target arrays are laid out as
+    // sample_count * steering_count. Translation actuators use metres and
+    // metres per second; rotation actuators use radians and radians per
+    // second.
+    std::size_t steering_count;
+    const int* steering_type;
+    const int* steering_body;
+    const int* steering_reaction_body;
+    const double* steering_point_local;
+    const double* steering_reaction_point_local;
+    const double* steering_axis_local;
+    const double* steering_reference_quaternion;
+    const double* steering_target_angle;
+    const double* steering_target_rate;
+    const double* steering_stiffness;
+    const double* steering_damping;
+
+    // Optional vertical road profile evaluated at the current wheel-center
+    // position. `road_kind` is 0 for sampled-only input, 1 for plane, 2 for
+    // sine, 3 for bump, 4 for random Fourier, and 5 for four-post bump.
+    int road_kind;
+    double road_origin_x;
+    double road_origin_z;
+    double road_amplitude;
+    double road_wavelength;
+    double road_phase;
+    double road_bump_start;
+    double road_bump_length;
+    const double* road_corner_scale;
+
+    // Optional non-negative brake torque magnitudes, laid out as
+    // sample_count * axle.tire_count. The kernel opposes the instantaneous
+    // tire spin direction and applies zero braking torque at zero spin.
+    const double* brake_torque;
+
+    // Optional static-trim gauge.  The mask uses pose coordinates
+    // translation x/y/z = bits 0/1/2 and rotation x/y/z = bits 3/4/5.
+    // These equations remove only a declared global coordinate null-space;
+    // they do not add a physical reaction or a ground constraint.
+    std::size_t static_gauge_body;
+    std::uint32_t static_gauge_dof_mask;
+
+    // Optional vehicle-only initialization mode.  When non-zero, the kernel
+    // trims the model with zero velocity and restores the body velocities
+    // supplied through AxleInput immediately before dynamic integration.
+    int static_trim_then_release;
+
+    // Optional vehicle-only tire frame mapping. The stable axle ABI keeps
+    // tire_body as both the force body and contact frame. A vehicle wheel
+    // has a separate spinning force body and a non-spinning upright frame;
+    // these arrays select the latter. The fields are optional for backward
+    // compatibility and fall back to AxleInput.tire_body/tire_center_local.
+    const int* tire_frame_body;
+    const double* tire_frame_center_local;
+
+    // 可选轮胎模型扩展。参数按 VEHICLE_PAC2002_PARAMETER_COUNT 的固定顺序
+    // 展开为 tire_count * parameter_count；省略这些字段时仍使用刷胎。
+    const int* tire_model_kind;
+    const double* tire_pac2002_parameters;
+    const int* tire_pac2002_mirror;
+
+    // 可选整车力元曲线。每条曲线使用对应的 offset/count 数组，坐标和力
+    // 分别为米、牛顿；弹簧坐标是压缩挠度，限位块坐标是穿透量。
+    const int* vehicle_spring_elastic_curve_offset;
+    const int* vehicle_spring_elastic_curve_count;
+    const double* vehicle_spring_elastic_curve_deflection;
+    const double* vehicle_spring_elastic_curve_force;
+    const int* vehicle_spring_compression_stop_curve_offset;
+    const int* vehicle_spring_compression_stop_curve_count;
+    const double* vehicle_spring_compression_stop_curve_penetration;
+    const double* vehicle_spring_compression_stop_curve_force;
+    const int* vehicle_spring_rebound_stop_curve_offset;
+    const int* vehicle_spring_rebound_stop_curve_count;
+    const double* vehicle_spring_rebound_stop_curve_penetration;
+    const double* vehicle_spring_rebound_stop_curve_force;
+
+    // 可选衬套六轴弹性曲线。每个衬套占用连续的六个 offset/count 槽位；
+    // 平移坐标/力为 m/N，转动坐标/力矩为 rad/N*m。
+    const int* vehicle_bushing_force_curve_offset;
+    const int* vehicle_bushing_force_curve_count;
+    const double* vehicle_bushing_force_curve_coordinate;
+    const double* vehicle_bushing_force_curve_force;
+
+    // Adams CONVEL marker副轴。主轴数组分别保存 I 的 x 轴和 J 的 y 轴，
+    // 副轴数组保存 I 的 y 轴和 J 的 x 轴。
+    const double* constraint_axis_a_secondary;
+    const double* constraint_axis_b_secondary;
+    // 可选的 Adams CONVEL 初始交叉轴关系，按 dot(I.x, J.y) 给出；
+    // 未提供时使用严格正交目标 0。
+    const double* constraint_convel_angle_target;
+
+    // 仅用于静态配平的被动转轴。每个条目由一个自由体和一个局部轴组成；
+    // 动态积分仍使用完整刚体自由度，不添加任何物理约束。
+    std::size_t static_rotation_gauge_count;
+    const int* static_rotation_gauge_body;
+    const double* static_rotation_gauge_axis_local;
+
+    // 仅用于 provided_consistent_state 的初始 CONVEL 角度残差检查；
+    // 不改变动态积分阶段的 local_angle_tolerance。
+    double initial_state_angle_tolerance;
+
+    // 每个衬套的转动坐标：0 为旋转向量，1 为 XYZ Cardan 角。
+    const int* bushing_rotation_coordinates;
+
+    // Adams 线性关节坐标耦合器。每个耦合器增加一行
+    // scale_a * delta_a + scale_b * delta_b = 0；关节编号使用
+    // `constraint_*` 数组中的零基索引，坐标类型 0 为转动、1 为平移。
+    std::size_t coordinate_coupler_count;
+    const int* coordinate_coupler_joint_a;
+    const int* coordinate_coupler_coordinate_a;
+    const double* coordinate_coupler_scale_a;
+    const int* coordinate_coupler_joint_b;
+    const int* coordinate_coupler_coordinate_b;
+    const double* coordinate_coupler_scale_b;
+
+    // Quadratic aerodynamic drag elements.  Points and axes are local to the
+    // selected body; coefficients multiply longitudinal speed squared.
+    std::size_t aerodynamic_drag_count;
+    const int* aerodynamic_drag_body;
+    const double* aerodynamic_drag_application_point;
+    const double* aerodynamic_drag_forward_axis;
+    const double* aerodynamic_drag_coefficient;
+
+    // Optional drive-torque actuator mapping per tire. A negative drive body
+    // retains the historical wheel-body application. The axis is local to
+    // the selected drive body; reaction body may be negative.
+    const int* tire_drive_torque_body;
+    const int* tire_drive_torque_reaction_body;
+    const double* tire_drive_torque_axis_local;
+    const int* bushing_force_curve_interpolation;
+};
+
+struct VehicleOutput {
+    std::size_t struct_size;
+    std::uint32_t abi_version;
+    std::uint32_t reserved;
+    AxleOutput axle;
+
+    // One row per sample and steering actuator:
+    // measured angle, measured rate, target angle, applied torque.
+    double* steering_output;
+    std::size_t steering_output_capacity;
+};
+
 AXLE_API int axle_kernel_abi_version();
 
 AXLE_API int axle_run(
     const AxleInput* input,
     AxleOutput* output,
+    char* error_buffer,
+    std::size_t error_capacity);
+
+AXLE_API int vehicle_kernel_abi_version();
+
+AXLE_API int vehicle_run(
+    const VehicleInput* input,
+    VehicleOutput* output,
     char* error_buffer,
     std::size_t error_capacity);
 

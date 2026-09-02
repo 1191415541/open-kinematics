@@ -27,9 +27,11 @@ from .result import (
     AxleRunPerformance,
 )
 from .schema import (
+    AxleAerodynamicDrag,
     AxleAntiRollBar,
     AxleBody,
     AxleBushing,
+    AxleCoordinateCoupler,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleHarmonicRoad,
@@ -40,8 +42,10 @@ from .schema import (
 )
 
 __all__ = [
+    "AxleAerodynamicDrag",
     "AxleBody",
     "AxleBushing",
+    "AxleCoordinateCoupler",
     "AxleAntiRollBar",
     "AxleDynamicsCase",
     "AxleContactEventRecord",

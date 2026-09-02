@@ -77,6 +77,9 @@ TIRE_OUTPUT_COLUMNS = (
     "friction_utilization",
     "brush_longitudinal_m",
     "brush_lateral_m",
+    "overturning_moment_n_m",
+    "rolling_resistance_moment_n_m",
+    "aligning_moment_n_m",
 )
 DIAGNOSTIC_COLUMNS = (
     "accepted",
@@ -229,7 +232,7 @@ class AxleDynamicsResult:
         return self.states[:, self.body_names.index(body), :]
 
     def tire_state(self, tire: str) -> np.ndarray:
-        """Return the documented 12-column contact state for one tire."""
+        """Return the documented 15-column contact state for one tire."""
         return self.tire_output[:, self.tire_names.index(tire), :]
 
     def joint_wrench_on_body_b(self, joint: str) -> np.ndarray:
