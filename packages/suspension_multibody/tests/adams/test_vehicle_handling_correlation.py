@@ -6,7 +6,10 @@ from pathlib import Path
 
 from suspension_multibody.adams import AdamsProfile
 from suspension_multibody.adams.time_domain import TimeHistory
-from suspension_multibody.adams.vehicle_correlation import validate_handling_correlation
+from suspension_multibody.adams.vehicle_correlation import (
+    validate_handling_correlation,
+    validate_handling_correlation_matrix,
+)
 from suspension_multibody.adams.vehicle_reference import write_vehicle_reference_bundle
 from suspension_multibody.analysis.vehicle_correlation_model import (
     VehicleCorrelationRun,
@@ -55,3 +58,22 @@ def test_handling_gate_compares_all_cases(tmp_path: Path) -> None:
 
     assert result.ok
     assert all(item["status"] == "PASS" for item in result.report["cases"].values())
+
+
+def test_handling_matrix_keeps_native_brush_blocked_without_reference(
+    tmp_path: Path,
+) -> None:
+    reference = tmp_path / "reference"
+    for case in ("steady_state_circle", "step_steer", "sine_steer", "double_lane_change"):
+        _bundle(reference, case)
+
+    result = validate_handling_correlation_matrix(
+        {"pac2002": reference},
+        output_dir=tmp_path / "matrix",
+    )
+
+    assert not result.ok
+    assert result.report["variants"]["pac2002"]["tire_model"] == "pac2002"
+    brush = result.report["variants"]["native_brush"]
+    assert brush["status"] == "BLOCKED"
+    assert brush["passed"] is False

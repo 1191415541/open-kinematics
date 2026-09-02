@@ -185,17 +185,20 @@ def test_stop_output_separates_conservative_and_dissipative_force() -> None:
 
 
 def test_failed_step_preserves_partial_result_and_failure_diagnostics() -> None:
+    model = _oscillator()
+    spring = model.springs[0].model_copy(update={"point_b_m": (0.10, 0.0, 0.0)})
+    model = model.model_copy(update={"springs": (spring,)})
     with pytest.raises(NativeAxleError) as captured:
         run_axle_dynamics(
-            _oscillator(),
+            model,
             AxleDynamicsCase(
                 name="forced-newton-failure",
-                times_s=(0.0, 0.001, 0.002),
+                times_s=(0.0, 0.01, 0.02),
                 solver=AxleSolverSettings(
                     initialization_mode="provided_consistent_state",
                     adaptive_step=False,
-                    internal_step_s=0.001,
-                    maximum_step_s=0.001,
+                    internal_step_s=0.01,
+                    maximum_step_s=0.01,
                     max_newton_iterations=1,
                 ),
             ),
@@ -207,7 +210,7 @@ def test_failed_step_preserves_partial_result_and_failure_diagnostics() -> None:
     np.testing.assert_allclose(error.partial_result.times_s, (0.0,))
     assert error.failure_diagnostics is not None
     assert error.failed_sample_index == 1
-    assert error.failed_time_s == 0.001
+    assert error.failed_time_s == 0.01
     assert error.named_failure_diagnostics is not None
     assert error.named_failure_diagnostics["failure_code"] == 1.0
     assert error.failure_diagnostics[0] == 0.0

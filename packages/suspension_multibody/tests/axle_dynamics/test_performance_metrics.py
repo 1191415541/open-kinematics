@@ -155,6 +155,7 @@ def test_native_build_metadata_keeps_safe_optimization_flags() -> None:
     flags = tuple(str(flag) for flag in metadata["flags"])
 
     assert metadata["abi_version"] == 14
+    assert metadata["vehicle_abi_version"] == 21
     assert metadata["configuration"] == "Release"
     assert "-ffast-math" not in flags
     assert "-fno-fast-math" in flags

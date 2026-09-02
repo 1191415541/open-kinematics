@@ -8,7 +8,9 @@ import pytest
 from suspension_multibody.adams import (
     TimeHistory,
     adams_axle_raw_channel_map,
+    compare_pac2002_tire_force_histories,
     compare_strict_axle_histories,
+    compare_tire_force_histories,
     load_axle_acceptance_contract,
 )
 from suspension_multibody.adams.axle_contract import load_axle_channel_contract
@@ -240,6 +242,69 @@ def test_near_zero_channel_does_not_fail_peak_timing_gate() -> None:
 
     metrics = report["channels"]["sprung_body.heave"]
     assert not metrics["peak_timing_applicable"]
+    assert metrics["peak_timing_passed"]
+
+
+def test_pac2002_tire_force_comparison_uses_only_six_force_channels() -> None:
+    reference = _canonical_history((0.0, 0.001, 0.002))
+    candidate = _canonical_history((0.0, 0.001, 0.002))
+    candidate.channels["sprung_body.heave"] = (1.0, 1.0, 1.0)
+
+    report = compare_pac2002_tire_force_histories(
+        reference,
+        candidate,
+        acceptance=load_axle_acceptance_contract(),
+    )
+
+    assert report["passed"]
+    assert report["channels_expected"] == [
+        "left.tire_normal_force",
+        "right.tire_normal_force",
+        "left.tire_longitudinal_force",
+        "right.tire_longitudinal_force",
+        "left.tire_lateral_force",
+        "right.tire_lateral_force",
+    ]
+
+
+def test_tire_force_comparison_records_native_brush_model() -> None:
+    reference = _canonical_history((0.0, 0.001, 0.002))
+    candidate = _canonical_history((0.0, 0.001, 0.002))
+
+    report = compare_tire_force_histories(
+        reference,
+        candidate,
+        tire_model="native_brush",
+        acceptance=load_axle_acceptance_contract(),
+    )
+
+    assert report["passed"]
+    assert report["tire_model"] == "native_brush"
+    assert report["contract"] == "tire-force-comparison-v2"
+
+
+def test_fixture_peak_timing_ignores_derived_endpoint_samples() -> None:
+    time = (0.0, 0.001, 0.002, 0.003, 0.004, 0.005, 0.006)
+    reference = _canonical_history(time)
+    candidate = _canonical_history(time)
+    reference.channels["fixture.moment_y"] = (
+        0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.05
+    )
+    candidate.channels["fixture.moment_y"] = (
+        0.0, 0.0, 0.0, 0.0, 1.01, 0.0, 0.95
+    )
+
+    report = compare_strict_axle_histories(
+        reference,
+        candidate,
+        acceptance=load_axle_acceptance_contract(),
+        case_name="endpoint_fixture_wrench",
+        include_harmonic=False,
+    )
+
+    metrics = report["channels"]["fixture.moment_y"]
+    assert metrics["peak_window_edge_exclusion_samples"] == 3
+    assert metrics["peak_timing_error_s"] == pytest.approx(0.0)
     assert metrics["peak_timing_passed"]
 
 

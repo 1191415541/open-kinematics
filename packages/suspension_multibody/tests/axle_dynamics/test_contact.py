@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from suspension_multibody.axle_dynamics import (
+    AxleAerodynamicDrag,
     AxleBody,
     AxleDynamicsCase,
     AxleDynamicsModel,
@@ -12,6 +13,10 @@ from suspension_multibody.axle_dynamics import (
     AxleTire,
     NativeAxleError,
     run_axle_dynamics,
+)
+from suspension_multibody.axle_dynamics.native import (
+    _run_native,
+    _VehicleRoadBuffers,
 )
 
 _I = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
@@ -108,6 +113,131 @@ def test_initial_tire_compression_limit_is_a_hard_physical_failure() -> None:
                 ),
             ),
         )
+
+
+def test_vehicle_aerodynamic_drag_uses_current_body_velocity() -> None:
+    model = AxleDynamicsModel(
+        name="aerodynamic-drag",
+        gravity_m_per_s2=(0.0, 0.0, 0.0),
+        bodies=(
+            AxleBody(
+                name="fixture",
+                mass_kg=0.0,
+                inertia_kg_m2=_ZERO_I,
+                fixed=True,
+            ),
+            AxleBody(
+                name="body",
+                mass_kg=10.0,
+                inertia_kg_m2=_I,
+                linear_velocity_m_per_s=(10.0, 0.0, 0.0),
+            ),
+        ),
+        joints=(),
+        aerodynamic_drags=(
+            AxleAerodynamicDrag(
+                body="body",
+                coefficient_n_s2_per_m2=0.5,
+            ),
+        ),
+    )
+    result = _run_native(
+        model,
+        AxleDynamicsCase(
+            name="aerodynamic-drag",
+            times_s=(0.0, 0.00001),
+            solver=AxleSolverSettings(
+                initialization_mode="provided_consistent_state",
+                adaptive_step=False,
+                internal_step_s=0.00001,
+                maximum_step_s=0.00001,
+            ),
+        ),
+        road=_VehicleRoadBuffers(
+            kind=1,
+            origin_x=0.0,
+            origin_z=0.0,
+            amplitude=0.0,
+            wavelength=1.0,
+            phase=0.0,
+            bump_start=0.0,
+            bump_length=1.0,
+            corner_scale=np.ones(4, dtype=float),
+        ),
+        initial_state_angle_tolerance_rad=1.0e-8,
+    ).result
+
+    assert result.body_state("body")[0, 13] == pytest.approx(-5.0)
+
+
+def test_pac2002_cambered_contact_applies_normal_force_at_ground_intersection() -> None:
+    camber = 0.1
+    center_height = 0.25
+    model = AxleDynamicsModel(
+        name="cambered-pac-contact",
+        gravity_m_per_s2=(0.0, 0.0, 0.0),
+        bodies=(
+            AxleBody(
+                name="fixture",
+                mass_kg=0.0,
+                inertia_kg_m2=_ZERO_I,
+                fixed=True,
+            ),
+            AxleBody(
+                name="wheel",
+                mass_kg=10.0,
+                inertia_kg_m2=_I,
+                position_m=(0.0, 0.0, center_height),
+                quaternion_body_to_world=(
+                    float(np.cos(0.5 * camber)),
+                    float(np.sin(0.5 * camber)),
+                    0.0,
+                    0.0,
+                ),
+            ),
+        ),
+        joints=(),
+        tires=(
+            _tire().model_copy(
+                update={
+                    "model_kind": "pac2002_pure_slip",
+                    "pac2002_parameter_source": "adams_builtin",
+                    "vertical_damping_n_s_per_m": 0.0,
+                }
+            ),
+        ),
+    )
+    result = _run_native(
+        model,
+        AxleDynamicsCase(
+            name="cambered-pac-contact",
+            times_s=(0.0, 0.00001),
+            solver=AxleSolverSettings(
+                initialization_mode="provided_consistent_state",
+                adaptive_step=True,
+                internal_step_s=0.00001,
+                maximum_step_s=0.00001,
+            ),
+        ),
+        road=_VehicleRoadBuffers(
+            kind=1,
+            origin_x=0.0,
+            origin_z=0.0,
+            amplitude=0.0,
+            wavelength=1.0,
+            phase=0.0,
+            bump_start=0.0,
+            bump_length=1.0,
+            corner_scale=np.ones(4, dtype=float),
+        ),
+        initial_state_angle_tolerance_rad=1.0e-8,
+    ).result
+
+    normal_force = float(result.tire_state("tire")[0, 4])
+    expected_roll_acceleration = center_height * np.tan(camber) * normal_force
+    assert float(result.body_state("wheel")[0, 16]) == pytest.approx(
+        expected_roll_acceleration, rel=1e-10, abs=1e-10
+    )
 
 
 def test_brush_force_opposes_longitudinal_slip_and_respects_ellipse() -> None:

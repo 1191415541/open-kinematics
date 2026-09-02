@@ -44,3 +44,32 @@ def test_bushing_requires_symmetric_positive_semidefinite_matrix() -> None:
     matrix = tuple(tuple(10.0 if i == j else 0.0 for j in range(6)) for i in range(6))
     result = Bushing6x6(name="mount", stiffness=matrix, body_a="a", body_b="b")
     assert result.stiffness[0][0] == 10
+
+
+def test_bushing_accepts_six_independent_force_curves() -> None:
+    matrix = tuple(tuple(0.0 for _ in range(6)) for _ in range(6))
+    curves = (
+        (),
+        (),
+        ((-1.0, -100.0), (0.0, 0.0), (1.0, 100.0)),
+        (),
+        (),
+        (),
+    )
+    result = Bushing6x6(
+        name="mount",
+        stiffness=matrix,
+        body_a="a",
+        body_b="b",
+        force_curves=curves,
+    )
+    assert result.force_curves[2][1] == (0.0, 0.0)
+
+    with pytest.raises(ValidationError, match="six axis curves"):
+        Bushing6x6(
+            name="mount",
+            stiffness=matrix,
+            body_a="a",
+            body_b="b",
+            force_curves=((),),
+        )

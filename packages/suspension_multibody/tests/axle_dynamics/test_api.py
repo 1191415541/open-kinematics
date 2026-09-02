@@ -10,6 +10,7 @@ from suspension_multibody.axle_dynamics import (
     BODY_STATE_COLUMNS,
     DIAGNOSTIC_COLUMNS,
     ENERGY_COLUMNS,
+    TIRE_OUTPUT_COLUMNS,
     AxleAntiRollBar,
     AxleBody,
     AxleBushing,
@@ -355,6 +356,13 @@ def test_axle_schema_loader_and_result_artifact_are_self_describing(
     assert manifest["layouts"]["body_state"] == list(BODY_STATE_COLUMNS)
     assert manifest["layouts"]["diagnostics"] == list(DIAGNOSTIC_COLUMNS)
     assert manifest["layouts"]["energy"] == list(ENERGY_COLUMNS)
+    assert manifest["layouts"]["tire_output"] == list(TIRE_OUTPUT_COLUMNS)
+    assert TIRE_OUTPUT_COLUMNS[-3:] == (
+        "overturning_moment_n_m",
+        "rolling_resistance_moment_n_m",
+        "aligning_moment_n_m",
+    )
+    assert len(TIRE_OUTPUT_COLUMNS) == 15
     with np.load(manifest_path.parent / "arrays.npz") as arrays:
         np.testing.assert_allclose(arrays["states"], result.states)
         np.testing.assert_allclose(arrays["energy"], result.energy)

@@ -32,6 +32,7 @@ from suspension_multibody.adams import (
     write_axle_evidence_bundle,
     write_dynamic_axle_manifest,
 )
+from suspension_multibody.adams.axle_equivalence import _refined_case
 from suspension_multibody.axle_dynamics import (
     AxleAntiRollBar,
     AxleBody,
@@ -467,6 +468,38 @@ def test_fixture_history_uses_common_momentum_balance() -> None:
         "fixture.moment_z",
     ):
         assert history.channels[name] == pytest.approx((0.0, 0.0, 0.0))
+
+
+def test_fixture_history_uses_analytic_state_acceleration() -> None:
+    result = _result()
+    states = result.states.copy()
+    states[:, :, :3] = states[0:1, :, :3]
+    states[:, :, 7:13] = 0.0
+    states[:, 1, 13] = 2.0
+    result = replace(
+        result,
+        states=states,
+        tire_output=np.zeros_like(result.tire_output),
+    )
+
+    history = axle_history_from_result(
+        _model(),
+        result,
+        _bindings(),
+        case=_case(),
+    )
+
+    assert history.channels["fixture.force_x"] == pytest.approx(
+        (-200.0, -200.0, -200.0)
+    )
+
+
+def test_refined_case_forces_a_true_fixed_h_over_2_run() -> None:
+    refined = _refined_case(_case())
+
+    assert not refined.solver.adaptive_step
+    assert refined.solver.internal_step_s == pytest.approx(0.000125)
+    assert refined.solver.maximum_step_s == pytest.approx(0.000125)
 
 
 def test_native_initialization_evidence_contains_complete_hashed_state() -> None:

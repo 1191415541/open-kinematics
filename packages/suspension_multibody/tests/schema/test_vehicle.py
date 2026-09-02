@@ -95,3 +95,38 @@ def test_dynamic_case_validates_initial_wheel_speed_names() -> None:
                 "initial_wheel_speeds": (("spare", 1.0),),
             }
         )
+
+
+def test_dynamic_case_validates_direct_wheel_torque_signals() -> None:
+    model = _vehicle()
+    case = VehicleDynamicCase(
+        solver=DynamicSolverSettings(end_time=1.0, step_size=0.01),
+        vehicle=model,
+        wheel_drive_torque=(
+            ("rear_left", TimeSignal(constant=250.0)),
+        ),
+        wheel_brake_torque=(
+            ("front_right", TimeSignal(constant=40.0)),
+        ),
+    )
+
+    assert dict(case.wheel_drive_torque)["rear_left"].constant == 250.0
+    assert dict(case.wheel_brake_torque)["front_right"].constant == 40.0
+
+    with pytest.raises(ValidationError, match="non-negative"):
+        VehicleDynamicCase(
+            solver=DynamicSolverSettings(end_time=1.0, step_size=0.01),
+            vehicle=model,
+            wheel_brake_torque=(
+                ("front_left", TimeSignal(constant=-1.0)),
+            ),
+        )
+
+    with pytest.raises(ValidationError, match="undefined wheel"):
+        VehicleDynamicCase(
+            solver=DynamicSolverSettings(end_time=1.0, step_size=0.01),
+            vehicle=model,
+            wheel_drive_torque=(
+                ("spare", TimeSignal(constant=1.0)),
+            ),
+        )

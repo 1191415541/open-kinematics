@@ -80,6 +80,32 @@ def test_constant_wrench_produces_physical_translation_and_rotation() -> None:
     assert np.all(result.diagnostics.accepted)
 
 
+def test_si_scale_inertia_remains_solvable() -> None:
+    base = _free_body_model()
+    bodies = list(base.bodies)
+    bodies[1] = bodies[1].model_copy(
+        update={"inertia_kg_m2": np.diag([1.0e-6, 1.0e-6, 1.0e-6])}
+    )
+    model = base.model_copy(update={"bodies": tuple(bodies)})
+
+    result = run_axle_dynamics(
+        model,
+        AxleDynamicsCase(
+            name="si-scale-inertia",
+            times_s=(0.0, 0.001),
+            solver=AxleSolverSettings(
+                initialization_mode="provided_consistent_state",
+                adaptive_step=False,
+                internal_step_s=0.001,
+                minimum_step_s=0.001,
+                maximum_step_s=0.001,
+            ),
+        ),
+    )
+
+    assert np.all(result.diagnostics.accepted)
+
+
 def test_provided_initial_state_rejects_velocity_constraint_violation() -> None:
     model = AxleDynamicsModel(
         name="inconsistent-velocity",
@@ -291,6 +317,71 @@ def _rotation_quaternion(
         float(np.cos(0.5 * angle_rad)),
         *(float(value) for value in direction * sine),
     )
+
+
+def test_prismatic_joint_accepts_rotated_initial_frame() -> None:
+    """棱柱副允许两端坐标系有安装偏角，只约束导向轴和绕轴转角."""
+    model = AxleDynamicsModel(
+        name="rotated-prismatic",
+        gravity_m_per_s2=(0.0, 0.0, 0.0),
+        bodies=(
+            AxleBody(
+                name="fixture",
+                mass_kg=0.0,
+                inertia_kg_m2=_ZERO_I,
+                fixed=True,
+            ),
+            AxleBody(
+                name="slider",
+                mass_kg=1.0,
+                inertia_kg_m2=_I,
+                quaternion_body_to_world=_rotation_quaternion(
+                    (1.0, 0.0, 0.0), np.pi / 2.0
+                ),
+                linear_velocity_m_per_s=(0.0, 1.0, 0.0),
+            ),
+        ),
+        joints=(
+            AxleJoint(
+                name="guide",
+                kind="prismatic",
+                body_a="fixture",
+                body_b="slider",
+                point_a_m=(0.0, 0.0, 0.0),
+                point_b_m=(0.0, 0.0, 0.0),
+                axis_a=(0.0, 1.0, 0.0),
+                axis_b=(0.0, 0.0, -1.0),
+            ),
+        ),
+    )
+
+    result = run_axle_dynamics(
+        model,
+        AxleDynamicsCase(
+            name="rotated-prismatic",
+            times_s=(0.0, 0.001, 0.002),
+            solver=AxleSolverSettings(
+                initialization_mode="provided_consistent_state",
+                adaptive_step=False,
+                internal_step_s=0.00025,
+            ),
+        ),
+    )
+    state = result.body_state("slider")
+    np.testing.assert_allclose(state[:, 0], 0.0, atol=1e-12, rtol=0.0)
+    np.testing.assert_allclose(state[:, 1], result.times_s, atol=1e-11)
+    np.testing.assert_allclose(state[:, 2], 0.0, atol=1e-12, rtol=0.0)
+    np.testing.assert_allclose(
+        state[:, 3:7],
+        np.broadcast_to(
+            _rotation_quaternion((1.0, 0.0, 0.0), np.pi / 2.0),
+            state[:, 3:7].shape,
+        ),
+        atol=1e-11,
+        rtol=0.0,
+    )
+    assert np.max(result.diagnostics.position_residual) <= 1e-8
+    assert np.max(result.diagnostics.velocity_residual) <= 1e-7
 
 
 @pytest.mark.parametrize(

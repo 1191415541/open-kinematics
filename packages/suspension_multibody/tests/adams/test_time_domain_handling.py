@@ -94,3 +94,16 @@ def test_handling_pac2002_assembly_uses_builtin_rt_tires(tmp_path: Path) -> None
     assert "TR_Front_Tires.sub::rt" in assembly.read_text(encoding="utf-8")
     assert "TR_Rear_Tires.sub::rt" in assembly.read_text(encoding="utf-8")
     assert manifest["tire_model"] == "adams_builtin_pac2002"
+
+
+def test_handling_manifest_can_declare_native_brush_reference() -> None:
+    manifest = _input_manifest(
+        _history(),
+        "fixture.dcf",
+        "fixture_native_brush.asy",
+        tire_model="native_brush",
+    )
+
+    assert manifest["tire_model"] == "adams_generated_brush"
+    assert manifest["tire_property_file"] is None
+    assert manifest["tire_property_source"] == "native_brush_generator"

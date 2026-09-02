@@ -3,7 +3,13 @@
 import numpy as np
 import pytest
 
-from suspension_multibody.core import SE3, RigidBody, RigidBodyState
+from suspension_multibody.core import (
+    SE3,
+    RigidBody,
+    RigidBodyState,
+    quaternion_multiply,
+    rotation_vector_to_quaternion,
+)
 from suspension_multibody.elements import (
     AntiRollBarElement,
     BumpStopElement,
@@ -61,6 +67,68 @@ def test_static_damper_and_bushing() -> None:
     result = bushing.evaluate(_state())
     assert np.isclose(result.energy, 20)
     assert np.isclose(result.body_wrenches_global["b"][0], -20)
+
+
+def test_bushing_akima_curve_controls_force_tangent_and_energy() -> None:
+    curve = ((-2.0, -4.0), (-1.0, -1.0), (0.0, 0.0), (1.0, 2.0), (2.0, 8.0))
+    bushing = BushingElement(
+        "akima_bushing",
+        "a",
+        "b",
+        stiffness=np.zeros((6, 6)),
+        force_curves=(curve, (), (), (), (), ()),
+        force_curve_interpolation="akima",
+    )
+
+    result = bushing.evaluate(_state(0.5))
+
+    assert result.body_wrenches_global["b"][0] == pytest.approx(-0.8166666667)
+    assert result.tangent is not None
+    assert result.tangent[0, 0] == pytest.approx(-1.9666666667)
+    assert result.energy == pytest.approx(0.1909722222)
+
+
+def test_bushing_uses_xyz_cardan_coordinates_and_rates() -> None:
+    angles = np.array((0.07, -0.04, 0.11))
+    relative_quaternion = quaternion_multiply(
+        quaternion_multiply(
+            rotation_vector_to_quaternion(np.array((angles[0], 0.0, 0.0))),
+            rotation_vector_to_quaternion(np.array((0.0, angles[1], 0.0))),
+        ),
+        rotation_vector_to_quaternion(np.array((0.0, 0.0, angles[2]))),
+    )
+    angular_velocity = np.array((0.3, -0.2, 0.5))
+    bushing = BushingElement(
+        "cardan_bushing",
+        "a",
+        "b",
+        stiffness=np.eye(6),
+        rotation_coordinates="cardan_xyz",
+    )
+
+    expected_rate = np.array(
+        (
+            angular_velocity[0]
+            - np.sin(angles[1])
+            * (-np.sin(angles[0]) * angular_velocity[1]
+               + np.cos(angles[0]) * angular_velocity[2])
+            / np.cos(angles[1]),
+            np.cos(angles[0]) * angular_velocity[1]
+            + np.sin(angles[0]) * angular_velocity[2],
+            (-np.sin(angles[0]) * angular_velocity[1]
+             + np.cos(angles[0]) * angular_velocity[2])
+            / np.cos(angles[1]),
+        )
+    )
+
+    np.testing.assert_allclose(
+        bushing.rotational_deformation(relative_quaternion), angles, atol=1e-12
+    )
+    np.testing.assert_allclose(
+        bushing.rotational_rate(relative_quaternion, angular_velocity),
+        expected_rate,
+        atol=1e-12,
+    )
 
 
 def test_tire_unilateral_active_set() -> None:
