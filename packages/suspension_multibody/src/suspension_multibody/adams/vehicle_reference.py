@@ -170,6 +170,7 @@ def write_vehicle_reference_bundle(
             "output_step_s": 0.01,
             "frame": "vehicle_x_forward_y_left_z_up",
             "units": "SI",
+            "tire_model": manifest.get("tire_model", "adams_builtin_pac2002"),
         }
     )
     bundle = VehicleReferenceBundle(
@@ -185,7 +186,7 @@ def write_vehicle_reference_bundle(
             "version": profile.version or "unknown",
             "profile": profile.name,
             "template": "Demo_Vehicle_Variants.asy/default",
-            "tire_model": "adams_builtin_pac2002",
+            "tire_model": manifest.get("tire_model", "adams_builtin_pac2002"),
         },
     )
     output = destination / "adams_reference_bundle.json"

@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -29,7 +28,7 @@ from ..analysis import CModeSolver, KReferenceCache, LoadPath
 from ..model import build_front_axle, side_hardpoints
 from ..schema import Bushing6x6, FrontAxleModel, MassSpec, Pose, Vec3
 from .adapter import SmokeResult, Tolerance
-from .probe import AdamsProfile
+from .probe import AdamsProfile, _adams_environment
 from .strict_k import build_equivalence_manifest
 
 CONTRACT = "strict-adams-c-v1"
@@ -749,7 +748,7 @@ def _run_process(
     return subprocess.run(
         [str(executable), *arguments],
         cwd=cwd,
-        env=os.environ.copy(),
+        env=_adams_environment(cwd),
         capture_output=True,
         text=True,
         timeout=timeout,

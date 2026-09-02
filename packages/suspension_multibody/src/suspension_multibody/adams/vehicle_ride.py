@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -12,7 +11,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from .probe import AdamsProfile
+from .probe import AdamsProfile, _adams_environment
 from .time_domain import AdamsResultChannel, TimeHistory, parse_adams_result_history
 from .vehicle_acceptance import RIDE_CASES
 from .vehicle_reference import write_vehicle_reference_bundle
@@ -117,7 +116,7 @@ def run_adams_car_ride_case(
     completed = subprocess.run(
         [profile.executable, "acar", "ru-acar", "b", str(command_path)],
         cwd=runtime,
-        env=os.environ.copy(),
+        env=_adams_environment(runtime),
         capture_output=True,
         text=True,
         timeout=600,
@@ -170,7 +169,7 @@ def run_adams_car_ride_case(
         standard = subprocess.run(
             [profile.executable, "ru-standard", stem],
             cwd=runtime,
-            env={**os.environ.copy(), "MDI_PRODUCT_NAME": "acar"},
+            env={**_adams_environment(runtime), "MDI_PRODUCT_NAME": "acar"},
             capture_output=True,
             text=True,
             timeout=600,

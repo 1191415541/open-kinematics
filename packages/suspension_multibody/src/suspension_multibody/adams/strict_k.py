@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import re
 import subprocess
 import tempfile
@@ -18,7 +17,7 @@ from ..model import build_front_axle
 from ..schema import FrontAxleModel, MassSpec
 from .adapter import SmokeResult, Tolerance
 from .equivalent_model import write_equivalent_sources
-from .probe import AdamsProfile
+from .probe import AdamsProfile, _adams_environment
 from .reference import _read_hardpoints
 
 CONTRACT = "strict-adams-k-v1"
@@ -543,7 +542,7 @@ def _run_process(
     timeout: int,
     environment: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    env = os.environ.copy()
+    env = _adams_environment(cwd)
     if environment:
         env.update(environment)
     return subprocess.run(

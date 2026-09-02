@@ -425,8 +425,8 @@ def _fixture_wrench_from_momentum_balance(
         if not body.fixed
     ]
     masses = np.asarray([body.mass_kg for body in moving], dtype=float)
-    linear_momentum = np.zeros((time.size, 3), dtype=float)
-    angular_momentum = np.zeros((time.size, 3), dtype=float)
+    linear_momentum_rate = np.zeros((time.size, 3), dtype=float)
+    angular_momentum_rate = np.zeros((time.size, 3), dtype=float)
     external_force = np.zeros((time.size, 3), dtype=float)
     external_moment = np.zeros((time.size, 3), dtype=float)
     gravity = np.asarray(model.gravity_m_per_s2, dtype=float)
@@ -435,20 +435,23 @@ def _fixture_wrench_from_momentum_balance(
         index = result_body_index[body.name]
         state = result.states[:, index, :]
         position = state[:, _POSITION]
-        velocity = state[:, _VELOCITY]
         omega = state[:, _OMEGA]
+        acceleration = state[:, _ACCELERATION]
+        alpha = state[:, _ALPHA]
         rotation = _rotation_matrices(state[:, _QUATERNION])
         inertia_body = np.asarray(body.inertia_kg_m2, dtype=float)
         inertia_world = np.einsum(
             "tij,jk,tlk->til", rotation, inertia_body, rotation
         )
-        linear_momentum += masses[body_offset] * velocity
-        angular_momentum += np.cross(
+        linear_momentum_rate += masses[body_offset] * acceleration
+        angular_momentum_rate += np.cross(
             position - reference_position,
-            masses[body_offset] * velocity,
+            masses[body_offset] * acceleration,
         )
-        angular_momentum += np.einsum(
-            "tij,tj->ti", inertia_world, omega
+        angular_momentum_rate += np.einsum("tij,tj->ti", inertia_world, alpha)
+        angular_momentum_rate += np.cross(
+            omega,
+            np.einsum("tij,tj->ti", inertia_world, omega),
         )
 
         body_gravity = masses[body_offset] * gravity
@@ -492,7 +495,14 @@ def _fixture_wrench_from_momentum_balance(
             + normal * tire_state[:, 4, None]
         )
         contact_point = center.copy()
-        contact_point[:, 2] -= tire.unloaded_radius_m
+        if tire.model_kind == "native_brush":
+            force_application_radius = tire.unloaded_radius_m
+        else:
+            force_application_radius = np.maximum(
+                tire.unloaded_radius_m - tire_state[:, 2],
+                1.0e-9,
+            )
+        contact_point[:, 2] -= force_application_radius
         external_force += force
         external_moment += np.cross(
             contact_point - reference_position, force
@@ -507,10 +517,8 @@ def _fixture_wrench_from_momentum_balance(
         spin_axis /= np.linalg.norm(spin_axis, axis=1)[:, None]
         external_moment += spin_axis * drive[:, None]
 
-    momentum_rate = _time_derivative(linear_momentum, time)
-    angular_momentum_rate = _time_derivative(angular_momentum, time)
     return np.column_stack(
-        (external_force - momentum_rate, external_moment - angular_momentum_rate)
+        (external_force - linear_momentum_rate, external_moment - angular_momentum_rate)
     )
 
 
@@ -535,12 +543,6 @@ def _case_signal(
             for column in range(width)
         ]
     )
-
-
-def _time_derivative(values: np.ndarray, time: np.ndarray) -> np.ndarray:
-    if values.shape[0] < 3:
-        return np.gradient(values, time, axis=0, edge_order=1)
-    return np.gradient(values, time, axis=0, edge_order=2)
 
 
 def _accumulate_wrench(

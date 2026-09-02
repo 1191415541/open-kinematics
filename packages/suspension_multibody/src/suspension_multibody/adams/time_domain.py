@@ -13,7 +13,7 @@ from typing import cast
 
 import numpy as np
 
-from ..schema import DynamicResultBundle
+from ..schema import DynamicResultBundle, TimeSignal
 
 
 @dataclass(frozen=True)
@@ -109,6 +109,14 @@ class AdamsResultChannel:
     component: str
 
 
+_ADAMS_CONTACT_PATCH_CHANNELS = {
+    "front_left": AdamsResultChannel("til_wheel_contact_patch", "z_front"),
+    "front_right": AdamsResultChannel("tir_wheel_contact_patch", "z_front"),
+    "rear_left": AdamsResultChannel("til_wheel_contact_patch", "z_rear"),
+    "rear_right": AdamsResultChannel("tir_wheel_contact_patch", "z_rear"),
+}
+
+
 def read_time_history(source: str | Path | Mapping[str, object]) -> TimeHistory:
     """Read a time history from mapping, JSON, or CSV."""
     if isinstance(source, Mapping):
@@ -185,6 +193,47 @@ def parse_adams_result_history(
         },
         units=units,
     )
+
+
+def adams_contact_patch_plane_height_m(path: str | Path) -> float:
+    """从 Adams 四轮接触面结果读取公共平面高度并转换为米."""
+    channels = {
+        f"{wheel}.contact_patch_z": channel
+        for wheel, channel in _ADAMS_CONTACT_PATCH_CHANNELS.items()
+    }
+    history = parse_adams_result_history(
+        path,
+        channels,
+        units={name: "mm" for name in channels},
+    )
+    initial_heights_mm = np.asarray(
+        [history.channels[name][0] for name in channels],
+        dtype=float,
+    )
+    if not np.all(np.isfinite(initial_heights_mm)):
+        raise ValueError("Adams 初始接触面高度包含非有限值")
+    if float(np.ptp(initial_heights_mm)) > 1.0e-6:
+        raise ValueError(
+            "Adams 四轮初始接触面不是公共平面: "
+            f"范围为 {float(np.ptp(initial_heights_mm)):.9g} mm"
+        )
+    return float(np.mean(initial_heights_mm) * 1.0e-3)
+
+
+def adams_rack_displacement_signal_from_result(path: str | Path) -> TimeSignal:
+    """从 Adams steering_Input 结果读取齿条位移历史，单位为毫米."""
+    channel_name = "steering_rack_displacement"
+    history = parse_adams_result_history(
+        path,
+        {
+            channel_name: AdamsResultChannel(
+                "steering_Input",
+                "pitman_arm_rotation_or_rack_travel_front",
+            )
+        },
+        units={channel_name: "mm"},
+    )
+    return TimeSignal(times=history.time, values=history.channels[channel_name])
 
 
 def write_time_history(history: TimeHistory, path: str | Path) -> Path:

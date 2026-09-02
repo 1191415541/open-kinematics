@@ -78,6 +78,7 @@ Copy-Item -LiteralPath $temporaryOutput -Destination $output -Force
 $version = (& $compiler --version | Select-Object -First 1)
 $record = [ordered]@{
     abi_version = 14
+    vehicle_abi_version = 21
     compiler = $compiler
     compiler_version = $version
     configuration = $Configuration

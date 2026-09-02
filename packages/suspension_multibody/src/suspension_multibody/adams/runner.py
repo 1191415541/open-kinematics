@@ -8,7 +8,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from .probe import AdamsProfile
+from .probe import AdamsProfile, _adams_environment
 
 
 def run_default_adams(
@@ -23,6 +23,7 @@ def run_default_adams(
     completed = subprocess.run(
         [profile.executable, "acar", "ru-acar", "b", str(command_file)],
         cwd=output_dir,
+        env=_adams_environment(output_dir),
         capture_output=True,
         text=True,
         timeout=600,

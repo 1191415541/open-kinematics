@@ -457,8 +457,8 @@ def _validate_adams_solver(value: Mapping[str, object]) -> None:
             raise ValueError(
                 "adams_solver fixed-step settings must be integers"
             ) from exc
-        if not 1 <= fixed_iterations <= 10:
-            raise ValueError("adams_solver fixed_iterations must be in [1, 10]")
+        if not 1 <= fixed_iterations <= 40:
+            raise ValueError("adams_solver fixed_iterations must be in [1, 40]")
         if step_ratio < 1:
             raise ValueError("adams_solver step_ratio must be positive")
 

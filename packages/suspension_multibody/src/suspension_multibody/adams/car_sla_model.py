@@ -441,6 +441,10 @@ def build_sla_axle_model(
                 longitudinal_relaxation_length_m=0.25,
                 lateral_relaxation_length_m=0.35,
                 detached_relaxation_s=0.05,
+                # 该 SLA 轴的 primitive Adams 对照模型是生成式刷胎，
+                # 显式写出模型类型，禁止依赖 AxleTire 的默认值。
+                model_kind="native_brush",
+                pac2002_parameter_source="user",
             )
         )
 

@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 
 ABI_VERSION = 14
+VEHICLE_ABI_VERSION = 21
 
 
 def main() -> int:
@@ -80,8 +81,10 @@ def main() -> int:
         # and the kernel simply runs single-threaded.
         "-fopenmp",
         f"-I{include}",
-        "-O2" if args.configuration == "Release" else "-O0",
+        "-O3" if args.configuration == "Release" else "-O0",
     ]
+    if args.configuration == "Release":
+        flags.append("-flto")
     if args.configuration == "Debug":
         flags.append("-g")
     with tempfile.TemporaryDirectory(prefix="axle-native-") as temp:
@@ -100,6 +103,7 @@ def main() -> int:
     ).stdout.splitlines()[0]
     metadata = {
         "abi_version": ABI_VERSION,
+        "vehicle_abi_version": VEHICLE_ABI_VERSION,
         "compiler": compiler,
         "compiler_version": version,
         "configuration": args.configuration,

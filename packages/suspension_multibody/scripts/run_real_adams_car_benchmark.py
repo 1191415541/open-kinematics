@@ -26,7 +26,7 @@ import tempfile
 import time
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 try:
     from run_dynamic_kc_correlation import bindings_for, build_case_and_model
@@ -43,6 +43,7 @@ from suspension_multibody.adams import (
     axle_history_from_result,
     build_axle_adams_dataset,
     compare_strict_axle_histories,
+    compare_tire_force_histories,
     create_dynamic_axle_manifest,
     discover_profile,
     initialization_evidence_from_result,
@@ -55,6 +56,8 @@ from suspension_multibody.axle_dynamics import (
     native_build_metadata,
     run_axle_dynamics,
 )
+
+ADAMS_FIXED_ITERATIONS = 40
 
 
 def _sha256(path: Path) -> str:
@@ -252,13 +255,15 @@ def _retain_adams_run(run_dir: Path, stem: str, destination: Path) -> dict[str, 
 
 
 def _refined_case(case: Any) -> Any:
+    internal_step_s = 0.5 * case.solver.internal_step_s
     solver = case.solver.model_copy(
         update={
-            "internal_step_s": 0.5 * case.solver.internal_step_s,
-            "maximum_step_s": 0.5 * case.solver.maximum_step_s,
+            "adaptive_step": False,
+            "internal_step_s": internal_step_s,
+            "maximum_step_s": internal_step_s,
             "minimum_step_s": min(
                 case.solver.minimum_step_s,
-                0.5 * case.solver.internal_step_s,
+                internal_step_s,
             ),
         }
     )
@@ -276,8 +281,12 @@ def _run_case(
     fixed_step: bool,
     fixed_step_s: float | None,
     adams_hht_alpha: float | None,
+    tire_model: Literal["native_brush"],
 ) -> dict[str, object]:
-    model, case, road_height = build_case_and_model(rigid=True)
+    model, case, road_height = build_case_and_model(
+        rigid=True,
+        tire_model=tire_model,
+    )
     hht_alpha = -0.3 if adams_hht_alpha is None else adams_hht_alpha
     solver_update: dict[str, object] = {
         "integrator": "hht",
@@ -371,7 +380,7 @@ def _run_case(
     if fixed_step:
         adams_solver.update(
             {
-                "fixed_iterations": 10,
+                "fixed_iterations": ADAMS_FIXED_ITERATIONS,
                 "step_ratio": int(round((case.times_s[1] - case.times_s[0]) / case.solver.internal_step_s)),
             }
         )
@@ -619,6 +628,14 @@ def _run_case(
             "precision_metrics": None,
             "blockers": final_audit["blockers"],
         }
+    tire_force_result = None
+    if adams_refined_history is not None and native_refined_history is not None:
+        tire_force_result = compare_tire_force_histories(
+            adams_refined_history,
+            native_refined_history,
+            tire_model=tire_model,
+            acceptance=manifest.payload["acceptance"],
+        )
     dynamic_comparison = {
         "contract": "dynamic-axle-channel-comparison-v2",
         "status": (
@@ -663,6 +680,8 @@ def _run_case(
                 "frozen 10-cycle harmonic window"
             ),
         },
+        "tire_model": tire_model,
+        "tire_force_precision": tire_force_result,
         **dynamic_result,
     }
     if not precision_performed:
@@ -705,6 +724,7 @@ def _run_case(
     adams_speed = float(adams_timing["median_wall_time_s"])
     summary = {
         "case": case_name,
+        "tire_model": tire_model,
         "manifest_sha256": manifest.sha256,
         "parameter_provenance": "adams_car_database_import",
         "source_database_provenance": final_audit["source_database_provenance"],
@@ -731,6 +751,7 @@ def _run_case(
         "dynamic_precision_gate_passed": (
             bool(dynamic_comparison["passed"]) if precision_performed else None
         ),
+        "tire_force_precision": dynamic_comparison["tire_force_precision"],
         "native_physics_gates": {
             "solver_internal": native_diagnostics["solver_internal_gates_passed"],
             "energy": native_diagnostics["energy_gate_passed"],
@@ -748,6 +769,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", default="artifacts/real-adams-car")
     parser.add_argument("--case", default="road_sine")
+    parser.add_argument(
+        "--tire-model",
+        choices=("native_brush",),
+        default="native_brush",
+        help="Standalone axle comparison model; PAC2002 uses the independent full-vehicle path.",
+    )
     parser.add_argument("--warmup-runs", type=int, default=1)
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument(
@@ -818,6 +845,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.fixed_step,
         args.fixed_step_s,
         args.adams_hht_alpha,
+        args.tire_model,
     )
     report = {
         "producer": "open-kinematics.real-adams-car-benchmark",

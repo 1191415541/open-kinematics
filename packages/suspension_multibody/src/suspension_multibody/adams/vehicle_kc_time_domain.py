@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import tempfile
@@ -11,7 +10,7 @@ from pathlib import Path
 
 from ..api import run_dynamic_case
 from ..schema import DynamicCaseSpec, FrontAxleModel, TimeSignal
-from .probe import AdamsProfile
+from .probe import AdamsProfile, _adams_environment
 from .time_domain import (
     AdamsResultChannel,
     TimeHistoryTolerance,
@@ -87,7 +86,7 @@ def run_vehicle_kc_roll_adams(
     completed = subprocess.run(
         [profile.executable, "ru-standard", stem],
         cwd=runtime,
-        env=os.environ.copy(),
+        env=_adams_environment(runtime),
         capture_output=True,
         text=True,
         timeout=300,

@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 
@@ -54,10 +55,20 @@ EXCITATION_HZ = 3.0
 EXCITATION_AMPLITUDE_M = 0.010
 DURATION_S = 0.5
 OUTPUT_STEP_S = 0.001
+CONVERGED_INTERNAL_STEP_S = 0.00003125
 
 
-def build_case_and_model(rigid: bool):
+def build_case_and_model(
+    rigid: bool,
+    *,
+    tire_model: Literal["native_brush"] = "native_brush",
+):
     """Return the SI model, the sampled case, and the contact plane height."""
+    if tire_model != "native_brush":
+        raise ValueError(
+            "standalone primitive Adams axle only implements native_brush; "
+            "PAC2002 requires an independent Adams/Car reference"
+        )
     suspension = read_adams_suspension(
         SUBSYSTEM,
         tire_unloaded_radius_m=RIG_WHEEL_RADIUS_M,
@@ -98,7 +109,7 @@ def build_case_and_model(rigid: bool):
         solver=AxleSolverSettings(
             initialization_mode="static_equilibrium",
             adaptive_step=True,
-            internal_step_s=0.00025,
+            internal_step_s=CONVERGED_INTERNAL_STEP_S,
             maximum_step_s=OUTPUT_STEP_S,
             minimum_step_s=1e-7,
             max_newton_iterations=100,
@@ -182,7 +193,10 @@ def main() -> int:
         shutil.rmtree(work)
     work.mkdir(parents=True)
 
-    model, case, road_height_m = build_case_and_model(rigid=True)
+    model, case, road_height_m = build_case_and_model(
+        rigid=True,
+        tire_model="native_brush",
+    )
     manifest = create_dynamic_axle_manifest(
         model,
         case,

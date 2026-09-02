@@ -11,6 +11,8 @@ comparison:
     formula: abs(candidate_peak-reference_peak)/max(abs(reference_peak),amplitude_floor)
     maximum: 0.05
     timing_max_s: 0.001
+    edge_exclusion_samples: 0
+    derived_channel_edge_exclusion_samples: 3
     multiple_peak_rule: compare_largest_absolute_peak_inside_frozen_window
   harmonic:
     method: least_squares_single_frequency

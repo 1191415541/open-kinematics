@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeAlias, cast
 
-from .probe import AdamsProfile
+from .probe import AdamsProfile, _adams_environment
 
 NumericGroups: TypeAlias = Mapping[str, Mapping[str, float]]
 Runner: TypeAlias = Callable[..., object] | str | Path | Sequence[str]
@@ -440,7 +440,7 @@ def _run_command(
     command: Sequence[str], request_path: Path, destination: Path
 ) -> subprocess.CompletedProcess[str]:
     args = list(command) + [str(request_path), str(destination)]
-    environment = os.environ.copy()
+    environment = _adams_environment(destination)
     environment.update(
         {
             "SUSPENSION_MULTIBODY_ADAMS_REQUEST": str(request_path),

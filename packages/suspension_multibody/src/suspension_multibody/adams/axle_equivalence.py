@@ -49,6 +49,16 @@ _DIAGNOSTIC_GATES = (
     "energy_gate_passed",
     "time_convergence_passed",
 )
+TIRE_FORCE_CHANNELS = (
+    "left.tire_normal_force",
+    "right.tire_normal_force",
+    "left.tire_longitudinal_force",
+    "right.tire_longitudinal_force",
+    "left.tire_lateral_force",
+    "right.tire_lateral_force",
+)
+# 兼容已有调用方；名称本身不再决定实际轮胎模型。
+PAC2002_TIRE_FORCE_CHANNELS = TIRE_FORCE_CHANNELS
 
 
 class AxleContactEvent(StrictModel):
@@ -475,6 +485,10 @@ def run_native_axle_manifest(
         history,
         refined_history,
         cast(Mapping[str, object], manifest.payload["acceptance"]),
+        primary_result=result,
+        refined_result=refined_result,
+        primary_case=manifest.case,
+        refined_case=refined_case,
     )
     solver_gate = _native_solver_gate(
         result,
@@ -573,6 +587,7 @@ def compare_strict_axle_histories(
             np.asarray(candidate.channels[name], dtype=float),
             _unit_category(cast(Mapping[str, str], reference.units or {})[name]),
             contract,
+            derived_from_public_balance=name.startswith("fixture."),
         )
         for name in core
     }
@@ -614,6 +629,88 @@ def compare_strict_axle_histories(
     }
 
 
+def compare_tire_force_histories(
+    reference: TimeHistory,
+    candidate: TimeHistory,
+    *,
+    tire_model: Literal["pac2002", "native_brush"],
+    acceptance: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """按显式轮胎模型在公共时间网格上比较六个轮胎力通道。."""
+    if tire_model not in {"pac2002", "native_brush"}:
+        raise ValueError(f"unsupported tire comparison model: {tire_model!r}")
+    names = TIRE_FORCE_CHANNELS
+    for history, label in ((reference, "reference"), (candidate, "candidate")):
+        missing = [name for name in names if name not in history.channels]
+        if missing:
+            raise ValueError(f"{label} history is missing tire channels: {missing}")
+        if history.units is None or any(name not in history.units for name in names):
+            raise ValueError(f"{label} history lacks explicit tire channel units")
+    reference_subset = TimeHistory(
+        time=reference.time,
+        channels={name: reference.channels[name] for name in names},
+        units={name: reference.units[name] for name in names},
+    )
+    candidate_subset = TimeHistory(
+        time=candidate.time,
+        channels={name: candidate.channels[name] for name in names},
+        units={name: candidate.units[name] for name in names},
+    )
+    contract = acceptance or load_axle_acceptance_contract()
+    _validate_history_pair(reference_subset, candidate_subset, names)
+    time = np.asarray(reference_subset.time, dtype=float)
+    channels = {
+        name: _channel_metrics(
+            time,
+            np.asarray(reference_subset.channels[name], dtype=float),
+            np.asarray(candidate_subset.channels[name], dtype=float),
+            _unit_category(reference_subset.units[name]),
+            contract,
+        )
+        for name in names
+    }
+    return {
+        "contract": "tire-force-comparison-v2",
+        "tire_model": tire_model,
+        "channels_expected": list(names),
+        "time_alignment": "common_manifest_grid",
+        "interpolation": "none",
+        "sample_count": len(time),
+        "channels": channels,
+        "passed": bool(all(value["passed"] for value in channels.values())),
+    }
+
+
+def compare_pac2002_tire_force_histories(
+    reference: TimeHistory,
+    candidate: TimeHistory,
+    *,
+    acceptance: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """兼容入口：比较明确标记为 PAC2002 的六个轮胎力通道。."""
+    return compare_tire_force_histories(
+        reference,
+        candidate,
+        tire_model="pac2002",
+        acceptance=acceptance,
+    )
+
+
+def compare_native_brush_tire_force_histories(
+    reference: TimeHistory,
+    candidate: TimeHistory,
+    *,
+    acceptance: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """比较明确标记为生成式 native brush 的六个轮胎力通道。."""
+    return compare_tire_force_histories(
+        reference,
+        candidate,
+        tire_model="native_brush",
+        acceptance=acceptance,
+    )
+
+
 def audit_axle_time_convergence(
     primary: TimeHistory,
     refined: TimeHistory,
@@ -629,11 +726,11 @@ def _refined_case(case: AxleDynamicsCase) -> AxleDynamicsCase:
     payload = case.model_dump(mode="json")
     solver = dict(cast(Mapping[str, object], payload["solver"]))
     internal = 0.5 * float(solver["internal_step_s"])
-    maximum = 0.5 * float(solver["maximum_step_s"])
     solver.update(
         {
+            "adaptive_step": False,
             "internal_step_s": internal,
-            "maximum_step_s": maximum,
+            "maximum_step_s": internal,
             "minimum_step_s": min(float(solver["minimum_step_s"]), internal),
         }
     )
@@ -736,6 +833,11 @@ def _time_convergence_gate(
     primary: TimeHistory,
     refined: TimeHistory,
     acceptance: Mapping[str, object],
+    *,
+    primary_result: AxleDynamicsResult | None = None,
+    refined_result: AxleDynamicsResult | None = None,
+    primary_case: AxleDynamicsCase | None = None,
+    refined_case: AxleDynamicsCase | None = None,
 ) -> dict[str, object]:
     _validate_history_pair(
         refined,
@@ -770,9 +872,38 @@ def _time_convergence_gate(
     )
     maximum_state = max(state_errors.values(), default=0.0)
     maximum_load = max(load_errors.values(), default=0.0)
+    step_evidence: dict[str, object] | None = None
+    if (
+        primary_result is not None
+        and refined_result is not None
+        and primary_case is not None
+        and refined_case is not None
+    ):
+        primary_steps = _accepted_step_evidence(primary_result, primary_case)
+        refined_steps = _accepted_step_evidence(refined_result, refined_case)
+        step_evidence = {
+            "primary": primary_steps,
+            "refined": refined_steps,
+            "target_ratio": (
+                refined_case.solver.internal_step_s
+                / primary_case.solver.internal_step_s
+            ),
+            "passed": bool(primary_steps["passed"] and refined_steps["passed"]),
+        }
+    step_passed = True if step_evidence is None else bool(step_evidence["passed"])
     return {
-        "primary_step_s": None,
-        "refined_step_ratio": 0.5,
+        "primary_step_s": (
+            None
+            if primary_case is None
+            else primary_case.solver.internal_step_s
+        ),
+        "refined_step_ratio": (
+            None
+            if primary_case is None or refined_case is None
+            else refined_case.solver.internal_step_s
+            / primary_case.solver.internal_step_s
+        ),
+        "step_evidence": step_evidence,
         "maximum_state_nrmse": maximum_state,
         "maximum_load_nrmse": maximum_load,
         "state_limit": float(convergence["state_nrmse_h_vs_h2_max"]),
@@ -784,7 +915,61 @@ def _time_convergence_gate(
             <= float(convergence["state_nrmse_h_vs_h2_max"])
             and maximum_load
             <= float(convergence["load_nrmse_h_vs_h2_max"])
+            and step_passed
         ),
+    }
+
+
+def _accepted_step_evidence(
+    result: AxleDynamicsResult,
+    case: AxleDynamicsCase,
+) -> dict[str, object]:
+    """核验求解器实际接受的步长，而不是只核验配置值。."""
+    diagnostics = result.diagnostics
+    accepted = np.asarray(diagnostics.accepted, dtype=float) > 0.5
+    arrays = {
+        "minimum": np.asarray(diagnostics.minimum_accepted_step_s, dtype=float),
+        "maximum": np.asarray(diagnostics.maximum_accepted_step_s, dtype=float),
+        "last": np.asarray(diagnostics.last_accepted_step_s, dtype=float),
+    }
+    finite = bool(
+        all(np.all(np.isfinite(values)) for values in arrays.values())
+    )
+    observed = np.concatenate(
+        tuple(values[accepted & (values > 0.0)] for values in arrays.values())
+    )
+    target = float(case.solver.internal_step_s)
+    tolerance = max(1.0e-12, abs(target) * 1.0e-8)
+    checks = {
+        "all_outputs_accepted": bool(np.all(accepted)),
+        "finite_step_diagnostics": finite,
+        "within_configured_maximum": bool(
+            finite
+            and observed.size > 0
+            and float(np.max(observed))
+            <= float(case.solver.maximum_step_s) + tolerance
+        ),
+        "fixed_step_matches_target": bool(
+            not case.solver.adaptive_step
+            and finite
+            and observed.size > 0
+            and float(np.max(np.abs(observed - target))) <= tolerance
+        )
+        if not case.solver.adaptive_step
+        else True,
+    }
+    return {
+        "adaptive_step": case.solver.adaptive_step,
+        "requested_internal_step_s": target,
+        "configured_maximum_step_s": case.solver.maximum_step_s,
+        "actual_minimum_step_s": (
+            float(np.min(observed)) if observed.size else None
+        ),
+        "actual_maximum_step_s": (
+            float(np.max(observed)) if observed.size else None
+        ),
+        "checks": checks,
+        "passed": bool(all(checks.values())),
     }
 
 
@@ -843,7 +1028,9 @@ def _channel_metrics(
     candidate: np.ndarray,
     category: str,
     acceptance: Mapping[str, object],
-) -> dict[str, float | bool]:
+    *,
+    derived_from_public_balance: bool = False,
+) -> dict[str, float | bool | int]:
     comparison = cast(Mapping[str, object], acceptance["comparison"])
     nrmse_contract = cast(Mapping[str, object], comparison["nrmse"])
     peak_contract = cast(Mapping[str, object], comparison["peak"])
@@ -857,8 +1044,21 @@ def _channel_metrics(
     error = candidate - reference
     reference_range = float(np.max(reference) - np.min(reference))
     nrmse = _rms(error) / max(reference_range, floor)
-    reference_index = int(np.argmax(np.abs(reference)))
-    candidate_index = int(np.argmax(np.abs(candidate)))
+    edge_exclusion_key = (
+        "derived_channel_edge_exclusion_samples"
+        if derived_from_public_balance
+        else "edge_exclusion_samples"
+    )
+    edge_exclusion = int(peak_contract.get(edge_exclusion_key, 0))
+    if edge_exclusion < 0:
+        raise ValueError("peak edge exclusion is outside the history")
+    if edge_exclusion >= len(time):
+        # 短单元测试或短诊断历史没有足够的公共点，保留完整历史而不是
+        # 让比较器因派生通道的窗口配置本身失败。
+        edge_exclusion = 0
+    peak_slice = slice(0, len(time) - edge_exclusion or None)
+    reference_index = int(np.argmax(np.abs(reference[peak_slice])))
+    candidate_index = int(np.argmax(np.abs(candidate[peak_slice])))
     reference_peak = float(reference[reference_index])
     candidate_peak = float(candidate[candidate_index])
     peak_relative = abs(candidate_peak - reference_peak) / max(
@@ -889,6 +1089,7 @@ def _channel_metrics(
         "peak_relative_error": peak_relative,
         "peak_timing_applicable": peak_timing_applicable,
         "peak_timing_error_s": peak_timing,
+        "peak_window_edge_exclusion_samples": edge_exclusion,
         "phase_lag_ms": phase_lag_ms,
         "phase_absolute_error_ms": abs(phase_lag_ms),
         "maximum_absolute_error": maximum_absolute,

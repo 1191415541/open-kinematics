@@ -186,6 +186,20 @@ def _input_blockers(
     case: AxleDynamicsCase,
 ) -> list[str]:
     blockers: list[str] = []
+    unsupported_tire_models = sorted(
+        {
+            tire.model_kind
+            for tire in model.tires
+            if tire.model_kind != "native_brush"
+        }
+    )
+    if unsupported_tire_models:
+        blockers.append(
+            "primitive Adams axle dataset implements only the explicit "
+            "native_brush reference; PAC2002 must use the independent "
+            "Adams/Car PAC2002 reference: "
+            + ", ".join(unsupported_tire_models)
+        )
     bodies = {body.name: body for body in model.bodies}
     # A declared harmonic is written as a closed-form SIN expression, so its
     # tire never needs breakpoints on either side.
@@ -577,8 +591,8 @@ class _DatasetBuilder:
             return
         self._emit("!")
         self._emit(
-            "! unilateral compliant contact with a transient brush model; the "
-            "friction-ellipse radial return is written out explicitly"
+            "! native_brush unilateral compliant contact; the friction-ellipse "
+            "radial return is written out explicitly"
         )
         for tire in self._model.tires:
             self._emit_tire(tire)

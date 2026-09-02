@@ -145,6 +145,23 @@ def write_profile(profile: AdamsProfile, path: str | Path) -> None:
     )
 
 
+def _adams_environment(runtime: Path) -> dict[str, str]:
+    """Use a run-local writable database without changing the user's config."""
+    home = runtime / "adams_home"
+    private_database = home / "private.cdb"
+    private_database.mkdir(parents=True, exist_ok=True)
+    (home / ".acar.cfg").write_text(
+        "! Open Kinematics run-local Adams/Car configuration\n"
+        f"DATABASE private {private_database.as_posix()}\n"
+        "DEFAULT_WRITE_DB private\n",
+        encoding="ascii",
+    )
+    environment = os.environ.copy()
+    environment["HOME"] = str(home)
+    environment.pop("DEFAULT_WRITE_DB", None)
+    return environment
+
+
 def _unavailable(name: str, message: str) -> AdamsProfile:
     return AdamsProfile(
         name=name,
@@ -281,6 +298,7 @@ def _run_license_probe(executable: Path) -> tuple[str, str]:
             completed = subprocess.run(
                 [str(executable), "acar", "ru-acar", "b", str(command_file)],
                 cwd=working_dir,
+                env=_adams_environment(working_dir),
                 capture_output=True,
                 text=True,
                 timeout=120,

@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Literal
 
 from ..analysis.vehicle_correlation_model import Vehicle14DofParameters
-from .probe import AdamsProfile
+from .probe import AdamsProfile, _adams_environment
 from .time_domain import AdamsResultChannel, TimeHistory, parse_adams_result_history
 from .vehicle_acceptance import HANDLING_CASES
 from .vehicle_reference import write_vehicle_reference_bundle
 
 HandlingRunner = Callable[[AdamsProfile, str, Path], TimeHistory]
+HandlingTireModel = Literal["pac2002", "native_brush"]
 
 HANDLING_ADAMS_CHANNELS: Mapping[str, AdamsResultChannel] = {
     "steering_angle": AdamsResultChannel("driver_demands", "steering_angle"),
@@ -67,6 +68,7 @@ def validate_handling_execution(
     report: dict[str, object] = {
         "contract": "adams-car-handling-execution-v1",
         "profile": profile.name,
+        "tire_model": "pac2002",
         "cases": cases,
         "passed": all(bool(item["passed"]) for item in cases.values()),
         "correlation_status": "not_evaluated_without_independent_vehicle_history",
@@ -76,14 +78,67 @@ def validate_handling_execution(
     return HandlingExecutionResult(bool(report["passed"]), str(output), report)
 
 
+def validate_handling_execution_matrix(
+    profile: AdamsProfile,
+    *,
+    runner: HandlingRunner | None = None,
+    output_dir: str | Path | None = None,
+) -> HandlingExecutionResult:
+    """执行操稳模型矩阵，并显式记录缺失的独立 brush 参考。."""
+    destination = _destination(output_dir)
+    pac2002 = validate_handling_execution(
+        profile,
+        runner=runner,
+        output_dir=destination / "pac2002",
+    )
+    brush_reason = (
+        "独立的 Adams/Car native_brush 整车参考尚未提供，不能复用 PAC2002 参考"
+    )
+    brush_cases = {
+        name: {
+            "status": "BLOCKED",
+            "passed": False,
+            "tire_model": "native_brush",
+            "error": brush_reason,
+        }
+        for name in HANDLING_CASES
+    }
+    report = {
+        "contract": "adams-car-handling-execution-matrix-v1",
+        "profile": profile.name,
+        "variants": {
+            "pac2002": pac2002.report,
+            "native_brush": {
+                "status": "BLOCKED",
+                "tire_model": "native_brush",
+                "cases": brush_cases,
+                "passed": False,
+                "error": brush_reason,
+            },
+        },
+        "passed": False,
+    }
+    output = destination / "adams_handling_execution_matrix_report.json"
+    output.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+    return HandlingExecutionResult(False, str(output), report)
+
+
 def run_adams_car_handling_case(
-    profile: AdamsProfile, name: str, output_dir: Path
+    profile: AdamsProfile,
+    name: str,
+    output_dir: Path,
+    *,
+    tire_model: HandlingTireModel = "pac2002",
 ) -> TimeHistory:
     """Run one built-in full-vehicle handling maneuver in Adams/Car."""
     if name not in HANDLING_CASES:
         raise ValueError(f"unsupported handling case: {name}")
     if not profile.executable:
         raise ValueError("Adams executable is unavailable")
+    if tire_model == "native_brush":
+        raise ValueError(
+            "独立的 Adams/Car native_brush 整车参考尚未提供，不能复用 PAC2002 装配"
+        )
     output_dir.mkdir(parents=True, exist_ok=True)
     runtime = Path(tempfile.mkdtemp(prefix=f"suspension_multibody_handling_{name}_"))
     stem = f"handling_{name}"
@@ -97,7 +152,7 @@ def run_adams_car_handling_case(
     completed = subprocess.run(
         [profile.executable, "acar", "ru-acar", "b", str(command_path)],
         cwd=runtime,
-        env=os.environ.copy(),
+        env=_adams_environment(runtime),
         capture_output=True,
         text=True,
         timeout=600,
@@ -217,13 +272,25 @@ def _copy_builtin_inputs(profile: AdamsProfile, name: str, raw_dir: Path) -> Non
 
 
 def _input_manifest(
-    history: TimeHistory, dcf_file: str, assembly_name: str
+    history: TimeHistory,
+    dcf_file: str,
+    assembly_name: str,
+    *,
+    tire_model: HandlingTireModel = "pac2002",
 ) -> dict[str, object]:
     """Freeze the effective Adams driver demand, excluding its static zero bias."""
     steering = history.channels["steering_angle"]
     if len(steering) != len(history.time) or not steering:
         raise ValueError("Adams handling history has no steering-demand time series")
     zero_offset = steering[0]
+    reference_tire_model = (
+        "adams_builtin_pac2002"
+        if tire_model == "pac2002"
+        else "adams_generated_brush"
+    )
+    tire_property_file = (
+        "pac2002_235_60R16.tir" if tire_model == "pac2002" else None
+    )
     return {
         "analysis_mode": "full_vehicle_sdi_dynamic",
         "assembly": assembly_name,
@@ -231,8 +298,13 @@ def _input_manifest(
         "testrig": "__MDI_SDI_TESTRIG",
         "driver_control": dcf_file,
         "road": "2d_flat.rdf",
-        "tire_model": "adams_builtin_pac2002",
-        "tire_property_file": "pac2002_235_60R16.tir",
+        "tire_model": reference_tire_model,
+        "tire_property_file": tire_property_file,
+        "tire_property_source": (
+            "adams_builtin_tir"
+            if tire_model == "pac2002"
+            else "native_brush_generator"
+        ),
         "initial_state": {
             "adams": "static_equilibrium",
             "package_relative_coordinates": "zero",
