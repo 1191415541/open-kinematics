@@ -19,7 +19,7 @@ from .result import (
 )
 from .schema import (
     PAC2002_PARAMETER_DEFAULTS,
-    PAC2002_PARAMETER_NAMES,
+PAC2002_PARAMETER_NAMES,
     AxleDynamicsCase,
     AxleDynamicsModel,
 )
@@ -882,6 +882,8 @@ def _run_native(
                     )
                     else 1
                     if tire.model_kind == "pac2002_pure_slip"
+                    else 3
+                    if tire.model_kind == "fiala"
                     else 0
                 )
             )
@@ -903,6 +905,26 @@ def _run_native(
         ],
         dtype=np.float64,
     )
+    for i, tire in enumerate(model.tires):
+        if tire.model_kind == "fiala":
+            fiala = tire.fiala_parameters
+            fiala_values = (
+                fiala.get("CSLIP", 1000.0),
+                fiala.get("CALPHA", 800.0),
+                fiala.get("CGAMMA", 0.0),
+                fiala.get("MGAMMA", 0.0),
+                fiala.get("CSPIN", 0.0),
+                fiala.get("UMIN", 0.9),
+                fiala.get("UMAX", 1.0),
+                fiala.get("RELAX_LENGTH_X", tire.longitudinal_relaxation_length_m),
+                fiala.get("RELAX_LENGTH_Y", tire.lateral_relaxation_length_m),
+                fiala.get("WIDTH", 0.235),
+                fiala.get("ROLLING_RESISTANCE", 0.0),
+                fiala.get("LOW_SPEED_THRESHOLD", 1.0e-3),
+                fiala.get("DAMP_X", 0.0),
+                fiala.get("DAMP_Y", 0.0),
+            )
+            tire_pac2002_parameters[i, :len(fiala_values)] = fiala_values
     tire_pac2002_mirror = np.ascontiguousarray(
         [
             int(

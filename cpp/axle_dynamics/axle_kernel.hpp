@@ -207,7 +207,9 @@ enum VehicleTireModelKind {
     VEHICLE_TIRE_PAC2002_PURE_SLIP = 1,
     // Adams 内置 PAC2002 源模式。按照 PAC2002/Chrono 的 Fx0/Fy0
     // 定义保留 PH*/PV* 在零滑移处产生的源偏置。
-    VEHICLE_TIRE_PAC2002_ADAMS_SOURCE = 2
+    VEHICLE_TIRE_PAC2002_ADAMS_SOURCE = 2,
+    // Adams FIALA 属性文件对应的瞬态刷模型。
+    VEHICLE_TIRE_FIALA = 3
 };
 
 enum VehicleBushingRotationCoordinates {

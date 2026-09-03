@@ -80,6 +80,16 @@ def test_road_surface_rejects_amplitude_for_plane() -> None:
         RoadSurfaceSpec(kind="plane", amplitude=1.0)
 
 
+def test_fiala_schema_rejects_nonphysical_friction_parameters() -> None:
+    with pytest.raises(ValidationError, match="UMAX must be positive"):
+        TireModelSpec(kind="fiala", fiala_parameters={"UMAX": 0.0})
+    with pytest.raises(ValidationError, match="UMAX must not be below UMIN"):
+        TireModelSpec(
+            kind="fiala",
+            fiala_parameters={"UMIN": 1.0, "UMAX": 0.9},
+        )
+
+
 def test_dynamic_case_validates_initial_wheel_speed_names() -> None:
     case = VehicleDynamicCase(
         solver=DynamicSolverSettings(end_time=1.0, step_size=0.01),

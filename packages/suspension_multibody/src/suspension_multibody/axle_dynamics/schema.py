@@ -771,16 +771,24 @@ class AxleTire(StrictModel):
     longitudinal_relaxation_length_m: float = Field(gt=0)
     lateral_relaxation_length_m: float = Field(gt=0)
     detached_relaxation_s: float = Field(gt=0)
-    model_kind: Literal["native_brush", "pac2002_pure_slip"] = "native_brush"
+    model_kind: Literal["native_brush", "pac2002_pure_slip", "fiala"] = "native_brush"
     pac2002_parameter_source: Literal["user", "adams_builtin"] = "user"
     pac2002_mirror: bool | None = None
     pac2002_coefficients: dict[str, float] = Field(default_factory=dict)
+    fiala_parameters: dict[str, float] = Field(default_factory=dict)
 
     @field_validator("pac2002_coefficients")
     @classmethod
     def _finite_pac2002_coefficients(cls, value: dict[str, float]) -> dict[str, float]:
         if any(not key or not math.isfinite(float(item)) for key, item in value.items()):
             raise ValueError("pac2002_coefficients must contain finite numeric values")
+        return {str(key): float(item) for key, item in value.items()}
+
+    @field_validator("fiala_parameters")
+    @classmethod
+    def _finite_fiala_parameters(cls, value: dict[str, float]) -> dict[str, float]:
+        if any(not key or not math.isfinite(float(item)) for key, item in value.items()):
+            raise ValueError("fiala_parameters must contain finite numeric values")
         return {str(key): float(item) for key, item in value.items()}
 
     @model_validator(mode="after")
@@ -795,6 +803,28 @@ class AxleTire(StrictModel):
             raise ValueError("tire spin and forward axes must not be parallel")
         if self.maximum_compression_m >= self.unloaded_radius_m:
             raise ValueError("maximum_compression_m must be below tire radius")
+        if self.model_kind == "fiala":
+            cslip = self.fiala_parameters.get("CSLIP")
+            calpha = self.fiala_parameters.get("CALPHA")
+            umin = self.fiala_parameters.get("UMIN")
+            umax = self.fiala_parameters.get("UMAX")
+            for name, value in (("CSLIP", cslip), ("CALPHA", calpha)):
+                if value is not None and value <= 0.0:
+                    raise ValueError(f"Fiala {name} must be positive")
+            if umin is not None and umin < 0.0:
+                raise ValueError("Fiala UMIN must be non-negative")
+            if umax is not None and umax <= 0.0:
+                raise ValueError("Fiala UMAX must be positive")
+            if (
+                umin is not None
+                and umax is not None
+                and umax < umin
+            ):
+                raise ValueError("Fiala UMAX must not be below UMIN")
+            for name in ("RELAX_LENGTH_X", "RELAX_LENGTH_Y"):
+                value = self.fiala_parameters.get(name)
+                if value is not None and value <= 0.0:
+                    raise ValueError(f"Fiala {name} must be positive")
         if (self.drive_torque_body is None) != (
             self.drive_torque_axis_local is None
         ):

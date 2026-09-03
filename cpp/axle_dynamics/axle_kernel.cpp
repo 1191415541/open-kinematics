@@ -895,7 +895,31 @@ enum Pac2002ParameterIndex {
     PAC_MBELT
 };
 
+// Fiala 参数复用车辆扩展数组的前 14 个槽位；仅在模型类型为 FIALA
+// 时解释，PAC2002 的历史布局和数值不变。
+enum FialaParameterIndex {
+    FIALA_CSLIP = 0,
+    FIALA_CALPHA = 1,
+    FIALA_CGAMMA = 2,
+    FIALA_MGAMMA = 3,
+    FIALA_CSPIN = 4,
+    FIALA_UMIN = 5,
+    FIALA_UMAX = 6,
+    FIALA_RELAX_LENGTH_X = 7,
+    FIALA_RELAX_LENGTH_Y = 8,
+    FIALA_WIDTH = 9,
+    FIALA_ROLLING_RESISTANCE = 10,
+    FIALA_LOW_SPEED_THRESHOLD = 11,
+    FIALA_DAMP_X = 12,
+    FIALA_DAMP_Y = 13
+};
+
 double pac2002_parameter(const Tire& tire, int index, double fallback);
+double fiala_parameter(const Tire& tire, int index, double fallback);
+void fiala_forces(
+    const Tire& tire, double kappa, double alpha, double normal_force,
+    double& fx, double& fy, double& mz
+);
 double pac2002_positive_scale(
     const Tire& tire, int index, double fallback
 );
@@ -1106,15 +1130,17 @@ Vec3 tire_frame_center(const Tire& tire) {
 }
 
 int tire_center_body(const Tire& tire) {
-    // Adams attaches PAC2002 to the wheel/spindle part. Its source initial
-    // velocities can contain small carrier-joint residuals, so evaluating the
-    // center on the carrier changes the slip fed to the tire law.
+    // Adams evaluates transient tire kinematics at the wheel/spindle center.
+    // The carrier remains the orientation frame, but its center velocity can
+    // differ from the wheel center when suspension compliance is active.
     return tire.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE
+        || tire.model_kind == VEHICLE_TIRE_FIALA
         ? tire.body : tire_frame_body(tire);
 }
 
 Vec3 tire_center_local(const Tire& tire) {
     return tire.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE
+        || tire.model_kind == VEHICLE_TIRE_FIALA
         ? tire.center : tire_frame_center(tire);
 }
 
@@ -2268,10 +2294,10 @@ void external_force_vector(
             (i < input.road_v.size() ? input.road_v[i] : 0.0)
             + road_slope * vc.x;
         const Vec3 normal{0.0, 0.0, 1.0};
-        const double delta = t.radius + road_height - center.z;
+        double delta = t.radius + road_height - center.z;
         const double sx = i < state.tire_sx.size() ? state.tire_sx[i] : 0.0;
         const double sy = i < state.tire_sy.size() ? state.tire_sy[i] : 0.0;
-        const double delta_dot = road_v - vc.z;
+        double delta_dot = road_v - vc.z;
         Vec3 forward = rotate(state.q[frame_body], t.forward_axis);
         forward.z = 0.0;
         forward = normalized(forward);
@@ -2286,28 +2312,62 @@ void external_force_vector(
         const Vec3 spin_axis = normalized(
             rotate(state.q[frame_body], t.spin_axis)
         );
-        const double spin_rate = dot(state.omega[t.body], spin_axis);
         const bool pac2002 =
             t.model_kind == VEHICLE_TIRE_PAC2002_PURE_SLIP
             || t.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE;
-        const double loaded_radius = std::max(
+        const bool fiala = t.model_kind == VEHICLE_TIRE_FIALA;
+        // Adams reports Fiala wheel spin relative to the upright.  The
+        // carrier angular velocity must not enter the rolling speed.
+        const Vec3 spin_omega = fiala
+            ? tire_relative_spin_omega(state, t)
+            : state.omega[t.body];
+        const double spin_rate = dot(spin_omega, spin_axis);
+        double loaded_radius = std::max(
             t.radius-std::max(delta, 0.0), 1e-9
         );
+        if (fiala && static_contact == nullptr) {
+            // The default Adams Fiala contact is the intersection of the
+            // wheel plane and the road plane. Its radial loaded radius is
+            // therefore the vertical gap divided by the radial direction's
+            // vertical projection, not the vertical gap itself.
+            const double axis_normal = dot(spin_axis, normal);
+            const double vertical_projection = std::max(
+                std::sqrt(std::max(1.0-axis_normal*axis_normal, 0.0)),
+                1e-9
+            );
+            const Vec3 axis_rate = cross(state.omega[frame_body], spin_axis);
+            const double axis_normal_rate = dot(axis_rate, normal);
+            const double projection_rate = -axis_normal*axis_normal_rate
+                / vertical_projection;
+            const double vertical_gap = center.z-road_height;
+            const double vertical_gap_rate = vc.z-road_v;
+            loaded_radius = std::max(
+                vertical_gap/vertical_projection,
+                1e-9
+            );
+            delta = t.radius-loaded_radius;
+            delta_dot = -(
+                vertical_gap_rate/vertical_projection
+                - vertical_gap*projection_rate
+                    /(vertical_projection*vertical_projection)
+            );
+        }
         const double rolling_radius = t.model_kind ==
             VEHICLE_TIRE_PAC2002_ADAMS_SOURCE
             ? pac2002_effective_rolling_radius(t, delta, spin_rate)
-            : (pac2002 ? loaded_radius : t.radius);
+            : ((pac2002 || fiala) ? loaded_radius : t.radius);
         // Adams primitive brush 用未加载半径把 GFORCE 力施加在轮心下方；
         // PAC2002 保留其加载半径接触点，滚动速度另用有效滚动半径。
-        const double force_application_radius = pac2002
+        const double force_application_radius = pac2002 || fiala
             ? loaded_radius
             : t.radius;
         Vec3 patch_arm = normal * (-force_application_radius);
-        if (pac2002 && static_contact == nullptr) {
+        if ((pac2002 || fiala) && static_contact == nullptr) {
             // A cambered tire intersects the road along its radial plane, not
-            // directly below the wheel center.  loaded_radius is the vertical
-            // center-to-road distance, so divide by the radial direction's
-            // vertical projection to keep the contact point on the road.
+            // directly below the wheel center. loaded_radius is the radial
+            // wheel-plane loaded radius; divide it by the radial direction's
+            // vertical projection to keep the floating contact point on the
+            // road, as used by the Adams tire FMA marker.
             Vec3 radial_down = normalized(
                 (normal-spin_axis*dot(spin_axis, normal))*(-1.0)
             );
@@ -2318,7 +2378,9 @@ void external_force_vector(
                 force_application_radius/vertical_projection
             );
         }
-        const Vec3 rolling_arm = normal * (-rolling_radius);
+        const Vec3 rolling_arm = (pac2002 || fiala)
+            ? patch_arm
+            : normal * (-rolling_radius);
         const Vec3 patch_velocity = vc + cross(
             state.omega[t.body], rolling_arm
         );
@@ -2328,7 +2390,8 @@ void external_force_vector(
         // forward speed and the scalar wheel spin times effective radius.
         // Using omega x a world-vertical arm introduces an erroneous
         // cos(camber) factor into the rolling speed.
-        const double vx = t.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE
+        const double vx = (t.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE
+            || fiala)
             ? dot(vc-road_velocity, forward)-spin_rate*rolling_radius
             : dot(relative_patch_velocity, forward);
         const double vy = dot(relative_patch_velocity, lateral);
@@ -2410,6 +2473,49 @@ void external_force_vector(
             continue;
         }
         const double rolling_speed = std::abs(dot(vc, forward));
+        if (t.model_kind == VEHICLE_TIRE_FIALA) {
+            const double slip_speed = std::max(
+                rolling_speed,
+                std::max(fiala_parameter(t, FIALA_LOW_SPEED_THRESHOLD, 1e-3), 1e-3)
+            );
+            const double longitudinal_slip = std::clamp(-vx/slip_speed, -1.0, 1.0);
+            const double lateral_slip = std::clamp(
+                std::atan2(vy, slip_speed), -0.5*kPi+0.01, 0.5*kPi-0.01
+            );
+            const double relax_x = std::max(
+                fiala_parameter(t, FIALA_RELAX_LENGTH_X, t.relaxation_length_longitudinal), 1e-6
+            );
+            const double relax_y = std::max(
+                fiala_parameter(t, FIALA_RELAX_LENGTH_Y, t.relaxation_length_lateral), 1e-6
+            );
+            tire_brush_derivatives[2*i] = rolling_speed/relax_x*(longitudinal_slip-sx);
+            tire_brush_derivatives[2*i+1] = rolling_speed/relax_y*(lateral_slip-sy);
+            if (brush_only) continue;
+            double fx = 0.0, fy = 0.0, aligning_moment = 0.0;
+            fiala_forces(t, sx, sy, fn, fx, fy, aligning_moment);
+            const double umax = std::max(fiala_parameter(t, FIALA_UMAX, 1.0), 1e-9);
+            const double utilization = std::sqrt(
+                std::pow(fx/(umax*fn), 2.0)+std::pow(fy/(umax*fn), 2.0)
+            );
+            const Mat3 body_rotation = qmat(state.q[t.body]);
+            const Vec3 contact_point = center + patch_arm;
+            const Vec3 contact_local = transpose(body_rotation) * (contact_point-state.r[t.body]);
+            add_force_on_body(force, torque, model, state, t.body, contact_local,
+                forward*fx+lateral*fy+normal*fn);
+            add_torque_on_body(torque, model, t.body,
+                normal*aligning_moment + lateral*(-fiala_parameter(t, FIALA_ROLLING_RESISTANCE, 0.0)*fn));
+            if (record_output) {
+                tire_output[output_offset+0] = 1.0;
+                tire_output[output_offset+4] = fn;
+                tire_output[output_offset+5] = fx;
+                tire_output[output_offset+6] = fy;
+                tire_output[output_offset+9] = utilization;
+                tire_output[output_offset+10] = sx;
+                tire_output[output_offset+11] = sy;
+                tire_output[output_offset+14] = aligning_moment;
+            }
+            continue;
+        }
         if (t.model_kind == VEHICLE_TIRE_PAC2002_PURE_SLIP
             || t.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE) {
             // Adams 高性能轮胎把 USE_MODE=14 的松弛状态保存在局部轮胎
@@ -2737,6 +2843,43 @@ double pac2002_parameter(
         static_cast<std::size_t>(index)
     ];
     return std::isfinite(value) ? value : fallback;
+}
+
+double fiala_parameter(const Tire& tire, int index, double fallback) {
+    const double value = tire.pac2002_parameters[static_cast<std::size_t>(index)];
+    return std::isfinite(value) ? value : fallback;
+}
+
+void fiala_forces(
+    const Tire& tire, double kappa, double alpha, double normal_force,
+    double& fx, double& fy, double& mz
+) {
+    fx = fy = mz = 0.0;
+    if (normal_force <= 0.0) return;
+    const double cslip = std::max(fiala_parameter(tire, FIALA_CSLIP, 1000.0), 1e-9);
+    const double calpha = std::max(fiala_parameter(tire, FIALA_CALPHA, 800.0), 1e-9);
+    const double umin = std::max(fiala_parameter(tire, FIALA_UMIN, 0.9), 0.0);
+    const double umax = std::max(fiala_parameter(tire, FIALA_UMAX, 1.0), umin);
+    const double tan_alpha = std::tan(alpha);
+    const double ss = std::min(1.0, std::sqrt(kappa*kappa + tan_alpha*tan_alpha));
+    const double uf = (umax-(umax-umin)*ss)*normal_force;
+    if (uf <= 0.0) return;
+    const double sign_k = kappa < 0.0 ? -1.0 : (kappa > 0.0 ? 1.0 : 0.0);
+    const double abs_k = std::abs(kappa);
+    if (abs_k <= uf/(2.0*cslip)) {
+        fx = cslip*kappa;
+    } else if (sign_k != 0.0) {
+        fx = sign_k*(uf-(uf*uf)/(4.0*abs_k*cslip));
+    }
+    const double critical_alpha = std::atan(3.0*uf/calpha);
+    const double sign_alpha = alpha < 0.0 ? -1.0 : (alpha > 0.0 ? 1.0 : 0.0);
+    if (std::abs(alpha) <= critical_alpha) {
+        const double h = 1.0-calpha*std::abs(tan_alpha)/(3.0*uf);
+        fy = -uf*(1.0-h*h*h)*sign_alpha;
+        mz = uf*fiala_parameter(tire, FIALA_WIDTH, 0.235)*(1.0-h)*h*h*h*sign_alpha;
+    } else {
+        fy = -uf*sign_alpha;
+    }
 }
 
 double pac2002_sign(double value) {
@@ -3540,6 +3683,13 @@ DirectionalScalar d_sin(const DirectionalScalar& a) {
 DirectionalScalar d_cos(const DirectionalScalar& a) {
     return {std::cos(a.value), -std::sin(a.value)*a.derivative};
 }
+DirectionalScalar d_tan(const DirectionalScalar& a) {
+    const double cosine = std::cos(a.value);
+    return {
+        std::tan(a.value),
+        a.derivative/(cosine*cosine)
+    };
+}
 DirectionalScalar d_exp(const DirectionalScalar& a) {
     const double value = std::exp(a.value);
     return {value, value*a.derivative};
@@ -3593,6 +3743,116 @@ DirectionalScalar d_clamp(
     if (a.value <= lower) return {lower, 0.0};
     if (a.value >= upper) return {upper, 0.0};
     return a;
+}
+
+void fiala_forces_directional(
+    const Tire& tire,
+    const DirectionalScalar& kappa,
+    const DirectionalScalar& alpha,
+    const DirectionalScalar& normal_force,
+    DirectionalScalar& fx,
+    DirectionalScalar& fy,
+    DirectionalScalar& mz,
+    bool& smooth
+) {
+    fx = fy = mz = {};
+    if (normal_force.value <= 0.0) {
+        smooth = false;
+        return;
+    }
+    const double cslip = std::max(
+        fiala_parameter(tire, FIALA_CSLIP, 1000.0), 1e-9
+    );
+    const double calpha = std::max(
+        fiala_parameter(tire, FIALA_CALPHA, 800.0), 1e-9
+    );
+    const double umin = std::max(
+        fiala_parameter(tire, FIALA_UMIN, 0.9), 0.0
+    );
+    const double umax = std::max(
+        fiala_parameter(tire, FIALA_UMAX, 1.0), umin
+    );
+    const DirectionalScalar tan_alpha = d_tan(alpha);
+    const DirectionalScalar combined_argument =
+        kappa*kappa+tan_alpha*tan_alpha;
+    DirectionalScalar combined_slip;
+    if (combined_argument.value <= 1e-24) {
+        smooth = false;
+    } else {
+        combined_slip = d_sqrt(combined_argument);
+    }
+    constexpr double kJacobianStep = 1e-7;
+    const double trial_combined_slip =
+        combined_slip.value+kJacobianStep*combined_slip.derivative;
+    if (
+        std::abs(combined_slip.value-1.0) <= 1e-12 ||
+        (combined_slip.value-1.0)*(trial_combined_slip-1.0) <= 0.0
+    ) {
+        smooth = false;
+    }
+    const DirectionalScalar ss = combined_slip.value >= 1.0
+        ? DirectionalScalar{1.0, 0.0}
+        : combined_slip;
+    const DirectionalScalar uf = (
+        DirectionalScalar{umax}-(umax-umin)*ss
+    )*normal_force;
+    if (uf.value <= 0.0) {
+        smooth = false;
+        return;
+    }
+
+    const DirectionalScalar longitudinal_limit =
+        uf/(2.0*cslip);
+    const double abs_kappa = std::abs(kappa.value);
+    const double trial_abs_kappa = abs_kappa +
+        kJacobianStep*(kappa.value < 0.0 ? -kappa.derivative : kappa.derivative);
+    if (
+        std::abs(abs_kappa-longitudinal_limit.value) <= 1e-12 ||
+        (abs_kappa-longitudinal_limit.value)
+            *(trial_abs_kappa-longitudinal_limit.value) <= 0.0
+    ) {
+        smooth = false;
+    }
+    if (abs_kappa <= longitudinal_limit.value) {
+        fx = cslip*kappa;
+    } else if (abs_kappa > 1e-12) {
+        const double sign_kappa = kappa.value < 0.0 ? -1.0 : 1.0;
+        const DirectionalScalar abs_kappa_directional{
+            abs_kappa,
+            sign_kappa*kappa.derivative
+        };
+        fx = DirectionalScalar{sign_kappa}*(
+            uf-uf*uf/(4.0*abs_kappa_directional*cslip)
+        );
+    } else {
+        smooth = false;
+    }
+
+    const DirectionalScalar critical_alpha = d_atan2(
+        3.0*uf/calpha, DirectionalScalar{1.0}
+    );
+    const DirectionalScalar tan_alpha_abs = d_abs(tan_alpha, smooth);
+    const double abs_alpha = std::abs(alpha.value);
+    const double trial_abs_alpha = abs_alpha+
+        kJacobianStep*(alpha.value < 0.0 ? -alpha.derivative : alpha.derivative);
+    if (
+        std::abs(abs_alpha-critical_alpha.value) <= 1e-12 ||
+        (abs_alpha-critical_alpha.value)
+            *(trial_abs_alpha-critical_alpha.value) <= 0.0
+    ) {
+        smooth = false;
+    }
+    const double sign_alpha = d_sign(alpha, smooth);
+    if (abs_alpha <= critical_alpha.value) {
+        const DirectionalScalar h = DirectionalScalar{1.0}
+            -calpha*tan_alpha_abs/(3.0*uf);
+        const DirectionalScalar h3 = h*h*h;
+        fy = -uf*(DirectionalScalar{1.0}-h3)*sign_alpha;
+        mz = uf*fiala_parameter(tire, FIALA_WIDTH, 0.235)
+            *(DirectionalScalar{1.0}-h)*h*h*h*sign_alpha;
+    } else {
+        fy = -uf*sign_alpha;
+    }
 }
 
 DirectionalScalar pac2002_effective_rolling_radius_directional(
@@ -5464,6 +5724,7 @@ bool external_force_directional(
         const bool pac2002 =
             t.model_kind == VEHICLE_TIRE_PAC2002_PURE_SLIP
             || t.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE;
+        const bool fiala = t.model_kind == VEHICLE_TIRE_FIALA;
         if (static_contact != nullptr) {
             if (!static_active) continue;
             const double compression =
@@ -5520,8 +5781,8 @@ bool external_force_directional(
             i < input.road_v.size() ? DirectionalScalar{input.road_v[i]}
                                     : DirectionalScalar{}
         ) + road_profile.slope*vc.x;
-        const DirectionalScalar delta = t.radius+road-center.z;
-        const DirectionalScalar delta_dot = road_v-vc.z;
+        DirectionalScalar delta = t.radius+road-center.z;
+        DirectionalScalar delta_dot = road_v-vc.z;
         const DVec3 forward_raw = d_rotate(
             state.q[frame_body], t.forward_axis, direction.dtheta[frame_body]
         );
@@ -5541,6 +5802,40 @@ bool external_force_directional(
             ),
             smooth
         );
+        DirectionalScalar loaded_radius = t.radius-d_clamp(
+            delta, 0.0, t.radius, smooth
+        );
+        if (fiala && static_contact == nullptr) {
+            const DirectionalScalar axis_normal = d_dot(spin_axis, normal);
+            DirectionalScalar projection = d_sqrt(
+                DirectionalScalar{1.0}-axis_normal*axis_normal
+            );
+            if (projection.value <= 1e-9) {
+                smooth = false;
+                projection = {1e-9, 0.0};
+            }
+            const DVec3 frame_omega{
+                {state.omega[frame_body].x, direction.domega[frame_body].x},
+                {state.omega[frame_body].y, direction.domega[frame_body].y},
+                {state.omega[frame_body].z, direction.domega[frame_body].z}
+            };
+            const DirectionalScalar axis_normal_rate = d_dot(
+                d_cross(frame_omega, spin_axis), normal
+            );
+            const DirectionalScalar projection_rate = -axis_normal
+                *axis_normal_rate/projection;
+            const DirectionalScalar vertical_gap = center.z-road;
+            const DirectionalScalar vertical_gap_rate{
+                vc.z.value-road_v.value,
+                vc.z.derivative-road_v.derivative
+            };
+            loaded_radius = vertical_gap/projection;
+            delta = t.radius-loaded_radius;
+            const DirectionalScalar loaded_radius_rate =
+                vertical_gap_rate/projection
+                -vertical_gap*projection_rate/(projection*projection);
+            delta_dot = -loaded_radius_rate;
+        }
         DirectionalScalar camber{};
         if (pac2002 && static_contact == nullptr) {
             camber = d_clamp(
@@ -5552,22 +5847,29 @@ bool external_force_directional(
                 smooth
             );
         }
-        const DirectionalScalar spin_rate = d_dot(omega, spin_axis);
-        const DirectionalScalar loaded_radius = delta.value > 0.0
-            ? DirectionalScalar{t.radius-delta.value, -delta.derivative}
-            : DirectionalScalar{t.radius};
+        DVec3 spin_omega = omega;
+        if (fiala && frame_body != t.body) {
+            spin_omega = spin_omega-DVec3{
+                {state.omega[frame_body].x, direction.domega[frame_body].x},
+                {state.omega[frame_body].y, direction.domega[frame_body].y},
+                {state.omega[frame_body].z, direction.domega[frame_body].z}
+            };
+        }
+        const DirectionalScalar spin_rate = d_dot(spin_omega, spin_axis);
         const DirectionalScalar rolling_radius =
             t.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE
             ? pac2002_effective_rolling_radius_directional(
                 t, delta, spin_rate, smooth
             )
-            : (pac2002 ? loaded_radius : DirectionalScalar{t.radius});
+            : ((pac2002 || fiala)
+                ? loaded_radius
+                : DirectionalScalar{t.radius});
         // 方向导数路径必须与标量路径采用同一模型相关的施力半径。
-        const DirectionalScalar force_application_radius = pac2002
+        const DirectionalScalar force_application_radius = pac2002 || fiala
             ? loaded_radius
             : DirectionalScalar{t.radius};
         DVec3 patch_arm = normal*(-force_application_radius);
-        if (pac2002) {
+        if (pac2002 || fiala) {
             const DVec3 radial_down = d_normalized(
                 (normal-spin_axis*d_dot(spin_axis, normal))*(-1.0),
                 smooth
@@ -5583,11 +5885,13 @@ bool external_force_directional(
                 force_application_radius/vertical_projection
             );
         }
-        const DVec3 rolling_arm = normal*(-rolling_radius);
+        const DVec3 rolling_arm = (pac2002 || fiala)
+            ? patch_arm
+            : normal*(-rolling_radius);
         const DVec3 patch_velocity = vc+d_cross(omega, rolling_arm);
         const DVec3 relative_patch_velocity = patch_velocity-DVec3(0.0,0.0,road_v);
         const DirectionalScalar vx =
-            t.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE
+            (t.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE || fiala)
             ? d_dot(vc-DVec3(0.0,0.0,road_v), forward)
                 -spin_rate*rolling_radius
             : d_dot(relative_patch_velocity, forward);
@@ -5747,6 +6051,59 @@ bool external_force_directional(
                     forward*overturning_moment
                         +lateral*rolling_resistance_moment
                         +normal*aligning_moment
+                );
+            }
+            continue;
+        }
+        if (t.model_kind == VEHICLE_TIRE_FIALA) {
+            const double low_speed_threshold = std::max(
+                fiala_parameter(t, FIALA_LOW_SPEED_THRESHOLD, 1e-3), 1e-3
+            );
+            DirectionalScalar slip_speed = rolling_speed;
+            if (slip_speed.value < low_speed_threshold) {
+                smooth = false;
+                slip_speed = {low_speed_threshold, 0.0};
+            }
+            const DirectionalScalar longitudinal_slip = d_clamp(
+                -vx/slip_speed, -1.0, 1.0, smooth
+            );
+            const DirectionalScalar lateral_slip = d_clamp(
+                d_atan2(vy, slip_speed), -0.5*kPi+0.01, 0.5*kPi-0.01,
+                smooth
+            );
+            const double relax_x = std::max(
+                fiala_parameter(t, FIALA_RELAX_LENGTH_X, t.relaxation_length_longitudinal), 1e-6
+            );
+            const double relax_y = std::max(
+                fiala_parameter(t, FIALA_RELAX_LENGTH_Y, t.relaxation_length_lateral), 1e-6
+            );
+            const DirectionalScalar state_rate_x =
+                rolling_speed/relax_x*(longitudinal_slip-sx);
+            const DirectionalScalar state_rate_y =
+                rolling_speed/relax_y*(lateral_slip-sy);
+            tire_brush_derivatives[2*i] = state_rate_x.derivative;
+            tire_brush_derivatives[2*i+1] = state_rate_y.derivative;
+            if (!brush_only) {
+                DirectionalScalar fx, fy, mz;
+                fiala_forces_directional(
+                    t, sx, sy, normal_force, fx, fy, mz, smooth
+                );
+                const DVec3 contact_force = forward*fx+lateral*fy
+                    +normal*normal_force;
+                const DVec3 body_origin{
+                    {state.r[t.body].x, direction.dr[t.body].x},
+                    {state.r[t.body].y, direction.dr[t.body].y},
+                    {state.r[t.body].z, direction.dr[t.body].z}
+                };
+                add_directional_force_at_arm(
+                    force, torque, model, t.body,
+                    center-body_origin+patch_arm, contact_force
+                );
+                add_directional_torque(
+                    torque, model, t.body,
+                    normal*mz
+                    +lateral*(-fiala_parameter(t, FIALA_ROLLING_RESISTANCE, 0.0)
+                        *normal_force)
                 );
             }
             continue;
@@ -9310,7 +9667,8 @@ bool initialize_internal_derivatives(
         const Tire& tire = model.tires[i];
         if (
             tire.model_kind != VEHICLE_TIRE_PAC2002_PURE_SLIP &&
-            tire.model_kind != VEHICLE_TIRE_PAC2002_ADAMS_SOURCE
+            tire.model_kind != VEHICLE_TIRE_PAC2002_ADAMS_SOURCE &&
+            tire.model_kind != VEHICLE_TIRE_FIALA
         ) {
             continue;
         }
@@ -9324,7 +9682,8 @@ bool initialize_internal_derivatives(
             const Tire& tire = model.tires[i];
             if (
                 tire.model_kind != VEHICLE_TIRE_PAC2002_PURE_SLIP &&
-                tire.model_kind != VEHICLE_TIRE_PAC2002_ADAMS_SOURCE
+                tire.model_kind != VEHICLE_TIRE_PAC2002_ADAMS_SOURCE &&
+                tire.model_kind != VEHICLE_TIRE_FIALA
             ) {
                 continue;
             }
@@ -9379,6 +9738,7 @@ bool apply_brush_return_mapping(
             tire_forces[i] > 0.0 &&
             model.tires[i].model_kind != VEHICLE_TIRE_PAC2002_PURE_SLIP
             && model.tires[i].model_kind != VEHICLE_TIRE_PAC2002_ADAMS_SOURCE
+            && model.tires[i].model_kind != VEHICLE_TIRE_FIALA
         ) {
             double projected_sx = state.tire_sx[i];
             double projected_sy = state.tire_sy[i];
@@ -9419,7 +9779,8 @@ bool solve_one_step(
         for (const Tire& tire : model.tires) {
             has_pac_tire = has_pac_tire ||
                 tire.model_kind == VEHICLE_TIRE_PAC2002_PURE_SLIP ||
-                tire.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE;
+                tire.model_kind == VEHICLE_TIRE_PAC2002_ADAMS_SOURCE ||
+                tire.model_kind == VEHICLE_TIRE_FIALA;
         }
         // PAC 纯滑移力随法向载荷和滑移率变化，但轮胎状态在相邻隐式
         // 步内通常仍处于同一局部支路。延长修正 Newton 的分解复用窗口
@@ -12070,7 +12431,8 @@ bool add_vehicle_tire_models(
         const int kind = input.tire_model_kind[i];
         if (kind != VEHICLE_TIRE_NATIVE_BRUSH &&
             kind != VEHICLE_TIRE_PAC2002_PURE_SLIP &&
-            kind != VEHICLE_TIRE_PAC2002_ADAMS_SOURCE) {
+            kind != VEHICLE_TIRE_PAC2002_ADAMS_SOURCE &&
+            kind != VEHICLE_TIRE_FIALA) {
             error = "unsupported vehicle tire model kind";
             return false;
         }
@@ -13130,6 +13492,10 @@ int run_model(
     NewtonLinearizationCache single_step_cache;
     NewtonLinearizationCache full_step_cache;
     NewtonLinearizationCache half_step_cache;
+    bool has_fiala_tire = false;
+    for (const Tire& tire : model.tires) {
+        has_fiala_tire = has_fiala_tire || tire.model_kind == VEHICLE_TIRE_FIALA;
+    }
     for(std::size_t sample_index=1;sample_index<input->sample_count;++sample_index){
         const double target=input->sample_times[sample_index];
         double t=input->sample_times[sample_index-1];
@@ -13169,15 +13535,18 @@ int run_model(
         // than by the local truncation error, so use the validated fixed step
         // path once and enable adaptive control after the first public sample.
         const bool use_adaptive_step =
-            input->adaptive_step != 0 && sample_index > 1;
+            input->adaptive_step != 0 && (sample_index > 1 || has_fiala_tire);
         while(t<target-time_tolerance){
             const double remaining=target-t;
             if (remaining <= time_tolerance) {
                 t = target;
                 break;
             }
+            const double fiala_start_step = has_fiala_tire && sample_index == 1
+                ? std::min(input->internal_step, 5.0e-4)
+                : input->internal_step;
             double h=std::min(
-                use_adaptive_step ? suggested_step : input->internal_step,
+                use_adaptive_step ? suggested_step : fiala_start_step,
                 remaining
             );
             h=std::min(h,input->max_step);

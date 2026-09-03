@@ -1075,10 +1075,10 @@ def _build_tires(
     tires: list[AxleTire] = []
     for wheel in wheels:
         spec = wheel.tire
-        if spec.kind not in {"native_brush", "pac2002"}:
+        if spec.kind not in {"native_brush", "pac2002", "fiala"}:
             raise ValueError(
                 f"wheel {wheel.name!r} uses tire kind {spec.kind!r}; "
-                "native vehicle dynamics supports native_brush and pac2002"
+                "native vehicle dynamics supports native_brush, fiala and pac2002"
             )
         if spec.kind == "native_brush" and spec.relaxation_length <= 0.0:
             raise ValueError(
@@ -1184,6 +1184,8 @@ def _build_tires(
                 model_kind=(
                     "pac2002_pure_slip"
                     if spec.kind == "pac2002"
+                    else "fiala"
+                    if spec.kind == "fiala"
                     else "native_brush"
                 ),
                 pac2002_parameter_source=spec.parameter_source,
@@ -1191,6 +1193,22 @@ def _build_tires(
                 pac2002_coefficients=(
                     dict(spec.pac2002_coefficients)
                     if spec.kind == "pac2002"
+                    else {}
+                ),
+                fiala_parameters=(
+                    {
+                        **spec.fiala_parameters,
+                        "RELAX_LENGTH_X": (
+                            float(spec.fiala_parameters.get("RELAX_LENGTH_X", relaxation_length))
+                            * scale
+                        ),
+                        "RELAX_LENGTH_Y": (
+                            float(spec.fiala_parameters.get("RELAX_LENGTH_Y", relaxation_length))
+                            * scale
+                        ),
+                        "WIDTH": float(spec.fiala_parameters.get("WIDTH", 235.0)) * scale,
+                    }
+                    if spec.kind == "fiala"
                     else {}
                 ),
             )

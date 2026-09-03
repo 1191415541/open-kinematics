@@ -207,6 +207,7 @@ class TireModelSpec(StrictModel):
     minimum_slip_speed: float = Field(default=10.0, gt=0)
     pneumatic_trail: float = Field(default=50.0, ge=0)
     pac2002_coefficients: dict[str, float] = Field(default_factory=dict)
+    fiala_parameters: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _valid_compression_limit(self) -> TireModelSpec:
@@ -215,6 +216,28 @@ class TireModelSpec(StrictModel):
             and self.maximum_compression >= self.unloaded_radius
         ):
             raise ValueError("maximum_compression must be below unloaded_radius")
+        if self.kind == "fiala":
+            cslip = self.fiala_parameters.get("CSLIP")
+            calpha = self.fiala_parameters.get("CALPHA")
+            umin = self.fiala_parameters.get("UMIN")
+            umax = self.fiala_parameters.get("UMAX")
+            for name, value in (("CSLIP", cslip), ("CALPHA", calpha)):
+                if value is not None and value <= 0.0:
+                    raise ValueError(f"Fiala {name} must be positive")
+            if umin is not None and umin < 0.0:
+                raise ValueError("Fiala UMIN must be non-negative")
+            if umax is not None and umax <= 0.0:
+                raise ValueError("Fiala UMAX must be positive")
+            if (
+                umin is not None
+                and umax is not None
+                and umax < umin
+            ):
+                raise ValueError("Fiala UMAX must not be below UMIN")
+            for name in ("RELAX_LENGTH_X", "RELAX_LENGTH_Y"):
+                value = self.fiala_parameters.get(name)
+                if value is not None and value <= 0.0:
+                    raise ValueError(f"Fiala {name} must be positive")
         return self
 
     @field_validator("pac2002_coefficients")
@@ -222,6 +245,13 @@ class TireModelSpec(StrictModel):
     def _finite_pac2002_coefficients(cls, value: dict[str, float]) -> dict[str, float]:
         if any(not key or not math.isfinite(float(item)) for key, item in value.items()):
             raise ValueError("PAC2002 coefficients must have finite numeric values")
+        return {str(key): float(item) for key, item in value.items()}
+
+    @field_validator("fiala_parameters")
+    @classmethod
+    def _finite_fiala_parameters(cls, value: dict[str, float]) -> dict[str, float]:
+        if any(not key or not math.isfinite(float(item)) for key, item in value.items()):
+            raise ValueError("Fiala parameters must have finite numeric values")
         return {str(key): float(item) for key, item in value.items()}
 
 
