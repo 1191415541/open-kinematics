@@ -174,10 +174,17 @@ def _native_case(
             # Integration error = 1e-2.  Keep the Native comparison on that
             # same fixed step; the Newton/constraint tolerances remain the
             # stricter physical convergence gate.
+            # Adams 的外层步长和 Integration error 保持一致；Fiala 的
+            # 内部松弛状态使用已验证的固定细分，避免把不同的步长加倍
+            # 误差估计器混入模型精度比较。
             "adaptive_substepping": False,
             "step_size": output_step,
             "internal_step_size": internal_step,
-            "min_internal_step_size": internal_step,
+            # Adams 在 Fiala 首步会自动细分；Native 保持相同外层步长，
+            # 允许内部步长下降到已验证的接触事件分辨率。
+            "min_internal_step_size": min(internal_step, 5.0e-4)
+            if tire_kind == "fiala"
+            else internal_step,
             "integration_error_tolerance": 1.0e-2,
         }
     )
@@ -204,11 +211,14 @@ def generate(
     output_step: float,
     internal_step: float,
     tire_kinds: tuple[str, ...] = ("native_brush", "pac2002"),
+    tire_property_file: Path | None = None,
 ) -> Path:
     """使用同一 Adams 初始状态和输入生成指定 Native 轮胎历史."""
     source_root = source_root.resolve()
     output_root.mkdir(parents=True, exist_ok=True)
-    data = load_adams_full_vehicle_input(source_root)
+    data = load_adams_full_vehicle_input(
+        source_root, tire_property_file=tire_property_file
+    )
     adams_result_path = source_root / "adams_raw" / "handling_step_steer_dynamic.res"
     road_origin_z_m = adams_contact_patch_plane_height_m(adams_result_path)
     adams_tire = _adams_tire_history(adams_result_path)
@@ -220,15 +230,15 @@ def generate(
     adams_tire = _truncate_history(adams_tire, end_time)
     adams_handling = _truncate_history(adams_handling, end_time)
     _write_history(
-        output_root / "adams_pac2002_time_history.json",
+        output_root / f"adams_{'fiala' if tire_property_file is not None else 'pac2002'}_time_history.json",
         TimeHistory(
             time=adams_tire.time,
             channels={**adams_tire.channels, **adams_handling.channels},
             units={**(adams_tire.units or {}), **(adams_handling.units or {})},
         ),
         {
-            "model": "adams PAC2002",
-            "model_kind": "adams_pac2002",
+            "model": "adams Fiala" if tire_property_file is not None else "adams PAC2002",
+            "model_kind": "adams_fiala" if tire_property_file is not None else "adams_pac2002",
             "source_result": str(adams_result_path),
             "handling_source_history": str(source_root / "adams_time_history.json"),
             "tire_channel_map": {
@@ -297,7 +307,7 @@ def generate(
                 "road_origin_z_m": road_origin_z_m,
                 "steering_input": "prescribed_adams_rack_displacement",
                 "wheel_torque_input": "direct_adams_drive_brake_replay",
-                "tire_force_coordinates": "pac2002_tire_iso_output",
+            "tire_force_coordinates": "adams_fiala_or_pac2002_tire_iso_output",
             },
         )
         manifest_path = write_vehicle_dynamics_artifact(
@@ -327,15 +337,20 @@ def generate(
                 "road_origin_z_m": road_origin_z_m,
                 "native_steering_input": "prescribed_adams_rack_displacement",
                 "native_wheel_torque_input": "direct_adams_drive_brake_replay",
-                "tire_force_coordinates": "pac2002_tire_iso_output",
+                "tire_force_coordinates": "adams_fiala_or_pac2002_tire_iso_output",
                 "matched_solver_settings": {
                     "adams_reported_step_size_s": 1.0e-2,
                     "adams_integration_error_tolerance": 1.0e-2,
                     "native_adaptive_substepping": False,
                     "native_step_size_s": output_step,
                     "native_internal_step_size_s": internal_step,
-                    "native_min_internal_step_size_s": internal_step,
+                    "native_min_internal_step_size_s": min(
+                        internal_step, 5.0e-4
+                    ) if "fiala" in native_models else internal_step,
                     "native_integration_error_tolerance": 1.0e-2,
+                    "same_external_step_and_tolerance": (
+                        abs(output_step - 1.0e-2) <= 1.0e-12
+                    ),
                     "same_step_and_tolerance": (
                         abs(output_step - 1.0e-2) <= 1.0e-12
                         and abs(internal_step - 1.0e-2) <= 1.0e-12
@@ -348,8 +363,8 @@ def generate(
                     "step_s": float(np.median(np.diff(adams_tire.time))),
                 },
                 "models": {
-                    "adams_pac2002": {
-                        "history": str(output_root / "adams_pac2002_time_history.json"),
+                    "adams_fiala" if tire_property_file is not None else "adams_pac2002": {
+                        "history": str(output_root / f"adams_{'fiala' if tire_property_file is not None else 'pac2002'}_time_history.json"),
                         "complete_vehicle_reference": True,
                     },
                     **(
@@ -360,6 +375,11 @@ def generate(
                     **(
                         {"native_pac2002": native_models["pac2002"]}
                         if "pac2002" in native_models
+                        else {}
+                    ),
+                    **(
+                        {"native_fiala": native_models["fiala"]}
+                        if "fiala" in native_models
                         else {}
                     ),
                 },
@@ -394,6 +414,8 @@ def main() -> None:
         action="store_true",
         help="只运行完整 Native PAC2002，不运行 Brush",
     )
+    parser.add_argument("--fiala-only", action="store_true")
+    parser.add_argument("--tire-property-file", type=Path)
     args = parser.parse_args()
     print(
         generate(
@@ -402,7 +424,12 @@ def main() -> None:
             end_time=args.end_time,
             output_step=args.output_step,
             internal_step=args.internal_step,
-            tire_kinds=("pac2002",) if args.pac_only else ("native_brush", "pac2002"),
+            tire_kinds=("fiala",)
+            if args.fiala_only
+            else ("pac2002",)
+            if args.pac_only
+            else ("native_brush", "pac2002"),
+            tire_property_file=args.tire_property_file,
         )
     )
 

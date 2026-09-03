@@ -196,7 +196,7 @@ def parse_adams_result_history(
 
 
 def adams_contact_patch_plane_height_m(path: str | Path) -> float:
-    """从 Adams 四轮接触面结果读取公共平面高度并转换为米."""
+    """从 Adams 四轮接触面结果读取公共平面高度并转换为米。"""
     channels = {
         f"{wheel}.contact_patch_z": channel
         for wheel, channel in _ADAMS_CONTACT_PATCH_CHANNELS.items()

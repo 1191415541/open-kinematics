@@ -6,6 +6,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -18,7 +19,7 @@ from .vehicle_acceptance import HANDLING_CASES
 from .vehicle_reference import write_vehicle_reference_bundle
 
 HandlingRunner = Callable[[AdamsProfile, str, Path], TimeHistory]
-HandlingTireModel = Literal["pac2002", "native_brush"]
+HandlingTireModel = Literal["pac2002", "native_brush", "fiala"]
 
 HANDLING_ADAMS_CHANNELS: Mapping[str, AdamsResultChannel] = {
     "steering_angle": AdamsResultChannel("driver_demands", "steering_angle"),
@@ -144,7 +145,11 @@ def run_adams_car_handling_case(
     stem = f"handling_{name}"
     suffix = "dynamic"
     dcf_file = _dcf_file(name, runtime)
-    assembly = _pac2002_assembly(profile, runtime)
+    assembly = (
+        _fiala_assembly(profile, runtime)
+        if tire_model == "fiala"
+        else _pac2002_assembly(profile, runtime)
+    )
     command_path = runtime / f"{stem}.cmd"
     command_path.write_text(
         _command_text(stem, suffix, dcf_file, assembly), encoding="ascii"
@@ -286,10 +291,16 @@ def _input_manifest(
     reference_tire_model = (
         "adams_builtin_pac2002"
         if tire_model == "pac2002"
+        else "adams_builtin_fiala"
+        if tire_model == "fiala"
         else "adams_generated_brush"
     )
     tire_property_file = (
-        "pac2002_235_60R16.tir" if tire_model == "pac2002" else None
+        "pac2002_235_60R16.tir"
+        if tire_model == "pac2002"
+        else "fiala_235_45R17.tir"
+        if tire_model == "fiala"
+        else None
     )
     return {
         "analysis_mode": "full_vehicle_sdi_dynamic",
@@ -302,7 +313,7 @@ def _input_manifest(
         "tire_property_file": tire_property_file,
         "tire_property_source": (
             "adams_builtin_tir"
-            if tire_model == "pac2002"
+            if tire_model in {"pac2002", "fiala"}
             else "native_brush_generator"
         ),
         "initial_state": {
@@ -346,6 +357,42 @@ def _pac2002_assembly(profile: AdamsProfile, runtime: Path) -> Path:
     runtime.mkdir(parents=True, exist_ok=True)
     destination = runtime / "Demo_Vehicle_Variants_pac2002.asy"
     destination.write_text(payload, encoding="utf-8")
+    return destination
+
+
+def _fiala_assembly(profile: AdamsProfile, runtime: Path) -> Path:
+    """Create a run-local assembly whose tire variants use Adams Fiala."""
+    if profile.home is None:
+        raise ValueError("Adams profile home is unavailable")
+    home = Path(profile.home)
+    source = home / "acar" / "acar_concept.cdb" / "assemblies.tbl" / "Demo_Vehicle_Variants.asy"
+    database = home / "acar" / "shared_car_database.cdb"
+    fiala = home / "acar" / "acar_concept.cdb" / "tires.tbl" / "fiala_235_45R17.tir"
+    if not source.is_file() or not fiala.is_file():
+        raise ValueError("Adams Fiala assembly inputs are unavailable")
+    runtime.mkdir(parents=True, exist_ok=True)
+    replacements: dict[str, str] = {}
+    for axle in ("Front", "Rear"):
+        source_sub = database / "subsystems.tbl" / f"TR_{axle}_Tires.sub"
+        destination_sub = runtime / f"TR_{axle}_Tires_fiala.sub"
+        payload = source_sub.read_text(encoding="utf-8")
+        payload = re.sub(
+            r"(PROPERTY_FILE\s*=\s*)'[^']+\.tir'",
+            rf"\1'{fiala.as_posix()}'",
+            payload,
+            flags=re.IGNORECASE,
+        )
+        destination_sub.write_text(payload, encoding="ascii")
+        replacements[
+            f"'<acar_shared>/subsystems.tbl/TR_{axle}_Tires.sub'"
+        ] = f"'{destination_sub.as_posix()}::rt'"
+    assembly_payload = source.read_text(encoding="utf-8")
+    for original, replacement in replacements.items():
+        if assembly_payload.count(original) != 1:
+            raise ValueError(f"Adams handling assembly has unexpected tire usage: {original}")
+        assembly_payload = assembly_payload.replace(original, replacement)
+    destination = runtime / "Demo_Vehicle_Variants_fiala.asy"
+    destination.write_text(assembly_payload, encoding="utf-8")
     return destination
 
 

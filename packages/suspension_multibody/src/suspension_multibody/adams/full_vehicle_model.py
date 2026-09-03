@@ -51,6 +51,9 @@ from ..schema import (
 DEFAULT_ADAMS_DATABASE = Path(
     r"C:\Program Files\MSC.Software\Adams\2024_1\acar\shared_car_database.cdb"
 )
+ALTERNATE_ADAMS_DATABASE = Path(
+    r"G:\MSC.Software\Adams\2024_1\acar\shared_car_database.cdb"
+)
 Matrix3 = tuple[tuple[float, float, float], ...]
 Vec3Tuple = tuple[float, float, float]
 BushingCurve = tuple[tuple[float, float], ...]
@@ -407,6 +410,7 @@ class AdamsFullVehicleInput:
     compiled_parts: Mapping[int, AdamsPartData]
     pac2002_coefficients: Mapping[str, float]
     initial_forward_speed_mps: float
+    fiala_parameters: Mapping[str, float] = field(default_factory=dict)
     part_roles: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
     front_inertias: Mapping[str, Matrix3] = field(default_factory=dict)
     rear_inertias: Mapping[str, Matrix3] = field(default_factory=dict)
@@ -444,7 +448,7 @@ class AdamsFullVehicleInput:
         steering_input: Mapping[str, object] | None = None,
         source_drive_brake_result_path: str | Path | None = None,
         *,
-        tire_kind: Literal["pac2002", "native_brush"] = "pac2002",
+        tire_kind: Literal["pac2002", "native_brush", "fiala"] = "pac2002",
     ) -> dict[str, object]:
         """Return hash-backed fields consumed by the full-MBD pairing gate."""
         runtime_part_ids = _source_native_body_part_ids(
@@ -935,6 +939,7 @@ def load_adams_full_vehicle_input(
     case_directory: str | Path,
     *,
     database_directory: str | Path | None = None,
+    tire_property_file: str | Path | None = None,
 ) -> AdamsFullVehicleInput:
     """Load a real Adams reference case and parse its source model inputs."""
     case = Path(case_directory)
@@ -954,7 +959,11 @@ def load_adams_full_vehicle_input(
     body_sub = database / "subsystems.tbl" / "TR_Body.sub"
     powertrain_sub = database / "subsystems.tbl" / "TR_Powertrain.sub"
     brake_sub = database / "subsystems.tbl" / "TR_Brake_System.sub"
-    tire = database / "tires.tbl" / "pac2002_235_60R16.tir"
+    tire = (
+        Path(tire_property_file)
+        if tire_property_file is not None
+        else database / "tires.tbl" / "pac2002_235_60R16.tir"
+    )
     spring = database / "springs.tbl" / "MDI_125_300_spr.xml"
     damper = database / "dampers.tbl" / "MDI_default.dpr"
     bumpstop = database / "bumpstops.tbl" / "MDI_default.bum"
@@ -1109,6 +1118,29 @@ def load_adams_full_vehicle_input(
         source_user_functions=source_user_functions,
         initial_part_states=initial_part_states,
         pac2002_coefficients=pac,
+        fiala_parameters={
+            "UNLOADED_RADIUS_MM": pac.get("UNLOADED_RADIUS_MM", 344.0),
+            "VERTICAL_STIFFNESS_N_MM": pac.get("VERTICAL_STIFFNESS_N_MM", 210.0),
+            "VERTICAL_DAMPING_N_S_MM": pac.get("VERTICAL_DAMPING_N_S_MM", 0.05),
+            "CSLIP": pac.get("CSLIP_N", pac.get("CSLIP", 1000.0)),
+            "CALPHA": pac.get("CALPHA_N_PER_RAD", pac.get("CALPHA", 800.0)),
+            "CGAMMA": pac.get("CGAMMA", 0.0),
+            "MGAMMA": pac.get("MGAMMA", 0.0),
+            "CSPIN": pac.get("CSPIN", 0.0),
+            "UMIN": pac.get("UMIN", 0.9),
+            "UMAX": pac.get("UMAX", 1.0),
+            "RELAX_LENGTH_X": pac.get("RELAX_LENGTH_X_MM", 50.0),
+            "RELAX_LENGTH_Y": pac.get("RELAX_LENGTH_Y_MM", 150.0),
+            "WIDTH": pac.get("WIDTH_MM", 235.0),
+            "ROLLING_RESISTANCE": pac.get("ROLLING_RESISTANCE", 0.0),
+            "LOW_SPEED_THRESHOLD": pac.get("LOW_SPEED_THRESHOLD", 1.0e-3),
+            "DAMP_X": pac.get("DAMP_X", 0.0),
+            "DAMP_Y": pac.get("DAMP_Y", 0.0),
+        } if "PROPERTY_FILE_FORMAT" in tire.read_text(
+            encoding="ascii", errors="replace"
+        ).upper() and "FIALA" in tire.read_text(
+            encoding="ascii", errors="replace"
+        ).upper() else {},
         spring_curve=spring_curve,
         damper_curve=damper_curve,
         bumpstop_curve=bumpstop_curve,
@@ -1136,7 +1168,7 @@ def load_adams_full_vehicle_input(
 def build_adams_vehicle_model(
     data: AdamsFullVehicleInput,
     *,
-    tire_kind: Literal["pac2002", "native_brush"] = "pac2002",
+    tire_kind: Literal["pac2002", "native_brush", "fiala"] = "pac2002",
 ) -> VehicleModel:
     """Build the explicit four-corner VehicleModel from parsed Adams inputs."""
     chassis_part_ids = _role_part_ids(data.part_roles, "chassis") + _role_part_ids(
@@ -1238,7 +1270,10 @@ def build_adams_vehicle_model(
         ),
         rear_rack_fixed=True,
     )
-    tire = _adams_tire_spec(data.pac2002_coefficients, kind=tire_kind)
+    tire = _adams_tire_spec(
+        data.fiala_parameters if tire_kind == "fiala" else data.pac2002_coefficients,
+        kind=tire_kind,
+    )
     wheels = tuple(
         WheelSpec(
             name=name,
@@ -1272,7 +1307,7 @@ def build_adams_vehicle_model(
         ),
         aerodynamic_drag=_source_aerodynamic_drag_spec(data),
     )
-    if tire_kind in {"native_brush", "pac2002"}:
+    if tire_kind in {"native_brush", "pac2002", "fiala"}:
         # 当前 native ABI 尚未表达 Adams .bus 的逐轴曲线。保留理想 K
         # 拓扑，避免把未解析的衬套刚度伪装成等效参数并破坏静态配平。
         model = model.model_copy(
@@ -1336,6 +1371,9 @@ def build_adams_vehicle_case(
             (wheel.name, initial_wheel_speed(wheel)) for wheel in model.wheels
         )
     )
+    has_brush_tire = any(
+        wheel.tire.kind == "native_brush" for wheel in model.wheels
+    )
     return VehicleDynamicCase(
         name=case_name,
         solver=DynamicSolverSettings(
@@ -1367,9 +1405,9 @@ def build_adams_vehicle_case(
             initial_state_angle_tolerance_rad=0.01,
             velocity_tolerance=1e-4,
             projection_failure_tolerance=0.1,
-            # 源整车的静态载荷分级需要 39 次以内收敛，保留一次余量。
-            # 该设置只属于 Adams 源整车案例，不改变通用 native 默认值。
-            projection_max_iterations=40,
+            # 刷毛模型在摩擦饱和边界附近的隐式状态校正需要更多 Newton
+            # 迭代；不改变时间步、积分误差或物理收敛容差。
+            projection_max_iterations=80 if has_brush_tire else 40,
         ),
         vehicle=model,
         road=RoadSurfaceSpec(),
@@ -3126,7 +3164,7 @@ def _source_initial_wheel_speeds(
 def build_adams_source_vehicle_model(
     data: AdamsFullVehicleInput,
     *,
-    tire_kind: Literal["pac2002", "native_brush"] = "pac2002",
+    tire_kind: Literal["pac2002", "native_brush", "fiala"] = "pac2002",
 ) -> VehicleModel:
     """Build a source-part explicit model while retaining unresolved-law gates."""
     chassis_ids = set(_source_chassis_part_ids(data))
@@ -3167,7 +3205,10 @@ def build_adams_source_vehicle_model(
         if chassis_initial is not None and steering_wheel_initial is not None
         else chassis_rotation.T @ steering_wheel_rotation
     )
-    tire = _adams_tire_spec(data.pac2002_coefficients, kind=tire_kind)
+    tire = _adams_tire_spec(
+        data.fiala_parameters if tire_kind == "fiala" else data.pac2002_coefficients,
+        kind=tire_kind,
+    )
     wheels = tuple(
         _source_wheel_spec(data, wheel_name, wheel_role, spindle_role, tire)
         for wheel_name, wheel_role, spindle_role in (
@@ -3230,7 +3271,7 @@ def build_adams_source_vehicle_model(
 def build_adams_native_vehicle_model(
     data: AdamsFullVehicleInput,
     *,
-    tire_kind: Literal["pac2002", "native_brush"] = "pac2002",
+    tire_kind: Literal["pac2002", "native_brush", "fiala"] = "pac2002",
 ) -> VehicleModel:
     """Build the runnable native model from source parts and source marker frames."""
     return build_adams_source_vehicle_model(data, tire_kind=tire_kind)
@@ -3239,7 +3280,7 @@ def build_adams_native_vehicle_model(
 def _adams_tire_spec(
     coefficients: Mapping[str, float],
     *,
-    kind: Literal["pac2002", "native_brush"],
+    kind: Literal["pac2002", "native_brush", "fiala"],
 ) -> TireModelSpec:
     """Convert shared PAC2002 values to either source or native proxy data."""
     radius = float(coefficients.get("UNLOADED_RADIUS_MM", 344.0))
@@ -3276,6 +3317,18 @@ def _adams_tire_spec(
         "pneumatic_trail": float(coefficients.get("QDZ1", 0.0935)) * radius,
         "pac2002_coefficients": dict(coefficients),
     }
+    if kind == "fiala":
+        kwargs["kind"] = "fiala"
+        kwargs["fiala_parameters"] = {
+            "CSLIP": float(coefficients.get("CSLIP_N", coefficients.get("CSLIP", 1000.0))),
+            "CALPHA": float(coefficients.get("CALPHA_N_PER_RAD", coefficients.get("CALPHA", 800.0))),
+            "UMIN": float(coefficients.get("UMIN", 0.9)),
+            "UMAX": float(coefficients.get("UMAX", 1.0)),
+            "RELAX_LENGTH_X": float(coefficients.get("RELAX_LENGTH_X_MM", 50.0)),
+            "RELAX_LENGTH_Y": float(coefficients.get("RELAX_LENGTH_Y_MM", 150.0)),
+            "WIDTH": float(coefficients.get("WIDTH_MM", 235.0)),
+            "ROLLING_RESISTANCE": float(coefficients.get("ROLLING_RESISTANCE", 0.0)),
+        }
     kwargs.update(
         {
             # PAC 纯滑移路径不把该量用于轮胎力，但底层仍保留两个
@@ -4093,6 +4146,8 @@ def _discover_default_database() -> Path:
         return Path(configured)
     if DEFAULT_ADAMS_DATABASE.is_dir():
         return DEFAULT_ADAMS_DATABASE
+    if ALTERNATE_ADAMS_DATABASE.is_dir():
+        return ALTERNATE_ADAMS_DATABASE
     try:
         from .probe import discover_profile
 
@@ -4204,6 +4259,22 @@ def _parse_tire(path: Path) -> dict[str, float]:
         values["VERTICAL_DAMPING_N_S_MM"] = (
             values["VERTICAL_DAMPING"] * force_scale * time_scale / length_scale
         )
+    if "WIDTH" in values:
+        values["WIDTH_MM"] = values["WIDTH"] * length_scale
+    if "CALPHA" in values:
+        values["CALPHA_N_PER_RAD"] = (
+            values["CALPHA"] * force_scale
+            / (length_scale / length_scale)
+            / _unit_factor(units.get("angle"), _ANGLE_TO_RAD, 1.0)
+        )
+    if "CSLIP" in values:
+        values["CSLIP_N"] = values["CSLIP"] * force_scale
+    if "RELAX_LENGTH_X" in values:
+        # Adams Fiala examples express relaxation length in metres even when
+        # the surrounding tire file declares millimetres.
+        values["RELAX_LENGTH_X_MM"] = values["RELAX_LENGTH_X"] * 1000.0
+    if "RELAX_LENGTH_Y" in values:
+        values["RELAX_LENGTH_Y_MM"] = values["RELAX_LENGTH_Y"] * 1000.0
     values.setdefault("SPRING_STIFFNESS_N_MM", 125.0)
     values.setdefault("SPRING_FREE_LENGTH_MM", 300.0)
     return values

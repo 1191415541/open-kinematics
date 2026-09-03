@@ -247,6 +247,38 @@ def test_native_comparison_converts_contact_height_to_model_units() -> None:
 @pytest.mark.skipif(
     not _SOURCE_CASE.is_dir(), reason="strict Adams source artifacts are unavailable"
 )
+def test_native_brush_source_case_converges_through_two_seconds() -> None:
+    script_path = Path(__file__).parents[2] / "scripts" / "run_full_native_three_model_comparison.py"
+    spec = importlib.util.spec_from_file_location("native_three_model_comparison_brush", script_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    data = load_adams_full_vehicle_input(_SOURCE_CASE)
+    model = build_native_rack_steering_model(
+        build_adams_source_vehicle_model(data, tire_kind="native_brush")
+    )
+    result_path = _SOURCE_CASE / "adams_raw" / "handling_step_steer_dynamic.res"
+    case = module._native_case(
+        data,
+        model,
+        adams_rack_displacement_signal_from_result(result_path),
+        tire_kind="native_brush",
+        end_time=2.0,
+        output_step=0.01,
+        internal_step=0.01,
+        road_origin_z_m=adams_contact_patch_plane_height_m(result_path),
+        source_drive_brake_result_path=result_path,
+    )
+    assert case.solver.projection_max_iterations == 80
+    result = run_vehicle_dynamics(model, case)
+    assert len(result.times_s) == 201
+    assert bool(np.all(result.diagnostics.accepted))
+
+
+@pytest.mark.skipif(
+    not _SOURCE_CASE.is_dir(), reason="strict Adams source artifacts are unavailable"
+)
 def test_source_manifest_records_couplers_and_user_function_entities() -> None:
     data = load_adams_full_vehicle_input(_SOURCE_CASE)
 

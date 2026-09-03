@@ -72,6 +72,7 @@ def discover_profile(
             DEFAULT_HOME,
             Path(r"C:\Program Files\MSC.Software\Adams\2024_1"),
             Path(r"C:\MSC.Software\Adams\2024_1"),
+            Path(r"G:\MSC.Software\Adams\2024_1"),
         ]
     )
     candidates = _unique_paths(candidates)
