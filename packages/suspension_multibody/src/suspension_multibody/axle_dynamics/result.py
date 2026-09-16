@@ -80,6 +80,47 @@ TIRE_OUTPUT_COLUMNS = (
     "overturning_moment_n_m",
     "rolling_resistance_moment_n_m",
     "aligning_moment_n_m",
+    # Contact-body states of the advanced transient modes (USE_MODE 21-25).  They are
+    # zero for every mode whose state layout has no such slot, so a consumer can read
+    # them unconditionally; exposing them is what turns "the second layer is active"
+    # into a measurable statement rather than an inference from the force history.
+    "contact_body_longitudinal_m",
+    "contact_body_longitudinal_rate_m_per_s",
+    "contact_body_lateral_m",
+    "contact_body_lateral_rate_m_per_s",
+    "contact_body_yaw_rad",
+    "contact_body_yaw_rate_rad_per_s",
+    # The four turn-slip relaxation states of USE_MODE 25 (Eq3963-Eq3966), in radians
+    # per metre like the turn slip itself: phi'_c, phi'_F2 and the pair phi'_1/phi'_2
+    # that Eq3969/Eq3970 combine into the force and moment channels.  Zero for every
+    # mode below 25.
+    "turn_slip_phi_c_rad_per_m",
+    "turn_slip_phi_f2_rad_per_m",
+    "turn_slip_phi_1_rad_per_m",
+    "turn_slip_phi_2_rad_per_m",
+    # Eq3961 / Eq3963 diagnostic decomposition, native-only.  These columns are
+    # appended so existing consumers of the force/moment/contact-state columns keep
+    # their offsets.
+    "rolling_speed_m_per_s",
+    "slip_reference_speed_m_per_s",
+    "lateral_slip_base_rad",
+    "lateral_slip_beta_term_rad",
+    "lateral_slip_beta_st_term_rad",
+    "lateral_slip_target_rad",
+    "lateral_slip_target_clamped_rad",
+    "turn_slip_force_rad_per_m",
+    "turn_slip_moment_rad_per_m",
+    "turn_slip_drive_rad_per_s",
+    "turn_slip_yaw_rate_rad_per_s",
+    "turn_slip_camber_term_rad_per_s",
+    "turn_slip_total_spin_rate_rad_per_s",
+    "lateral_slip_relaxation_length_m",
+    # The slip the Magic Formula actually evaluates in a transient mode: the relaxed
+    # state of Eq3960-Eq3962 after the validity clamp, i.e. what the force above was
+    # computed from.  The columns before it show the target; these show the achieved
+    # value, so the transient lag can be read instead of inferred.
+    "longitudinal_relaxed_slip",
+    "lateral_relaxed_slip",
 )
 DIAGNOSTIC_COLUMNS = (
     "accepted",
@@ -123,6 +164,7 @@ PERFORMANCE_COLUMNS = (
     "nonsmooth_fallback_columns",
     "analytic_jacobian_time_s",
     "finite_difference_jacobian_time_s",
+    "dynamic_integration_time_s",
 )
 ENERGY_COLUMNS = (
     "kinetic_energy_j",
@@ -205,6 +247,7 @@ class AxleRunPerformance:
     nonsmooth_fallback_columns: int = 0
     analytic_jacobian_time_s: float = 0.0
     finite_difference_jacobian_time_s: float = 0.0
+    dynamic_integration_time_s: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -236,7 +279,13 @@ class AxleDynamicsResult:
         return self.tire_output[:, self.tire_names.index(tire), :]
 
     def joint_wrench_on_body_b(self, joint: str) -> np.ndarray:
-        """Return world force and marker-referenced moment on joint body_b."""
+        """
+        Return world force and marker-referenced moment on joint body_b.
+
+        Driven coordinates appear in ``constraint_names`` too, because each one is
+        a constraint row: for those the returned wrench is the drive reaction, i.e.
+        what the prescribed motion has to supply to hold its coordinate.
+        """
         return self.constraint_wrench[:, self.constraint_names.index(joint), :]
 
     def spring_state(self, spring: str) -> np.ndarray:

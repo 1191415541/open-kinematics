@@ -185,6 +185,14 @@ def test_stop_output_separates_conservative_and_dissipative_force() -> None:
 
 
 def test_failed_step_preserves_partial_result_and_failure_diagnostics() -> None:
+    """
+    A fatal Newton failure still reports the partial result and diagnostics.
+
+    The floor is deliberately equal to the step here: with no room to reduce, the
+    failure is fatal.  When the floor is lower the solver halves the step and
+    retries instead -- see
+    ``test_newton_failure_halves_the_step_when_a_floor_is_available``.
+    """
     model = _oscillator()
     spring = model.springs[0].model_copy(update={"point_b_m": (0.10, 0.0, 0.0)})
     model = model.model_copy(update={"springs": (spring,)})
@@ -199,6 +207,7 @@ def test_failed_step_preserves_partial_result_and_failure_diagnostics() -> None:
                     adaptive_step=False,
                     internal_step_s=0.01,
                     maximum_step_s=0.01,
+                    minimum_step_s=0.01,
                     max_newton_iterations=1,
                 ),
             ),

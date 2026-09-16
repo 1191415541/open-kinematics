@@ -181,6 +181,9 @@ def command_time_domain_runner(command: str) -> TimeDomainRunner:
             env=os.environ.copy(),
             capture_output=True,
             text=True,
+            # Decode explicitly; see `adams/adapter.py`.
+            encoding="utf-8",
+            errors="replace",
             timeout=600,
             check=False,
         )

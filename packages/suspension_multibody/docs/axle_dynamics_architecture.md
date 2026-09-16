@@ -1,17 +1,56 @@
 # 整轴与整车动力学软件架构
 
-本文件描述**已实现**的结构。计划中的分目录 C++ 布局未采用：内核收敛为单一翻译单元，
-因为全部求解阶段共享同一 `Model`/`State` 表示与残量装配，跨文件拆分只会把内部结构
-暴露为头文件接口而不减少耦合。
+本文件描述**已实现**的结构。
+
+> 修订（2026-09-13）：此前本文件记载「分目录 C++ 布局未采用、内核收敛为单一翻译单元」，
+> 该决策已被推翻。C++ 内核正在从单翻译单元迁出：源码移入独立包
+> `packages/suspension_kernel`，由 CMake + Ninja 构建（此前 CMake 只是仓内零调用的
+> 描述文件，真实构建是单文件直编），并按职责分层为可独立编译的库。本文件所述的目录
+> 与构建入口随之更新；迁移过程中的过渡形态见
+> `.codex-tasks/20260913-cpp-kernel-package/MODULES.md`。
 
 ## 模块边界
 
 ```text
-cpp/axle_dynamics/
-  axle_kernel.hpp   C ABI 结构体、输出列布局注释、axle_run 声明
-  axle_kernel.cpp   数学、刚体、约束、元件、接触、静态配平、积分、C ABI
-  CMakeLists.txt    共享库目标，输出到 Python 包的 native/ 目录
+packages/suspension_kernel/
+  cpp/axle_dynamics/        公开 C ABI 面，只剩这两个头
+    axle_kernel.hpp         结构体、枚举（转引 mb_model/enums.hpp）与输出列布局注释
+    core_abi.hpp            mb_core_* 的输入输出结构体
+  cpp/include/<module>/     每模块的头：类型头 + `functions.hpp`
+    functions.hpp 只**声明**该模块定义的自由函数，并包含本层与允许依赖层的类型头；
+    编译器不再有「一个头看到全内核」的过渡形态（K6 删除了 kernel_internal.hpp）
+    abi/                     version.hpp、functions.hpp
+    mb_base/                 vector、constants、diagnostics、env、util、dual、dual_geometry、
+                             monotone_cubic、prelude.hpp（只含标准库包含）、functions.hpp
+    mb_linalg/               factorization_types、functions.hpp
+    mb_model/                enums（零依赖）、types、functions.hpp
+    mb_tire_state/           tire_state、functions.hpp
+    mb_constraint/           types（行数与残差分类，零依赖）、registry（JointTypeDescriptor 表）、
+                             functions.hpp
+    mb_suspension/           functions.hpp
+    mb_tire/                 model（轮胎模型注册表）、assembly、force_context、functions.hpp
+      common/                kinematics、functions.hpp
+      brush/ fiala/ pac2002/ functions.hpp（pac2002 另有 parameters、spin、turn_slip）
+    mb_vehicle/              energy、functions.hpp
+    mb_integrator/           context、functions.hpp
+    mb_static/ mb_output/    functions.hpp（output 另有 measurement）
+  cpp/src/<module>/         每个模块目录一个静态库目标，一文件一层
+    base linalg model tire_state constraint suspension tire
+    tire/{common,brush,fiala,pac2002} vehicle integrator static output abi
+  CMakeLists.txt            共享库 + 16 个模块静态库，显式列出全部翻译单元；
+                            模块间用 --start-group 链接，分层方向由源码级探针检查
+  src/suspension_kernel/native/          本包自己的构建产物
+  src/suspension_kernel/binding/         与产品语义无关的 ctypes 层：
+                                         库路径解析、符号探测、ABI 门、元数据、错误类型
+`.codex-tasks/20260913-cpp-kernel-package/tasks/07-extract-domains/scripts/` 下有两个可执行检查：
+`check_module_layering.py`（模块依赖方向，实测边集冻结为回归基线）与
+`route_declarations.py`（K6 把过渡头声明分派到各模块头、并切断各翻译单元的包含；已完成）。
+packages/suspension_multibody/scripts/build_axle_native.py
+                      兼容包装：委派内核构建，并把产物镜像到本包 native/
+                      注意：内核侧构建不会刷新这份镜像，改了 ABI 结构体后必须跑它，
+                      否则 native.py 的新鲜度守卫会拒绝加载并提示这条命令
 packages/suspension_multibody/src/suspension_multibody/
+  native/                                 轴语义侧加载的那份共享库副本
   axle_dynamics/schema.py   闭集 SI 物理模型与工况（Pydantic StrictModel）
   axle_dynamics/native.py   共享库查找、ABI 校验、ctypes 编组、错误码转异常
   axle_dynamics/result.py   结果对象与全部输出列名
@@ -46,10 +85,16 @@ int axle_run(
 `AxleInput` 以并列数组携带刚体、关节、弹簧、衬套、稳定杆、轮胎、采样时间、路面、
 驱动力矩、外载和全部求解设置；`AxleOutput` 以调用方分配的缓冲区接收 body state、
 约束反力、元件输出、轮胎接触、能量账本、诊断和已定位的接触事件。当前 ABI 版本为
-**14**，整车扩展 ABI 版本为 **15**；`native.py` 与 `native_build.json` 必须与之一致，
-否则拒绝加载。整车 ABI 15 在整轴字段末尾追加整车轮端框架、自转轴和 PAC2002 参数；整车
-ABI 15 在 PAC2002 参数数组末尾追加 Chrono PAC02 的缩放、压力和附加力矩字段；不改变
-既有整轴字段的排列。
+**15**，整车扩展 ABI 版本为 **30**；`native.py` 与 `native_build.json` 必须与之一致，
+否则拒绝加载。**30 相对 29 的改动是加法**：两个入口各在结构体末尾追加同一组通用元素字段
+（`element_count` / `elements` / `element_curves` / `topology_extension_count` /
+`topology_extensions`），轴侧另在开头补 `struct_size` / `abi_version` / `reserved`。
+既有字段偏移全部未变，版本号仍必须前进——调用方编译所依据的结构体大小已经不同，
+按 14/29 编译的调用方会被明确拒绝，而不是越过自己的边界读内存。
+整车 ABI 此前的追加历史：轮端框架、自转轴与 PAC2002 参数（15），
+缩放/压力/附加力矩字段，`[DEFLECTION_LOAD_CURVE]` 与 `[BOTTOMING_CURVE]` 的曲线数组，
+以及**通用运动学驱动**的坐标数组（29：`driven_*`，把任意两体之间的一个自由度按规定时间
+函数驱动，对应 Adams 的关节 `MOTION`）。
 
 ABI 只传输 SI 数值；字符串仅用于错误缓冲区。所有数组由调用方分配，C++ 不跨边界释放内存。
 返回码：`1` 参数缺失、`2` 模型构建失败（含约束秩亏）、`3` 输出缓冲区过小、
@@ -110,11 +155,15 @@ Chrono 万向连接方程替换。
 
 ## 构建和打包
 
-- CMake + C++17 构建共享库（`cpp/axle_dynamics/CMakeLists.txt`），输出直接落到
-  `src/suspension_multibody/native/`。
-- `scripts/build_axle_native.py` 是跨平台入口：Windows 委派 `build_axle_native.ps1`
-  使用 64 位 MinGW-w64 `g++`，其他平台直接调用 `CXX`/`c++`/`g++`/`clang++`。
-  两条路径都固定 `-Wall -Wextra -Werror -fno-fast-math -O2`，并记录编译器与旗标。
+- CMake + Ninja + C++17 构建共享库（`packages/suspension_kernel/CMakeLists.txt`），
+  `KERNEL_SOURCES` 逐个列出全部翻译单元（不扫目录），产物复制到
+  `src/suspension_kernel/native/` 与 `src/suspension_multibody/native/`。
+- `packages/suspension_kernel/scripts/build_suspension_kernel.py` 是唯一的构建入口：
+  它发现编译器、跑 `cmake -G Ninja`、`cmake --build`、复制产物，然后**加载产物读回**
+  `axle_kernel_abi_version` / `vehicle_kernel_abi_version` / `mb_core_abi_version` 写进
+  `native_build.json`。`scripts/build_axle_native.py` 与 `build_axle_native.ps1` 只是包装。
+- 旗标：`-O3 -DNDEBUG -std=c++17 -Wall -Wextra -Werror -fno-fast-math -fopenmp`，
+  Release 下另开 `-flto`；`-static -static-libgcc -static-libstdc++` 由 `target_link_options` 给出。
 - 共享库放在 `src/suspension_multibody/native/`，wheel 的 package-data 必须包含它。
 - 构建元数据、编译器、优化旗标和 ABI 版本写入 `native_build.json`，并进入结果 artifact
   与 Adams 证据包。

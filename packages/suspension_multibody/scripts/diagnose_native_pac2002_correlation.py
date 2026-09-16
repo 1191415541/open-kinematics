@@ -10,7 +10,17 @@ from typing import Any
 import numpy as np
 
 WHEELS = ("front_left", "front_right", "rear_left", "rear_right")
-FORCE_COMPONENTS = ("normal_force", "longitudinal_force", "lateral_force")
+# ``aligning_moment`` is reported but deliberately not in DEFAULT_LIMITS_PERCENT:
+# the mode-14/23/24 gates freeze their limits against that dict, so adding a channel
+# to it would silently widen what those gates assert.  USE_MODE 25 is the parking
+# mode and its torque lives in this channel, so it gets its own gate limits
+# (see the task-D notes) instead of changing the existing ones.
+FORCE_COMPONENTS = (
+    "normal_force",
+    "longitudinal_force",
+    "lateral_force",
+    "aligning_moment",
+)
 HANDLING_CHANNELS = ("lateral_acceleration", "yaw_rate", "body_roll")
 DEFAULT_LIMITS_PERCENT = {
     "normal_force": 3.0,

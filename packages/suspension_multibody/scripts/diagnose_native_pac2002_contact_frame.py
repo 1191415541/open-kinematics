@@ -65,6 +65,7 @@ def _channels() -> dict[str, AdamsResultChannel]:
 
 
 def diagnose(adams_result: Path, native_artifact: Path) -> dict[str, Any]:
+    """对比 Adams 与 native 的 PAC2002 接触坐标系."""
     manifest = _read_json(native_artifact / "manifest.json")
     model = VehicleModel.model_validate(manifest["model"])
     case = VehicleDynamicCase.model_validate(manifest["case"])
@@ -155,6 +156,7 @@ def diagnose(adams_result: Path, native_artifact: Path) -> dict[str, Any]:
 
 
 def main() -> int:
+    """运行 PAC2002 接触坐标系诊断."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--adams-result", type=Path, required=True)
     parser.add_argument("--native-artifact", type=Path, required=True)

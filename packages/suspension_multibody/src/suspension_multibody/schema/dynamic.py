@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from ..pac2002_scope import validate_pac2002_native_scope
 from .common import (
     CoordinateSystem,
     Pose,
@@ -207,7 +208,32 @@ class TireModelSpec(StrictModel):
     minimum_slip_speed: float = Field(default=10.0, gt=0)
     pneumatic_trail: float = Field(default=50.0, ge=0)
     pac2002_coefficients: dict[str, float] = Field(default_factory=dict)
+    # Tabulated coefficients cannot ride in the scalar payload.  Each entry is a
+    # (deflection_m, load_n) curve in SI units, strictly increasing in deflection, and
+    # is absent when the tire file does not carry the section.
+    pac2002_tables: dict[str, tuple[tuple[float, float], ...]] = Field(
+        default_factory=dict
+    )
     fiala_parameters: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("pac2002_tables")
+    @classmethod
+    def _valid_tables(
+        cls, value: dict[str, tuple[tuple[float, float], ...]]
+    ) -> dict[str, tuple[tuple[float, float], ...]]:
+        """Require every tabulated curve to be a monotone sequence of finite pairs."""
+        for name, rows in value.items():
+            if len(rows) < 2:
+                raise ValueError(f"{name} needs at least two points")
+            previous = None
+            for row in rows:
+                if len(row) != 2 or not all(math.isfinite(item) for item in row):
+                    raise ValueError(f"{name} rows must be two finite numbers")
+                deflection = row[0]
+                if previous is not None and deflection <= previous:
+                    raise ValueError(f"{name} deflection must strictly increase")
+                previous = deflection
+        return value
 
     @model_validator(mode="after")
     def _valid_compression_limit(self) -> TireModelSpec:
@@ -238,6 +264,8 @@ class TireModelSpec(StrictModel):
                 value = self.fiala_parameters.get(name)
                 if value is not None and value <= 0.0:
                     raise ValueError(f"Fiala {name} must be positive")
+        if self.kind == "pac2002":
+            validate_pac2002_native_scope(self.pac2002_coefficients)
         return self
 
     @field_validator("pac2002_coefficients")

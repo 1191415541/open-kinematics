@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ..api import run_dynamic_case
 from ..schema import DynamicCaseSpec, FrontAxleModel, TimeSignal
-from .probe import AdamsProfile, _adams_environment
+from .probe import AdamsProfile, _adams_environment, producer_id
 from .time_domain import (
     AdamsResultChannel,
     TimeHistoryTolerance,
@@ -89,6 +89,9 @@ def run_vehicle_kc_roll_adams(
         env=_adams_environment(runtime),
         capture_output=True,
         text=True,
+        # Decode explicitly; see `adams/adapter.py`.
+        encoding="utf-8",
+        errors="replace",
         timeout=300,
         check=False,
     )
@@ -127,7 +130,7 @@ def run_vehicle_kc_roll_adams(
     (output_dir / "adams_vehicle_kc_execution.json").write_text(
         json.dumps(
             {
-                "producer": "msc.adams-solver.2024.1",
+                "producer": producer_id("adams-solver", profile.version),
                 "analysis": "vehicle_kc_time_domain",
                 "analysis_mode": "dynamic",
                 "runtime_directory": str(runtime),

@@ -30,10 +30,17 @@ test-kinematics:
 build-axle-native:
     uv run python packages/suspension_multibody/scripts/build_axle_native.py
 
+# The real kernel build: CMake + Ninja, sources under packages/suspension_kernel.
+build-kernel:
+    uv run python packages/suspension_kernel/scripts/build_suspension_kernel.py
+
+test-kernel: build-kernel
+    uv run --package suspension-kernel pytest packages/suspension_kernel/tests
+
 test-multibody: build-axle-native
     uv run --package suspension-multibody pytest packages/suspension_multibody/tests
 
-test: test-contracts test-kinematics test-multibody
+test: test-contracts test-kinematics test-kernel test-multibody
 
 # Static gates over the workspace-defined scope.
 lint:
@@ -48,11 +55,14 @@ check: lint type-check build import-smoke cli-smoke
 build:
     uv build --package suspension-contracts
     uv build --package suspension-kinematics
+    uv run python packages/suspension_kernel/scripts/build_suspension_kernel.py
+    uv build --package suspension-kernel
     uv run python packages/suspension_multibody/scripts/build_axle_native.py
     uv build --package suspension-multibody
 
 import-smoke:
     uv run --package suspension-contracts python -c "import suspension_contracts"
+    uv run --package suspension-kernel python -c "import suspension_kernel"
     uv run --package suspension-kinematics python -c "import suspension_kinematics"
     uv run --package suspension-multibody python -c "import suspension_multibody"
 

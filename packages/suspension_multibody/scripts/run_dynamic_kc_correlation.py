@@ -32,6 +32,7 @@ from suspension_multibody.adams.car_sla_model import (
     build_sla_axle_model,
     unsprung_corner_mass_kg,
 )
+from suspension_multibody.adams.probe import resolve_adams_home
 from suspension_multibody.axle_dynamics import (
     AxleDynamicsCase,
     AxleHarmonicRoad,
@@ -39,7 +40,8 @@ from suspension_multibody.axle_dynamics import (
     run_axle_dynamics,
 )
 
-ADAMS_ROOT = Path("G:/MSC.Software/Adams/2024_1")
+# The example vehicle ships inside whichever Adams/Car release is installed.
+ADAMS_ROOT = resolve_adams_home() or Path("adams-car-installation-is-unavailable")
 SUBSYSTEM = (
     ADAMS_ROOT
     / "acar/achassis_gs.cdb/subsystems.tbl/acar_gs_front_suspension.sub"
@@ -177,6 +179,10 @@ def run_adams(work_dir: Path, stem: str) -> tuple[float, str]:
         ],
         capture_output=True,
         text=True,
+        # Decode explicitly: the locale codec cannot read every byte a child
+        # process prints, and this repository's path is non-ASCII.
+        encoding="utf-8",
+        errors="replace",
         timeout=3600,
     )
     elapsed = time.perf_counter() - started

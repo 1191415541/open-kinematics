@@ -3,15 +3,37 @@
 from __future__ import annotations
 
 import ctypes
-import json
-import platform
+import math
+import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 
 import numpy as np
+from suspension_kernel.binding import (
+    KernelAbiMismatchError,
+    KernelSymbolMissingError,
+)
+from suspension_kernel.binding import (
+    NativeKernelUnavailableError as KernelUnavailableError,
+)
+from suspension_kernel.binding import (
+    library_path as kernel_library_path,
+)
+from suspension_kernel.binding import (
+    load_kernel_library as kernel_load_library,
+)
+from suspension_kernel.binding import (
+    native_build_metadata as kernel_build_metadata,
+)
+from suspension_kernel.binding import (
+    native_directory as kernel_native_directory,
+)
 
 from .result import (
     DIAGNOSTIC_COLUMNS,
+    TIRE_OUTPUT_COLUMNS,
     AxleContactEventRecord,
     AxleDynamicsResult,
     AxleRunDiagnostics,
@@ -19,13 +41,28 @@ from .result import (
 )
 from .schema import (
     PAC2002_PARAMETER_DEFAULTS,
-PAC2002_PARAMETER_NAMES,
+    PAC2002_PARAMETER_NAMES,
     AxleDynamicsCase,
     AxleDynamicsModel,
 )
 
-_NATIVE_KERNEL_ABI_VERSION = 14
-_NATIVE_VEHICLE_KERNEL_ABI_VERSION = 21
+#: Library base name and the axle package's own copy of the built product.  The
+#: kernel is built by `packages/suspension_kernel`; this package keeps a copy in
+#: its `native` directory and loads it from there, which is the deployed layout
+#: the wheel already relied on.
+_LIBRARY_STEM = "suspension_kernel"
+_NATIVE_DIR = Path(__file__).resolve().parent.parent / "native"
+
+#: The Python side is still a second source of truth for the ABI numbers, as it
+#: always was.  The kernel's `binding` layer checks the library against these at
+#: load time, and `_require_matching_metadata_versions` checks them against the
+#: metadata the build read back out of the artefact, so a one-sided bump is named
+#: at the boundary instead of silently reading the wrong struct layout.
+_NATIVE_KERNEL_ABI_VERSION = 15
+_NATIVE_VEHICLE_KERNEL_ABI_VERSION = 30
+#: The generic core surface (`mb_core_*`).  It has its own version because it is
+#: the one entry point a non-suspension product links against.
+_NATIVE_CORE_ABI_VERSION = 1
 
 
 def _is_right_tire_name(name: str) -> bool:
@@ -34,8 +71,15 @@ def _is_right_tire_name(name: str) -> bool:
     return normalized.endswith(("_right", "_r", "right"))
 
 
-class NativeKernelUnavailableError(RuntimeError):
-    """Raised when the C++ axle kernel is not installed for this platform."""
+class NativeKernelUnavailableError(KernelUnavailableError):
+    """
+    Raised when the C++ axle kernel is not installed for this platform.
+
+    Subclasses the kernel binding's same-named error so that a caller catching
+    either package's class catches this condition.  Two unrelated classes with
+    one name was itself a trap: code written against one silently failed to catch
+    the other.
+    """
 
 
 class NativeAxleError(RuntimeError):
@@ -71,6 +115,10 @@ class NativeAxleError(RuntimeError):
 
 class _AxleInput(ctypes.Structure):
     _fields_ = [
+        # Extension protocol, mirrored from `AxleInput` in the C ABI header.
+        ("struct_size", ctypes.c_size_t),
+        ("abi_version", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32),
         ("body_count", ctypes.c_size_t),
         ("body_mass", ctypes.POINTER(ctypes.c_double)),
         ("body_inertia_body_3x3", ctypes.POINTER(ctypes.c_double)),
@@ -175,11 +223,24 @@ class _AxleInput(ctypes.Structure):
         ("velocity_tolerance", ctypes.c_double),
         ("dynamics_tolerance", ctypes.c_double),
         ("increment_tolerance", ctypes.c_double),
+        # Generic element surface.  These must be present even while the kernel
+        # still reads the per-family arrays above, because the kernel checks the
+        # caller's `struct_size`: a mirror that stops short of the real structure
+        # is rejected outright rather than partly read.
+        ("element_count", ctypes.c_size_t),
+        ("elements", ctypes.c_void_p),
+        ("element_curves", ctypes.c_void_p),
+        ("topology_extension_count", ctypes.c_size_t),
+        ("topology_extensions", ctypes.c_void_p),
     ]
 
 
 class _AxleOutput(ctypes.Structure):
     _fields_ = [
+        # Extension protocol, mirrored from `AxleOutput` in the C ABI header.
+        ("struct_size", ctypes.c_size_t),
+        ("abi_version", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32),
         ("body_state", ctypes.POINTER(ctypes.c_double)),
         ("body_state_capacity", ctypes.c_size_t),
         ("constraint_wrench", ctypes.POINTER(ctypes.c_double)),
@@ -278,6 +339,36 @@ class _VehicleInput(ctypes.Structure):
         ("tire_drive_torque_reaction_body", ctypes.POINTER(ctypes.c_int)),
         ("tire_drive_torque_axis_local", ctypes.POINTER(ctypes.c_double)),
         ("bushing_force_curve_interpolation", ctypes.POINTER(ctypes.c_int)),
+        ("tire_deflection_curve_offset", ctypes.POINTER(ctypes.c_int)),
+        ("tire_deflection_curve_count", ctypes.POINTER(ctypes.c_int)),
+        ("tire_deflection_curve_deflection", ctypes.POINTER(ctypes.c_double)),
+        ("tire_deflection_curve_force", ctypes.POINTER(ctypes.c_double)),
+        ("tire_bottoming_curve_offset", ctypes.POINTER(ctypes.c_int)),
+        ("tire_bottoming_curve_count", ctypes.POINTER(ctypes.c_int)),
+        ("tire_bottoming_curve_penetration", ctypes.POINTER(ctypes.c_double)),
+        ("tire_bottoming_curve_force", ctypes.POINTER(ctypes.c_double)),
+        # Generic kinematic driver (vehicle ABI 29).  Appended last so the
+        # existing field offsets are unchanged; the kernel guards their presence
+        # with struct_size.
+        ("driven_count", ctypes.c_size_t),
+        ("driven_type", ctypes.POINTER(ctypes.c_int)),
+        ("driven_body", ctypes.POINTER(ctypes.c_int)),
+        ("driven_reaction_body", ctypes.POINTER(ctypes.c_int)),
+        ("driven_point_local", ctypes.POINTER(ctypes.c_double)),
+        ("driven_reaction_point_local", ctypes.POINTER(ctypes.c_double)),
+        ("driven_axis_local", ctypes.POINTER(ctypes.c_double)),
+        ("driven_reference_quaternion", ctypes.POINTER(ctypes.c_double)),
+        ("driven_target", ctypes.POINTER(ctypes.c_double)),
+        ("driven_target_rate", ctypes.POINTER(ctypes.c_double)),
+        # Generic element surface, shared verbatim with `_AxleInput` so a `kind`
+        # has one layout on both entry points.  These have to be listed even while
+        # the kernel still reads the per-family arrays, because `struct_size` is
+        # checked against the real structure.
+        ("element_count", ctypes.c_size_t),
+        ("elements", ctypes.c_void_p),
+        ("element_curves", ctypes.c_void_p),
+        ("topology_extension_count", ctypes.c_size_t),
+        ("topology_extensions", ctypes.c_void_p),
     ]
 
 
@@ -310,6 +401,27 @@ class _VehicleSteeringBuffers:
 
 
 @dataclass(frozen=True)
+class _VehicleDrivenBuffers:
+    """
+    Per-coordinate geometry and per-sample targets of the driven coordinates.
+
+    The targets are flattened ``sample_count x count`` in the case's declared
+    order, matching the steering actuator layout.
+    """
+
+    names: tuple[str, ...]
+    kind: np.ndarray
+    body: np.ndarray
+    reaction_body: np.ndarray
+    point_local: np.ndarray
+    reaction_point_local: np.ndarray
+    axis_local: np.ndarray
+    reference_quaternion: np.ndarray
+    target: np.ndarray
+    target_rate: np.ndarray
+
+
+@dataclass(frozen=True)
 class _VehicleRoadBuffers:
     kind: int
     origin_x: float
@@ -326,44 +438,255 @@ class _VehicleRoadBuffers:
 class _NativeRun:
     result: AxleDynamicsResult
     steering_output: np.ndarray | None = None
+    kernel_wall_time_s: float = 0.0
 
 
 def _ptr(array: np.ndarray, ctype: type[ctypes.c_double] | type[ctypes.c_int]):
     return array.ctypes.data_as(ctypes.POINTER(ctype))
 
 
+#: Mirror of the C ABI's uniform element block.  The parameter and integer widths
+#: are the ABI's (`kElementBlockSize` / `kElementIntBlockSize`); a mirror that is
+#: narrower than the C structure cannot address the later families' slots.
+class _ElementBlock(ctypes.Structure):
+    _fields_ = [
+        ("kind", ctypes.c_int),
+        ("flags", ctypes.c_int),
+        ("body_a", ctypes.c_int),
+        ("body_b", ctypes.c_int),
+        ("parameters", ctypes.c_double * 176),
+        ("ints", ctypes.c_int * 16),
+        # Parameter cache for families larger than the uniform block, such as a
+        # tire's 226-entry PAC2002 table.  Both stay at zero for the families that
+        # fit, and the reader rejects a count without a pointer.
+        ("cached_parameters", ctypes.c_void_p),
+        ("cached_parameter_count", ctypes.c_size_t),
+    ]
+
+
+class _ElementCurveReference(ctypes.Structure):
+    _fields_ = [
+        ("values", ctypes.c_void_p),
+        ("count", ctypes.c_size_t),
+    ]
+
+
+#: Element kinds, mirroring `enum ElementKind` in the kernel header.
+ELEMENT_SPRING = 0
+ELEMENT_BUSHING = 1
+ELEMENT_ANTI_ROLL = 2
+ELEMENT_TIRE = 3
+ELEMENT_AERODYNAMIC_DRAG = 4
+
+#: Curve slots per element, mirroring `kElementCurveSlots`.
+ELEMENT_CURVE_SLOTS = 8
+
+
+def _apply_element_blocks(
+    target: object, element_blocks: tuple[_ElementBlock, ...]
+) -> tuple[object, object]:
+    """
+    Point a native input structure at the given element blocks.
+
+    Clears the per-family element counts as well: the kernel rejects a caller that
+    supplies both forms, so the two must not be left set together.  Returns the
+    block and curve arrays, which the caller must keep alive because the structure
+    holds raw pointers into them.
+
+    Shared by both entry points: `AxleInput` and `VehicleInput` carry the same
+    fields, which is the point of the generic surface.
+    """
+    curves = (_ElementCurveReference * (len(element_blocks) * ELEMENT_CURVE_SLOTS))()
+    blocks = (_ElementBlock * len(element_blocks))(*element_blocks)
+    target.spring_count = 0  # type: ignore[attr-defined]
+    target.bushing_count = 0  # type: ignore[attr-defined]
+    target.anti_roll_bar_count = 0  # type: ignore[attr-defined]
+    target.tire_count = 0  # type: ignore[attr-defined]
+    target.element_count = len(element_blocks)  # type: ignore[attr-defined]
+    target.elements = ctypes.cast(blocks, ctypes.c_void_p).value  # type: ignore[attr-defined]
+    if hasattr(target, "aerodynamic_drag_count"):
+        # The one element family the vehicle structure owns; see
+        # `add_vehicle_aerodynamic_drags`, which applies the same rule.
+        target.aerodynamic_drag_count = 0
+    target.element_curves = ctypes.cast(curves, ctypes.c_void_p).value  # type: ignore[attr-defined]
+    target.topology_extension_count = 0  # type: ignore[attr-defined]
+    target.topology_extensions = None  # type: ignore[attr-defined]
+    return blocks, curves
+
+
+def _spring_element_block(
+    *,
+    body_a: int,
+    body_b: int,
+    stiffness: float,
+    compression_damping: float,
+    rebound_damping: float,
+    free_length: float,
+    minimum_length: float = math.nan,
+    maximum_length: float = math.nan,
+    compression_stop_stiffness: float = 0.0,
+    compression_stop_damping: float = 0.0,
+    rebound_stop_stiffness: float = 0.0,
+    rebound_stop_damping: float = 0.0,
+    point_a: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    point_b: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> _ElementBlock:
+    """
+    Build one SPRING element block.
+
+    The parameter offsets mirror `enum ElementParameter` in the kernel header; a
+    mismatch is caught by the array-versus-block equivalence test, which asserts
+    the two spellings of a model produce identical results.
+    """
+    block = _ElementBlock()
+    block.kind = ELEMENT_SPRING
+    block.body_a = body_a
+    block.body_b = body_b
+    parameters = block.parameters
+    parameters[0] = stiffness
+    parameters[1] = compression_damping
+    parameters[2] = rebound_damping
+    parameters[3] = free_length
+    parameters[4] = minimum_length
+    parameters[5] = maximum_length
+    parameters[6] = compression_stop_stiffness
+    parameters[7] = compression_stop_damping
+    parameters[8] = rebound_stop_stiffness
+    parameters[9] = rebound_stop_damping
+    for offset, point in ((10, point_a), (13, point_b)):
+        parameters[offset] = point[0]
+        parameters[offset + 1] = point[1]
+        parameters[offset + 2] = point[2]
+    return block
+
+
 def _library_path() -> Path:
-    root = Path(__file__).resolve().parent.parent / "native"
-    if platform.system() == "Windows":
-        return root / "axle_dynamics_native.dll"
-    if platform.system() == "Darwin":
-        return root / "libaxle_dynamics_native.dylib"
-    return root / "libaxle_dynamics_native.so"
+    """
+    Return the path of this package's copy of the kernel library.
+
+    Path decoration (prefix and extension per platform) and the load itself are
+    owned by `suspension_kernel.binding`; this function only says *where* the
+    axle package keeps its copy.
+    """
+    return kernel_library_path(_LIBRARY_STEM, _NATIVE_DIR)
 
 
 def native_build_metadata() -> dict[str, object]:
-    """Return the recorded compiler and ABI metadata."""
-    path = _library_path().with_name("native_build.json")
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8-sig"))
+    """
+    Return the recorded compiler and ABI metadata.
+
+    Delegates to the kernel binding, which fails explicitly when the file is
+    absent instead of returning an empty mapping.
+    """
+    return kernel_build_metadata(_NATIVE_DIR)
+
+
+def _require_matching_metadata_versions() -> None:
+    """
+    Assert that the module's ABI constants agree with the recorded metadata.
+
+    Both numbers describe the same installed library, so a disagreement means one
+    of the two got bumped without the other.  Failing here keeps the mismatch at
+    the boundary, where it is named, instead of letting a run read the wrong
+    struct layout.
+    """
+    metadata = native_build_metadata()
+    for key, expected in (
+        ("abi_version", _NATIVE_KERNEL_ABI_VERSION),
+        ("vehicle_abi_version", _NATIVE_VEHICLE_KERNEL_ABI_VERSION),
+        ("core_abi_version", _NATIVE_CORE_ABI_VERSION),
+    ):
+        observed = metadata.get(key)
+        if observed != expected:
+            raise KernelAbiMismatchError(key, expected, observed)
+
+
+def _canonical_kernel_library() -> Path:
+    """
+    Return the kernel package's own copy of the built library.
+
+    Mirrored by :func:`_require_fresh_mirror`; kept as a separate function so the
+    mirror policy is stated once.  `suspension_kernel.binding` owns the location,
+    so the two packages cannot disagree about where the canonical copy lives.
+    """
+    return kernel_native_directory() / _library_path().name
+
+
+def _require_fresh_mirror() -> None:
+    """
+    Refuse to load a mirror that is older *and* different from its source.
+
+    This package loads its own copy under `native/`, but the build that produces
+    the canonical library lives in `suspension_kernel`.  A build that refreshed
+    only the canonical copy leaves a stale library here, and a stale library
+    against a fresh `ctypes` mirror shows up as an access violation inside the
+    kernel rather than as the build problem it is.
+
+    The comparison is on content, not only on time: a rebuild that reproduces the
+    same bytes (the usual case, since the kernel is built reproducibly) must not
+    be reported as staleness.  Time only orders the two copies so the check costs
+    one file comparison instead of two on every load.
+    """
+    mirror = _library_path()
+    canonical = _canonical_kernel_library()
+    if not canonical.is_file() or not mirror.is_file():
+        # A wheel installation has no kernel package beside it, which is fine.
+        return
+    if canonical.stat().st_mtime <= mirror.stat().st_mtime:
+        return
+    if _same_content(mirror, canonical):
+        return
+    raise NativeKernelUnavailableError(
+        f"the native kernel mirror at {mirror} is older and different from "
+        f"{canonical}; run `just build-axle-native` (or `just build-kernel` "
+        "followed by `just build-axle-native`) so the axle package loads the "
+        "library it was built against"
+    )
+
+
+def _same_content(left: Path, right: Path) -> bool:
+    """Return whether two files hold identical bytes."""
+    if left.stat().st_size != right.stat().st_size:
+        return False
+    with left.open("rb") as first, right.open("rb") as second:
+        while True:
+            a = first.read(1 << 20)
+            b = second.read(1 << 20)
+            if a != b:
+                return False
+            if not a:
+                return True
 
 
 def _load_library() -> ctypes.CDLL:
+    """
+    Load the kernel library, probing symbols and gating both ABI versions.
+
+    The symbol probe and the ABI gate live in `suspension_kernel.binding`; what
+    stays here is the axle-specific arity and pointer typing of each symbol,
+    which needs this module's `ctypes.Structure` mirrors.
+    """
     path = _library_path()
     if not path.exists():
         raise NativeKernelUnavailableError(
             f"native axle kernel is unavailable at {path}; "
             "run packages/suspension_multibody/scripts/build_axle_native.ps1"
         )
-    library = ctypes.CDLL(str(path))
-    library.axle_kernel_abi_version.argtypes = []
-    library.axle_kernel_abi_version.restype = ctypes.c_int
-    if library.axle_kernel_abi_version() != _NATIVE_KERNEL_ABI_VERSION:
-        raise NativeKernelUnavailableError(
-            "native axle kernel ABI is not version "
-            f"{_NATIVE_KERNEL_ABI_VERSION}"
-        )
+    _require_fresh_mirror()
+    try:
+        library = kernel_load_library(
+            stem=_LIBRARY_STEM,
+            directory=_NATIVE_DIR,
+            abi_symbols={
+                "axle_kernel_abi_version": _NATIVE_KERNEL_ABI_VERSION,
+                "vehicle_kernel_abi_version": _NATIVE_VEHICLE_KERNEL_ABI_VERSION,
+            },
+            required_symbols=("axle_run", "vehicle_run"),
+        ).handle
+    except KernelSymbolMissingError as error:
+        raise NativeKernelUnavailableError(str(error)) from error
+    except KernelAbiMismatchError as error:
+        raise NativeKernelUnavailableError(str(error)) from error
     library.axle_run.argtypes = [
         ctypes.POINTER(_AxleInput),
         ctypes.POINTER(_AxleOutput),
@@ -371,16 +694,6 @@ def _load_library() -> ctypes.CDLL:
         ctypes.c_size_t,
     ]
     library.axle_run.restype = ctypes.c_int
-    library.vehicle_kernel_abi_version.argtypes = []
-    library.vehicle_kernel_abi_version.restype = ctypes.c_int
-    if (
-        library.vehicle_kernel_abi_version()
-        != _NATIVE_VEHICLE_KERNEL_ABI_VERSION
-    ):
-        raise NativeKernelUnavailableError(
-            "native vehicle kernel ABI is not version "
-            f"{_NATIVE_VEHICLE_KERNEL_ABI_VERSION}"
-        )
     library.vehicle_run.argtypes = [
         ctypes.POINTER(_VehicleInput),
         ctypes.POINTER(_VehicleOutput),
@@ -423,11 +736,152 @@ def _body_wrench_matrix(
     return np.ascontiguousarray(values)
 
 
+#: Driven-coordinate kind -> AxleConstraintType value in the C++ enum.
+_DRIVEN_KIND = {"translation": 8, "rotation": 9}
+
+#: Steering actuator types that prescribe a coordinate instead of applying a force.
+_PRESCRIBED_STEERING_TYPES = (2, 3)
+
+
+def _prescribed_steering_indices(
+    steering: _VehicleSteeringBuffers | None,
+) -> tuple[int, ...]:
+    """
+    Return the indices of the actuators that became driven coordinates.
+
+    A prescribed actuator no longer owns a private constraint row in the kernel: it
+    registers an ``AXLE_DRIVEN_*`` coordinate, which takes a slot in the
+    constraint-wrench output.  The order matters because the kernel appends those
+    constraints before the case's own driven coordinates.
+    """
+    if steering is None:
+        return ()
+    return tuple(
+        index
+        for index, kind in enumerate(np.asarray(steering.actuator_type).ravel())
+        if int(kind) in _PRESCRIBED_STEERING_TYPES
+    )
+
+
+def _driven_buffers(
+    model: AxleDynamicsModel,
+    case: AxleDynamicsCase,
+) -> _VehicleDrivenBuffers | None:
+    """
+    Assemble the driven-coordinate buffers the versioned ABI expects.
+
+    Geometry comes from the model and targets from the case, one row per sample in
+    the model's declared coordinate order.  A missing target is an error rather
+    than a silent zero: a driven coordinate with no target would pin a degree of
+    freedom at the assembling pose and look like a plausible run.
+    """
+    coordinates = model.driven_coordinates
+    if not coordinates:
+        return None
+    samples = len(case.times_s)
+    times = np.asarray(case.times_s, dtype=np.float64)
+    names = tuple(coordinate.name for coordinate in coordinates)
+    unknown = set(case.driven_target_m) - set(names)
+    if unknown:
+        raise ValueError(
+            f"driven targets reference unknown coordinates: {sorted(unknown)}"
+        )
+    target_rows: list[np.ndarray] = []
+    rate_rows: list[np.ndarray] = []
+    for coordinate in coordinates:
+        values = case.driven_target_m.get(coordinate.name)
+        rate_values = case.driven_target_rate.get(coordinate.name)
+        if values is None and rate_values is None:
+            raise ValueError(
+                f"driven coordinate {coordinate.name!r} has neither a target nor "
+                "a rate in the case"
+            )
+        if values is None:
+            # Rate-level request: the caller prescribes how fast the coordinate
+            # moves and the displacement is its integral from the assembling pose.
+            # The row itself stays position-level, so the coordinate still tracks
+            # the integral exactly instead of being allowed to drift; a true
+            # velocity-level DAE row is a separate, larger change (its position
+            # Jacobian needs dJ/dq * q_dot, which only the directional Jacobian
+            # assembly forms today).
+            rate = np.asarray(rate_values, dtype=np.float64)
+            if rate.shape != (samples,):
+                raise ValueError(
+                    f"driven target rate {coordinate.name!r} must match times_s"
+                )
+            target = np.concatenate(
+                ([0.0], np.cumsum(0.5 * (rate[1:] + rate[:-1]) * np.diff(times)))
+            )
+        else:
+            target = np.asarray(values, dtype=np.float64)
+            if target.shape != (samples,):
+                raise ValueError(
+                    f"driven target {coordinate.name!r} length must match times_s"
+                )
+            if rate_values is None:
+                # Every velocity- and acceleration-level row needs the explicit time
+                # derivative of the target, so derive it here once instead of making
+                # each caller supply it.
+                rate = np.gradient(target, times) if samples > 1 else np.zeros(1)
+            else:
+                rate = np.asarray(rate_values, dtype=np.float64)
+                if rate.shape != (samples,):
+                    raise ValueError(
+                        f"driven target rate {coordinate.name!r} must match times_s"
+                    )
+        target_rows.append(target)
+        rate_rows.append(rate)
+    return _VehicleDrivenBuffers(
+        names=names,
+        kind=np.ascontiguousarray(
+            [_DRIVEN_KIND[coordinate.kind] for coordinate in coordinates],
+            dtype=np.int32,
+        ),
+        body=np.ascontiguousarray(
+            [_body_index(model, coordinate.body) for coordinate in coordinates],
+            dtype=np.int32,
+        ),
+        reaction_body=np.ascontiguousarray(
+            [
+                _body_index(model, coordinate.reaction_body)
+                for coordinate in coordinates
+            ],
+            dtype=np.int32,
+        ),
+        point_local=np.ascontiguousarray(
+            [coordinate.point_local_m for coordinate in coordinates],
+            dtype=np.float64,
+        ),
+        reaction_point_local=np.ascontiguousarray(
+            [coordinate.reaction_point_local_m for coordinate in coordinates],
+            dtype=np.float64,
+        ),
+        axis_local=np.ascontiguousarray(
+            [coordinate.axis_local for coordinate in coordinates],
+            dtype=np.float64,
+        ),
+        reference_quaternion=np.ascontiguousarray(
+            [coordinate.reference_quaternion for coordinate in coordinates],
+            dtype=np.float64,
+        ),
+        target=np.ascontiguousarray(np.stack(target_rows, axis=1)),
+        target_rate=np.ascontiguousarray(np.stack(rate_rows, axis=1)),
+    )
+
+
+def _body_index(model: AxleDynamicsModel, name: str) -> int:
+    for index, body in enumerate(model.bodies):
+        if body.name == name:
+            return index
+    raise ValueError(f"unknown body {name!r}")
+
+
 def _run_native(
     model: AxleDynamicsModel,
     case: AxleDynamicsCase,
     *,
     steering: _VehicleSteeringBuffers | None = None,
+    driven: _VehicleDrivenBuffers | None = None,
     road: _VehicleRoadBuffers | None = None,
     brake_torque: dict[str, tuple[float, ...]] | None = None,
     static_gauge_body: str | None = None,
@@ -437,8 +891,21 @@ def _run_native(
     static_rotation_gauges: tuple[
         tuple[str, tuple[float, float, float]], ...
     ] = (),
+    element_blocks: tuple[_ElementBlock, ...] = (),
 ) -> _NativeRun:
-    """Run one validated SI axle case through the native C++ kernel."""
+    """
+    Run one validated SI axle case through the native C++ kernel.
+
+    `element_blocks`, when given, is the generic element surface: the per-family
+    arrays are then cleared so the kernel reads the blocks instead.  Both forms
+    describe the same model, which is what the array-versus-block equivalence test
+    asserts.
+    """
+    # Arrays whose lifetime must outlive the call.  The element surface needs the
+    # curve references to stay alive alongside the blocks themselves, so both are
+    # parked here rather than allocated inline at the construction site.
+    _element_block_array: object | None = None
+    _element_curve_array: object | None = None
     body_names = tuple(body.name for body in model.bodies)
     body_index = {name: index for index, name in enumerate(body_names)}
     tire_names = tuple(tire.name for tire in model.tires)
@@ -856,6 +1323,56 @@ def _run_native(
     tire_detached_relaxation = np.ascontiguousarray(
         [tire.detached_relaxation_s for tire in model.tires]
     )
+    deflection_rows: list[tuple[float, float]] = []
+    deflection_offset: list[int] = []
+    deflection_count: list[int] = []
+    for tire in model.tires:
+        rows = tuple(
+            getattr(tire, "pac2002_tables", {}).get("deflection_load_curve", ())
+        )
+        deflection_offset.append(len(deflection_rows))
+        deflection_count.append(len(rows))
+        deflection_rows.extend((float(d), float(f)) for d, f in rows)
+    if os.environ.get("SUSPENSION_AXLE_CURVE_TRACE"):
+        print(
+            f"[curve-trace] tires={len(model.tires)} counts={deflection_count} "
+            f"rows={len(deflection_rows)} tables={[getattr(t, 'pac2002_tables', None) for t in model.tires[:1]]}",
+            file=sys.stderr,
+        )
+    bottoming_rows: list[tuple[float, float]] = []
+    bottoming_offset: list[int] = []
+    bottoming_count: list[int] = []
+    for tire in model.tires:
+        rows = tuple(
+            getattr(tire, "pac2002_tables", {}).get("bottoming_curve", ())
+        )
+        bottoming_offset.append(len(bottoming_rows))
+        bottoming_count.append(len(rows))
+        bottoming_rows.extend((float(p), float(f)) for p, f in rows)
+    tire_bottoming_curve_offset = np.ascontiguousarray(
+        bottoming_offset, dtype=np.int32
+    )
+    tire_bottoming_curve_count = np.ascontiguousarray(
+        bottoming_count, dtype=np.int32
+    )
+    tire_bottoming_curve_penetration = np.ascontiguousarray(
+        [row[0] for row in bottoming_rows], dtype=np.float64
+    )
+    tire_bottoming_curve_force = np.ascontiguousarray(
+        [row[1] for row in bottoming_rows], dtype=np.float64
+    )
+    tire_deflection_curve_offset = np.ascontiguousarray(
+        deflection_offset, dtype=np.int32
+    )
+    tire_deflection_curve_count = np.ascontiguousarray(
+        deflection_count, dtype=np.int32
+    )
+    tire_deflection_curve_deflection = np.ascontiguousarray(
+        [row[0] for row in deflection_rows], dtype=np.float64
+    )
+    tire_deflection_curve_force = np.ascontiguousarray(
+        [row[1] for row in deflection_rows], dtype=np.float64
+    )
     aerodynamic_drags = tuple(getattr(model, "aerodynamic_drags", ()))
     aerodynamic_drag_body = np.ascontiguousarray(
         [body_index[drag.body] for drag in aerodynamic_drags], dtype=np.int32
@@ -911,9 +1428,19 @@ def _run_native(
             fiala_values = (
                 fiala.get("CSLIP", 1000.0),
                 fiala.get("CALPHA", 800.0),
+                # Adams' Fiala property format defines CGAMMA but its handling
+                # force model ignores it ("Camber angle has no effect on tire
+                # forces"), so the slot is carried for fidelity and never read.
                 fiala.get("CGAMMA", 0.0),
-                fiala.get("MGAMMA", 0.0),
-                fiala.get("CSPIN", 0.0),
+                # Reserved.  MGAMMA and the two damping slots are not keywords of
+                # the Adams Fiala format at all; keeping them at zero preserves the
+                # 14-slot layout that the kernel's FialaParameterIndex mirrors.
+                0.0,
+                # Slot 4 now carries the tire's [MODEL] USE_MODE.  It used to hold
+                # CSPIN, which the Adams Fiala format does not define, so the slot
+                # was never read.  Selects startup smoothing (2, 12) and the slip
+                # transient (11, 12) -- see fiala_use_mode() in the kernel.
+                fiala.get("USE_MODE", 2.0),
                 fiala.get("UMIN", 0.9),
                 fiala.get("UMAX", 1.0),
                 fiala.get("RELAX_LENGTH_X", tire.longitudinal_relaxation_length_m),
@@ -921,8 +1448,8 @@ def _run_native(
                 fiala.get("WIDTH", 0.235),
                 fiala.get("ROLLING_RESISTANCE", 0.0),
                 fiala.get("LOW_SPEED_THRESHOLD", 1.0e-3),
-                fiala.get("DAMP_X", 0.0),
-                fiala.get("DAMP_Y", 0.0),
+                0.0,
+                0.0,
             )
             tire_pac2002_parameters[i, :len(fiala_values)] = fiala_values
     tire_pac2002_mirror = np.ascontiguousarray(
@@ -932,9 +1459,12 @@ def _run_native(
                 and getattr(tire, "pac2002_parameter_source", "user")
                 == "adams_builtin"
                 and (
-                    tire.pac2002_mirror
-                    if tire.pac2002_mirror is not None
-                    else _is_right_tire_name(tire.name)
+                    (
+                        tire.pac2002_mirror
+                        if tire.pac2002_mirror is not None
+                        else _is_right_tire_name(tire.name)
+                    )
+                    or tire.pac2002_coefficients.get("USE_MODE", 14.0) < 0.0
                 )
             )
             for tire in model.tires
@@ -953,14 +1483,40 @@ def _run_native(
     states = np.full(
         (len(times), len(body_names), 19), np.nan, dtype=np.float64
     )
+    # The kernel writes one wrench per *constraint*, and a driven coordinate takes a
+    # slot exactly like a joint: its reaction is the drive force/torque that holds
+    # the prescribed coordinate, which is what a rig wants to compare.  A prescribed
+    # steering actuator is de-specialized into a driven coordinate too, so it needs
+    # a slot as well -- and the kernel appends steering constraints before the
+    # case's own driven coordinates, which fixes the name order below.
+    prescribed_steering = _prescribed_steering_indices(steering)
     constraint_wrench = np.full(
-        (len(times), len(model.joints), 6), np.nan, dtype=np.float64
+        (
+            len(times),
+            len(model.joints)
+            + len(model.driven_coordinates)
+            + len(prescribed_steering),
+            6,
+        ),
+        np.nan,
+        dtype=np.float64,
+    )
+    # The solver sizes its component channels from the model, so the buffers have
+    # to match the elements that will actually be built.  When the elements arrive
+    # as blocks the model's per-family lists are empty until the kernel reads them,
+    # so the counts are taken from the blocks instead: sizing by `len(model.springs)`
+    # in that case produced zero-length buffers and the kernel rejected the run.
+    spring_count = len(model.springs) + sum(
+        1 for block in element_blocks if block.kind == ELEMENT_SPRING
+    )
+    bushing_count = len(model.bushings) + sum(
+        1 for block in element_blocks if block.kind == ELEMENT_BUSHING
     )
     spring_output = np.full(
-        (len(times), len(model.springs), 7), np.nan, dtype=np.float64
+        (len(times), spring_count, 7), np.nan, dtype=np.float64
     )
     bushing_output = np.full(
-        (len(times), len(model.bushings), 12), np.nan, dtype=np.float64
+        (len(times), bushing_count, 12), np.nan, dtype=np.float64
     )
     anti_roll_output = np.full(
         (len(times), len(model.anti_roll_bars), 3), np.nan, dtype=np.float64
@@ -972,7 +1528,9 @@ def _run_native(
     # performance record spans the first two tail rows after public samples.
     diagnostics = np.full((len(times) + 2, 16), np.nan, dtype=np.float64)
     tire_output = np.full(
-        (len(times), len(tire_names), 15), np.nan, dtype=np.float64
+        (len(times), len(tire_names), len(TIRE_OUTPUT_COLUMNS)),
+        np.nan,
+        dtype=np.float64,
     )
     energy = np.full((len(times), 21), np.nan, dtype=np.float64)
     event_capacity = max(16, len(times) * max(1, len(tire_names)) * 4)
@@ -984,6 +1542,9 @@ def _run_native(
     contact_event_count = ctypes.c_size_t(0)
     settings = case.solver
     axle_input = _AxleInput(
+        ctypes.sizeof(_AxleInput),
+        _NATIVE_KERNEL_ABI_VERSION,
+        0,
         len(body_names),
         _ptr(mass, ctypes.c_double),
         _ptr(inertia, ctypes.c_double),
@@ -1086,8 +1647,20 @@ def _run_native(
         settings.dynamics_tolerance,
         settings.increment_tolerance,
     )
+    if element_blocks:
+        # The generic element surface replaces the per-family arrays: clearing
+        # their counts is what makes the kernel read the blocks instead of both.
+        # Every array this clears becomes a zero-length view, so the kernel
+        # iterates nothing and the model's elements come from the blocks alone.
+        block_array, curve_array = _apply_element_blocks(axle_input, element_blocks)
+        # Keep both arrays alive past the call: the kernel holds raw pointers.
+        _element_block_array = block_array
+        _element_curve_array = curve_array
+    if driven is None:
+        driven = _driven_buffers(model, case)
     vehicle_mode = (
         steering is not None
+        or driven is not None
         or road is not None
         or brake_torque is not None
         or static_gauge_body is not None
@@ -1130,6 +1703,22 @@ def _run_native(
             corner_scale=np.ones(4, dtype=np.float64),
         )
     native_input: _AxleInput | _VehicleInput = axle_input
+    # `_VehicleInput` embeds `_AxleInput` by value, so the element fields set on
+    # `axle_input` above do not travel with the copy that `_VehicleInput(...)`
+    # makes further down.  The vehicle entry point reads its own copy, and the
+    # block arrays must therefore be re-pointed on it -- but only once it exists,
+    # which is why the addresses are captured here and transferred below.
+    # Applying them to `axle_input` before the copy, as an earlier version did, is
+    # a no-op: the copy takes the fields and the arrays never follow.
+    carried_element_fields: dict[str, object] = {}
+    if element_blocks:
+        carried_element_fields = {
+            "element_count": axle_input.element_count,
+            "elements": axle_input.elements,
+            "element_curves": axle_input.element_curves,
+            "topology_extension_count": axle_input.topology_extension_count,
+            "topology_extensions": axle_input.topology_extensions,
+        }
     if vehicle_mode:
         if static_gauge_dof_mask < 0 or static_gauge_dof_mask & ~0x3F:
             raise ValueError("static_gauge_dof_mask must use pose bits 0 through 5")
@@ -1213,7 +1802,7 @@ def _run_native(
             _ptr(static_rotation_gauge_body, ctypes.c_int),
             _ptr(static_rotation_gauge_axis_local, ctypes.c_double),
             (
-                settings.local_angle_tolerance
+                settings.local_angle_tolerance_rad
                 if initial_state_angle_tolerance_rad is None
                 else initial_state_angle_tolerance_rad
             ),
@@ -1234,10 +1823,48 @@ def _run_native(
             _ptr(tire_drive_torque_reaction_body, ctypes.c_int),
             _ptr(tire_drive_torque_axis_local, ctypes.c_double),
             _ptr(bushing_force_curve_interpolation, ctypes.c_int),
+            _ptr(tire_deflection_curve_offset, ctypes.c_int),
+            _ptr(tire_deflection_curve_count, ctypes.c_int),
+            _ptr(tire_deflection_curve_deflection, ctypes.c_double),
+            _ptr(tire_deflection_curve_force, ctypes.c_double),
+            _ptr(tire_bottoming_curve_offset, ctypes.c_int),
+            _ptr(tire_bottoming_curve_count, ctypes.c_int),
+            _ptr(tire_bottoming_curve_penetration, ctypes.c_double),
+            _ptr(tire_bottoming_curve_force, ctypes.c_double),
+            0 if driven is None else len(driven.names),
+            None if driven is None else _ptr(driven.kind, ctypes.c_int),
+            None if driven is None else _ptr(driven.body, ctypes.c_int),
+            None if driven is None else _ptr(driven.reaction_body, ctypes.c_int),
+            None if driven is None else _ptr(driven.point_local, ctypes.c_double),
+            (
+                None
+                if driven is None
+                else _ptr(driven.reaction_point_local, ctypes.c_double)
+            ),
+            None if driven is None else _ptr(driven.axis_local, ctypes.c_double),
+            (
+                None
+                if driven is None
+                else _ptr(driven.reference_quaternion, ctypes.c_double)
+            ),
+            None if driven is None else _ptr(driven.target, ctypes.c_double),
+            None if driven is None else _ptr(driven.target_rate, ctypes.c_double),
         )
+        # The vehicle structure now exists, so the element surface can be pointed
+        # at the arrays that were built for the axle structure.  Without this the
+        # vehicle entry point reads an empty element list while the axle entry
+        # point reads the blocks, which is exactly the divergence the shared layout
+        # table is meant to prevent.
+        for field, value in carried_element_fields.items():
+            setattr(native_input, field, value)
     library = _load_library()
+    _require_matching_metadata_versions()
+    kernel_wall_time_s = 0.0
     while True:
         native_output = _AxleOutput(
+            ctypes.sizeof(_AxleOutput),
+            _NATIVE_KERNEL_ABI_VERSION,
+            0,
             _ptr(states, ctypes.c_double),
             states.size,
             _ptr(constraint_wrench, ctypes.c_double),
@@ -1259,6 +1886,7 @@ def _run_native(
             ctypes.pointer(contact_event_count),
         )
         error_buffer = ctypes.create_string_buffer(4096)
+        kernel_started = perf_counter()
         if not vehicle_mode:
             status = library.axle_run(
                 ctypes.byref(native_input),
@@ -1285,6 +1913,7 @@ def _run_native(
                 error_buffer,
                 len(error_buffer),
             )
+        kernel_wall_time_s += perf_counter() - kernel_started
         if status != 10 or contact_event_count.value <= event_capacity:
             break
         event_capacity = int(contact_event_count.value)
@@ -1297,7 +1926,7 @@ def _run_native(
     def build_result(sample_count: int) -> AxleDynamicsResult:
         diagnostic_rows = diagnostics[:sample_count]
         performance_row = np.concatenate(
-            (diagnostics[len(times)], diagnostics[len(times) + 1, :7])
+            (diagnostics[len(times)], diagnostics[len(times) + 1, :8])
         )
 
         def metric_int(index: int) -> int:
@@ -1332,6 +1961,7 @@ def _run_native(
             nonsmooth_fallback_columns=metric_int(20),
             analytic_jacobian_time_s=metric_float(21),
             finite_difference_jacobian_time_s=metric_float(22),
+            dynamic_integration_time_s=metric_float(23),
         )
         event_rows = contact_event_output[
             : min(int(contact_event_count.value), event_capacity)
@@ -1347,7 +1977,17 @@ def _run_native(
         return AxleDynamicsResult(
             times_s=times[:sample_count],
             body_names=body_names,
-            constraint_names=tuple(joint.name for joint in model.joints),
+            constraint_names=(
+                *(joint.name for joint in model.joints),
+                *(
+                    ()
+                    if steering is None
+                    else tuple(
+                        steering.names[index] for index in prescribed_steering
+                    )
+                ),
+                *(driven.name for driven in model.driven_coordinates),
+            ),
             spring_names=tuple(spring.name for spring in model.springs),
             bushing_names=tuple(bushing.name for bushing in model.bushings),
             anti_roll_bar_names=tuple(
@@ -1412,12 +2052,18 @@ def _run_native(
                 else None
             ),
         )
-    return _NativeRun(
+    built = _NativeRun(
         result=build_result(len(times)),
         steering_output=(
             None if steering is None else steering.output.copy()
         ),
+        kernel_wall_time_s=kernel_wall_time_s,
     )
+    # The kernel has returned, so the element and curve arrays may be released.
+    # Dropping them here rather than letting them fall out of scope makes the
+    # lifetime requirement explicit, which is the only reason they are named.
+    del _element_block_array, _element_curve_array
+    return built
 
 
 def run_axle_dynamics(
@@ -1425,3 +2071,7 @@ def run_axle_dynamics(
 ) -> AxleDynamicsResult:
     """Run one validated SI axle case through the native C++ kernel."""
     return _run_native(model, case).result
+
+
+
+

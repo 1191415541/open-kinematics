@@ -22,6 +22,7 @@ from .axle_dynamics.schema import (
     AxleBody,
     AxleBushing,
     AxleCoordinateCoupler,
+    AxleDrivenCoordinate,
     AxleDynamicsCase,
     AxleJoint,
     AxleSolverSettings,
@@ -85,6 +86,11 @@ class _NativeVehicleModel:
     tires: tuple[AxleTire, ...]
     aerodynamic_drags: tuple[AxleAerodynamicDrag, ...]
     gravity_m_per_s2: tuple[float, float, float]
+    # Generic kinematic drivers.  The vehicle assembly does not build any today
+    # (it prescribes steering through the steering-actuator path), but the view
+    # carries the field so the driven-coordinate machinery has one model shape to
+    # work with on both entry points.
+    driven_coordinates: tuple[AxleDrivenCoordinate, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -132,6 +138,7 @@ class VehicleDynamicsResult:
     axle: AxleDynamicsResult
     steering_names: tuple[str, ...] = ()
     steering_output: np.ndarray | None = None
+    native_kernel_wall_time_s: float = 0.0
 
     @property
     def times_s(self) -> np.ndarray:
@@ -283,6 +290,7 @@ def run_vehicle_dynamics(
         axle=native_run.result,
         steering_names=() if steering is None else steering.names,
         steering_output=native_run.steering_output,
+        native_kernel_wall_time_s=native_run.kernel_wall_time_s,
     )
 
 
@@ -334,6 +342,9 @@ def write_vehicle_dynamics_artifact(
         "failed_time_s": getattr(failure, "failed_time_s", None),
         "native_status": getattr(failure, "status", 0),
         "performance": None if axle is None else asdict(axle.performance),
+        "native_kernel_wall_time_s": (
+            None if result is None else result.native_kernel_wall_time_s
+        ),
         "error": None if failure is None else str(failure),
         "failure_diagnostics": (
             None
@@ -444,6 +455,7 @@ def _build_static_rotation_gauges(
     def add(body: str, axis) -> None:
         if axis is None:
             return
+        body = assembly.body_aliases.get(body, body)
         if body not in assembly.bodies:
             raise ValueError(
                 f"static rotation gauge references unknown body {body!r}"
@@ -510,11 +522,14 @@ def _initial_body_state(
     masses: dict[str, float] = {}
     inertias: dict[str, np.ndarray] = {}
     body_frames: dict[str, _BodyFrame] = {}
-    body_aliases = {
-        wheel.body: assembly.wheel_body_names[wheel.name]
-        for wheel in assembly.wheel_specs.values()
-        if wheel.body != assembly.wheel_body_names[wheel.name]
-    }
+    body_aliases = dict(assembly.body_aliases)
+    body_aliases.update(
+        {
+            wheel.body: assembly.wheel_body_names[wheel.name]
+            for wheel in assembly.wheel_specs.values()
+            if wheel.body != assembly.wheel_body_names[wheel.name]
+        }
+    )
     for name, body in assembly.bodies.items():
         rotation = body.pose.rotation
         origin_m = body.pose.translation * length_scale
@@ -545,8 +560,19 @@ def _initial_body_state(
             )
 
     body_names = tuple(assembly.bodies)
+    resolved_initials: dict[str, Any] = {}
+    direct_initials: set[str] = set()
     for initial in case.initial_states:
         name = _resolve_vehicle_body(initial.body, body_names, body_aliases)
+        is_direct = initial.body == name
+        if name in direct_initials and not is_direct:
+            continue
+        if name in resolved_initials and not is_direct:
+            continue
+        resolved_initials[name] = initial
+        if is_direct:
+            direct_initials.add(name)
+    for name, initial in resolved_initials.items():
         pose = initial.pose
         quaternion = np.asarray(pose.rotation.as_tuple(), dtype=float)
         rotation = _rotation_from_quaternion(quaternion)
@@ -1130,6 +1156,10 @@ def _build_tires(
                 candidate = f"{prefix}{name}"
                 if candidate in assembly.bodies:
                     return candidate
+                if name in assembly.body_aliases:
+                    return assembly.body_aliases[name]
+                if candidate in assembly.body_aliases:
+                    return assembly.body_aliases[candidate]
                 raise ValueError(
                     f"wheel {wheel.name!r} drive torque references unknown body {name!r}"
                 )
@@ -1191,8 +1221,30 @@ def _build_tires(
                 pac2002_parameter_source=spec.parameter_source,
                 pac2002_mirror=pac2002_mirror,
                 pac2002_coefficients=(
-                    dict(spec.pac2002_coefficients)
+                    {
+                        **spec.pac2002_coefficients,
+                        # BOTTOMING_RADIUS is the one length the kernel compares against
+                        # its own radius in metres, so it is converted here; the ABI
+                        # carries it in SI.  Everything else stays in file units,
+                        # because the kernel converts per use site.
+                        **(
+                            {
+                                "BOTTOMING_RADIUS": float(
+                                    spec.pac2002_coefficients["BOTTOMING_RADIUS"]
+                                )
+                                * scale
+                            }
+                            if "BOTTOMING_RADIUS" in spec.pac2002_coefficients
+                            else {}
+                        ),
+                    }
                     if spec.kind == "pac2002"
+                    else {}
+                ),
+                pac2002_tables=(
+                    # Fiala also consumes [DEFLECTION_LOAD_CURVE]; see the importer.
+                    dict(spec.pac2002_tables)
+                    if spec.kind in {"pac2002", "fiala"}
                     else {}
                 ),
                 fiala_parameters=(
@@ -1207,6 +1259,19 @@ def _build_tires(
                             * scale
                         ),
                         "WIDTH": float(spec.fiala_parameters.get("WIDTH", 235.0)) * scale,
+                        # ROLLING_RESISTANCE is a *length*, not a coefficient: Adams
+                        # forms the moment as
+                        # -sign(omega)*STEP(|omega|,0.125,0,0.5,1)*RR*Fz and its
+                        # property reader converts RR with the file's length unit.
+                        # Measured on the shipped rig: RR = 0.02 with LENGTH='mm'
+                        # and Fz = 3000 N gives exactly 60 N*mm.  Routing it through
+                        # the same length scale as WIDTH is what makes that true
+                        # here; previously the raw file value was used as metres,
+                        # which is 1000x too large for a file declaring mm.
+                        "ROLLING_RESISTANCE": (
+                            float(spec.fiala_parameters.get("ROLLING_RESISTANCE", 0.0))
+                            * scale
+                        ),
                     }
                     if spec.kind == "fiala"
                     else {}

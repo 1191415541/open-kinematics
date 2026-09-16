@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +16,7 @@ from suspension_multibody.adams import (
     build_adams_vehicle_model,
     build_native_rack_steering_model,
     direct_wheel_torque_signals_from_adams_result,
+    full_vehicle_model,
     load_adams_full_vehicle_input,
     parse_adams_result_history,
     steering_signal_from_manifest,
@@ -40,8 +42,12 @@ from suspension_multibody.adams.full_vehicle_model import (
     _source_bushing_side,
     _source_native_body_part_ids,
     build_adams_source_vehicle_model,
+    parse_tire_tables,
 )
-from suspension_multibody.schema import TimeSignal
+from suspension_multibody.pac2002_scope import (
+    pac2002_unsupported_native_reasons,
+)
+from suspension_multibody.schema import TimeSignal, TireModelSpec
 from suspension_multibody.vehicle_dynamics import run_vehicle_dynamics
 
 _CASE = Path("artifacts/adams/correlation-reference-real-si/handling-pac2002-v1/step_steer")
@@ -74,6 +80,475 @@ def test_source_bushing_frame_uses_right_handed_xp_zp_and_side_mirror() -> None:
     np.testing.assert_allclose(right[:, 2], reflection @ left[:, 2], atol=1e-12)
     assert _source_bushing_side("TR_Rear_Suspension.bkr_lwr_strut.field") == "R"
     assert _source_bushing_side("TR_Rear_Suspension.bkl_lwr_strut.field") == "L"
+
+
+def test_parse_tire_marks_pac2002_side_and_unsupported_native_features(
+    tmp_path: Path,
+) -> None:
+    tire = tmp_path / "right_pac2002.tir"
+    tire.write_text(
+        """
+[MODEL]
+PROPERTY_FILE_FORMAT = 'PAC2002'
+USE_MODE = 14
+TYRESIDE = 'RIGHT'
+FE_METHOD = 1
+BELT_DYNAMICS = 'YES'
+LOCAL_SOLVER = 'GSTIFF'
+CONTACT_MODEL = '3D_ENVELOPING'
+
+[DIMENSION]
+UNLOADED_RADIUS = 0.344D+0
+
+[VERTICAL]
+FNOMIN = 4850
+USE_DYNAMIC_STIFFNESS = 'YES'
+DYNAMIC_STIFFNESS = 1.9E+003
+DYNAMIC_DAMPING = 221
+
+[DEFLECTION_LOAD_CURVE]
+0.000 0.0
+0.010 1000.0
+
+[BOTTOMING_CURVE]
+0.000 0.0
+0.005 500.0
+""",
+        encoding="ascii",
+    )
+
+    values = _parse_tire(tire)
+
+    assert values["USE_MODE"] == pytest.approx(-14.0)
+    assert values["TYRESIDE_RIGHT"] == pytest.approx(1.0)
+    assert values["UNLOADED_RADIUS_MM"] == pytest.approx(0.344)
+    assert values["DEFLECTION_LOAD_CURVE_POINT_COUNT"] == pytest.approx(2.0)
+    assert values["BOTTOMING_CURVE_POINT_COUNT"] == pytest.approx(2.0)
+    for key in (
+        "PAC2002_UNSUPPORTED_BELT_DYNAMICS",
+        "PAC2002_UNSUPPORTED_CONTACT_MODEL",
+        "PAC2002_UNSUPPORTED_DYNAMIC_STIFFNESS",
+        "PAC2002_UNSUPPORTED_FE_METHOD",
+        "PAC2002_UNSUPPORTED_LOCAL_SOLVER",
+    ):
+        assert values[key] == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="unsupported native PAC2002 scope"):
+        TireModelSpec(kind="pac2002", pac2002_coefficients=values)
+
+
+def test_deflection_load_curve_alone_is_inside_the_native_scope(
+    tmp_path: Path,
+) -> None:
+    """
+    Promoting the curve must actually let such a tire through, not just unsay a flag.
+
+    The fixture below carries `[DEFLECTION_LOAD_CURVE]` and nothing else the kernel
+    rejects, so the scope check has to return no reasons and the spec has to build --
+    measured: `pac2002_unsupported_native_reasons(...) == ()`.  A bottoming curve on
+    its own must still fail closed, which the same fixture asserts by adding the
+    section and expecting a rejection naming the narrowed gap.
+    """
+    from suspension_multibody.pac2002_scope import (
+        pac2002_unsupported_native_reasons,
+    )
+
+    header = """[UNITS]
+LENGTH = 'mm'
+FORCE = 'newton'
+TIME = 'second'
+ANGLE = 'radian'
+MASS = 'kg'
+
+[MODEL]
+PROPERTY_FILE_FORMAT = 'PAC2002'
+USE_MODE = 14
+
+[DIMENSION]
+UNLOADED_RADIUS = 344.0
+
+[VERTICAL]
+VERTICAL_STIFFNESS = 200.0
+"""
+    with_curve = tmp_path / "curve_only.tir"
+    with_curve.write_text(
+        header
+        + """
+[DEFLECTION_LOAD_CURVE]
+0.000 0.0
+0.010 1000.0
+""",
+        encoding="ascii",
+    )
+    values = _parse_tire(with_curve)
+    assert "PAC2002_UNSUPPORTED_DEFLECTION_LOAD_CURVE" not in values
+    assert values["DEFLECTION_LOAD_CURVE_POINT_COUNT"] == pytest.approx(2.0)
+    assert pac2002_unsupported_native_reasons(values) == ()
+    TireModelSpec(kind="pac2002", pac2002_coefficients=values)
+
+    with_bottoming = tmp_path / "bottoming_only.tir"
+    with_bottoming.write_text(
+        header
+        + """
+[BOTTOMING_CURVE]
+0.000 0.0
+0.005 500.0
+""",
+        encoding="ascii",
+    )
+    bottoming_values = _parse_tire(with_bottoming)
+    # Wheel bottoming is implemented too, so this tire is inside the scope as well --
+    # and its point count is still recorded for diagnostics.
+    assert "PAC2002_UNSUPPORTED_BOTTOMING_CURVE" not in bottoming_values
+    assert bottoming_values["BOTTOMING_CURVE_POINT_COUNT"] == pytest.approx(2.0)
+    assert pac2002_unsupported_native_reasons(bottoming_values) == ()
+    TireModelSpec(kind="pac2002", pac2002_coefficients=bottoming_values)
+
+
+def test_tire_curves_are_carried_in_si_units(tmp_path: Path) -> None:
+    """
+    The tabulated curves must reach the spec, not just be counted.
+
+    ``[DEFLECTION_LOAD_CURVE]`` and ``[BOTTOMING_CURVE]`` cannot ride in the scalar
+    coefficient payload, so the loader parses them separately and the spec carries them
+    as (deflection_m, load_n) pairs.  Measured on the fixture tire above (engineering
+    units, so millimetres and newtons): the first row is (0, 0) and the second is
+    (0.010 mm -> 1e-5 m, 1000 N), which is exactly what this asserts -- a parser that
+    only counted the rows would leave ``pac2002_tables`` empty and fail here.
+    """
+    tire = tmp_path / "curves.tir"
+    tire.write_text(
+        """[UNITS]
+LENGTH = 'mm'
+FORCE = 'newton'
+TIME = 'second'
+ANGLE = 'radian'
+MASS = 'kg'
+
+[MODEL]
+PROPERTY_FILE_FORMAT = 'PAC2002'
+USE_MODE = 14
+
+[DIMENSION]
+UNLOADED_RADIUS = 344.0
+
+[DEFLECTION_LOAD_CURVE]
+0.000 0.0
+0.010 1000.0
+
+[BOTTOMING_CURVE]
+0.000 0.0
+0.005 500.0
+""",
+        encoding="ascii",
+    )
+    tables = parse_tire_tables(tire)
+    assert set(tables) == {"deflection_load_curve", "bottoming_curve"}
+    assert tables["deflection_load_curve"] == (
+        (0.0, 0.0),
+        (pytest.approx(1.0e-5), pytest.approx(1000.0)),
+    )
+    assert tables["bottoming_curve"][1][0] == pytest.approx(5.0e-6)
+    spec = TireModelSpec(kind="pac2002", pac2002_tables=tables)
+    assert spec.pac2002_tables["bottoming_curve"][1][1] == pytest.approx(500.0)
+    with pytest.raises(ValueError, match="deflection must strictly increase"):
+        TireModelSpec(
+            kind="pac2002",
+            pac2002_tables={"curve": ((0.0, 0.0), (0.0, 1.0))},
+        )
+
+
+# Coefficients a PAC2002 tire may legitimately carry outside the 168-name ABI
+# payload.  Every entry has to have a real consumer:
+#   * consumed by the Python model builder (geometry, vertical/spring values),
+#   * derived unit or diagnostic variants the importer itself computes,
+#   * fail-closed feature flags,
+#   * file metadata that intentionally has no physics meaning.
+# Anything else is a silent drop: parsed, then never used and never rejected.
+_LEGITIMATE_NON_ABI_TIRE_KEYS = frozenset(
+    {
+        # Consumed by the Python vehicle builder.
+        "ASPECT_RATIO",
+        "RIM_RADIUS",
+        "RIM_WIDTH",
+        "UNLOADED_RADIUS",
+        "WIDTH",
+        "VERTICAL_STIFFNESS",
+        "VERTICAL_DAMPING",
+        "SPRING_FREE_LENGTH_MM",
+        "SPRING_STIFFNESS_N_MM",
+        "TYRESIDE_LEFT",
+        # Derived by the importer for unit conversion and diagnostics.
+        "UNLOADED_RADIUS_MM",
+        "WIDTH_MM",
+        "VERTICAL_STIFFNESS_N_MM",
+        "VERTICAL_DAMPING_N_S_MM",
+        "FNOMIN_N",
+        "PROPERTY_FILE_FORMAT_PAC2002",
+        # Fail-closed feature flags (originally emitted by the importer).
+        "PAC2002_UNSUPPORTED_BELT_DYNAMICS",
+        "PAC2002_UNSUPPORTED_CONTACT_MODEL",
+        "PAC2002_UNSUPPORTED_DYNAMIC_STIFFNESS",
+        "PAC2002_UNSUPPORTED_FE_METHOD",
+        "PAC2002_UNSUPPORTED_LOCAL_SOLVER",
+        "PAC2002_UNSUPPORTED_PAC_MC",
+        # Metadata with no physics meaning.
+        "FILE_VERSION",
+        "FILE_FORMAT",
+        "FILE_TYPE",
+        "MESSAGES",
+        "ANGLE",
+        "FORCE",
+        "LENGTH",
+        "MASS",
+        "TIME",
+        "DEFLECTION_LOAD_CURVE_POINT_COUNT",
+        "BOTTOMING_CURVE_POINT_COUNT",
+        # Declared validity ranges.  Every tire file has these, so they cannot be
+        # treated as a feature request for fail-closed purposes -- see
+        # ``UNCLAMPED_VALIDITY_RANGE_COEFFICIENTS`` in ``pac2002_scope``.  They
+        # are a real open gap instead: the kernel receives the bounds but never
+        # clamps to them.  Listed here so the gate stays green only as long as
+        # that gap is explicitly acknowledged rather than forgotten.
+        "KPUMIN",
+        "KPUMAX",
+        "ALPMIN",
+        "ALPMAX",
+        "CAMMIN",
+        "CAMMAX",
+        "FZMIN",
+        "FZMAX",
+    }
+)
+
+# A representative sample of installed reference tires, including the ones that
+# request the features native cannot run yet.
+_ADAMS_TIRE_LIBRARY = Path(
+    r"G:\MSC.Software\Adams\2025_1_1\acar\shared_car_database.cdb\tires.tbl"
+)
+_REFERENCE_TIRES = (
+    "pac2002_235_60R16.tir",
+    "pac2002_205_55R16_belt_dynamics.tir",
+    "pac2002_205_55R16_parking.tir",
+    "pac2002_235_60R16_min.tir",
+)
+
+
+def test_every_parsed_tire_key_has_a_consumer_or_a_fail_closed_flag(
+    tmp_path: Path,
+) -> None:
+    """
+    No PAC2002 tire coefficient may be parsed and then neither used nor rejected.
+
+    This is the gate that would have caught the Maxwell element: ``DYNAMIC_STIFFNESS``
+    was parsed into the coefficient dict while neither the C++ ABI payload nor
+    ``pac2002_scope`` had any use for it.
+    """
+    from suspension_multibody.adams.full_vehicle_model import _parse_tire
+    from suspension_multibody.axle_dynamics.schema import PAC2002_PARAMETER_NAMES
+    from suspension_multibody.pac2002_scope import (
+        PAC2002_MUST_BE_ZERO_COEFFICIENTS,
+    )
+
+    missing_sources = [
+        name for name in _REFERENCE_TIRES if not (_ADAMS_TIRE_LIBRARY / name).is_file()
+    ]
+    if missing_sources:
+        pytest.skip(
+            "Adams reference tires unavailable at "
+            f"{_ADAMS_TIRE_LIBRARY}: {missing_sources}"
+        )
+
+    abi = set(PAC2002_PARAMETER_NAMES)
+    offenders: dict[str, list[str]] = {}
+    for name in _REFERENCE_TIRES:
+        values = _parse_tire(_ADAMS_TIRE_LIBRARY / name)
+        for key in values:
+            if (
+                key in abi
+                or key in PAC2002_MUST_BE_ZERO_COEFFICIENTS
+                or key in _LEGITIMATE_NON_ABI_TIRE_KEYS
+            ):
+                continue
+            offenders.setdefault(key, []).append(name)
+
+    assert offenders == {}, (
+        "these tire coefficients are parsed but have no consumer and no "
+        f"fail-closed flag: {sorted(offenders)}"
+    )
+
+
+def test_every_parser_unsupported_flag_is_fail_closed() -> None:
+    """
+    No unsupported-feature flag may be emitted without a fail-closed check.
+
+    The Maxwell element was silently accepted because the parser wrote
+    ``DYNAMIC_STIFFNESS`` into the coefficient dict while nothing rejected it.
+    This guard closes that whole class: every ``PAC2002_UNSUPPORTED_*`` key the
+    importer can emit must be recognised by ``pac2002_scope``.
+    """
+    source = Path(
+        full_vehicle_model.__file__
+    ).read_text(encoding="utf-8")
+    emitted = set(re.findall(r"[\"'](PAC2002_UNSUPPORTED_[A-Z_]+)[\"']", source))
+    assert emitted, "expected the importer to emit unsupported-feature flags"
+
+    unreachable = []
+    for flag in sorted(emitted):
+        probe = {flag: 1.0}
+        if not pac2002_unsupported_native_reasons(probe):
+            unreachable.append(flag)
+    assert unreachable == [], (
+        "these flags are emitted by the importer but never fail closed: "
+        f"{unreachable}"
+    )
+
+
+@pytest.mark.parametrize("switch", ["'YES'", "'yes'", "YES", "1", "TRUE"])
+def test_maxwell_element_fails_closed_for_any_truthy_switch(
+    tmp_path: Path, switch: str
+) -> None:
+    """
+    A tire requesting the Maxwell element must never be silently accepted.
+
+    ``DYNAMIC_STIFFNESS`` and ``DYNAMIC_DAMPING`` are unquoted numbers, so the
+    generic extractor copies them into the coefficient dict even though they are
+    absent from the PAC2002 ABI payload.  The enable switch is quoted, so it is
+    only visible through ``_source_fields``.  Both halves have to be handled or
+    the element is dropped without any diagnostic.
+    """
+    tire = tmp_path / "maxwell.tir"
+    tire.write_text(
+        f"""
+[UNITS]
+LENGTH = 'meter'
+FORCE = 'newton'
+ANGLE = 'radian'
+MASS = 'kg'
+TIME = 'second'
+
+[MODEL]
+PROPERTY_FILE_FORMAT = 'PAC2002'
+USE_MODE = 14
+
+[DIMENSION]
+UNLOADED_RADIUS = 0.344
+
+[VERTICAL]
+FNOMIN = 4850
+VERTICAL_STIFFNESS = 2.1E+005
+USE_DYNAMIC_STIFFNESS = {switch}
+DYNAMIC_STIFFNESS = 1.9E+003
+DYNAMIC_DAMPING = 221
+""",
+        encoding="ascii",
+    )
+
+    values = _parse_tire(tire)
+
+    assert values["PAC2002_UNSUPPORTED_DYNAMIC_STIFFNESS"] == pytest.approx(1.0)
+    assert values["DYNAMIC_STIFFNESS"] == pytest.approx(1.9e3)
+    with pytest.raises(ValueError, match="unsupported dynamic_stiffness"):
+        TireModelSpec(kind="pac2002", pac2002_coefficients=values)
+
+
+@pytest.mark.parametrize("fit_type", ["5", "'5'", "1", "'1'"])
+def test_fityp_fails_closed(tmp_path: Path, fit_type: str) -> None:
+    """
+    A FITTYP tire must be rejected rather than silently given the modern law.
+
+    ``FITTYP=5`` selects an alternative rolling-resistance formulation that the
+    native kernel does not implement.  The keyword appears in none of the tires
+    shipped with Adams, so failing closed is preferable to silently applying the
+    [ROLLING_COEFFICIENTS] equations to a tire that asked for something else.
+    """
+    tire = tmp_path / "legacy.tir"
+    tire.write_text(
+        f"""
+[UNITS]
+LENGTH = 'meter'
+FORCE = 'newton'
+ANGLE = 'radian'
+MASS = 'kg'
+TIME = 'second'
+
+[MODEL]
+PROPERTY_FILE_FORMAT = 'PAC2002'
+USE_MODE = 14
+FITTYP = {fit_type}
+
+[DIMENSION]
+UNLOADED_RADIUS = 0.344
+""",
+        encoding="ascii",
+    )
+
+    values = _parse_tire(tire)
+
+    assert values["PAC2002_UNSUPPORTED_FITTYP"] == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="unsupported fittyp"):
+        TireModelSpec(kind="pac2002", pac2002_coefficients=values)
+
+
+def test_fityp_absent_leaves_the_tire_acceptable(tmp_path: Path) -> None:
+    """Tires without FITTYP keep working; the rest of the library has no FITTYP."""
+    tire = tmp_path / "modern.tir"
+    tire.write_text(
+        """
+[UNITS]
+LENGTH = 'meter'
+FORCE = 'newton'
+ANGLE = 'radian'
+MASS = 'kg'
+TIME = 'second'
+
+[MODEL]
+PROPERTY_FILE_FORMAT = 'PAC2002'
+USE_MODE = 14
+
+[DIMENSION]
+UNLOADED_RADIUS = 0.344
+""",
+        encoding="ascii",
+    )
+
+    values = _parse_tire(tire)
+
+    assert "PAC2002_UNSUPPORTED_FITTYP" not in values
+    assert pac2002_unsupported_native_reasons(values) == ()
+
+
+def test_maxwell_element_absent_leaves_the_tire_acceptable(tmp_path: Path) -> None:
+    """The flag must not fire for tires that do not request the element."""
+    tire = tmp_path / "plain.tir"
+    tire.write_text(
+        """
+[UNITS]
+LENGTH = 'meter'
+FORCE = 'newton'
+ANGLE = 'radian'
+MASS = 'kg'
+TIME = 'second'
+
+[MODEL]
+PROPERTY_FILE_FORMAT = 'PAC2002'
+USE_MODE = 14
+
+[DIMENSION]
+UNLOADED_RADIUS = 0.344
+
+[VERTICAL]
+FNOMIN = 4850
+VERTICAL_STIFFNESS = 2.1E+005
+VERTICAL_DAMPING = 50
+""",
+        encoding="ascii",
+    )
+
+    values = _parse_tire(tire)
+
+    assert "PAC2002_UNSUPPORTED_DYNAMIC_STIFFNESS" not in values
+    assert pac2002_unsupported_native_reasons(values) == ()
+    TireModelSpec(kind="pac2002", pac2002_coefficients=values)
 
 
 @pytest.mark.skipif(
@@ -476,10 +951,7 @@ def test_importer_uses_adams_source_files_and_builds_full_model() -> None:
     assert manifest["adams_user_function_inventory"]["entity_counts"] == user_counts
     assert manifest["adams_user_function_inventory"]["solver_active_count"] == 154
     assert manifest["unit_normalization"]["status"] == "complete"
-    assert (
-        manifest["native_tire_implementation"]
-        == "pac2002_selected_combined_slip_with_relaxation_source_offsets"
-    )
+    assert manifest["native_tire_implementation"] == "exact_pac2002"
     assert "selected_combined_slip_coefficients" in manifest["native_tire_model_scope"]["implemented"]
     assert manifest["adams_model_reduction"]["omitted_part_ids"]
     assert "unsupported" in manifest["adams_force_law_mapping"]["spring"]

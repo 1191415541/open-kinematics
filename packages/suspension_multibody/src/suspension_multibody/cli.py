@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 
 from . import __version__
+from .adams.probe import DEFAULT_PROFILE
 from .api import run_case, run_dynamic_case
 from .schema import (
     load_case,
@@ -297,7 +298,13 @@ def compare_axle_adams_command(
 
 @app.command("validate-adams")
 def validate_adams(
-    profile: str = typer.Option("adams-car-2024.1"),
+    profile: str = typer.Option(
+        DEFAULT_PROFILE,
+        help=(
+            "Adams profile: 'adams-car' for the installed release, or "
+            "'adams-car-<release>' to require one exact release."
+        ),
+    ),
     smoke: bool = typer.Option(False),
     full: bool = typer.Option(False),
     strict_k: bool = typer.Option(

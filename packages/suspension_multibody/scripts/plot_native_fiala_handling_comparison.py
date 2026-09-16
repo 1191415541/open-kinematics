@@ -9,7 +9,6 @@ from typing import Any
 
 import numpy as np
 
-
 CHANNELS = (
     ("lateral_acceleration", "横向加速度"),
     ("yaw_rate", "横摆角速度"),
@@ -151,6 +150,7 @@ def _fragment(payload: dict[str, Any]) -> str:
 
 
 def main() -> None:
+    """绘制 native Fiala 与 Adams 的操控对比图."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--comparison-root", type=Path, required=True)
     parser.add_argument("--fragment", type=Path, required=True)

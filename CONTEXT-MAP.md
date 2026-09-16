@@ -7,24 +7,35 @@ The root `uv.lock` is the workspace's only tracked dependency lockfile.
 ## Product responsibilities
 
 - `suspension_contracts`: solver-independent, versioned Geometry Contract V1.
+- `suspension_kernel`: the generic C++ multibody kernel, its CMake build, and the
+  product-independent part of the ctypes binding (library path resolution,
+  exported-symbol probing, the ABI gate, build metadata, error types). Carries no
+  element semantics.
 - `suspension_kinematics`: daily suspension geometry design and optimization.
 - `suspension_multibody`: high-fidelity quasi-static K&C, load analysis, the
-  native transient axle dynamics kernel, and optional Adams validation.
+  axle dynamics semantics layer over the native kernel, and optional Adams
+  validation.
 
 ## Native axle dynamics kernel
 
-`cpp/axle_dynamics/axle_kernel.cpp` builds a shared library into
-`packages/suspension_multibody/src/suspension_multibody/native/` and is reached
-only through `suspension_multibody.axle_dynamics`. Build it with
-`packages/suspension_multibody/scripts/build_axle_native.py`. Importing the
-package without the library succeeds; running a transient case raises
-`NativeKernelUnavailableError`. Design, results, and known limitations live in
-`packages/suspension_multibody/docs/axle_dynamics_*.md`.
+The kernel sources live in
+`packages/suspension_kernel/cpp/axle_dynamics/axle_kernel.cpp` and are built by
+CMake + Ninja into `packages/suspension_kernel/src/suspension_kernel/native/`.
+`suspension_multibody` keeps a copy in its own `native/` directory, which is the
+path its ctypes boundary loads and the path its wheel packages; that copy is
+produced by `packages/suspension_multibody/scripts/build_axle_native.py`, a
+wrapper that delegates to the kernel build. The kernel is reached only through
+`suspension_multibody.axle_dynamics`. Importing the package without the library
+succeeds; running a transient case raises `NativeKernelUnavailableError`. Design,
+results, and known limitations live in
+`packages/suspension_multibody/docs/axle_dynamics_*.md`; the kernel's own layout
+and build are described in `packages/suspension_kernel/README.md`.
 
 ## Dependency direction
 
 ```text
 suspension_kinematics --> suspension_contracts <-- suspension_multibody
+suspension_multibody --> suspension_kernel
 ```
 
 The two solver products must not import each other. The contracts package must

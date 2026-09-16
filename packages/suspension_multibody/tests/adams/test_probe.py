@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 
 import suspension_multibody.adams.probe as probe_module
-from suspension_multibody.adams import discover_profile
+from suspension_multibody.adams import discover_profile, installation_version
 
 
 def test_local_adams_profile_discovers_expected_template() -> None:
@@ -12,7 +12,10 @@ def test_local_adams_profile_discovers_expected_template() -> None:
     if not profile.available:
         assert "not found" in profile.message or "failed" in profile.message
         return
-    assert profile.version == "2024.1"
+    # The installed release is whatever the launcher reports; the assertion is
+    # that discovery did not mix up two installations, not that it is one year.
+    assert profile.version is not None
+    assert profile.version == installation_version(profile.home or "")
     assert profile.template_id == "_double_wishbone.tpl"
     assert profile.subsystem_id == "TR_Front_Suspension.sub"
     assert "lcam" in profile.export_fields

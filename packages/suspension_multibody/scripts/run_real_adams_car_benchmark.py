@@ -36,6 +36,7 @@ except ModuleNotFoundError:
         build_case_and_model,
     )
 from suspension_multibody.adams import (
+    DEFAULT_PROFILE,
     TimeHistory,
     adams_axle_result_from_result,
     audit_axle_equivalence,
@@ -47,6 +48,7 @@ from suspension_multibody.adams import (
     create_dynamic_axle_manifest,
     discover_profile,
     initialization_evidence_from_result,
+    producer_id,
     run_native_axle_manifest,
     write_axle_adams_dataset,
     write_dynamic_axle_manifest,
@@ -153,6 +155,10 @@ def _run_adams_once(
         env=environment,
         capture_output=True,
         text=True,
+        # Decode explicitly: Adams prints the run directory, which is non-ASCII
+        # here, and the locale codec raised on it.
+        encoding="utf-8",
+        errors="replace",
         timeout=600,
         check=False,
     )
@@ -652,7 +658,7 @@ def _run_case(
         "dynamic_precision_comparison_performed": precision_performed,
         "equivalence_audit": str(final_audit_path),
         "reference": {
-            "producer": "msc.adams-solver.2024.1",
+            "producer": producer_id("adams-solver", profile.version),
             "history": str(adams_refined_history_path or adams_history_path),
             "result": str(adams_refined_result_path or retained_result_path),
             "result_sha256": _sha256(
@@ -694,7 +700,7 @@ def _run_case(
         encoding="utf-8",
     )
     adams_execution = {
-        "producer": "msc.adams-solver.2024.1",
+        "producer": producer_id("adams-solver", profile.version),
         "installation": profile.as_dict(),
         "analysis": "dynamic_kc_heave_sine",
         "analysis_mode": "dynamic",
@@ -818,7 +824,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             os.environ["HOME"] = str(default_home)
     os.environ.setdefault("MSC_USE_WD", "disabled")
 
-    profile = discover_profile("adams-car-2024.1", home=args.adams_home)
+    profile = discover_profile(DEFAULT_PROFILE, home=args.adams_home)
     if not profile.available or not profile.executable:
         raise SystemExit(profile.message)
     output_dir = Path(args.output)

@@ -7,9 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from run_full_native_three_model_comparison import _native_case
+
 from suspension_multibody.adams import (
     adams_contact_patch_plane_height_m,
     adams_rack_displacement_signal_from_result,
@@ -67,6 +66,7 @@ def _run_variant(data: Any, model: Any, result_path: Path, road_z: float) -> dic
 
 
 def diagnose(source_root: Path) -> dict[str, Any]:
+    """对比启用与禁用 PAC2002 回正力矩时的初始响应."""
     data = load_adams_full_vehicle_input(source_root)
     source = build_adams_source_vehicle_model(data, tire_kind="pac2002")
     baseline = build_native_rack_steering_model(source)
@@ -80,6 +80,7 @@ def diagnose(source_root: Path) -> dict[str, Any]:
 
 
 def main() -> int:
+    """运行初始 PAC2002 力矩诊断并把结果写成 JSON."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--output", type=Path)

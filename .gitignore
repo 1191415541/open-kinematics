@@ -192,5 +192,20 @@ GEMINI.md
 /acar.log.*
 /probe_fourpost_*
 
+# Built native kernels and their build metadata.  Both packages carry a copy of
+# the shared library: `suspension_kernel` owns the build product and
+# `suspension_multibody` carries the copy its ctypes boundary loads.  Neither is
+# a source input -- `just build` regenerates them -- and the K0 baseline archive
+# keeps its own frozen copy under .codex-tasks/.
+/packages/suspension_kernel/build/
+/packages/suspension_kernel/src/suspension_kernel/native/*.dll
+/packages/suspension_kernel/src/suspension_kernel/native/*.dylib
+/packages/suspension_kernel/src/suspension_kernel/native/*.so
+/packages/suspension_kernel/src/suspension_kernel/native/native_build.json
+/packages/suspension_multibody/src/suspension_multibody/native/*.dll
+/packages/suspension_multibody/src/suspension_multibody/native/*.dylib
+/packages/suspension_multibody/src/suspension_multibody/native/*.so
+/packages/suspension_multibody/src/suspension_multibody/native/native_build.json
+
 # The virtual workspace owns the single tracked lockfile at its root.
 /packages/*/uv.lock

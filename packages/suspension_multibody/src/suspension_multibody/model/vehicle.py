@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, replace
+import os
+from dataclasses import dataclass, field, fields, replace
 from typing import Any, Literal
 
 import numpy as np
@@ -13,8 +14,15 @@ from ..core import (
     RevoluteJoint,
     RigidBody,
     RigidBodyState,
+    WeldJoint,
 )
-from ..elements import VerticalTireElement
+from ..elements import (
+    BumpStopElement,
+    BushingElement,
+    LinearSpringElement,
+    StaticDamperElement,
+    VerticalTireElement,
+)
 from ..schema import RigidBodySpec, VehicleModel, WheelSpec
 from .front_axle import (
     Connection,
@@ -41,6 +49,7 @@ class VehicleAssembly:
     wheel_body_names: dict[str, str]
     wheel_rotations_local: dict[str, np.ndarray]
     axle_assemblies: dict[str, FrontAxleAssembly]
+    body_aliases: dict[str, str] = field(default_factory=dict)
 
     @property
     def component_ids(self) -> tuple[str, ...]:
@@ -161,7 +170,7 @@ def build_vehicle(model: VehicleModel, mode: Literal["K", "C"] = "K") -> Vehicle
                 )
 
     state = RigidBodyState(bodies)
-    return VehicleAssembly(
+    assembly = VehicleAssembly(
         mode=mode,
         bodies=bodies,
         state=state,
@@ -176,6 +185,7 @@ def build_vehicle(model: VehicleModel, mode: Literal["K", "C"] = "K") -> Vehicle
         wheel_rotations_local=wheel_rotations_local,
         axle_assemblies=axle_assemblies,
     )
+    return _drop_isolated_bodies(_condense_welded_bodies(assembly))
 
 
 def _body_from_spec(spec: RigidBodySpec) -> RigidBody:
@@ -201,11 +211,17 @@ def _rename_dataclasses(
     body_fields = {"body", "body_a", "body_b", "wheel_body", "left_body", "right_body"}
     for value in values:
         updates: dict[str, object] = {}
-        for field in fields(value):
-            if field.name in body_fields:
-                updates[field.name] = body_map[getattr(value, field.name)]
-            elif field.name == "name":
-                updates[field.name] = f"{prefix}{getattr(value, field.name)}"
+        # Renamed from `field`: the module imports `field` from `dataclasses`,
+        # and shadowing it here made the import look unused.
+        for dataclass_field in fields(value):
+            if dataclass_field.name in body_fields:
+                updates[dataclass_field.name] = body_map[
+                    getattr(value, dataclass_field.name)
+                ]
+            elif dataclass_field.name == "name":
+                updates[dataclass_field.name] = (
+                    f"{prefix}{getattr(value, dataclass_field.name)}"
+                )
         renamed.append(replace(value, **updates))
     return tuple(renamed)
 
@@ -221,6 +237,334 @@ def _rename_connections(
             body_b=body_map[value.body_b],
         )
         for value in values
+    )
+
+
+def _condense_welded_bodies(assembly: VehicleAssembly) -> VehicleAssembly:
+    """Exactly merge bodies connected by WeldJoint constraints."""
+    flag = os.environ.get("SUSPENSION_MULTIBODY_CONDENSE_WELDS")
+    if flag is not None and flag != "" and flag == "0":
+        return assembly
+    welds = tuple(
+        constraint
+        for constraint in assembly.constraints
+        if isinstance(constraint, WeldJoint)
+    )
+    if not welds:
+        return assembly
+
+    body_order = {name: index for index, name in enumerate(assembly.bodies)}
+    parent = {name: name for name in assembly.bodies}
+
+    def find(body: str) -> str:
+        root = parent[body]
+        while parent[root] != root:
+            root = parent[root]
+        while parent[body] != body:
+            next_body = parent[body]
+            parent[body] = root
+            body = next_body
+        return root
+
+    def union(a: str, b: str) -> None:
+        root_a = find(a)
+        root_b = find(b)
+        if root_a != root_b:
+            if body_order[root_a] > body_order[root_b]:
+                root_a, root_b = root_b, root_a
+            parent[root_b] = root_a
+
+    for weld in welds:
+        union(weld.body_a, weld.body_b)
+
+    components: dict[str, list[str]] = {}
+    for body in assembly.bodies:
+        components.setdefault(find(body), []).append(body)
+
+    def component_root(component: list[str]) -> str:
+        if "chassis" in component:
+            return "chassis"
+        body_b_candidates = [
+            weld.body_b
+            for weld in welds
+            if weld.body_a in component and weld.body_b in component
+        ]
+        if body_b_candidates:
+            return min(body_b_candidates, key=lambda name: body_order[name])
+        return min(component, key=lambda name: body_order[name])
+
+    alias: dict[str, str] = {}
+    for component in components.values():
+        if len(component) <= 1:
+            continue
+        root = component_root(component)
+        for body in component:
+            if body != root:
+                alias[body] = root
+    if not alias:
+        return assembly
+
+    def mapped_body(body: str) -> str:
+        return alias.get(body, body)
+
+    def point_to_body(point: np.ndarray, source: str, target: str) -> np.ndarray:
+        value = np.asarray(point, dtype=float)
+        if source == target:
+            return value.copy()
+        source_pose = assembly.bodies[source].pose
+        target_pose = assembly.bodies[target].pose
+        return target_pose.inverse().transform_point(source_pose.transform_point(value))
+
+    def axis_to_body(axis: np.ndarray, source: str, target: str) -> np.ndarray:
+        value = np.asarray(axis, dtype=float)
+        if source == target:
+            return value.copy()
+        source_rotation = assembly.bodies[source].pose.rotation
+        target_rotation = assembly.bodies[target].pose.rotation
+        return target_rotation.T @ source_rotation @ value
+
+    def pose_to_body(pose: SE3, source: str, target: str) -> SE3:
+        if source == target:
+            return pose
+        source_pose = assembly.bodies[source].pose
+        target_pose = assembly.bodies[target].pose
+        return target_pose.inverse().compose(source_pose.compose(pose))
+
+    def fused_body(root: str, component: list[str]) -> RigidBody:
+        root_body = assembly.bodies[root]
+        root_pose = root_body.pose
+        root_rotation = root_pose.rotation
+        root_origin = root_pose.translation
+        masses: list[float] = []
+        centers: list[np.ndarray] = []
+        inertias: list[np.ndarray] = []
+        fixed = False
+        for body_name in component:
+            body = assembly.bodies[body_name]
+            fixed = fixed or body.fixed
+            mass = float(body.mass)
+            body_rotation = body.pose.rotation
+            center_world = body.pose.transform_point(body.center_of_mass)
+            center_root = root_rotation.T @ (center_world - root_origin)
+            inertia_root = (
+                root_rotation.T @ body_rotation
+                @ np.asarray(body.inertia, dtype=float)
+                @ body_rotation.T @ root_rotation
+            )
+            masses.append(mass)
+            centers.append(center_root)
+            inertias.append(inertia_root)
+        total_mass = float(sum(masses))
+        if total_mass <= 0.0:
+            return replace(root_body, mass=0.0, fixed=fixed)
+        center = sum(
+            mass * point for mass, point in zip(masses, centers)
+        ) / total_mass
+        inertia = np.zeros((3, 3), dtype=float)
+        for mass, point, body_inertia in zip(masses, centers, inertias):
+            inertia += body_inertia + _parallel_axis_inertia(mass, point - center)
+        return replace(
+            root_body,
+            mass=total_mass,
+            inertia=inertia,
+            center_of_mass=center,
+            fixed=fixed,
+        )
+
+    bodies: dict[str, RigidBody] = {}
+    for component in components.values():
+        root = component_root(component)
+        if len(component) == 1:
+            bodies[root] = assembly.bodies[root]
+        else:
+            bodies[root] = fused_body(root, component)
+
+    points: dict[tuple[str, str], np.ndarray] = {}
+    for (body, label), point in assembly.points.items():
+        target = mapped_body(body)
+        key = (target, label)
+        converted = point_to_body(point, body, target)
+        if key in points and not np.allclose(points[key], converted, atol=1e-9):
+            raise ValueError(
+                f"weld condensation creates conflicting point {key!r}"
+            )
+        points[key] = converted
+
+    def transform_constraint(constraint: Constraint) -> Constraint | None:
+        if isinstance(constraint, WeldJoint):
+            return None
+        updates: dict[str, object] = {}
+        body_a = getattr(constraint, "body_a", None)
+        body_b = getattr(constraint, "body_b", None)
+        if isinstance(body_a, str):
+            updates["body_a"] = mapped_body(body_a)
+        if isinstance(body_b, str):
+            updates["body_b"] = mapped_body(body_b)
+        if isinstance(body_a, str) and hasattr(constraint, "point_a"):
+            updates["point_a"] = point_to_body(
+                getattr(constraint, "point_a"), body_a, mapped_body(body_a)
+            )
+        if isinstance(body_b, str) and hasattr(constraint, "point_b"):
+            updates["point_b"] = point_to_body(
+                getattr(constraint, "point_b"), body_b, mapped_body(body_b)
+            )
+        if isinstance(body_a, str) and hasattr(constraint, "axis_a"):
+            updates["axis_a"] = axis_to_body(
+                getattr(constraint, "axis_a"), body_a, mapped_body(body_a)
+            )
+        if isinstance(body_b, str) and hasattr(constraint, "axis_b"):
+            updates["axis_b"] = axis_to_body(
+                getattr(constraint, "axis_b"), body_b, mapped_body(body_b)
+            )
+        if isinstance(body_a, str) and hasattr(constraint, "axis_a_secondary"):
+            updates["axis_a_secondary"] = axis_to_body(
+                getattr(constraint, "axis_a_secondary"), body_a, mapped_body(body_a)
+            )
+        if isinstance(body_b, str) and hasattr(constraint, "axis_b_secondary"):
+            updates["axis_b_secondary"] = axis_to_body(
+                getattr(constraint, "axis_b_secondary"), body_b, mapped_body(body_b)
+            )
+        transformed = replace(constraint, **updates)
+        if getattr(transformed, "body_a", None) == getattr(transformed, "body_b", None):
+            raise ValueError(
+                f"weld condensation collapses constraint {constraint.name!r} onto one body"
+            )
+        return transformed
+
+    def transform_element(element: object) -> object:
+        if isinstance(element, (LinearSpringElement, StaticDamperElement, BumpStopElement)):
+            body_a = element.body_a
+            body_b = element.body_b
+            return replace(
+                element,
+                body_a=mapped_body(body_a),
+                body_b=mapped_body(body_b),
+                point_a=point_to_body(element.point_a, body_a, mapped_body(body_a)),
+                point_b=point_to_body(element.point_b, body_b, mapped_body(body_b)),
+            )
+        if isinstance(element, BushingElement):
+            body_a = element.body_a
+            body_b = element.body_b
+            return replace(
+                element,
+                body_a=mapped_body(body_a),
+                body_b=mapped_body(body_b),
+                local_pose_a=pose_to_body(
+                    element.local_pose_a, body_a, mapped_body(body_a)
+                ),
+                local_pose_b=pose_to_body(
+                    element.local_pose_b, body_b, mapped_body(body_b)
+                ),
+            )
+        return element
+
+    constraints = tuple(
+        transformed
+        for constraint in assembly.constraints
+        for transformed in (transform_constraint(constraint),)
+        if transformed is not None
+    )
+    ideal_constraints = tuple(
+        transformed
+        for constraint in assembly.ideal_constraints
+        for transformed in (transform_constraint(constraint),)
+        if transformed is not None
+    )
+    elements = tuple(transform_element(element) for element in assembly.elements)
+    connections = tuple(
+        replace(
+            connection,
+            body_a=mapped_body(connection.body_a),
+            body_b=mapped_body(connection.body_b),
+        )
+        for connection in assembly.connections
+        if mapped_body(connection.body_a) != mapped_body(connection.body_b)
+    )
+    wheel_body_names = {
+        wheel: mapped_body(body)
+        for wheel, body in assembly.wheel_body_names.items()
+    }
+    wheel_centers = {
+        wheel: (
+            mapped_body(body),
+            point_to_body(point, body, mapped_body(body)),
+        )
+        for wheel, (body, point) in assembly.wheel_centers.items()
+    }
+    wheel_rotations_local = {}
+    for wheel, rotation in assembly.wheel_rotations_local.items():
+        body = assembly.wheel_body_names[wheel]
+        target = mapped_body(body)
+        wheel_rotations_local[wheel] = (
+            axis_to_body(rotation[:, 0], body, target),
+            axis_to_body(rotation[:, 1], body, target),
+            axis_to_body(rotation[:, 2], body, target),
+        )
+        wheel_rotations_local[wheel] = np.column_stack(wheel_rotations_local[wheel])
+
+    return replace(
+        assembly,
+        bodies=bodies,
+        state=RigidBodyState(bodies),
+        points=points,
+        constraints=constraints,
+        ideal_constraints=ideal_constraints,
+        elements=elements,
+        connections=connections,
+        wheel_centers=wheel_centers,
+        wheel_body_names=wheel_body_names,
+        wheel_rotations_local=wheel_rotations_local,
+        body_aliases={**assembly.body_aliases, **alias},
+    )
+
+
+def _drop_isolated_bodies(assembly: VehicleAssembly) -> VehicleAssembly:
+    """Remove free bodies that have no physical connection to the vehicle."""
+    flag = os.environ.get("SUSPENSION_MULTIBODY_DROP_ISOLATED_BODIES")
+    if flag is not None and flag != "" and flag == "0":
+        return assembly
+
+    referenced: set[str] = {"chassis"}
+    for constraint in (*assembly.constraints, *assembly.ideal_constraints):
+        for attr in ("body_a", "body_b"):
+            body = getattr(constraint, attr, None)
+            if isinstance(body, str):
+                referenced.add(body)
+    for connection in assembly.connections:
+        referenced.add(connection.body_a)
+        referenced.add(connection.body_b)
+    for element in assembly.elements:
+        for attr in ("body_a", "body_b"):
+            body = getattr(element, attr, None)
+            if isinstance(body, str):
+                referenced.add(body)
+    for body, _point in assembly.wheel_centers.values():
+        referenced.add(body)
+    referenced.update(assembly.wheel_body_names.values())
+
+    dropped = tuple(
+        name
+        for name, body in assembly.bodies.items()
+        if name not in referenced and not body.fixed
+    )
+    if not dropped:
+        return assembly
+    dropped_set = set(dropped)
+    bodies = {
+        name: body
+        for name, body in assembly.bodies.items()
+        if name not in dropped_set
+    }
+    points = {
+        key: point
+        for key, point in assembly.points.items()
+        if key[0] not in dropped_set
+    }
+    return replace(
+        assembly,
+        bodies=bodies,
+        state=RigidBodyState(bodies),
+        points=points,
     )
 
 

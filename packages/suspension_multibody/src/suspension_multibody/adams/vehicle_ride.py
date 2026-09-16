@@ -11,7 +11,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from .probe import AdamsProfile, _adams_environment
+from .probe import AdamsProfile, _adams_environment, producer_id
 from .time_domain import AdamsResultChannel, TimeHistory, parse_adams_result_history
 from .vehicle_acceptance import RIDE_CASES
 from .vehicle_reference import write_vehicle_reference_bundle
@@ -119,6 +119,9 @@ def run_adams_car_ride_case(
         env=_adams_environment(runtime),
         capture_output=True,
         text=True,
+        # Decode explicitly; see `adams/adapter.py`.
+        encoding="utf-8",
+        errors="replace",
         timeout=600,
         check=False,
     )
@@ -172,6 +175,9 @@ def run_adams_car_ride_case(
             env={**_adams_environment(runtime), "MDI_PRODUCT_NAME": "acar"},
             capture_output=True,
             text=True,
+            # Decode explicitly; see `adams/adapter.py`.
+            encoding="utf-8",
+            errors="replace",
             timeout=600,
             check=False,
         )
@@ -238,7 +244,7 @@ def run_adams_car_ride_case(
     (output_dir / "adams_execution.json").write_text(
         json.dumps(
             {
-                "producer": "msc.adams-car.2024.1",
+                "producer": producer_id("adams-car", profile.version),
                 "analysis": name,
                 "analysis_mode": (
                     "full_vehicle_sdi_dynamic"

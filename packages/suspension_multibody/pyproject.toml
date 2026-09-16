@@ -13,11 +13,13 @@ dependencies = [
     "scipy>=1.14.1",
     "setuptools>=84.0.0",
     "suspension-contracts>=0.1.0,<0.2.0",
+    "suspension-kernel>=0.1.0,<0.2.0",
     "typer>=0.19.2",
 ]
 
 [tool.uv.sources]
 suspension-contracts = { workspace = true }
+suspension-kernel = { workspace = true }
 
 [project.scripts]
 suspension-multibody = "suspension_multibody.cli:app"

@@ -35,6 +35,8 @@ _CASE_DURATION_S = {
     "step_steer": 5.0,
     "sine_steer": 6.0,
     "double_lane_change": 12.0,
+    "acceleration": 10.0,
+    "braking_in_turn": 10.0,
     "single_wheel_bump": 4.0,
     "double_wheel_bump": 4.0,
     "random_road": 8.0,

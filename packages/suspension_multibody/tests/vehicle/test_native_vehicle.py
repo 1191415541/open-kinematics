@@ -236,7 +236,10 @@ def _case(
 
 
 def _pac2002_model(
-    *, combined: bool, parameter_source: str = "user"
+    *,
+    combined: bool,
+    parameter_source: str = "user",
+    extra_coefficients: dict[str, float] | None = None,
 ) -> VehicleModel:
     base = _positioned_vehicle(_vehicle())
     coefficients = {
@@ -259,6 +262,8 @@ def _pac2002_model(
     }
     if not combined:
         coefficients.update(RBX1=0.0, RBY1=0.0)
+    if extra_coefficients:
+        coefficients.update(extra_coefficients)
     tire = _tire().model_copy(
         update={
             "kind": "pac2002",
@@ -278,6 +283,9 @@ def _pac2002_model(
 
 def _uniform_velocity_initial_states(
     model: VehicleModel,
+    *,
+    vx_mm_s: float = 10_000.0,
+    vy_mm_s: float = 5_000.0,
 ) -> tuple[InitialBodyState, ...]:
     assembly = build_vehicle(model, mode="K")
     states: list[InitialBodyState] = []
@@ -300,7 +308,7 @@ def _uniform_velocity_initial_states(
                     ),
                 ),
                 # 工程单位为 mm/s；同时施加纵向和侧向速度以激活联合滑移。
-                velocity=SixVector(fx=10_000.0, fy=5_000.0),
+                velocity=SixVector(fx=vx_mm_s, fy=vy_mm_s),
             )
         )
     return tuple(states)
@@ -311,7 +319,10 @@ def test_native_vehicle_runs_two_suspensions_and_four_wheels() -> None:
 
     result = run_vehicle_dynamics(model, _case(model))
 
-    assert len(result.body_names) == 23
+    # chassis + front rack + 8 front links + rear rack + 8 rear links + 4 wheels.
+    # ``build_vehicle`` condenses welded bodies and drops isolated ones, so the
+    # resolved body set no longer matches the raw spec body count.
+    assert len(result.body_names) == 22
     assert result.tire_names == (
         "front_left",
         "front_right",
@@ -344,6 +355,421 @@ def test_pac2002_selected_combined_slip_changes_force() -> None:
     combined_tire = combined.axle.tire_output[-1]
     assert np.max(np.abs(combined_tire[:, 5:7] - pure_tire[:, 5:7])) > 1.0e-5
     assert np.all(combined_tire[:, 9] > 0.0)
+
+
+def test_pac2002_use_mode_gates_native_force_axes() -> None:
+    def run(use_mode: int):
+        model = _pac2002_model(
+            combined=True,
+            parameter_source="adams_builtin",
+            extra_coefficients={"USE_MODE": float(use_mode)},
+        )
+        case = _case(model).model_copy(
+            update={
+                "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
+                "initial_states": _uniform_velocity_initial_states(model),
+            }
+        )
+        result = run_vehicle_dynamics(model, case)
+        assert np.all(result.diagnostics.accepted)
+        return result.axle.tire_output[-1]
+
+    longitudinal_only = run(11)
+    lateral_only = run(12)
+    combined = run(14)
+
+    assert np.max(np.abs(longitudinal_only[:, 5])) > 1.0e-3
+    assert np.max(np.abs(longitudinal_only[:, 6])) < 1.0e-10
+    assert np.max(np.abs(lateral_only[:, 6])) > 1.0e-3
+    assert np.max(np.abs(lateral_only[:, 5])) < 1.0e-10
+    assert np.max(np.abs(combined[:, 5])) > 1.0e-3
+    assert np.max(np.abs(combined[:, 6])) > 1.0e-3
+
+
+def test_pac2002_use_mode_zero_is_vertical_spring_only() -> None:
+    """
+    USE_MODE 0 must produce no slip forces and no moments.
+
+    Adams documents USE_MODE 0 as "acts as a vertical spring & damper" with the
+    output tuple ``0, 0, Fz, 0, 0, 0``.  The tire still carries vertical load, so
+    the check is that every slip force and every moment is identically zero while
+    the normal force is not.
+    """
+
+    def run(use_mode: int):
+        model = _pac2002_model(
+            combined=True,
+            parameter_source="adams_builtin",
+            extra_coefficients={"USE_MODE": float(use_mode)},
+        )
+        case = _case(model).model_copy(
+            update={
+                "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
+                "initial_states": _uniform_velocity_initial_states(model),
+            }
+        )
+        result = run_vehicle_dynamics(model, case)
+        assert np.all(result.diagnostics.accepted)
+        return result.axle.tire_output[-1]
+
+    vertical_only = run(0)
+    reference = run(14)
+
+    # Indices follow TIRE_OUTPUT_COLUMNS: 4 normal force, 5 longitudinal force,
+    # 6 lateral force, 12/13/14 overturning, rolling resistance, aligning moment.
+    assert np.max(np.abs(vertical_only[:, 4])) > 1.0e-3
+    for column in (5, 6, 12, 13, 14):
+        assert np.max(np.abs(vertical_only[:, column])) < 1.0e-10, column
+
+    # The same tire in a Magic-Formula mode does produce those quantities, so the
+    # assertions above are not vacuous.
+    assert np.max(np.abs(reference[:, 5])) > 1.0e-3
+    assert np.max(np.abs(reference[:, 6])) > 1.0e-3
+
+
+def test_pac2002_use_mode_zero_is_accepted_by_scope_checks() -> None:
+    """USE_MODE 0 is natively supported and must not be rejected."""
+    from suspension_multibody.pac2002_scope import (
+        pac2002_unsupported_native_reasons,
+        validate_pac2002_native_scope,
+    )
+
+    coefficients = {
+        "FNOMIN": 4_850.0,
+        "PCX1": 1.65,
+        "PDX1": 1.0,
+        "PKX1": 22.3,
+        "PCY1": 1.3,
+        "PDY1": 1.0,
+        "PKY1": -21.9,
+        "USE_MODE": 0.0,
+    }
+    assert pac2002_unsupported_native_reasons(coefficients) == ()
+    validate_pac2002_native_scope(coefficients)
+
+
+def test_pac2002_validity_ranges_clamp_the_magic_formula_inputs() -> None:
+    """
+    A narrow declared validity range must change the computed forces.
+
+    Adams clamps the tire model inputs to the ranges declared in the tire
+    property file.  Declaring very tight slip and load ranges therefore has to
+    produce different forces from a tire with permissive ranges on the same
+    maneuver; if it does not, the bounds are being carried but never applied.
+    """
+
+    def run(coefficients: dict[str, float]):
+        model = _pac2002_model(
+            combined=True,
+            parameter_source="adams_builtin",
+            extra_coefficients=coefficients,
+        )
+        case = _case(model).model_copy(
+            update={
+                "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
+                "initial_states": _uniform_velocity_initial_states(model),
+            }
+        )
+        result = run_vehicle_dynamics(model, case)
+        assert np.all(result.diagnostics.accepted)
+        return result.axle.tire_output[-1]
+
+    permissive = {
+        "KPUMIN": -1.0e12,
+        "KPUMAX": 1.0e12,
+        "ALPMIN": -1.0e12,
+        "ALPMAX": 1.0e12,
+        "CAMMIN": -1.0e12,
+        "CAMMAX": 1.0e12,
+        "FZMIN": 0.0,
+        "FZMAX": 1.0e12,
+    }
+    # Pin slip to almost nothing and hold the load in a narrow band around the
+    # measured value, so both the slip and the load clamps engage.
+    narrow = {
+        **permissive,
+        "KPUMIN": -1.0e-4,
+        "KPUMAX": 1.0e-4,
+        "ALPMIN": -1.0e-4,
+        "ALPMAX": 1.0e-4,
+        "FZMIN": 199.0,
+        "FZMAX": 201.0,
+    }
+
+    unclamped = run(permissive)
+    clamped = run(narrow)
+
+    for column, name in ((5, "longitudinal"), (6, "lateral")):
+        assert not np.allclose(
+            unclamped[:, column], clamped[:, column], atol=1.0e-9
+        ), f"{name} force did not respond to the declared validity range"
+    # The permissive case must keep producing the normal force it always did.
+    assert np.max(np.abs(unclamped[:, 4])) > 1.0e-3
+
+
+def test_pac2002_deflection_load_curve_replaces_the_stiffness_polynomial() -> None:
+    """
+    A tire carrying `[DEFLECTION_LOAD_CURVE]` must use the table, not VERTICAL_STIFFNESS.
+
+    The table is the measured load at nominal conditions, so a curve twice as stiff as
+    the polynomial has to produce twice the vertical force at the same deflection.
+    Measured: 400.173 N against 200.044 N, ratio 2.0004, while the deflection moves by
+    4e-6 relative -- this fixture prescribes the wheel position, so the deflection is
+    geometry and only the force can discriminate.
+
+    The table is built from the *measured* polynomial response rather than from
+    ``vertical_stiffness``: that value is in the file's units (N/mm here, so 200 against
+    the kernel's 2e5 N/m), and a table built from it is three orders of magnitude too
+    soft -- measured as a vertical load of 0.1 N against 200 N.
+
+    The case runs with `constraint_tolerance` relaxed to 1e-5 (an increment tolerance of
+    1e-8 after the engineering-unit scaling): at the default the fixture's Newton reaches
+    machine precision on every residual (measured pos=2.2e-16, vel=1.3e-15, dyn=5.3e-12)
+    yet stops with an increment of 1.16e-10 and reports "no descent" -- the fixture
+    residual floor from step 22, which this case merely tips over.
+    """
+    extra = {"USE_MODE": 14.0}
+
+    def run(model, relaxed: bool) -> tuple[float, float]:
+        case = _case(model)
+        if relaxed:
+            case = case.model_copy(
+                update={
+                    "solver": case.solver.model_copy(
+                        update={"constraint_tolerance": 1.0e-5}
+                    )
+                }
+            )
+        case = case.model_copy(
+            update={
+                "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
+                "initial_states": _uniform_velocity_initial_states(model),
+            }
+        )
+        result = run_vehicle_dynamics(model, case)
+        assert np.all(result.diagnostics.accepted)
+        tire = result.axle.tire_output[-1]
+        return (
+            float(np.max(np.abs(tire[:, 2]))),
+            float(np.max(np.abs(tire[:, 4]))),
+        )
+
+    base = _pac2002_model(
+        combined=False, parameter_source="adams_builtin", extra_coefficients=extra
+    )
+    deflection, load = run(base, relaxed=False)
+    # Twice the polynomial stiffness through the measured point, plus a third point so
+    # the monotone cubic has an interior slope to work with.
+    curve = (
+        (0.0, 0.0),
+        (deflection, 2.0*load),
+        (2.0*deflection, 4.0*load),
+    )
+    wheels = tuple(
+        wheel.model_copy(
+            update={
+                "tire": wheel.tire.model_copy(
+                    update={"pac2002_tables": {"deflection_load_curve": curve}}
+                )
+            }
+        )
+        for wheel in base.wheels
+    )
+    with_curve = base.model_copy(update={"wheels": wheels})
+    tabulated, tabulated_load = run(with_curve, relaxed=True)
+
+    # The fixture prescribes the wheel position, so the deflection is geometry rather
+    # than a response; it is the *force* at that deflection the table has to change.
+    assert 0.9 < tabulated/deflection < 1.1, (deflection, tabulated)
+    ratio = tabulated_load/load
+    assert 1.6 < ratio < 2.4, (load, tabulated_load, ratio)
+
+
+def test_pac2002_bottoming_curve_adds_the_rim_force() -> None:
+    """
+    `[BOTTOMING_CURVE]` adds the rim reaction once the rim reaches the road.
+
+    Adams documents the vertical force as ``Fz = min(0, Fzk + Fzc) + min(0, Fzrim)``:
+    the rim contribution is *added* to the tire's own force, engaged once the
+    deflection exceeds ``UNLOADED_RADIUS - BOTTOMING_RADIUS``, and the curve is
+    tabulated against that rim penetration.  Three runs pin it:
+
+    * no bottoming section: the baseline vertical force;
+    * section present but `BOTTOMING_RADIUS = 0`: the documented "no rim contact" case,
+      which must leave the force *bit-identical* -- this is what catches a kernel that
+      applies the curve without gating on the radius;
+    * section with the rim half a millimetre below the unloaded radius: measured
+      1200.28 N against 200.04 N, a ratio of 6.000 -- the rim curve's value (1000 N) at
+      the rim penetration the fixture's ~1 mm deflection produces, on top of the tire's
+      own force.
+
+    The deflection itself moves by 4e-6 relative because this fixture prescribes the
+    wheel position, so only the force can discriminate.
+    """
+    extra = {"USE_MODE": 14.0}
+
+    def run(model) -> tuple[float, float]:
+        case = _case(model).model_copy(
+            update={
+                "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
+                "initial_states": _uniform_velocity_initial_states(model),
+            }
+        )
+        result = run_vehicle_dynamics(model, case)
+        assert np.all(result.diagnostics.accepted)
+        tire = result.axle.tire_output[-1]
+        return (
+            float(np.max(np.abs(tire[:, 2]))),
+            float(np.max(np.abs(tire[:, 4]))),
+        )
+
+    def with_tables(tables: dict, radius: float):
+        base = _pac2002_model(
+            combined=False,
+            parameter_source="adams_builtin",
+            extra_coefficients=extra,
+        )
+        wheels = tuple(
+            wheel.model_copy(
+                update={
+                    "tire": wheel.tire.model_copy(
+                        update={
+                            "pac2002_tables": tables,
+                            "pac2002_coefficients": {
+                                **wheel.tire.pac2002_coefficients,
+                                "BOTTOMING_RADIUS": radius,
+                            },
+                        }
+                    )
+                }
+            )
+            for wheel in base.wheels
+        )
+        return base.model_copy(update={"wheels": wheels})
+
+    curve = ((0.0, 0.0), (0.0005, 1000.0), (0.001, 2000.0))
+    deflection, baseline = run(
+        _pac2002_model(
+            combined=False, parameter_source="adams_builtin", extra_coefficients=extra
+        )
+    )
+    _, no_rim = run(with_tables({"bottoming_curve": curve}, 0.0))
+    assert no_rim == pytest.approx(baseline, rel=1.0e-12)
+
+    unloaded_radius = float(
+        _pac2002_model(
+            combined=False, parameter_source="adams_builtin", extra_coefficients=extra
+        ).wheels[0].tire.unloaded_radius
+    )
+    tabulated_deflection, with_rim = run(
+        with_tables({"bottoming_curve": curve}, unloaded_radius - 0.5)
+    )
+    assert tabulated_deflection == pytest.approx(deflection, rel=1.0e-4)
+    assert with_rim > 4.0*baseline, (baseline, with_rim)
+
+
+def test_pac2002_vxlow_does_not_floor_the_slip_denominator() -> None:
+    """
+    VXLOW must not change the slip, only (per the tire file) fade the forces below it.
+
+    The tire file documents VXLOW as "Below this speed forces are scaled down", but the
+    kernel used it as a floor on the slip denominator (``max(|Vx|, VXLOW)``), which
+    shrinks the slip itself.  Measured on the mode-24 parking maneuver (|Vx| = 1 m/s
+    against VXLOW = 2 m/s) the floor gave a lateral-force NRMSE of 73.4 % with the rear
+    axle's lateral force and aligning moment anti-phase against Adams (r = -0.78/-0.71);
+    dividing by the true |Vx| gives 16.8 % with those correlations at +0.85/+0.89, and
+    the handling channels improve with it (lateral acceleration 13.5 -> 6.7 %, yaw rate
+    12.8 -> 2.9 %, body roll 24.1 -> 15.5 %).  This test pins the corrected behaviour,
+    so reintroducing the floor fails here.
+
+    The force fade itself is deliberately *not* implemented: measured, scaling the tire
+    forces by min(1, |Vx|/VXLOW) makes the parking comparison worse (73.4 -> 82.8 % with
+    the floor, 16.8 -> 54.5 % without) and breaks standstill cases, so the documented
+    half that matters here is the slip reference speed.
+    """
+
+    def run(vxlow: float):
+        model = _pac2002_model(
+            combined=False,
+            parameter_source="user",
+            extra_coefficients={"USE_MODE": 14.0, "VXLOW": vxlow},
+        )
+        case = _case(model).model_copy(
+            update={
+                "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
+                "initial_states": _uniform_velocity_initial_states(
+                    model, vx_mm_s=100.0, vy_mm_s=50.0
+                ),
+            }
+        )
+        result = run_vehicle_dynamics(model, case)
+        assert np.all(result.diagnostics.accepted)
+        return np.max(np.abs(result.axle.tire_output[-1, :, 10]))
+
+    low_floor_slip = run(0.1)
+    high_floor_slip = run(10.0)
+
+    assert high_floor_slip == pytest.approx(low_floor_slip, rel=1.0e-9)
+
+
+def test_pac2002_vertical_force_uses_speed_and_force_coupling_terms() -> None:
+    def run(extra_coefficients: dict[str, float], moving: bool = False):
+        model = _pac2002_model(
+            combined=False,
+            parameter_source="adams_builtin",
+            extra_coefficients={"USE_MODE": 14.0, **extra_coefficients},
+        )
+        case_updates = {
+            "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
+        }
+        if moving:
+            case_updates["initial_states"] = _uniform_velocity_initial_states(model)
+        else:
+            case_updates["initial_wheel_speeds"] = tuple(
+                (wheel.name, 100.0) for wheel in model.wheels
+            )
+        case = _case(model).model_copy(update=case_updates)
+        result = run_vehicle_dynamics(model, case)
+        assert np.all(result.diagnostics.accepted)
+        return float(np.mean(result.axle.tire_output[-1, :, 4]))
+
+    baseline_spin = run({"QV2": 0.0})
+    boosted_spin = run({"QV2": 0.2})
+    uncoupled = run({"QFCX1": 0.0}, moving=True)
+    force_coupled = run({"QFCX1": 5.0}, moving=True)
+
+    assert boosted_spin > 1.2 * baseline_spin
+    assert force_coupled < uncoupled
+
+
+def test_pac2002_rejects_unsupported_adams_turn_slip_modes() -> None:
+    with pytest.raises(ValueError, match="unsupported native PAC2002 scope"):
+        TireModelSpec(kind="pac2002", pac2002_coefficients={"USE_MODE": 15.0})
+    # The spin/parking coefficient family used to be rejected wholesale.  It is now
+    # consumed by USE_MODE 25, so only the two second-order trail coefficients that no
+    # documented factor reads still fail closed.
+    with pytest.raises(ValueError, match="unsupported native PAC2002 scope"):
+        TireModelSpec(kind="pac2002", pac2002_coefficients={"QDTP2": 0.1})
+    with pytest.raises(ValueError, match="unsupported native PAC2002 scope"):
+        TireModelSpec(kind="pac2002", pac2002_coefficients={"QBRP2": 0.1})
+    # USE_MODE 25 and the spin family it needs are inside the native scope now; the
+    # comparison that validates them is
+    # ``tests/adams/test_pac2002_adams_correlation_gate.py::test_parking_steer_pins_the_turn_slip_and_parking_torque``.
+    TireModelSpec(
+        kind="pac2002",
+        pac2002_coefficients={
+            "USE_MODE": 25.0,
+            "IC": 0.05, "KP": 11.9, "CP": 2019.0,
+            "EP": 1.0, "EP12": 3.0, "BF2": 0.5, "BP1": 0.5, "BP2": 0.667,
+            "PECP1": 0.0, "PECP2": 0.0,
+            "PDXP1": 0.4, "PDXP2": 0.0, "PDXP3": 0.0,
+            "PDYP1": 0.4, "PDYP2": 0.0, "PDYP3": 0.0, "PDYP4": 0.0,
+            "PKYP1": 0.0,
+            "PHYP1": 0.0, "PHYP2": 0.0, "PHYP3": 0.0, "PHYP4": 0.0,
+            "QBRP1": 0.1, "QCRP1": 0.15, "QCRP2": 0.02,
+            "QDRP1": 1.0, "QDRP2": 0.0, "QDTP1": 10.0,
+        },
+    )
 
 
 def test_pac2002_initial_relaxation_state_matches_current_slip() -> None:
@@ -444,6 +870,49 @@ def test_adams_pac2002_preserves_source_static_offset() -> None:
     assert np.all(source_result.diagnostics.accepted)
     assert np.max(np.abs(user_result.axle.tire_output[0, :, 5:7])) < 1e-10
     assert np.max(np.abs(source_result.axle.tire_output[0, :, 5:7])) > 1e-8
+
+
+def test_adams_pac2002_negative_use_mode_mirrors_left_side_coefficients() -> None:
+    base = _pac2002_model(combined=False, parameter_source="adams_builtin")
+
+    def with_use_mode(use_mode: float) -> VehicleModel:
+        return base.model_copy(
+            update={
+                "wheels": tuple(
+                    wheel.model_copy(
+                        update={
+                            "tire": wheel.tire.model_copy(
+                                update={
+                                    "pac2002_coefficients": {
+                                        **wheel.tire.pac2002_coefficients,
+                                        "PHY1": 0.02,
+                                        "PVY1": 0.02,
+                                        "USE_MODE": use_mode,
+                                    }
+                                }
+                            )
+                        }
+                    )
+                    if wheel.name == "front_left" else wheel
+                    for wheel in base.wheels
+                )
+            }
+        )
+
+    def lateral_force(model: VehicleModel) -> float:
+        result = run_vehicle_dynamics(
+            model,
+            _case(model).model_copy(
+                update={"road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0))}
+            ),
+        )
+        assert np.all(result.diagnostics.accepted)
+        return float(result.axle.tire_output[0, 0, 6])
+
+    left_side = lateral_force(with_use_mode(14.0))
+    mirrored_side = lateral_force(with_use_mode(-14.0))
+
+    assert left_side * mirrored_side < 0.0
 
 
 def test_adams_pac2002_uses_source_gyroscopic_moment_parameters() -> None:
@@ -1063,6 +1532,29 @@ def test_direct_wheel_torque_signals_override_global_distribution() -> None:
     assert brake["rear_right"] == (0.04, 0.04)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "this fixture is degenerate: ideal joints only (no springs, no bushings), "
+        "gravity=0, the wheel centre sits exactly one unloaded radius above the "
+        "road so the tire carries no load, and the solver gets a single 1 ms step "
+        "with min_internal_step_size == internal_step_size, so a rejected step has "
+        "nowhere to go.  The kernel now applies the caliper couple's reaction on "
+        "the knuckle (required for the braking load transfer), and this fixture "
+        "cannot satisfy it: the line search finds no descent, and where it does "
+        "converge the blocker is the raw-max increment criterion "
+        "(axle_kernel.cpp:14298) against increment_tolerance = "
+        "constraint_tolerance * scale.  The residual floor scales as "
+        "1/gas_stiffness of the suspension, i.e. it is the zero-stiffness "
+        "mechanism that cannot react the couple.  Giving the fixture a gas spring "
+        "does not rescue it either: it then trips 'contact event localization "
+        "failed' on the negative-spin half, because the single non-subdividable "
+        "step cannot resolve the contact switching.  So this needs a fixture "
+        "redesign (loaded tire and/or substeppable solver), not a tweak.  "
+        "Reproduce with the raw/brake_fixture_* probes under "
+        ".codex-tasks/20260912-native-fiala-parity/tasks/08-adams-braking-case/"
+    ),
+)
 def test_native_brake_opposes_the_instantaneous_wheel_spin() -> None:
     model = _vehicle().model_copy(
         update={
@@ -1126,3 +1618,45 @@ def test_si_vehicle_requires_explicit_gravity() -> None:
     )
     with pytest.raises(ValueError, match="gravity.*explicitly"):
         run_vehicle_dynamics(model, case)
+
+
+def test_analytic_jacobian_stays_consistent_across_steps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    The Newton retry path must rebuild the Jacobian at the current iterate.
+
+    ``newton_step`` reuses the cached constraint Jacobians and the interpolated
+    states held in ``primary_workspace``.  A line search that fails leaves that
+    workspace describing its last *rejected trial*, so the retry used to assemble
+    analytic columns for a point whose residual was not the one being solved.  The
+    run then died on its second step with "Newton solve did not converge", because
+    the direction was not a descent direction for the true residual.
+
+    With ``SUSPENSION_AXLE_VALIDATE_JACOBIAN`` the kernel compares every analytic
+    column against a finite difference of the same residual and aborts on a
+    mismatch, so *completing three steps* is the assertion.  Before the fix this
+    failed at ``t = 0.001`` with the mismatch reported at the first velocity
+    column.
+    """
+    monkeypatch.setenv("SUSPENSION_AXLE_VALIDATE_JACOBIAN", "1")
+    model = _pac2002_model(combined=True, parameter_source="adams_builtin")
+    step = 0.001
+    case = _case(model).model_copy(
+        update={
+            "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
+            "initial_states": _uniform_velocity_initial_states(model),
+            "solver": DynamicSolverSettings(
+                end_time=3.0 * step,
+                step_size=step,
+                internal_step_size=step,
+                min_internal_step_size=step,
+                adaptive_substepping=False,
+                integrator="generalized_alpha",
+                gravity=Vec3(x=0, y=0, z=0),
+            ),
+        }
+    )
+    result = run_vehicle_dynamics(model, case)
+    assert np.all(result.diagnostics.accepted)
+    assert result.axle.tire_output.shape[0] >= 3

@@ -17,7 +17,7 @@ from ..model import build_front_axle
 from ..schema import FrontAxleModel, MassSpec
 from .adapter import SmokeResult, Tolerance
 from .equivalent_model import write_equivalent_sources
-from .probe import AdamsProfile, _adams_environment
+from .probe import AdamsProfile, _adams_environment, producer_id
 from .reference import _read_hardpoints
 
 CONTRACT = "strict-adams-k-v1"
@@ -355,7 +355,7 @@ def run_adams_pure_k(
     evidence = {
         "contract": CONTRACT,
         "schema_version": SCHEMA_VERSION,
-        "producer": "msc.adams-car.2024.1",
+        "producer": producer_id("adams-car", profile.version),
         "adams_version": profile.version,
         "input_manifest_sha256": hashlib.sha256(
             json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -551,6 +551,10 @@ def _run_process(
         env=env,
         capture_output=True,
         text=True,
+        # Decode explicitly; see `adams/adapter.py`.  The locale codec cannot read
+        # every byte an external tool prints here.
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
         check=False,
     )

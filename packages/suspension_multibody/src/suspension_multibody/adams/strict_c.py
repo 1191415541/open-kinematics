@@ -28,7 +28,7 @@ from ..analysis import CModeSolver, KReferenceCache, LoadPath
 from ..model import build_front_axle, side_hardpoints
 from ..schema import Bushing6x6, FrontAxleModel, MassSpec, Pose, Vec3
 from .adapter import SmokeResult, Tolerance
-from .probe import AdamsProfile, _adams_environment
+from .probe import AdamsProfile, _adams_environment, producer_id
 from .strict_k import build_equivalence_manifest
 
 CONTRACT = "strict-adams-c-v1"
@@ -388,7 +388,7 @@ def run_adams_strict_c(
     evidence = {
         "contract": CONTRACT,
         "schema_version": SCHEMA_VERSION,
-        "producer": "msc.adams-solver.2024.1",
+        "producer": producer_id("adams-solver", profile.version),
         "adams_version": profile.version,
         "analysis_mode": "quasi_static",
         "gravity_contribution": False,
@@ -751,6 +751,10 @@ def _run_process(
         env=_adams_environment(cwd),
         capture_output=True,
         text=True,
+        # Decode explicitly; see `adams/adapter.py`.  The locale codec cannot read
+        # every byte an external tool prints here.
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
         check=False,
     )

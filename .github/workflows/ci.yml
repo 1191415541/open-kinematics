@@ -65,3 +65,35 @@ jobs:
       - run: just install-ci
       - run: just import-smoke
       - run: just cli-smoke
+
+  # The kernel is built with CMake + Ninja for the host platform.  The Linux
+  # jobs above cover the build path, but they cannot cover what is MinGW
+  # specific: static linking of libgcc/libstdc++/OpenMP, the `_WIN32` branch of
+  # the MKL loader, and the `.dll` name the loader resolves.  This job runs the
+  # kernel and multibody gates on Windows so those paths are actually
+  # exercised.  The MinGW release here differs from a developer WinLibs UCRT
+  # toolchain, so it establishes "builds and passes", not bit-identical output.
+  windows:
+    name: Windows kernel build and multibody tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: extractions/setup-just@v2
+      - name: Install the MinGW-w64 toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+      - name: Put the toolchain on PATH
+        shell: pwsh
+        run: |
+          "C:\msys64\ucrt64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - run: just install-ci
+      - run: just build-kernel
+      - run: just test-kernel
+      - run: just test-multibody

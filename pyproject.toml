@@ -1,6 +1,7 @@
 [tool.uv.workspace]
 members = [
     "packages/suspension_contracts",
+    "packages/suspension_kernel",
     "packages/suspension_kinematics",
     "packages/suspension_multibody",
 ]
@@ -17,6 +18,7 @@ dictionary = ".codespell-british.txt,-"
 # those modules receive dedicated type annotations.
 exclude = [
     "packages/suspension_contracts/tests/",
+    "packages/suspension_kernel/tests/",
     "packages/suspension_kinematics/tests/",
     "packages/suspension_multibody/tests/",
     "packages/suspension_kinematics/tools/",

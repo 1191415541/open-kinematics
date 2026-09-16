@@ -12,11 +12,15 @@ from suspension_multibody.adams.car_import import (
     read_adams_suspension,
     suspension_summary,
 )
+from suspension_multibody.adams.probe import resolve_adams_home
 
-_ADAMS_ROOT = Path("G:/MSC.Software/Adams/2024_1")
+# The example vehicle ships inside whichever Adams/Car release is installed.
+_ADAMS_HOME = resolve_adams_home()
 _SUBSYSTEM = (
-    _ADAMS_ROOT
+    _ADAMS_HOME
     / "acar/achassis_gs.cdb/subsystems.tbl/acar_gs_front_suspension.sub"
+    if _ADAMS_HOME is not None
+    else Path("adams-car-installation-is-unavailable")
 )
 
 pytestmark = pytest.mark.skipif(

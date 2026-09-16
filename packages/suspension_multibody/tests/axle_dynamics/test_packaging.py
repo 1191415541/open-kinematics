@@ -10,12 +10,15 @@ ROOT = Path(__file__).parents[4]
 
 
 def test_wheel_contains_current_platform_native_kernel(tmp_path: Path) -> None:
+    # The kernel is built by `packages/suspension_kernel` and mirrored into this
+    # package's `native` directory, which is the path the wheel packages and the
+    # ctypes boundary loads.  K1 renamed the library from `axle_dynamics_native`.
     if sys.platform == "win32":
-        library_name = "axle_dynamics_native.dll"
+        library_name = "suspension_kernel.dll"
     elif sys.platform == "darwin":
-        library_name = "libaxle_dynamics_native.dylib"
+        library_name = "libsuspension_kernel.dylib"
     else:
-        library_name = "libaxle_dynamics_native.so"
+        library_name = "libsuspension_kernel.so"
     native_dir = (
         ROOT
         / "packages"
@@ -46,6 +49,10 @@ def test_wheel_contains_current_platform_native_kernel(tmp_path: Path) -> None:
         assert library_path in archive.namelist()
         assert metadata_path in archive.namelist()
         metadata = json.loads(archive.read(metadata_path))
-    assert metadata["abi_version"] == 14
-    assert metadata["vehicle_abi_version"] == 21
+    assert metadata["abi_version"] == 15
+    assert metadata["vehicle_abi_version"] == 30
     assert metadata["source"] == "cpp/axle_dynamics/axle_kernel.cpp"
+
+
+
+

@@ -7,11 +7,11 @@
 
 | 项目 | 值 |
 | --- | --- |
-| 内核源码 | `cpp/axle_dynamics/axle_kernel.cpp`（单翻译单元） |
-| C ABI 版本 | 14；整车 ABI 15 |
-| 构建入口 | `packages/suspension_multibody/scripts/build_axle_native.py`（Windows 委派 `.ps1`） |
+| 内核源码 | `packages/suspension_kernel/cpp/axle_dynamics/`（已由单翻译单元拆为多翻译单元，按 epic 的模块边界分层） |
+| C ABI 版本 | 轴 15；整车 30 |
+| 构建入口 | `packages/suspension_kernel/scripts/build_suspension_kernel.py`（CMake + Ninja）；`packages/suspension_multibody/scripts/build_axle_native.py` 是委派包装 |
 | 编译旗标 | `-std=c++17 -Wall -Wextra -Werror -fno-fast-math -O3 -flto -fopenmp`，静态链接 libgcc/libstdc++ |
-| 共享库位置 | `src/suspension_multibody/native/`，随 wheel 一同打包 |
+| 共享库位置 | `src/suspension_multibody/native/suspension_kernel.dll`（新包自留一份在 `packages/suspension_kernel/src/suspension_kernel/native/`），随 wheel 一同打包 |
 | 构建元数据 | `native/native_build.json`，进入结果 artifact 与 Adams 证据包 |
 
 编译器与版本随构建机记录在 `native_build.json`，不在本文写死。
@@ -33,8 +33,15 @@ uv run --package suspension-multibody python \
 
 ### 逐工况门禁结果
 
-13/13 工况的解算门、能量门与步长收敛门全部通过。能量闭合相对误差（门限为
-smooth 5e-3、contact_event 2e-2）：
+本文记录的是 2026-08 的合成台架结果。**其中「13/13 全部通过」这一条已不再成立**，
+按实测更正如下，保留原文以便对照：13 个工况中解算门与能量门全部通过，`time_convergence`
+门有 3 个工况不通过——`road_step_finite_rise`、`tire_liftoff_and_recontact`、
+`large_amplitude_high_frequency`，且都只由 `fixture.force_z` 一项引起
+（载荷 NRMSE 0.036 / 0.078 / 0.432，门限 0.02；状态 NRMSE 均为 5e-4 量级，门限 0.01，余量约 20 倍）。
+成因是 committed `5231fd6`（2026-08-26）把 `fixture.*` 从数值死通道（≤4.4e-9）改成动量平衡
+重建量，而 `axle_acceptance.yaml` 仍按 5 N 地板把它们计入收敛门。这是既有问题，
+按既定决定**记录如实、不修改工况、不掩盖**；能量闭合相对误差（门限为
+smooth 5e-3、contact_event 2e-2）仍如下表：
 
 | 工况 | 能量类 | 闭合误差 | 门限 |
 | --- | --- | --- | --- |

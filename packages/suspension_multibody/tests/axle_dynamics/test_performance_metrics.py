@@ -154,8 +154,8 @@ def test_native_build_metadata_keeps_safe_optimization_flags() -> None:
     metadata = native_build_metadata()
     flags = tuple(str(flag) for flag in metadata["flags"])
 
-    assert metadata["abi_version"] == 14
-    assert metadata["vehicle_abi_version"] == 21
+    assert metadata["abi_version"] == 15
+    assert metadata["vehicle_abi_version"] == 30
     assert metadata["configuration"] == "Release"
     assert "-ffast-math" not in flags
     assert "-fno-fast-math" in flags
@@ -204,3 +204,7 @@ def test_concurrent_native_runs_are_isolated() -> None:
         np.testing.assert_array_equal(result[0], reference[0])
         np.testing.assert_array_equal(result[1], reference[1])
         np.testing.assert_array_equal(result[2], reference[2])
+
+
+
+

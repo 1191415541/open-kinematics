@@ -26,6 +26,12 @@ def run_default_adams(
         env=_adams_environment(output_dir),
         capture_output=True,
         text=True,
+        # Adams prints the working directory, which is non-ASCII here.  Decoding
+        # with the locale codec raised from inside this call and reported a failed
+        # batch run as a crashed harness; the two lines below are written as UTF-8
+        # with replacement already, so the text only has to survive the decode.
+        encoding="utf-8",
+        errors="replace",
         timeout=600,
         check=False,
     )

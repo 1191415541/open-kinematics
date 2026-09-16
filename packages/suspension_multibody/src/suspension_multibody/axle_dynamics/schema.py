@@ -8,6 +8,7 @@ from typing import Literal
 import numpy as np
 from pydantic import Field, field_validator, model_validator
 
+from ..pac2002_scope import validate_pac2002_native_scope
 from ..schema.common import StrictModel
 
 Vec3Tuple = tuple[float, float, float]
@@ -192,6 +193,89 @@ PAC2002_PARAMETER_NAMES = (
     # Adams PAC2002 无带动力学模式下的陀螺回正力矩参数；只能追加。
     "LGYR",
     "MBELT",
+    # Adams PAC2002 [MODEL] use switch. Negative values mirror tire data.
+    "USE_MODE",
+    # Input validity ranges from [LONG_SLIP_RANGE], [SLIP_ANGLE_RANGE],
+    # [INCLINATION_ANGLE_RANGE] and [VERTICAL_FORCE_RANGE].  Adams clamps the
+    # tire model inputs to these bounds; append only, never reorder.
+    "KPUMIN",
+    "KPUMAX",
+    "ALPMIN",
+    "ALPMAX",
+    "CAMMIN",
+    "CAMMAX",
+    "FZMIN",
+    "FZMAX",
+    # Non-linear (advanced) transient contact-mass model, USE_MODE 21-25.
+    # [DYNAMIC_COEFFICIENTS]: contact body mass/inertia, its damping and
+    # stiffness, plus the composite turn-slip and relaxation coefficients.
+    # Append only, never reorder.
+    "MC",
+    "IC",
+    "KX",
+    "KY",
+    "KP",
+    "CX",
+    "CY",
+    "CP",
+    "CXZ1",
+    "CXZ2",
+    "CXX1",
+    "CYZ1",
+    "CYZ2",
+    "CYY1",
+    "EP",
+    "EP12",
+    "BF2",
+    "BP1",
+    "BP2",
+    "BP3",
+    "BP4",
+    # Appended for the non-linear transient model's half contact length
+    # (Adams "Transient Behavior in PAC2002" Eq3978):
+    #     a = PA1*R0*(rho_z/R0 + PA2*sqrt(rho_z/R0))
+    "PA1",
+    "PA2",
+    # Appended for the steady-state turn-slip / parking family
+    # (Adams "Steady State: Magic Form" Eq3329-Eq3356).  The native kernel reads
+    # these only at USE_MODE 25; at modes 1-24 Adams measures them as inert.
+    "PECP1",
+    "PECP2",
+    "PDXP1",
+    "PDXP2",
+    "PDXP3",
+    "PDYP1",
+    "PDYP2",
+    "PDYP3",
+    "PDYP4",
+    "PKYP1",
+    "PHYP1",
+    "PHYP2",
+    "PHYP3",
+    "PHYP4",
+    "QBRP1",
+    "QBRP2",
+    "QCRP1",
+    "QCRP2",
+    "QDRP1",
+    "QDRP2",
+    "QDTP1",
+    "QDTP2",
+    # Appended for Eq3981's equivalent slip, whose longitudinal term is
+    # (2/3)*WIDTH*|phi'_c|.  Every PAC2002 tire file declares WIDTH in its
+    # [DIMENSION] block; the neutral default of zero drops that term.
+    "WIDTH",
+    # Appended for the non-rolling vertical Maxwell element (A5).  The switch is a
+    # quoted string in the tire file, so the importer writes 1 or 0 here; the two
+    # rates default to zero, which is the neutral value that leaves the element out
+    # even when the switch is on (DYNAMIC_STIFFNESS = 0 --> no Maxwell force).
+    "USE_DYNAMIC_STIFFNESS",
+    "DYNAMIC_STIFFNESS",
+    "DYNAMIC_DAMPING",
+    # Wheel bottoming: the radius at which the rim starts to hit the road.  The force
+    # curve itself is a table and rides in the per-tire curve arrays, like
+    # [DEFLECTION_LOAD_CURVE].
+    "BOTTOMING_RADIUS",
 )
 
 PAC2002_PARAMETER_DEFAULTS = {
@@ -362,6 +446,85 @@ PAC2002_PARAMETER_DEFAULTS = {
     "VXLOW": 1.0,
     "LGYR": 1.0,
     "MBELT": 0.0,
+    "USE_MODE": 14.0,
+    # Validity ranges.  A tire that does not declare them must not be clamped,
+    # so the fallbacks are permissive rather than Adams' typical values: only an
+    # explicit range in the tire property file narrows the envelope.
+    "KPUMIN": -1.0e12,
+    "KPUMAX": 1.0e12,
+    "ALPMIN": -1.0e12,
+    "ALPMAX": 1.0e12,
+    "CAMMIN": -1.0e12,
+    "CAMMAX": 1.0e12,
+    "FZMIN": 0.0,
+    "FZMAX": 1.0e12,
+    # Contact-mass model.  MC/IC must stay positive for the contact body to be
+    # causal; the rest default to zero, which disables the corresponding term.
+    "MC": 1.0,
+    "IC": 0.05,
+    "KX": 409.0,
+    "KY": 320.8,
+    "KP": 11.9,
+    "CX": 4.35e5,
+    "CY": 1.665e5,
+    "CP": 2019.0,
+    "CXZ1": 0.0,
+    "CXZ2": 0.0,
+    "CXX1": 0.0,
+    "CYZ1": 0.0,
+    "CYZ2": 0.0,
+    "CYY1": 0.0,
+    "EP": 1.0,
+    "EP12": 3.0,
+    "BF2": 0.5,
+    "BP1": 0.5,
+    "BP2": 0.667,
+    "BP3": 0.0,
+    "BP4": 0.0,
+    # Zero is the neutral value: with both at zero the half contact length is
+    # zero and the non-linear transient relaxation length falls back to the
+    # contact-body spring term alone.
+    "PA1": 0.0,
+    "PA2": 0.0,
+    # Zero is the neutral value for the turn-slip / parking family too: every
+    # spin reduction factor then degenerates to zeta_i = 1 (Eq3327), the spin
+    # lateral shift SHyphi to 0 and the spin moments Drphi / Mz_phi90 to 0, which
+    # is exactly "turn-slip ignored".  A non-zero default here would silently turn
+    # the feature on for every tire that does not declare it.
+    "PECP1": 0.0,
+    "PECP2": 0.0,
+    "PDXP1": 0.0,
+    "PDXP2": 0.0,
+    "PDXP3": 0.0,
+    "PDYP1": 0.0,
+    "PDYP2": 0.0,
+    "PDYP3": 0.0,
+    "PDYP4": 0.0,
+    "PKYP1": 0.0,
+    "PHYP1": 0.0,
+    "PHYP2": 0.0,
+    "PHYP3": 0.0,
+    "PHYP4": 0.0,
+    "QBRP1": 0.0,
+    "QBRP2": 0.0,
+    "QCRP1": 0.0,
+    "QCRP2": 0.0,
+    "QDRP1": 0.0,
+    "QDRP2": 0.0,
+    "QDTP1": 0.0,
+    "QDTP2": 0.0,
+    # Nominal section width of Eq3981.  Zero is the neutral value: it drops the
+    # (2/3)*b*|phi'_c| term, so a tire that does not declare a width keeps the
+    # turn-slip relaxation it would have without turn slip.
+    "WIDTH": 0.0,
+    # Maxwell element: off by default, and with zero rates it contributes no force
+    # even when the switch is on.
+    "USE_DYNAMIC_STIFFNESS": 0.0,
+    "DYNAMIC_STIFFNESS": 0.0,
+    "DYNAMIC_DAMPING": 0.0,
+    # Zero means "no rim contact", which is the documented behaviour when a tire
+    # omits the [BOTTOMING_CURVE] block.
+    "BOTTOMING_RADIUS": 0.0,
 }
 
 
@@ -775,6 +938,12 @@ class AxleTire(StrictModel):
     pac2002_parameter_source: Literal["user", "adams_builtin"] = "user"
     pac2002_mirror: bool | None = None
     pac2002_coefficients: dict[str, float] = Field(default_factory=dict)
+    # Tabulated curves in SI units, keyed like TireModelSpec.pac2002_tables.  They
+    # cannot ride in the scalar coefficient payload, so the kernel takes them through
+    # the per-tire curve arrays of VehicleInput.
+    pac2002_tables: dict[str, tuple[tuple[float, float], ...]] = Field(
+        default_factory=dict
+    )
     fiala_parameters: dict[str, float] = Field(default_factory=dict)
 
     @field_validator("pac2002_coefficients")
@@ -825,6 +994,8 @@ class AxleTire(StrictModel):
                 value = self.fiala_parameters.get(name)
                 if value is not None and value <= 0.0:
                     raise ValueError(f"Fiala {name} must be positive")
+        if self.model_kind == "pac2002_pure_slip":
+            validate_pac2002_native_scope(self.pac2002_coefficients)
         if (self.drive_torque_body is None) != (
             self.drive_torque_axis_local is None
         ):
@@ -845,6 +1016,52 @@ class AxleTire(StrictModel):
         return self
 
 
+class AxleDrivenCoordinate(StrictModel):
+    """
+    One prescribed relative degree of freedom between two bodies.
+
+    This is the generic kinematic driver: the analogue of an Adams joint MOTION.
+    ``kind = "translation"`` holds the signed separation along ``axis_local`` equal
+    to the case's target; ``kind = "rotation"`` holds the principal rotation of
+    ``body`` relative to ``reaction_body`` about that axis equal to the target,
+    measured from ``reference_quaternion`` (the assembling pose is the zero angle).
+
+    ``axis_local`` is expressed in the **reaction** body's frame, matching the
+    steering actuator convention: a joint axis is normally fixed to the body the
+    driven one moves relative to.  The target values live on the case
+    (``AxleDynamicsCase.driven_target_m``), one tuple per coordinate name.
+
+    A reaction body is mandatory: the row measures a relative quantity and the
+    constraint-wrench output indexes both endpoints, so there is no "ground"
+    shorthand here.
+    """
+
+    name: str = Field(min_length=1)
+    kind: Literal["translation", "rotation"]
+    body: str = Field(min_length=1)
+    reaction_body: str = Field(min_length=1)
+    point_local_m: Vec3Tuple = (0.0, 0.0, 0.0)
+    reaction_point_local_m: Vec3Tuple = (0.0, 0.0, 0.0)
+    axis_local: Vec3Tuple
+    reference_quaternion: QuaternionTuple = (1.0, 0.0, 0.0, 0.0)
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> AxleDrivenCoordinate:
+        if self.body == self.reaction_body:
+            raise ValueError(
+                "a driven coordinate needs two distinct bodies"
+            )
+        _finite(self.point_local_m, "point_local_m")
+        _finite(self.reaction_point_local_m, "reaction_point_local_m")
+        _finite(self.axis_local, "axis_local")
+        if float(np.linalg.norm(self.axis_local)) <= 1e-12:
+            raise ValueError("axis_local must be nonzero")
+        _finite(self.reference_quaternion, "reference_quaternion")
+        if abs(float(np.linalg.norm(self.reference_quaternion)) - 1.0) > 1e-9:
+            raise ValueError("reference_quaternion must be a unit quaternion")
+        return self
+
+
 class AxleDynamicsModel(StrictModel):
     """Complete native axle physical model."""
 
@@ -862,6 +1079,9 @@ class AxleDynamicsModel(StrictModel):
     tires: tuple[AxleTire, ...] = ()
     aerodynamic_drags: tuple[AxleAerodynamicDrag, ...] = ()
     coordinate_couplers: tuple[AxleCoordinateCoupler, ...] = ()
+    # Generic kinematic drivers (Adams joint MOTION).  Each one appends a
+    # constraint row, so "drive a degree of freedom" is exactly "remove it".
+    driven_coordinates: tuple[AxleDrivenCoordinate, ...] = ()
     gravity_m_per_s2: Vec3Tuple = (0.0, 0.0, -9.80665)
 
     @model_validator(mode="after")
@@ -926,6 +1146,19 @@ class AxleDynamicsModel(StrictModel):
             if coupler.joint_a not in joint_names or coupler.joint_b not in joint_names:
                 raise ValueError(
                     f"coordinate coupler {coupler.name!r} references an unknown joint"
+                )
+        driven_names = [driven.name for driven in self.driven_coordinates]
+        if len(driven_names) != len(set(driven_names)):
+            raise ValueError("driven coordinate names must be unique")
+        fixed_names = {body.name for body in self.bodies if body.fixed}
+        for driven in self.driven_coordinates:
+            if driven.body not in known or driven.reaction_body not in known:
+                raise ValueError(
+                    f"driven coordinate {driven.name!r} references an unknown body"
+                )
+            if driven.body in fixed_names:
+                raise ValueError(
+                    f"driven coordinate {driven.name!r} drives a fixed body"
                 )
         _finite(self.gravity_m_per_s2, "gravity_m_per_s2")
         return self
@@ -1011,6 +1244,15 @@ class AxleDynamicsCase(StrictModel):
     # closed form rather than from the sampled tables, so no interpolation
     # enters the comparison on either side.
     harmonic_roads: tuple[AxleHarmonicRoad, ...] = ()
+    #: Target value of each driven coordinate per sample, keyed by its name.
+    #: Translation targets are metres, rotation targets radians, both measured
+    #: from the assembling pose (exactly like an Adams joint MOTION function).
+    driven_target_m: dict[str, tuple[float, ...]] = Field(default_factory=dict)
+    #: Optional explicit target rate.  When a coordinate is absent the kernel
+    #: input derives its rate from ``driven_target_m`` over ``times_s``, because
+    #: the velocity- and acceleration-level rows need the explicit time
+    #: derivative and every consumer would otherwise have to supply it.
+    driven_target_rate: dict[str, tuple[float, ...]] = Field(default_factory=dict)
     solver: AxleSolverSettings = Field(default_factory=AxleSolverSettings)
 
     @model_validator(mode="after")
@@ -1075,4 +1317,10 @@ class AxleDynamicsCase(StrictModel):
                 for component in wrench
             ):
                 raise ValueError(f"signal {name!r} must be finite")
+        for signals in (self.driven_target_m, self.driven_target_rate):
+            for name, values in signals.items():
+                if len(values) != len(self.times_s):
+                    raise ValueError(f"signal {name!r} length must match times_s")
+                if any(not math.isfinite(value) for value in values):
+                    raise ValueError(f"signal {name!r} must be finite")
         return self

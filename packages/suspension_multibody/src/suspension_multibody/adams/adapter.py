@@ -198,7 +198,7 @@ class AdamsBatchAdapter:
             missing_paths.append("database")
         checks: dict[str, bool] = {
             "profile_available": self.profile.available,
-            "version": self.profile.version == "2024.1",
+            "version": self.profile.version is not None,
             "license_probe": self.profile.license_probe == "passed",
             "required_report_fields": not missing_fields,
             "installed_assets": not missing_paths,
@@ -457,6 +457,12 @@ def _run_command(
             env=environment,
             capture_output=True,
             text=True,
+            # Decode explicitly: the locale codec (GBK on the machine this was
+            # fixed on) cannot read every byte Adams prints, and this repository's
+            # path is non-ASCII, so the locale decode raised from inside the call
+            # and reported a failed tool as a crashed harness.
+            encoding="utf-8",
+            errors="replace",
             timeout=300,
             check=False,
             shell=True,
@@ -467,6 +473,8 @@ def _run_command(
         env=environment,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=300,
         check=False,
     )

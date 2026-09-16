@@ -21,6 +21,12 @@ from typing import Literal, Mapping, cast
 
 import numpy as np
 
+from ..pac2002_scope import (
+    PAC2002_NATIVE_IMPLEMENTED_FEATURES,
+    PAC2002_NATIVE_NOT_IMPLEMENTED_FEATURES,
+    PAC2002_SUPPORTED_NATIVE_USE_MODES,
+    pac2002_unsupported_native_reasons,
+)
 from ..schema import (
     AerodynamicDragSpec,
     BumpStop,
@@ -48,6 +54,9 @@ from ..schema import (
     WheelSpec,
 )
 
+# Last-resort locations, used only to name a path in the failure message when no
+# Adams installation can be discovered.  Discovery itself is release-agnostic:
+# see ``adams.probe``, which finds whichever release is installed.
 DEFAULT_ADAMS_DATABASE = Path(
     r"C:\Program Files\MSC.Software\Adams\2024_1\acar\shared_car_database.cdb"
 )
@@ -106,6 +115,10 @@ _FORCE_TO_N: dict[str, float] = {
     "kilonewton": 1_000.0,
     "kilonewtons": 1_000.0,
     "lbf": 4.4482216152605,
+    # Long spelling shipped by four stock tires (AA_small_*_relax,
+    # AA_small_trr64_rim, mdi_pac94).  Without it _unit_factor raises and those
+    # files fail to import at all instead of being converted or rejected.
+    "pound_force": 4.4482216152605,
 }
 _MASS_TO_KG: dict[str, float] = {
     "kg": 1.0,
@@ -116,6 +129,7 @@ _MASS_TO_KG: dict[str, float] = {
     "grams": 1.0e-3,
     "lb": 0.45359237,
     "lbm": 0.45359237,
+    "pound_mass": 0.45359237,
 }
 _TIME_TO_S: dict[str, float] = {
     "s": 1.0,
@@ -411,6 +425,12 @@ class AdamsFullVehicleInput:
     pac2002_coefficients: Mapping[str, float]
     initial_forward_speed_mps: float
     fiala_parameters: Mapping[str, float] = field(default_factory=dict)
+    # Tabulated curves (deflection_m, load_n) in SI, keyed the same way as in
+    # ``TireModelSpec.pac2002_tables``.  They cannot live in the scalar coefficient
+    # mapping, so the loader fills them here and the spec builder forwards them.
+    pac2002_tables: Mapping[str, tuple[tuple[float, float], ...]] = field(
+        default_factory=dict
+    )
     part_roles: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
     front_inertias: Mapping[str, Matrix3] = field(default_factory=dict)
     rear_inertias: Mapping[str, Matrix3] = field(default_factory=dict)
@@ -607,33 +627,32 @@ class AdamsFullVehicleInput:
             if tire_kind == "pac2002"
             else "adams_generated_brush"
         )
+        # This label claims exactness for the supported feature set only; the
+        # features named in the scope's ``not_implemented`` tuple stay
+        # fail-closed.  See ``native_tire_model_scope`` and the P8 task record
+        # for the real-Adams correlation evidence that justifies the claim.
         native_tire_implementation = (
-            "pac2002_selected_combined_slip_with_relaxation_source_offsets"
+            "exact_pac2002" if tire_kind == "pac2002" else "exact_native_brush"
+        )
+        pac2002_native_blockers = (
+            pac2002_unsupported_native_reasons(self.pac2002_coefficients)
             if tire_kind == "pac2002"
-            else "exact_native_brush"
+            else ()
         )
         return {
             "adams_assembly": self.asy_path.name,
             "tire_model": reference_tire_model,
             "native_tire_implementation": native_tire_implementation,
             "native_tire_model_scope": {
-                "implemented": (
-                    "pure_longitudinal_slip",
-                    "pure_lateral_slip",
-                    "selected_combined_slip_coefficients",
-                    "first_order_relaxation",
-                    "vertical_contact",
-                    "source_phx_pvx_phy_pvy_offsets",
-                    "selected_aligning_moment_coefficients",
-                    "selected_overturning_and_rolling_resistance_moments",
+                # Published from the scope module rather than transcribed here:
+                # the audit in tests/adams/test_pac2002_native_scope_audit.py
+                # keeps the declaration and the enforcement in step.
+                "implemented": PAC2002_NATIVE_IMPLEMENTED_FEATURES,
+                "not_implemented": PAC2002_NATIVE_NOT_IMPLEMENTED_FEATURES,
+                "supported_use_modes": tuple(
+                    sorted(PAC2002_SUPPORTED_NATIVE_USE_MODES)
                 ),
-                "not_implemented": (
-                    "complete_combined_pac2002_parameter_set",
-                    "complete_camber_and_load_scaling",
-                    "complete_pac2002_aligning_moment_parameter_set",
-                    "complete_pac2002_extra_moment_parameter_set",
-                    "complete_adams_contact_force_law",
-                ),
+                "fail_closed_blockers": pac2002_native_blockers,
             },
             "source_units": {
                 source: dict(sorted(units.items()))
@@ -1118,6 +1137,7 @@ def load_adams_full_vehicle_input(
         source_user_functions=source_user_functions,
         initial_part_states=initial_part_states,
         pac2002_coefficients=pac,
+        pac2002_tables=parse_tire_tables(tire),
         fiala_parameters={
             "UNLOADED_RADIUS_MM": pac.get("UNLOADED_RADIUS_MM", 344.0),
             "VERTICAL_STIFFNESS_N_MM": pac.get("VERTICAL_STIFFNESS_N_MM", 210.0),
@@ -1125,17 +1145,19 @@ def load_adams_full_vehicle_input(
             "CSLIP": pac.get("CSLIP_N", pac.get("CSLIP", 1000.0)),
             "CALPHA": pac.get("CALPHA_N_PER_RAD", pac.get("CALPHA", 800.0)),
             "CGAMMA": pac.get("CGAMMA", 0.0),
-            "MGAMMA": pac.get("MGAMMA", 0.0),
-            "CSPIN": pac.get("CSPIN", 0.0),
+            # [MODEL] USE_MODE drives the Fiala startup smoothing (2, 12) and the
+            # slip-relaxation transient (11, 12).  Every shipped Adams Fiala tire
+            # uses 2.0, i.e. smoothing on and transient off.
+            "USE_MODE": pac.get("USE_MODE", 2.0),
             "UMIN": pac.get("UMIN", 0.9),
             "UMAX": pac.get("UMAX", 1.0),
             "RELAX_LENGTH_X": pac.get("RELAX_LENGTH_X_MM", 50.0),
             "RELAX_LENGTH_Y": pac.get("RELAX_LENGTH_Y_MM", 150.0),
             "WIDTH": pac.get("WIDTH_MM", 235.0),
-            "ROLLING_RESISTANCE": pac.get("ROLLING_RESISTANCE", 0.0),
+            "ROLLING_RESISTANCE": pac.get(
+                "ROLLING_RESISTANCE_MM", pac.get("ROLLING_RESISTANCE", 0.0)
+            ),
             "LOW_SPEED_THRESHOLD": pac.get("LOW_SPEED_THRESHOLD", 1.0e-3),
-            "DAMP_X": pac.get("DAMP_X", 0.0),
-            "DAMP_Y": pac.get("DAMP_Y", 0.0),
         } if "PROPERTY_FILE_FORMAT" in tire.read_text(
             encoding="ascii", errors="replace"
         ).upper() and "FIALA" in tire.read_text(
@@ -1273,6 +1295,12 @@ def build_adams_vehicle_model(
     tire = _adams_tire_spec(
         data.fiala_parameters if tire_kind == "fiala" else data.pac2002_coefficients,
         kind=tire_kind,
+        # Fiala shares the table plumbing: [DEFLECTION_LOAD_CURVE] replaces its
+        # vertical stiffness exactly as Adams documents ("the load deflection data
+        # points with a cubic spline ... VERTICAL_STIFFNESS ... does not play any
+        # role").  The Fiala force law never reads the bottoming curve, so carrying
+        # that one is inert.
+        tables=dict(data.pac2002_tables),
     )
     wheels = tuple(
         WheelSpec(
@@ -3208,6 +3236,12 @@ def build_adams_source_vehicle_model(
     tire = _adams_tire_spec(
         data.fiala_parameters if tire_kind == "fiala" else data.pac2002_coefficients,
         kind=tire_kind,
+        # Fiala shares the table plumbing: [DEFLECTION_LOAD_CURVE] replaces its
+        # vertical stiffness exactly as Adams documents ("the load deflection data
+        # points with a cubic spline ... VERTICAL_STIFFNESS ... does not play any
+        # role").  The Fiala force law never reads the bottoming curve, so carrying
+        # that one is inert.
+        tables=dict(data.pac2002_tables),
     )
     wheels = tuple(
         _source_wheel_spec(data, wheel_name, wheel_role, spindle_role, tire)
@@ -3281,6 +3315,7 @@ def _adams_tire_spec(
     coefficients: Mapping[str, float],
     *,
     kind: Literal["pac2002", "native_brush", "fiala"],
+    tables: Mapping[str, tuple[tuple[float, float], ...]] | None = None,
 ) -> TireModelSpec:
     """Convert shared PAC2002 values to either source or native proxy data."""
     radius = float(coefficients.get("UNLOADED_RADIUS_MM", 344.0))
@@ -3316,6 +3351,7 @@ def _adams_tire_spec(
         ),
         "pneumatic_trail": float(coefficients.get("QDZ1", 0.0935)) * radius,
         "pac2002_coefficients": dict(coefficients),
+        "pac2002_tables": dict(tables or {}),
     }
     if kind == "fiala":
         kwargs["kind"] = "fiala"
@@ -3327,7 +3363,14 @@ def _adams_tire_spec(
             "RELAX_LENGTH_X": float(coefficients.get("RELAX_LENGTH_X_MM", 50.0)),
             "RELAX_LENGTH_Y": float(coefficients.get("RELAX_LENGTH_Y_MM", 150.0)),
             "WIDTH": float(coefficients.get("WIDTH_MM", 235.0)),
-            "ROLLING_RESISTANCE": float(coefficients.get("ROLLING_RESISTANCE", 0.0)),
+            "ROLLING_RESISTANCE": float(
+                coefficients.get(
+                    "ROLLING_RESISTANCE_MM",
+                    coefficients.get("ROLLING_RESISTANCE", 0.0),
+                )
+            ),
+            # [MODEL] USE_MODE: smoothing (2, 12) and slip transient (11, 12).
+            "USE_MODE": float(coefficients.get("USE_MODE", 2.0)),
         }
     kwargs.update(
         {
@@ -3376,6 +3419,35 @@ def _source_fields(block: str) -> dict[str, str]:
         )
     }
 
+
+def parse_tire_tables(path: Path) -> dict[str, tuple[tuple[float, float], ...]]:
+    """
+    Read a tire's tabulated curves in SI units.
+
+    ``[DEFLECTION_LOAD_CURVE]`` and ``[BOTTOMING_CURVE]`` are two-column tables
+    (vertical deflection, load) in the file's declared units.  The kernel needs SI and
+    the tables cannot ride in the scalar coefficient payload, so they are returned
+    separately: the ABI carries them as per-tire arrays.  Both curves are part of
+    USE_MODE-independent vertical behaviour, which is why they are parsed here rather
+    than in the mode-specific code.
+    """
+    text = path.read_text(encoding="ascii", errors="replace")
+    units = _parse_text_units(text)
+    length_scale = _unit_factor(units.get("length"), _LENGTH_TO_MM, 1.0)
+    force_scale = _unit_factor(units.get("force"), _FORCE_TO_N, 1.0)
+    sections = {name: block for name, block in _bracket_sections(text)}
+    tables: dict[str, tuple[tuple[float, float], ...]] = {}
+    for section, name in (
+        ("DEFLECTION_LOAD_CURVE", "deflection_load_curve"),
+        ("BOTTOMING_CURVE", "bottoming_curve"),
+    ):
+        rows = _source_numeric_table(sections.get(section, ""))
+        if rows:
+            tables[name] = tuple(
+                (deflection*length_scale*1.0e-3, load*force_scale)
+                for deflection, load in rows
+            )
+    return tables
 
 def _source_numeric_table(block: str) -> tuple[tuple[float, float], ...]:
     """读取曲线段中的前两列数值."""
@@ -4144,18 +4216,17 @@ def _discover_default_database() -> Path:
     configured = os.environ.get("SUSPENSION_MULTIBODY_ADAMS_DATABASE")
     if configured:
         return Path(configured)
-    if DEFAULT_ADAMS_DATABASE.is_dir():
-        return DEFAULT_ADAMS_DATABASE
-    if ALTERNATE_ADAMS_DATABASE.is_dir():
-        return ALTERNATE_ADAMS_DATABASE
     try:
-        from .probe import discover_profile
+        from .probe import resolve_adams_database
 
-        profile = discover_profile()
+        discovered = resolve_adams_database()
     except (OSError, RuntimeError):
-        return DEFAULT_ADAMS_DATABASE
-    if profile.database_path:
-        return Path(profile.database_path)
+        discovered = None
+    if discovered is not None:
+        return discovered
+    for fallback in (DEFAULT_ADAMS_DATABASE, ALTERNATE_ADAMS_DATABASE):
+        if fallback.is_dir():
+            return fallback
     return DEFAULT_ADAMS_DATABASE
 
 
@@ -4245,8 +4316,100 @@ def _parse_tire(path: Path) -> dict[str, float]:
     force_scale = _unit_factor(units.get("force"), _FORCE_TO_N, 1.0)
     time_scale = _unit_factor(units.get("time"), _TIME_TO_S, 1.0)
     values: dict[str, float] = {}
-    for key, raw in re.findall(r"^\s*([A-Z][A-Z0-9_]*)\s*=\s*([-+0-9.Ee]+)", text, re.MULTILINE):
-        values[key] = float(raw)
+    for key, raw in re.findall(
+        rf"^\s*([A-Z][A-Z0-9_]*)\s*=\s*({_ADAMS_NUMBER})",
+        text,
+        re.MULTILINE,
+    ):
+        values[key] = _adams_float(raw)
+    sections = {name: block for name, block in _bracket_sections(text)}
+    model_fields = _source_fields(sections.get("MODEL", ""))
+    for key in ("USE_MODE", "VXLOW", "LONGVL", "FE_METHOD"):
+        raw = model_fields.get(key)
+        if raw is not None and re.fullmatch(_ADAMS_NUMBER, raw):
+            values[key] = _adams_float(raw)
+    property_format = model_fields.get("PROPERTY_FILE_FORMAT", "").upper()
+    if property_format:
+        values["PROPERTY_FILE_FORMAT_PAC2002"] = float("PAC2002" in property_format)
+        if "PAC-MC" in property_format or "PACMC" in property_format:
+            values["PAC2002_UNSUPPORTED_PAC_MC"] = 1.0
+    tyre_side = model_fields.get("TYRESIDE", "").upper()
+    if tyre_side.startswith("R"):
+        values["TYRESIDE_RIGHT"] = 1.0
+        values["USE_MODE"] = -abs(values.get("USE_MODE", 14.0))
+    elif tyre_side.startswith("L"):
+        values["TYRESIDE_LEFT"] = 1.0
+        values["USE_MODE"] = abs(values.get("USE_MODE", 14.0))
+    def truthy_field(name: str) -> bool:
+        raw = model_fields.get(name, "").strip().strip("'").upper()
+        return raw not in {"", "0", "FALSE", "NO", "NONE", "OFF"}
+    if truthy_field("BELT_DYNAMICS"):
+        values["PAC2002_UNSUPPORTED_BELT_DYNAMICS"] = 1.0
+    if truthy_field("LOCAL_SOLVER"):
+        values["PAC2002_UNSUPPORTED_LOCAL_SOLVER"] = 1.0
+    # The Maxwell element must fail closed.  Its enable switch is a quoted
+    # string that the numeric extractor above cannot see, while
+    # DYNAMIC_STIFFNESS and DYNAMIC_DAMPING are numbers it does copy into
+    # ``values``.  None of the three reaches the C++ parameter array, so
+    # without this flag the tire would be accepted and solved as if the
+    # element were absent.  Adams documents the switch in the [VERTICAL]
+    # section, so both sections are checked.
+    vertical_fields = _source_fields(sections.get("VERTICAL", ""))
+    maxwell_switch = (
+        vertical_fields.get("USE_DYNAMIC_STIFFNESS")
+        or model_fields.get("USE_DYNAMIC_STIFFNESS")
+        or ""
+    )
+    if maxwell_switch.strip().strip("'").upper() not in {
+        "",
+        "0",
+        "FALSE",
+        "NO",
+        "NONE",
+        "OFF",
+    }:
+        values["PAC2002_UNSUPPORTED_DYNAMIC_STIFFNESS"] = 1.0
+        # Carry the switch itself into the ABI as well, so the kernel can see that
+        # the element was requested once it is implemented.  Until then the flag
+        # above still fails the tire closed, so this changes nothing user-facing.
+        values["USE_DYNAMIC_STIFFNESS"] = 1.0
+    contact_model = model_fields.get("CONTACT_MODEL", "").strip().strip("'").upper()
+    if contact_model and contact_model not in {"0", "POINT_FOLLOWER"}:
+        values["PAC2002_UNSUPPORTED_CONTACT_MODEL"] = 1.0
+    # FITTYP selects an alternative (legacy) rolling-resistance formulation.
+    # Adams documents that FITTYP=5 determines rolling resistance differently and
+    # that removing the keyword switches to the [ROLLING_COEFFICIENTS] equations.
+    # The native kernel implements only the latter.  The keyword is absent from
+    # every tire in the installed Adams libraries, so rather than implement an
+    # unexercised legacy path this fails closed: silently applying the modern
+    # formula to a FITTYP=5 tire would misstate rolling resistance.
+    fit_type = model_fields.get("FITTYP", "").strip().strip("'").upper()
+    if fit_type not in {"", "0"}:
+        values["PAC2002_UNSUPPORTED_FITTYP"] = 1.0
+    if abs(values.get("FE_METHOD", 0.0)) > 1.0e-12:
+        values["PAC2002_UNSUPPORTED_FE_METHOD"] = 1.0
+    def mark_curve(section: str, count_key: str, flag_key: str) -> None:
+        """
+        Record a curve's point count, and fail it closed only if asked to.
+
+        An empty ``flag_key`` means the curve is implemented, so the count is purely
+        diagnostic and no rejection flag is written.
+        """
+        rows = _source_numeric_table(sections.get(section, ""))
+        if rows:
+            values[count_key] = float(len(rows))
+            if flag_key:
+                values[flag_key] = 1.0
+    # [DEFLECTION_LOAD_CURVE] is implemented: the kernel interpolates the table with a
+    # monotone cubic and uses it as the vertical spring law (see
+    # pac2002_curve_interpolate).  The point count is still recorded for diagnostics,
+    # but the tire is no longer rejected for carrying the section.
+    mark_curve("DEFLECTION_LOAD_CURVE", "DEFLECTION_LOAD_CURVE_POINT_COUNT", "")
+    # Wheel bottoming is implemented: the kernel adds the rim reaction from
+    # [BOTTOMING_CURVE] once the deflection reaches UNLOADED_RADIUS - BOTTOMING_RADIUS,
+    # exactly as Adams documents Fz = min(0, Fzk+Fzc) + min(0, Fzrim).  The point count
+    # stays for diagnostics and the tire is no longer rejected for carrying it.
+    mark_curve("BOTTOMING_CURVE", "BOTTOMING_CURVE_POINT_COUNT", "")
     if "UNLOADED_RADIUS" in values:
         values["UNLOADED_RADIUS_MM"] = values["UNLOADED_RADIUS"] * length_scale
     if "FNOMIN" in values:
@@ -4275,6 +4438,11 @@ def _parse_tire(path: Path) -> dict[str, float]:
         values["RELAX_LENGTH_X_MM"] = values["RELAX_LENGTH_X"] * 1000.0
     if "RELAX_LENGTH_Y" in values:
         values["RELAX_LENGTH_Y_MM"] = values["RELAX_LENGTH_Y"] * 1000.0
+    if "ROLLING_RESISTANCE" in values:
+        # A length, like WIDTH: Adams' property reader converts it with the file's
+        # length unit and forms Ty = -sign(omega)*STEP(...)*RR*Fz.  Carried in mm
+        # so the vehicle path can scale it to metres alongside WIDTH.
+        values["ROLLING_RESISTANCE_MM"] = values["ROLLING_RESISTANCE"] * length_scale
     values.setdefault("SPRING_STIFFNESS_N_MM", 125.0)
     values.setdefault("SPRING_FREE_LENGTH_MM", 300.0)
     return values

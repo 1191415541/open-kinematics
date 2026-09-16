@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "suspension-contracts",
+    "suspension-kernel",
     "suspension-kinematics",
     "suspension-multibody",
 ]
@@ -894,6 +895,31 @@ dev = [
 ]
 
 [[package]]
+name = "suspension-kernel"
+version = "0.1.0"
+source = { editable = "packages/suspension_kernel" }
+dependencies = [
+    { name = "numpy" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "ty" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "numpy", specifier = ">=2.2.0" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.3.4" },
+    { name = "ruff", specifier = ">=0.13.3" },
+    { name = "ty", specifier = ">=0.0.1a21" },
+]
+
+[[package]]
 name = "suspension-kinematics"
 version = "0.4.0"
 source = { editable = "packages/suspension_kinematics" }
@@ -966,6 +992,7 @@ dependencies = [
     { name = "scipy" },
     { name = "setuptools" },
     { name = "suspension-contracts" },
+    { name = "suspension-kernel" },
     { name = "typer" },
 ]
 
@@ -987,6 +1014,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.14.1" },
     { name = "setuptools", specifier = ">=84.0.0" },
     { name = "suspension-contracts", editable = "packages/suspension_contracts" },
+    { name = "suspension-kernel", editable = "packages/suspension_kernel" },
     { name = "typer", specifier = ">=0.19.2" },
 ]
 

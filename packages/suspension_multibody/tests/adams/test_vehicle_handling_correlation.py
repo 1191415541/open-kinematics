@@ -4,16 +4,59 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from suspension_multibody.adams import AdamsProfile
 from suspension_multibody.adams.time_domain import TimeHistory
 from suspension_multibody.adams.vehicle_correlation import (
     validate_handling_correlation,
     validate_handling_correlation_matrix,
 )
+from suspension_multibody.adams.vehicle_handling import (
+    _replace_rt_tire_property,
+)
 from suspension_multibody.adams.vehicle_reference import write_vehicle_reference_bundle
 from suspension_multibody.analysis.vehicle_correlation_model import (
     VehicleCorrelationRun,
 )
+
+
+def test_tire_override_rewrites_only_the_rt_variant() -> None:
+    """
+    The tire override must not touch the subsystem's default tire.
+
+    A tire subsystem declares its default tire in ``[WHEEL_ASSEMBLY]`` and the
+    high-performance tire in the ``{rt}`` variant.  The handling assembly selects
+    the variant, so rewriting the default entry as well would silently change an
+    unrelated configuration.
+    """
+    payload = (
+        "[WHEEL_ASSEMBLY]\n"
+        " PROPERTY_FILE        = 'mdids://acar_shared/tires.tbl/TR_front_pac89.tir'\n"
+        " CONTACT_TYPE         = 'handling'\n"
+        "(VARIANTS)\n"
+        "{rt}\n"
+        " PROPERTY_FILE  = 'mdids://acar_shared/tires.tbl/pac2002_235_60R16.tir'\n"
+        " HIGH_PERFORMANCE  =  'yes'\n"
+    )
+    replacement = Path("/tmp/variant/pac2002_um21.tir")
+
+    patched = _replace_rt_tire_property(payload, replacement, "TR_Front_Tires.sub")
+
+    assert "TR_front_pac89.tir" in patched, "default tire entry was modified"
+    assert patched.count("TR_front_pac89.tir") == 1
+    assert replacement.as_posix() in patched
+    assert "pac2002_235_60R16.tir" not in patched
+
+
+def test_tire_override_requires_a_variant_block() -> None:
+    """A subsystem without the ``{rt}`` block must fail loudly."""
+    with pytest.raises(ValueError, match="no .rt. variant block"):
+        _replace_rt_tire_property(
+            "[WHEEL_ASSEMBLY]\n PROPERTY_FILE = 'a.tir'\n",
+            Path("/tmp/b.tir"),
+            "TR_Front_Tires.sub",
+        )
 
 
 def _profile(tmp_path: Path) -> AdamsProfile:

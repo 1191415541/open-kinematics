@@ -1,24 +1,37 @@
-"""Build the axle native library for the current host platform."""
+"""
+Build the axle native library for the current host platform.
+
+Compatibility wrapper.  The real build lives in `packages/suspension_kernel`
+(CMake + Ninja); this script delegates to it and then copies the product into
+this package's `native` directory, which is where the axle ctypes boundary has
+always loaded it from and where the multibody wheel packages it.
+"""
 
 from __future__ import annotations
 
 import argparse
-import json
-import os
-import platform
 import shutil
 import struct
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
-ABI_VERSION = 14
-VEHICLE_ABI_VERSION = 21
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+KERNEL_PACKAGE = REPOSITORY_ROOT / "packages" / "suspension_kernel"
+KERNEL_SOURCE = KERNEL_PACKAGE / "src"
+NATIVE_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "suspension_multibody"
+    / "native"
+)
+
+sys.path.insert(0, str(KERNEL_SOURCE))
+
+from suspension_kernel.binding.build import build  # noqa: E402
 
 
 def main() -> int:
-    """Build the host-native shared library and metadata."""
+    """Build the kernel and mirror its product into this package."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--configuration",
@@ -26,98 +39,26 @@ def main() -> int:
         default="Release",
     )
     args = parser.parse_args()
-    script = Path(__file__).resolve()
-    package_root = script.parents[1]
-    repository_root = script.parents[3]
     if struct.calcsize("P") != 8:
         raise RuntimeError("the axle native kernel requires a 64-bit host")
-    if sys.platform == "win32":
-        powershell = shutil.which("pwsh") or shutil.which("powershell")
-        if powershell is None:
-            raise RuntimeError("PowerShell is required for the Windows build")
-        subprocess.run(
-            [
-                powershell,
-                "-NoProfile",
-                "-File",
-                str(script.with_suffix(".ps1")),
-                "-Configuration",
-                args.configuration,
-            ],
-            cwd=repository_root,
-            check=True,
-        )
-        return 0
 
-    compiler = (
-        os.environ.get("CXX")
-        or shutil.which("c++")
-        or shutil.which("g++")
-        or shutil.which("clang++")
-    )
-    if compiler is None:
-        raise RuntimeError("no C++ compiler found in CXX or PATH")
-    source = repository_root / "cpp" / "axle_dynamics" / "axle_kernel.cpp"
-    include = source.parent
-    native_dir = package_root / "src" / "suspension_multibody" / "native"
+    produced = build(args.configuration)
+    native_dir = NATIVE_DIR
     native_dir.mkdir(parents=True, exist_ok=True)
-    if sys.platform == "darwin":
-        output_name = "libaxle_dynamics_native.dylib"
-        shared_flag = "-dynamiclib"
-    else:
-        output_name = "libaxle_dynamics_native.so"
-        shared_flag = "-shared"
-    output = native_dir / output_name
-    flags = [
-        "-std=c++17",
-        shared_flag,
-        "-fPIC",
-        "-Wall",
-        "-Wextra",
-        "-Werror",
-        "-fno-fast-math",
-        # The Jacobian assembly loop carries no reduction, so results are
-        # identical for any thread count; without this the pragma is ignored
-        # and the kernel simply runs single-threaded.
-        "-fopenmp",
-        f"-I{include}",
-        "-O3" if args.configuration == "Release" else "-O0",
-    ]
-    if args.configuration == "Release":
-        flags.append("-flto")
-    if args.configuration == "Debug":
-        flags.append("-g")
-    with tempfile.TemporaryDirectory(prefix="axle-native-") as temp:
-        temporary_output = Path(temp) / output_name
-        subprocess.run(
-            [compiler, *flags, str(source), "-o", str(temporary_output)],
-            cwd=repository_root,
-            check=True,
-        )
-        shutil.copy2(temporary_output, output)
-    version = subprocess.run(
-        [compiler, "--version"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.splitlines()[0]
-    metadata = {
-        "abi_version": ABI_VERSION,
-        "vehicle_abi_version": VEHICLE_ABI_VERSION,
-        "compiler": compiler,
-        "compiler_version": version,
-        "configuration": args.configuration,
-        "flags": flags,
-        "platform": platform.platform(),
-        "architecture": platform.machine(),
-        "source": "cpp/axle_dynamics/axle_kernel.cpp",
-    }
-    (native_dir / "native_build.json").write_text(
-        json.dumps(metadata, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    print(output)
+    destination = native_dir / produced.name
+    shutil.copy2(produced, destination)
+    # The metadata must sit next to the copy so the axle loader still finds it.
+    shutil.copy2(produced.with_name("native_build.json"), native_dir / "native_build.json")
+    _remove_stale_library_names(destination)
+    print(destination)
     return 0
+
+
+def _remove_stale_library_names(destination: Path) -> None:
+    """Drop the pre-rename library file if a previous build left one behind."""
+    stale = NATIVE_DIR / "axle_dynamics_native.dll"
+    if stale.exists() and stale != destination:
+        stale.unlink()
 
 
 if __name__ == "__main__":

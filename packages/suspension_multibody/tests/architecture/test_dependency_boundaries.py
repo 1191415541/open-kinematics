@@ -16,6 +16,11 @@ PACKAGE_SOURCES = {
     / "suspension_contracts"
     / "src"
     / "suspension_contracts",
+    "suspension_kernel": ROOT
+    / "packages"
+    / "suspension_kernel"
+    / "src"
+    / "suspension_kernel",
     "suspension_kinematics": ROOT
     / "packages"
     / "suspension_kinematics"
@@ -27,9 +32,22 @@ PACKAGE_SOURCES = {
     / "src"
     / "suspension_multibody",
 }
+#: Every product package that must not be imported by the package named in the
+#: key.  `suspension_kernel` is deliberately in every list: it is the shared
+#: generic core, so a dependency from it back into any product would invert the
+#: layering the epic is built on.
 FORBIDDEN_IMPORTS = {
-    "suspension_contracts": {"suspension_kinematics", "suspension_multibody"},
-    "suspension_kinematics": {"suspension_multibody"},
+    "suspension_contracts": {
+        "suspension_kernel",
+        "suspension_kinematics",
+        "suspension_multibody",
+    },
+    "suspension_kernel": {
+        "suspension_contracts",
+        "suspension_kinematics",
+        "suspension_multibody",
+    },
+    "suspension_kinematics": {"suspension_kernel", "suspension_multibody"},
     "suspension_multibody": {"suspension_kinematics"},
 }
 
@@ -53,20 +71,61 @@ def _dependencies(package: str) -> list[str]:
 
 
 def test_contract_is_the_only_shared_solver_dependency() -> None:
-    kinematics_dependencies = _dependencies("suspension_kinematics")
-    multibody_dependencies = _dependencies("suspension_multibody")
-    contract_dependency = "suspension-contracts>=0.1.0,<0.2.0"
+    """
+    Exactly one product may depend on the contract package, and no peers.
 
-    assert contract_dependency in kinematics_dependencies
-    assert contract_dependency in multibody_dependencies
-    assert not any(
-        dependency.startswith("suspension-multibody")
-        for dependency in kinematics_dependencies
+    The original assertion only checked a handful of negative cases, so it
+    claimed a uniqueness property it never tested.  This now computes the
+    actual set of inter-package dependencies and asserts its shape.
+    """
+    packages = (
+        "suspension_contracts",
+        "suspension_kernel",
+        "suspension_kinematics",
+        "suspension_multibody",
     )
-    assert not any(
-        dependency.startswith("suspension-kinematics")
-        for dependency in multibody_dependencies
+    distribution_names = {
+        "suspension_contracts": "suspension-contracts",
+        "suspension_kernel": "suspension-kernel",
+        "suspension_kinematics": "suspension-kinematics",
+        "suspension_multibody": "suspension-multibody",
+    }
+    dependency_sets = {
+        package: {
+            _distribution_name(dependency)
+            for dependency in _dependencies(package)
+            if _distribution_name(dependency) in distribution_names.values()
+        }
+        for package in packages
+    }
+
+    # The generic kernel depends on no other package in the workspace.
+    assert dependency_sets["suspension_kernel"] == set()
+    # The contract package depends on no product either.
+    assert dependency_sets["suspension_contracts"] == set()
+    # Products may take the contract and the kernel, but never each other.
+    assert "suspension-multibody" not in dependency_sets["suspension_kinematics"]
+    assert "suspension-kinematics" not in dependency_sets["suspension_multibody"]
+    # The axle product must reach the kernel: it loads the shared library
+    # through the kernel binding rather than owning the build itself.
+    assert "suspension-kernel" in dependency_sets["suspension_multibody"]
+    # Uniqueness, stated as a set equality rather than as spot checks: the only
+    # thing both products depend on is the contract package.  The kernel is
+    # consumed by the axle product alone -- it hosts the multibody solver, and
+    # the kinematics product has no C++ core.
+    shared = (
+        dependency_sets["suspension_kinematics"]
+        & dependency_sets["suspension_multibody"]
     )
+    assert shared == {"suspension-contracts"}
+    assert "suspension-kernel" not in dependency_sets["suspension_kinematics"]
+    assert "suspension-contracts" in dependency_sets["suspension_kinematics"]
+    assert "suspension-contracts" in dependency_sets["suspension_multibody"]
+
+
+def _distribution_name(requirement: str) -> str:
+    """Reduce a PEP 508 requirement string to its distribution name."""
+    return requirement.split(">=")[0].split("==")[0].split("<")[0].strip()
 
 
 def test_product_sources_do_not_import_peer_products() -> None:
@@ -106,6 +165,10 @@ print(json.dumps(sorted(
         capture_output=True,
         check=False,
         text=True,
+        # Decode explicitly: this repository's path is non-ASCII, and a locale
+        # codec raises on bytes the child prints.
+        encoding="utf-8",
+        errors="replace",
     )
 
     assert completed.returncode == 0, completed.stderr

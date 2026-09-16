@@ -82,7 +82,19 @@ from .full_vehicle_model import (
     load_adams_full_vehicle_input,
     steering_signal_from_manifest,
 )
-from .probe import AdamsProfile, discover_profile, probe_profile
+from .probe import (
+    DEFAULT_PROFILE,
+    AdamsProfile,
+    adams_database,
+    adams_executable,
+    discover_profile,
+    installation_version,
+    probe_profile,
+    producer_id,
+    resolve_adams_database,
+    resolve_adams_executable,
+    resolve_adams_home,
+)
 from .strict_c import validate_strict_c
 from .strict_k import validate_strict_k
 from .time_domain import (
@@ -171,6 +183,7 @@ __all__ = [
     "AxleMarkerBinding",
     "DynamicAxleManifest",
     "DynamicAxleManifestSettings",
+    "DEFAULT_PROFILE",
     "EngineeringTolerance",
     "HANDLING_CASES",
     "HANDLING_ADAMS_CHANNELS",
@@ -206,6 +219,13 @@ __all__ = [
     "command_time_domain_runner",
     "create_dynamic_axle_manifest",
     "discover_profile",
+    "adams_database",
+    "adams_executable",
+    "installation_version",
+    "producer_id",
+    "resolve_adams_database",
+    "resolve_adams_executable",
+    "resolve_adams_home",
     "default_vehicle_acceptance_matrix",
     "history_from_dynamic_bundle",
     "initialization_evidence_from_result",
