@@ -15,6 +15,16 @@
 
 #include "mb_tire/force_context.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+#include "mb_model/functions.hpp"
+#include "mb_tire/brush/functions.hpp"
+#include "mb_tire/fiala/functions.hpp"
+#include "mb_tire/pac2002/functions.hpp"
+#include "mb_tire_state/functions.hpp"
+
 namespace axle_kernel {
 // Writes the columns of one tire's output row that are known before the force law
 // runs: the contact state, the slip velocities and the input slips, the

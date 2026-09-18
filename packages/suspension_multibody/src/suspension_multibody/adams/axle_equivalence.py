@@ -649,12 +649,12 @@ def compare_tire_force_histories(
     reference_subset = TimeHistory(
         time=reference.time,
         channels={name: reference.channels[name] for name in names},
-        units={name: reference.units[name] for name in names},
+        units={name: reference.units[name] for name in names},  # ty: ignore[non-subscriptable]
     )
     candidate_subset = TimeHistory(
         time=candidate.time,
         channels={name: candidate.channels[name] for name in names},
-        units={name: candidate.units[name] for name in names},
+        units={name: candidate.units[name] for name in names},  # ty: ignore[non-subscriptable]
     )
     contract = acceptance or load_axle_acceptance_contract()
     _validate_history_pair(reference_subset, candidate_subset, names)
@@ -664,7 +664,7 @@ def compare_tire_force_histories(
             time,
             np.asarray(reference_subset.channels[name], dtype=float),
             np.asarray(candidate_subset.channels[name], dtype=float),
-            _unit_category(reference_subset.units[name]),
+            _unit_category(reference_subset.units[name]),  # ty: ignore[non-subscriptable]
             contract,
         )
         for name in names

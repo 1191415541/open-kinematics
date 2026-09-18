@@ -22,17 +22,8 @@
 #include "mb_base/dual.hpp"
 #include "mb_base/dual_geometry.hpp"
 #include "mb_tire/common/kinematics.hpp"
-#include "mb_base/functions.hpp"
 #include "mb_base/prelude.hpp"
 #include "mb_model/enums.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_tire/common/functions.hpp"
-#include "mb_tire/fiala/functions.hpp"
-#include "mb_tire_state/functions.hpp"
-#include "mb_base/functions.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_tire/common/functions.hpp"
-#include "mb_tire_state/functions.hpp"
 
 namespace axle_kernel {
 double fiala_parameter(const Tire& tire, int index, double fallback);

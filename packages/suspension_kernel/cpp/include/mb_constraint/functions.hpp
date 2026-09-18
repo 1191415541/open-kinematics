@@ -21,16 +21,9 @@
 #include "mb_base/dual_geometry.hpp"
 #include "mb_linalg/factorization_types.hpp"
 #include "mb_constraint/types.hpp"
-#include "mb_base/functions.hpp"
 #include "mb_base/prelude.hpp"
-#include "mb_constraint/functions.hpp"
 #include "mb_constraint/registry.hpp"
-#include "mb_linalg/functions.hpp"
 #include "mb_model/enums.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_base/functions.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_linalg/functions.hpp"
 
 namespace axle_kernel {
 double joint_coordinate_value( const Model& model, const State& state, int joint_index, int coordinate, double reference_translation, const Quat& reference_rotation );

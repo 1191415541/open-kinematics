@@ -19,14 +19,9 @@
 #include "mb_base/util.hpp"
 #include "mb_base/dual.hpp"
 #include "mb_base/dual_geometry.hpp"
-#include "mb_base/functions.hpp"
 #include "mb_base/prelude.hpp"
 #include "mb_model/enums.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_suspension/functions.hpp"
-#include "mb_vehicle/energy.hpp"
-#include "mb_base/functions.hpp"
-#include "mb_model/functions.hpp"
+#include "mb_energy/types.hpp"
 
 namespace axle_kernel {
 std::pair<double, double> bushing_curve_value_slope( const Bushing& bushing, std::size_t axis, double value );

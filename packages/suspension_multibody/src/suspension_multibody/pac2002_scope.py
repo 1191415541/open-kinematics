@@ -1,64 +1,41 @@
 """
 Native PAC2002 feature-scope validation helpers.
 
-The native kernel implements the steady-state Magic Formula and the linear
-transient model.  Every other PAC2002 feature Adams documents must fail closed:
-a tire that requests it has to be rejected, because accepting it would produce a
-result that silently omits the feature.
+The kernel exposes the steady-state Magic Formula, the linear transient model and
+the advanced transient contact-mass modes.  Every other PAC2002 feature Adams
+documents has to fail closed: a tire that requests it must be rejected, because
+accepting it would produce a result that silently omits the feature.
 
-Two enforcement layers exist here:
+*Which* features those are is a property of the kernel, so the kernel declares
+it: ``suspension_kernel_capabilities`` returns the supported USE_MODEs and the
+coefficient families the kernel refuses, and everything below is derived from
+that document.  The lists used to be copied into this module by hand, and the
+copy drifted in the direction that matters -- this file claimed the kernel never
+applies the validity-range clamps while the kernel was calling
+``pac2002_clamp_load`` on every tire step, and it still carried a stale comment
+saying USE_MODE 25 was refused after the kernel had implemented and gated it.
 
-``PAC2002_UNSUPPORTED_NATIVE_PARAMETERS`` / ``..._FEATURE_FLAGS``
-    Scalar switches and coefficients that must be zero.  These are the original
-    checks and cover the PAC-MC pressure extensions and the non-zero feature
-    flags the importer emits.
+Two things stay here because they are not properties of the kernel:
 
-``PAC2002_UNSUPPORTED_FEATURE_FAMILIES``
-    Whole coefficient families keyed by the ``.tir`` section that declares them
-    (turn-slip, advanced-transient contact mass, belt dynamics, validity
-    ranges).  These were previously invisible: the generic numeric extractor
-    copies every ``NAME = number`` pair into the coefficient dict, so a tire
-    could request belt dynamics or a contact-mass model and be solved without
-    it, with no diagnostic at all.
+``PAC2002_ADAMS_GATED_USE_MODES`` / ``PAC2002_UNGATED_USE_MODE_REASONS``
+    which modes the live Adams correlation gate can cover, and why the rest
+    cannot be covered by any maneuver the installed Adams ships.
+
+``PAC2002_NATIVE_IMPLEMENTED_FEATURES`` / ``..._NOT_IMPLEMENTED_FEATURES``
+    the human-readable coverage claim the comparison manifest publishes next to
+    the ``exact_pac2002`` label.  A permanent audit derives both from the
+    enforcement and fails when they stop matching.
 """
 
 from __future__ import annotations
 
+import functools
+import json
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
-# USE_MODE 0 is the vertical-spring-and-damper-only mode; the rest are the
-# steady-state, linear-transient and (23/24) advanced-transient contact-mass
-# modes the kernel runs exactly enough to be gated by the coefficient families
-# below.
-#
-# Deliberately still absent:
-#   21, 22 -- pure longitudinal / pure lateral advanced transient.  The contact
-#             body always has both in-plane degrees of freedom, so these modes
-#             would need a per-mode slot layout the kernel does not have.
-#   25     -- adds turn-slip and the contact body's yaw degree of freedom, which
-#             is not modelled at all (subtask D).
-PAC2002_SUPPORTED_NATIVE_USE_MODES = frozenset(
-    {0, 1, 2, 3, 4, 11, 12, 13, 14, 23, 24, 25}
-)
-
-# Which of those modes a live automated Adams correlation gate covers, and why the
-# rest cannot be covered by any maneuver the installed Adams ships.
-#
-# A steering maneuver needs both force axes to hold the vehicle, but that is not the
-# only obstacle: adding the straight-line `acceleration` case (see
-# ``STRAIGHT_LINE_CASES``) still leaves modes 0/1/11 failing Adams' *static*
-# equilibrium, with "Static equilibrium analysis has not been successful ... the
-# equation with the largest error was model.TR_Brake_System.*_wheel_omega".  The
-# same case runs to 801 samples in mode 14, so the maneuver works and the failure is
-# specific to those modes.  A single-axis USE_MODE has no route to an Adams
-# reference in this vehicle assembly.
-#
-# Claiming a mode as supported while it has no gate is a real gap in the exactness
-# claim, so it is recorded here rather than left implicit; an audit asserts that the
-# gated and accounted-for sets together cover every supported mode and do not
-# overlap.
 PAC2002_ADAMS_GATED_USE_MODES = frozenset({3, 4, 13, 14, 23, 24, 25})
 
 PAC2002_UNGATED_USE_MODE_REASONS: dict[int, str] = {
@@ -78,45 +55,6 @@ PAC2002_UNGATED_USE_MODE_REASONS: dict[int, str] = {
     12: "Fy, Mx and Mz only (transient); cannot hold the vehicle",
 }
 
-# These Adams PAC2002/PAC-MC extensions are not part of the native ABI yet.  A
-# non-zero value would otherwise be accepted by the Python schema and silently
-# dropped before the C++ parameter array is built.
-PAC2002_UNSUPPORTED_NATIVE_PARAMETERS = frozenset(
-    {
-        # Maxwell non-rolling vertical element (subtask A5, unimplemented).  The
-        # quoted ``USE_DYNAMIC_STIFFNESS`` switch has its own feature flag below;
-        # these two are unquoted numbers, so the generic extractor does copy them
-        # into the coefficient dict and they are checked here as well.
-        "DYNAMIC_STIFFNESS",
-        "DYNAMIC_DAMPING",
-    }
-)
-
-PAC2002_UNSUPPORTED_NATIVE_FEATURE_FLAGS = frozenset(
-    {
-        "PAC2002_UNSUPPORTED_BELT_DYNAMICS",
-        "PAC2002_UNSUPPORTED_CONTACT_MODEL",
-        # The Maxwell element (USE_DYNAMIC_STIFFNESS = 'YES' plus
-        # DYNAMIC_STIFFNESS/DYNAMIC_DAMPING) changes non-rolling vertical
-        # stiffness.  DYNAMIC_STIFFNESS and DYNAMIC_DAMPING are unquoted
-        # numbers, so the generic extractor reads them into the coefficient
-        # dict, but neither name is part of the PAC2002 ABI payload and the
-        # enable switch is quoted and therefore invisible to that extractor.
-        # Without this flag a tire requesting the element was accepted and
-        # silently solved without it.
-        "PAC2002_UNSUPPORTED_DYNAMIC_STIFFNESS",
-        "PAC2002_UNSUPPORTED_FE_METHOD",
-        # FITTYP selects the legacy rolling-resistance formulation, which the
-        # native kernel does not implement.  The keyword is absent from every
-        # tire in the installed Adams libraries, so it fails closed instead of
-        # silently applying the modern [ROLLING_COEFFICIENTS] equations.
-        "PAC2002_UNSUPPORTED_FITTYP",
-        "PAC2002_UNSUPPORTED_LOCAL_SOLVER",
-        "PAC2002_UNSUPPORTED_PAC_MC",
-    }
-)
-
-
 @dataclass(frozen=True)
 class Pac2002FeatureFamily:
     """
@@ -131,202 +69,6 @@ class Pac2002FeatureFamily:
     coefficients: frozenset[str]
 
 
-# The steady-state spin/parking coefficients of Eq3329-Eq3356 are consumed by the
-# kernel for USE_MODE 25, with exactly two exceptions: QBRP2 and QDTP2 appear in the
-# ABI enum but no documented factor reads them (Eq3347 gives ``DDrgamma`` from QDTP1
-# alone), so a tire that sets either one still fails closed rather than being solved
-# with a term dropped.
-_TURN_SLIP_SECOND_ORDER = frozenset({"QBRP2", "QDTP2"})
-
-# [DYNAMIC_COEFFICIENTS] and [CONTACT_COEFFICIENTS] together carry the
-# non-linear (advanced) transient contact-mass model from Adams sections
-# "Transient Behavior in PAC2002" and "PAC2002 with Belt Dynamics".
-_CONTACT_MASS = frozenset(
-    {
-        "MC",
-        "IC",
-        "KX",
-        "KY",
-        "KP",
-        "CX",
-        "CY",
-        "CP",
-        "CXZ1",
-        "CXZ2",
-        "CXX1",
-        "CYZ1",
-        "CYZ2",
-        "CYY1",
-        "PA1",
-        "PA2",
-        "EP",
-        "EP12",
-        "BF2",
-        "BP1",
-        "BP2",
-        "BP3",
-        "BP4",
-        "N_LENGTH",
-        "N_WIDTH",
-        "PAE",
-        "PB1",
-        "PB2",
-        "PB3",
-        "PBE",
-        "PCE",
-        "PLS",
-    }
-)
-
-# Subset of the contact-mass family the native kernel still cannot consume.
-# MC/KX/KY/CX/CY drive the contact patch's force balance, CXZ*/CXX*/CYZ*/CYY* scale
-# its carcass stiffness with load and slip (eqs 48-50), PA1/PA2 give the half
-# contact length of the non-linear relaxation lengths (eqs 3978, 3982-3984) and
-# IC/KP/CP are the yaw degree of freedom (eqs 3954 and 3961).  What remains is the
-# turn-slip relaxation set (EP/EP12/BF2/BP*) and the enveloping helpers
-# (N_*/PAE/PB*/PBE/PCE/PLS).  A tire that declares any of them still fails closed.
-# Subset of the contact-mass family the native kernel still cannot consume.
-# MC/KX/KY/CX/CY drive the contact patch's force balance, CXZ*/CXX*/CYZ*/CYY* scale
-# its carcass stiffness with load and slip (eqs 48-50), PA1/PA2 give the half
-# contact length of the non-linear relaxation lengths (eqs 3978, 3982-3984), IC/KP/CP
-# are the yaw degree of freedom (eqs 3954, 3961) and EP/EP12/BF2/BP1/BP2 are the
-# turn-slip relaxation set (eqs 3969-3977) the USE_MODE 25 kernel now evaluates.  What
-# remains is BP3/BP4 (the third and fourth moment relaxation factors, which no
-# documented filter uses and no installed tire declares) and the enveloping helpers
-# (N_*/PAE/PB*/PBE/PCE/PLS) of the non-point contact models.  A tire that declares
-# any of them still fails closed.
-_CONTACT_MASS_UNIMPLEMENTED = _CONTACT_MASS - frozenset(
-    {
-        "MC",
-        "KX",
-        "KY",
-        "CX",
-        "CY",
-        "CXZ1",
-        "CXZ2",
-        "CXX1",
-        "CYZ1",
-        "CYZ2",
-        "CYY1",
-        "PA1",
-        "PA2",
-        "IC",
-        "KP",
-        "CP",
-        # Eq3969-Eq3977: the four filters, their composite turn slips and the
-        # relaxation lengths they use, all evaluated in the USE_MODE 25 kernel.
-        "EP",
-        "EP12",
-        "BF2",
-        "BP1",
-        "BP2",
-    }
-)
-
-# [BELT_PARAMETERS] carries the rigid-ring belt model (rim-to-belt six degree of
-# freedom bushing) described by Adams section "PAC2002 with Belt Dynamics".
-_BELT_DYNAMICS = frozenset(
-    {
-        "QBVTH",
-        "QBVXZ",
-        "QCBGM",
-        "QCBTH",
-        "QCBXZ",
-        "QCBY",
-        "QCCFI",
-        "QCCX",
-        "QCCY",
-        "QIBXZ",
-        "QIBY",
-        "QIC",
-        "QKBGM",
-        "QKBTH",
-        "QKBXZ",
-        "QKBY",
-        "QKCFI",
-        "QKCX",
-        "QKCY",
-        "QMB",
-        "QMC",
-        "TYRE_MASS",
-    }
-)
-
-# Validity ranges are declared in the tire file and Adams clamps the inputs to
-# them.  The native kernel copies these into the ABI payload but never applies
-# them, so a request that relies on clamping is silently unclamped.
-_VALIDITY_RANGES = frozenset(
-    {
-        "KPUMIN",
-        "KPUMAX",
-        "ALPMIN",
-        "ALPMAX",
-        "CAMMIN",
-        "CAMMAX",
-        "FZMIN",
-        "FZMAX",
-    }
-)
-
-PAC2002_UNSUPPORTED_FEATURE_FAMILIES: tuple[Pac2002FeatureFamily, ...] = (
-    Pac2002FeatureFamily(
-        name="turn_slip_second_order_coefficients",
-        reason="unsupported second-order turn-slip coefficients",
-        coefficients=_TURN_SLIP_SECOND_ORDER,
-    ),
-    Pac2002FeatureFamily(
-        name="contact_mass_advanced_transient",
-        reason="unsupported non-linear transient contact-mass coefficients",
-        coefficients=_CONTACT_MASS_UNIMPLEMENTED,
-    ),
-    Pac2002FeatureFamily(
-        name="belt_dynamics",
-        reason="unsupported belt dynamics coefficients",
-        coefficients=_BELT_DYNAMICS,
-    ),
-)
-
-# ``_VALIDITY_RANGES`` is deliberately NOT part of the fail-closed check above.
-# Every tire property file declares [LONG_SLIP_RANGE], [SLIP_ANGLE_RANGE],
-# [INCLINATION_ANGLE_RANGE] and [VERTICAL_FORCE_RANGE], so treating their
-# presence as "the feature was requested" rejects every valid tire, including
-# the reference case.  Declaring a range is not requesting a feature.
-#
-# The gap is real but different in kind: the kernel copies these bounds into the
-# ABI payload and never applies them, so inputs outside the declared range are
-# not clamped the way Adams clamps them.  For a simulation whose inputs stay
-# inside the declared ranges — including the reference case — behaviour matches
-# Adams.  Closing this properly means implementing the clamp in the kernel, which
-# is tracked as its own subtask rather than approximated by a rejection.
-UNCLAMPED_VALIDITY_RANGE_COEFFICIENTS = _VALIDITY_RANGES
-
-_FAMILY_COEFFICIENTS = frozenset(
-    name
-    for family in PAC2002_UNSUPPORTED_FEATURE_FAMILIES
-    for name in family.coefficients
-)
-
-# Every coefficient that must be zero for a tire to run natively.
-PAC2002_MUST_BE_ZERO_COEFFICIENTS = (
-    PAC2002_UNSUPPORTED_NATIVE_PARAMETERS | _FAMILY_COEFFICIENTS
-)
-
-# ---------------------------------------------------------------------------
-# Declared native coverage
-# ---------------------------------------------------------------------------
-#
-# The comparison manifest publishes these two tuples as
-# ``native_tire_model_scope``.  They used to be hand-written inside the
-# manifest builder and had drifted: they still claimed only modes 1-4/11-14 were
-# gated and did not mention the validity-range clamp or USE_MODE 0, so the
-# ``exact_pac2002`` label advertised a wider scope than the code had and a
-# narrower one than it actually had.
-#
-# Keeping the declaration next to the enforcement lets a permanent audit derive
-# both from one source.  ``test_pac2002_native_scope_audit.py`` asserts that every
-# fail-closed family is declared below, that the mode list matches
-# ``PAC2002_SUPPORTED_NATIVE_USE_MODES``, and that the manifest republishes these
-# exact tuples.
 PAC2002_NATIVE_IMPLEMENTED_FEATURES: tuple[str, ...] = (
     "steady_state_pure_and_combined_slip_modes_1_4",
     "selected_combined_slip_coefficients",
@@ -424,6 +166,87 @@ PAC2002_PARAMETER_DECLARED_GAP: dict[str, str] = {
 }
 
 
+@functools.lru_cache(maxsize=1)
+def _kernel_scope() -> tuple[
+    frozenset[int], frozenset[str], frozenset[str], tuple[Pac2002FeatureFamily, ...]
+]:
+    """
+    Return the kernel's capability declaration.
+
+    Read from the shared library rather than carried here, and read lazily: the
+    authoring schemas import this module, and there is no reason for them to need
+    a built kernel until a tire actually reaches the scope check.
+    """
+    import ctypes
+
+    from .axle_dynamics.native import _load_library
+
+    reader = _load_library().suspension_kernel_capabilities
+    reader.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    reader.restype = ctypes.c_int32
+    needed = ctypes.c_size_t(0)
+    status = int(reader(None, 0, ctypes.byref(needed)))
+    if status != 11:
+        raise RuntimeError(
+            f"kernel capability probe returned {status}; expected the size request"
+        )
+    buffer = ctypes.create_string_buffer(int(needed.value))
+    status = int(reader(buffer, int(needed.value), ctypes.byref(needed)))
+    if status != 0:
+        raise RuntimeError(f"kernel capability read returned {status}")
+    document = json.loads(buffer.value.decode("utf-8"))
+    families = tuple(
+        Pac2002FeatureFamily(
+            name=str(entry["name"]),
+            reason=str(entry["reason"]),
+            coefficients=frozenset(str(value) for value in entry["coefficients"]),
+        )
+        for entry in document["pac2002_refused_families"]
+    )
+    return (
+        frozenset(int(value) for value in document["pac2002_supported_use_modes"]),
+        frozenset(str(value) for value in document["pac2002_refused_parameters"]),
+        frozenset(str(value) for value in document["pac2002_refused_feature_flags"]),
+        families,
+    )
+
+
+#: The constants the kernel owns.  They are resolved on first access rather than
+#: at import, so importing the authoring schemas does not load the library.
+_KERNEL_SOURCED = (
+    "PAC2002_SUPPORTED_NATIVE_USE_MODES",
+    "PAC2002_UNSUPPORTED_NATIVE_PARAMETERS",
+    "PAC2002_UNSUPPORTED_NATIVE_FEATURE_FLAGS",
+    "PAC2002_UNSUPPORTED_FEATURE_FAMILIES",
+    "PAC2002_MUST_BE_ZERO_COEFFICIENTS",
+)
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve the kernel-sourced constants on first access."""
+    if name not in _KERNEL_SOURCED:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    modes, parameters, flags, families = _kernel_scope()
+    if name == "PAC2002_SUPPORTED_NATIVE_USE_MODES":
+        value: Any = modes
+    elif name == "PAC2002_UNSUPPORTED_NATIVE_PARAMETERS":
+        value = parameters
+    elif name == "PAC2002_UNSUPPORTED_NATIVE_FEATURE_FLAGS":
+        value = flags
+    elif name == "PAC2002_UNSUPPORTED_FEATURE_FAMILIES":
+        value = families
+    else:
+        value = parameters | frozenset(
+            coefficient for family in families for coefficient in family.coefficients
+        )
+    globals()[name] = value
+    return value
+
+
 def pac2002_native_use_mode(coefficients: Mapping[str, float]) -> int:
     """Return the Adams USE_MODE magnitude used for native scope checks."""
     raw = abs(float(coefficients.get("USE_MODE", 14.0)))
@@ -442,27 +265,32 @@ def pac2002_unsupported_native_reasons(
     coefficients: Mapping[str, float],
 ) -> tuple[str, ...]:
     """List native PAC2002 blockers that must not be silently approximated."""
+    # The scope comes from the kernel, so this can only refuse what the kernel
+    # itself says it cannot run.  A bare module-level name would not do: the
+    # kernel-sourced constants resolve through `__getattr__`, which a global
+    # lookup inside a function does not consult.
+    supported_modes, refused_parameters, refused_flags, refused_families = _kernel_scope()
     reasons: list[str] = []
 
     use_mode = pac2002_native_use_mode(coefficients)
-    if use_mode not in PAC2002_SUPPORTED_NATIVE_USE_MODES:
+    if use_mode not in supported_modes:
         reasons.append(f"unsupported USE_MODE {use_mode}")
 
-    for name in sorted(PAC2002_UNSUPPORTED_NATIVE_PARAMETERS):
+    for name in sorted(refused_parameters):
         value = float(coefficients.get(name, 0.0))
         if not math.isfinite(value):
             reasons.append(f"non-finite unsupported parameter {name}")
         elif abs(value) > 1.0e-12:
             reasons.append(f"unsupported parameter {name}")
 
-    for name in sorted(PAC2002_UNSUPPORTED_NATIVE_FEATURE_FLAGS):
+    for name in sorted(refused_flags):
         value = float(coefficients.get(name, 0.0))
         if not math.isfinite(value):
             reasons.append(f"non-finite unsupported feature flag {name}")
         elif abs(value) > 1.0e-12:
             reasons.append(name.replace("PAC2002_UNSUPPORTED_", "unsupported ").lower())
 
-    for family in PAC2002_UNSUPPORTED_FEATURE_FAMILIES:
+    for family in refused_families:
         requested = [
             name
             for name in sorted(family.coefficients)
@@ -472,7 +300,6 @@ def pac2002_unsupported_native_reasons(
             reasons.append(f"{family.reason} ({', '.join(requested)})")
 
     return tuple(reasons)
-
 
 def validate_pac2002_native_scope(coefficients: Mapping[str, float]) -> None:
     """Raise if coefficients request Adams PAC2002 features native cannot run exactly."""

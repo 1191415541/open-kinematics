@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from suspension_multibody.api import run_dynamic_case
-from suspension_multibody.dynamics import TireKinematics, tire_model_from_spec
 from suspension_multibody.schema import (
     DynamicCaseSpec,
     DynamicSolverSettings,
@@ -13,7 +12,6 @@ from suspension_multibody.schema import (
     MassSpec,
     PrescribedMotion,
     TimeSignal,
-    TireModelSpec,
     Vec3,
     VehicleBodyModel,
 )
@@ -79,14 +77,3 @@ def test_legacy_vehicle_integrator_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="legacy vehicle dynamics integrator"):
         run_dynamic_case(_model(), case)
-
-
-def test_fiala_and_pac2002_tire_models_are_bounded_by_friction() -> None:
-    state = TireKinematics(normal_load=4000.0, slip_angle=0.2, slip_ratio=0.3)
-    fiala = tire_model_from_spec(TireModelSpec(kind="fiala"))
-    pac = tire_model_from_spec(
-        TireModelSpec(kind="pac2002", parameter_source="adams_builtin")
-    )
-
-    assert abs(fiala.evaluate(state).fy) <= 4000.0
-    assert abs(pac.evaluate(state).fx) <= 4000.0

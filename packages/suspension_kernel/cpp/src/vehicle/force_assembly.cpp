@@ -6,6 +6,12 @@
 
 #include "mb_tire/force_context.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_suspension/functions.hpp"
+#include "mb_tire/functions.hpp"
+
 namespace axle_kernel {
 
 void external_force_vector(

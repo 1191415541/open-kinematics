@@ -9,6 +9,12 @@
 
 #include "mb_tire/common/functions.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+#include "mb_model/functions.hpp"
+
 namespace axle_kernel {
 
 DirectionalScalar tire_contact_compression_directional(

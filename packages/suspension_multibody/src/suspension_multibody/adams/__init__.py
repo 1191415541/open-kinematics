@@ -125,12 +125,6 @@ from .vehicle_acceptance import (
     default_vehicle_acceptance_matrix,
     validate_vehicle_acceptance_matrix,
 )
-from .vehicle_correlation import (
-    VehicleCorrelationResult,
-    validate_handling_correlation,
-    validate_handling_correlation_matrix,
-    validate_ride_correlation,
-)
 from .vehicle_handling import (
     HANDLING_ADAMS_CHANNELS,
     HandlingExecutionResult,
@@ -256,10 +250,6 @@ __all__ = [
     "validate_vehicle_kc_time_domain",
     "validate_handling_execution",
     "validate_handling_execution_matrix",
-    "VehicleCorrelationResult",
-    "validate_handling_correlation",
-    "validate_handling_correlation_matrix",
-    "validate_ride_correlation",
     "validate_ride_execution",
     "full_vehicle_time_history",
     "AdamsBushingAssembly",

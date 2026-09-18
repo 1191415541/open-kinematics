@@ -21,17 +21,8 @@
 #include "mb_base/dual.hpp"
 #include "mb_base/dual_geometry.hpp"
 #include "mb_tire/common/kinematics.hpp"
-#include "mb_base/functions.hpp"
 #include "mb_base/prelude.hpp"
 #include "mb_model/enums.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_tire/brush/functions.hpp"
-#include "mb_tire/common/functions.hpp"
-#include "mb_tire_state/functions.hpp"
-#include "mb_base/functions.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_tire/common/functions.hpp"
-#include "mb_tire_state/functions.hpp"
 
 namespace axle_kernel {
 void project_brush_state( const Tire& tire, double normal_force, double sx, double sy, double& projected_sx, double& projected_sy, double& trial_utilization );

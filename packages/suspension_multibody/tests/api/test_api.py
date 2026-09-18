@@ -68,7 +68,14 @@ def test_run_case_writes_structured_output(tmp_path: Path) -> None:
     bundle = run_case(_model(), CaseSpec(name="demo", mode="K"), tmp_path)
     assert bundle.manifest.state_count == 1
     assert (tmp_path / "manifest.json").is_file()
-    assert bundle.states[0].converged
+    state = bundle.states[0]
+    assert state.converged
+    # The residuals are the kernel's own last-sample values, so the neutral case
+    # -- whose target is the separation the model was assembled with -- sits on
+    # the solution rather than reporting a placeholder.
+    assert state.constraint_residual == 0.0
+    assert state.force_residual == 0.0
+    assert state.moment_residual == 0.0
 
 
 def test_run_case_expands_displacement_controls_and_checkpoints(tmp_path: Path) -> None:
@@ -91,6 +98,12 @@ def test_run_case_expands_displacement_controls_and_checkpoints(tmp_path: Path) 
         "grid-0003",
     ]
     assert checkpoint.is_file()
+    # A moved case reports the residual the kernel converged to: the position
+    # column is metres there and millimetres here, so the bound is the kernel's
+    # own 1e-8 m tolerance expressed in the reporting unit.
+    for state in bundle.states:
+        assert 0.0 <= state.constraint_residual < 1e-5
+        assert state.force_residual >= 0.0
 
 
 def test_run_case_c_retains_physical_response_and_element_loads() -> None:

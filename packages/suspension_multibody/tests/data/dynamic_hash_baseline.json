@@ -1,0 +1,215 @@
+{
+  "acceptance_exit_code": 1,
+  "acceptance_statuses": {
+    "braking": "PASSED",
+    "combined_load": "FAILED",
+    "driving": "PASSED",
+    "in_phase_road": "FAILED",
+    "large_amplitude_high_frequency": "FAILED",
+    "lateral_or_steering": "PASSED",
+    "opposite_phase_road": "FAILED",
+    "road_pulse": "FAILED",
+    "road_sine": "FAILED",
+    "road_step_finite_rise": "FAILED",
+    "single_wheel_road": "FAILED",
+    "static_equilibrium": "PASSED",
+    "tire_liftoff_and_recontact": "FAILED"
+  },
+  "artifact_count": 26,
+  "combined_sha256": "e7407656731ed556efc28fb89d8fc69881725b3bfb2f39066eb898986389d48e",
+  "entries": [
+    {
+      "arrays_npz_sha256": "f382fc0fbefe113570b4618b1874846de2784352278c526546a7be90f8a896fe",
+      "artifact": "braking/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "8646fd5dc06d59a412fcf3c4eed931b5c463433204c40297ca70c878d484b50a",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "c476a90b776f84322a5570109ee2779bc8560408cd3520b91c3dac23d3d89bc6",
+      "artifact": "braking/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "f8dddf09d396fcd1f6758546555f476b2d1281cfe4a029716f487346e4bf2e7e",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "772f357ab5de89462ca5baa6c4cc0268efe8e137d7350aea7ca0b8255e41b501",
+      "artifact": "combined_load/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "57972fdab4cbc398c375b200cf37b1b3354e7bf0ccc7bce94a01048ffd58db79",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "f5d6f2256243b42f30fb0550aba33649bec940e31c75331cc63f6207b138009a",
+      "artifact": "combined_load/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "551d169ec5c45634811b6f882d7542e213c28991536b75d258d47bd263ff8a11",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "cf1f880b6f6fffbe12ab320743ed2312fbf5f9e3bfd6f8f329b55541b65d0e19",
+      "artifact": "driving/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "ff9edd3b9fa2771a3536310ee9ad402443b0991fcc83ae10c80ec8156cb87eb9",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "3dbea1e905bd9a4e44f690ea5aa754966765c5167b04b48fcf65fa6e754f55f1",
+      "artifact": "driving/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "a2339c4e5f936fef2ee87a4b7a0e115ba4626465e09a3abe57de98f113dd9891",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "f53d1bfe05f6f5c7a01a6155f0b6f6bba22f25d83cf6e688d37e1fdd9b9ae680",
+      "artifact": "in_phase_road/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "e30e5c7efb276ad34d71fc7f96afd9e3c23ebff4653adb4de4c6c92e601f4f85",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "b347c0351d36fa4c3d641c9950173ec5654539d2e6a64ba8374cfd2bf4a1756e",
+      "artifact": "in_phase_road/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "914e2c9cfd3c5865404abf48ae90866e9dfaa53e352019431afd9bdd613e4c6c",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "c5ba6fbb33b839fd1b22429f249b73f4b584555eedd1e453e72594492e0c14ec",
+      "artifact": "large_amplitude_high_frequency/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "c66c67207edbde3e61e15ee472e81f4cc93511894a0760eef5401092e518773b",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "98fa2ba17cc899707e14f8d8f90db823da969224c0bc27c239c8dc3fcb54cfa0",
+      "artifact": "large_amplitude_high_frequency/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "19e0d3a35ef456853b8d11aae4976ed3fc2f270e9ae42f644a2be4b9fb53350e",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "f5f40b3c5fa7df4fd1721a3957f00e0c79b7de6985486a00fda51fb029b1d47a",
+      "artifact": "lateral_or_steering/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "810be98ffeb8cdfeb1b14dc7404d7bb68749ec136ad0ac04581cbcfe720ea9d9",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "8bbd8e442c15ba420d753521b064adb826f4dabe4b834e232b50fd7a21008e14",
+      "artifact": "lateral_or_steering/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "70f741374cf82df0dbfbf8c179194be5efbf0454cbc7715c7fe651e5fe83eae6",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "f731971acfc51e07a5d9926b118cceb3f797dca9a0948c8b7bbde3ebbcfb6bcd",
+      "artifact": "opposite_phase_road/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "7cd09e4839a969ac685f9b565b49ed92c56f2a3078d031859d02e40c0157de92",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "d7fc6eadc32aca4e9188165c3698277627bc3eea7b40ecc25d6b1cd8a2a3cfcf",
+      "artifact": "opposite_phase_road/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "27c520d09daaf882d065eaea2d8565e2bd3fdf47e00cbe76f893614e02d53111",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "cd4eaed12e2a347376b12c2a86b819d07905942269c46461dc72c1df044abf51",
+      "artifact": "road_pulse/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "67072890fb224efeec06f872907d93cc48b67d2020501697e10500bbe86e7bee",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "05dd6d1f8073f86c1b3d08a43de25e41ffc1b610fc20a625efa1b0f5a5575b2d",
+      "artifact": "road_pulse/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "c01b375a05b683bdb8652d46074de9a8d6aa014c7c35d8691d512a8bbca03fb3",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "6cfd5904b262f9f835dffee4c22aceec28f63f25e97163dd87b21eb8eddd8a31",
+      "artifact": "road_sine/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "eee8de925086963e1b90f222018c61c027234421d60e3d4a7004c499d8753d98",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "68c08990b82b48d74f5ecb0616c7208f9677e755add0435006cb097f582efaf7",
+      "artifact": "road_sine/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "164907c6c820d0c988cd270020773ff4e2ac0780e9a87d98809383c58a3c5716",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "293052ebddc00a0f9a6b7cc2f9e68934dfd7a5eaaa67a11f0c1b8576e341ee29",
+      "artifact": "road_step_finite_rise/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "d3e6b64a46110c878a9716a78e38e3b25126b0eae5a258b1caa92c401748b3d9",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "2de0d04fc9d3a8ccb71594d2bcf72f3d2d539b2ffebfad50856fece00fbc68cb",
+      "artifact": "road_step_finite_rise/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "5d14f5873efc6a70fafe98aaa424c7443ef73c5ea693d08ac412c3701e845542",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "8569e3b7abd4995baaefa3acb53c5607a94887f4cd6a042c53bb4ec020f5da83",
+      "artifact": "single_wheel_road/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "79f6374bbff071cc08cacf3eca17864e6efbd392320f5ffb115fa0aec11ea784",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "f19283dc22342425bb77a143fb47bbb0f044f9054ce7626ee603892375a5fd58",
+      "artifact": "single_wheel_road/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "452f2106b9496906a72a374da7e66be9dddc711732af2f71ebaec5657077e50c",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "dea187e4c271d272edaded3e125891ace2d4cf5bf6f35d1af817c8b9d20a6ced",
+      "artifact": "static_equilibrium/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "97311364093adc2080c5c858064c2493d0e9e673167ab7fcaab7c42665b96c32",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "500e14bc7b4a9548d229d86827e7c23bf6dd6aef12edf21acb95f1cf18863c24",
+      "artifact": "static_equilibrium/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "bfeada708de569b42de30ce34027f36be86ce0c80b76006066a7400199dd9fff",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "4688a2e4ab58c6f35f19441edb07ebc65c0945762896df35557df6c88fee9482",
+      "artifact": "tire_liftoff_and_recontact/native/native_refined_result",
+      "completed_samples": null,
+      "manifest_sha256": "dbf2485f1844d079503f4a1318a65e3cd8dab43ef078f4a0b8de63ee6ad51594",
+      "status": "success"
+    },
+    {
+      "arrays_npz_sha256": "79ca1e0174d39178d9b083101bc5927cab83b1ef8e518e56e0612d82c14d861c",
+      "artifact": "tire_liftoff_and_recontact/native/native_result",
+      "completed_samples": null,
+      "manifest_sha256": "c99b0a94d2df4517178c86999e5e48071dcbaad9cfe70b941f5fd1825f9537fe",
+      "status": "success"
+    }
+  ],
+  "failed_cases": [
+    "combined_load",
+    "in_phase_road",
+    "large_amplitude_high_frequency",
+    "opposite_phase_road",
+    "road_pulse",
+    "road_sine",
+    "road_step_finite_rise",
+    "single_wheel_road",
+    "tire_liftoff_and_recontact"
+  ]
+}

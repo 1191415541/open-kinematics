@@ -6,14 +6,20 @@
 //
 // It deliberately does **not** re-implement the solver.  `run_model` in
 // `kernel_abi.cpp` already accepts a caller-built `Model` (its `model_override`
-// parameter, which `vehicle_run` uses the same way), so the core path builds the
-// model and then hands it over.  Writing a second integration and output path
+// parameter, which the contract entry point uses the same way), so the core path
+// builds the model and then hands it over.  Writing a second integration and output path
 // would mean two copies of the tested numerics, which is the opposite of what
 // this ABI is for.
 
 #include "core_abi.hpp"
 
 #include "abi/functions.hpp"
+
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+#include "mb_model/functions.hpp"
 
 namespace axle_kernel {
 

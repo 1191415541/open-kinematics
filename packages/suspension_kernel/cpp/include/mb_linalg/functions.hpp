@@ -19,10 +19,7 @@
 #include "mb_base/dual.hpp"
 #include "mb_base/dual_geometry.hpp"
 #include "mb_linalg/factorization_types.hpp"
-#include "mb_base/functions.hpp"
 #include "mb_base/prelude.hpp"
-#include "mb_linalg/functions.hpp"
-#include "mb_base/functions.hpp"
 
 namespace axle_kernel {
 bool solve_linear(std::vector<double> A, std::vector<double> b, std::vector<double>& x);

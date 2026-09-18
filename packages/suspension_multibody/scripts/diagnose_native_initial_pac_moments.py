@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from run_full_native_three_model_comparison import _native_case
+from run_full_native_three_model_comparison import (  # ty: ignore[unresolved-import]
+    _native_case,
+)
 
 from suspension_multibody.adams import (
     adams_contact_patch_plane_height_m,

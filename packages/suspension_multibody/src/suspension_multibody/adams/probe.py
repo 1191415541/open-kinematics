@@ -187,7 +187,7 @@ def discover_profile(
             message=f"unknown Adams profile {name!r}",
         )
 
-    root = resolve_adams_home(home, version=requested)
+    root = resolve_adams_home(home, version=requested)  # ty: ignore[invalid-argument-type]
     if root is None:
         label = f" {requested}" if requested is not None else ""
         return _unavailable(name, f"Adams/Car{label} installation was not found")

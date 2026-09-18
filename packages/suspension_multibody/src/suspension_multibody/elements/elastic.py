@@ -200,8 +200,8 @@ def _akima_integral(
             total += _integrate_akima_segment(
                 points[index - 1, 1],
                 points[index, 1],
-                nodal_slopes[index - 1],
-                nodal_slopes[index],
+                nodal_slopes[index - 1],  # ty: ignore[invalid-argument-type]
+                nodal_slopes[index],  # ty: ignore[invalid-argument-type]
                 span,
                 (left - points[index - 1, 0]) / span,
                 (right - points[index - 1, 0]) / span,

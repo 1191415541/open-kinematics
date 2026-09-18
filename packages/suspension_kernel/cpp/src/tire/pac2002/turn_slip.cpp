@@ -4,6 +4,11 @@
 
 #include "mb_tire/pac2002/functions.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_tire_state/functions.hpp"
+
 namespace axle_kernel {
 
 Pac2002TurnSlip pac2002_state_turn_slip(

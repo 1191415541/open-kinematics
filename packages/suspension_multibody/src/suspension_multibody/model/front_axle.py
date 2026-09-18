@@ -277,19 +277,19 @@ def _explicit_constraint(
         "name": spec.name,
     }
     if spec.kind == "spherical":
-        return BallJoint(**common)
+        return BallJoint(**common)  # ty: ignore[missing-argument]
     if spec.kind == "fixed":
-        return WeldJoint(**common)
+        return WeldJoint(**common)  # ty: ignore[missing-argument]
     if spec.kind == "revolute":
-        return RevoluteJoint(**common, axis_a=axis_a, axis_b=axis_b)
+        return RevoluteJoint(**common, axis_a=axis_a, axis_b=axis_b)  # ty: ignore[missing-argument]
     if spec.kind == "prismatic":
-        return PrismaticJoint(**common, axis_a=axis_a, axis_b=axis_b)
+        return PrismaticJoint(**common, axis_a=axis_a, axis_b=axis_b)  # ty: ignore[missing-argument]
     if spec.kind == "universal":
-        return UniversalJoint(**common, axis_a=axis_a, axis_b=axis_b)
+        return UniversalJoint(**common, axis_a=axis_a, axis_b=axis_b)  # ty: ignore[missing-argument]
     if spec.kind == "constant_velocity":
         secondary_a = bodies[spec.body_a].pose.rotation.T @ spec.axis_a_secondary.as_array()
         secondary_b = bodies[spec.body_b].pose.rotation.T @ spec.axis_b_secondary.as_array()
-        return ConstantVelocityJoint(
+        return ConstantVelocityJoint(  # ty: ignore[missing-argument]
             **common,
             axis_a=axis_a,
             axis_a_secondary=secondary_a,
@@ -298,9 +298,9 @@ def _explicit_constraint(
             angle_target=spec.constant_velocity_angle_target,
         )
     if spec.kind == "cylindrical":
-        return CylindricalJoint(**common, axis_a=axis_a, axis_b=axis_b)
+        return CylindricalJoint(**common, axis_a=axis_a, axis_b=axis_b)  # ty: ignore[missing-argument]
     if spec.kind == "inplane":
-        return InPlaneJoint(**common, axis_a=axis_a)
+        return InPlaneJoint(**common, axis_a=axis_a)  # ty: ignore[missing-argument]
     raise ValueError(f"unsupported explicit ideal joint kind {spec.kind!r}")
 
 

@@ -5,8 +5,8 @@ These cover the two things K1 has to get right independently of any physics:
 
 * the loader's failure modes are typed and explicit (missing library, missing
   symbol, ABI mismatch), instead of surfacing as bare ``AttributeError``;
-* the CMake-built shared library really exports the four existing C ABI symbols
-  and reports the ABI versions the axle product expects at K1.
+* the CMake-built shared library exports the contract entry point and reports
+  the ABI versions the axle product expects at K1.
 """
 
 from __future__ import annotations
@@ -30,12 +30,11 @@ from suspension_kernel import (
 )
 from suspension_kernel.binding import build as build_module
 
-#: The four symbols the pre-existing C ABI exports.  K1 must not change this set.
-EXISTING_SYMBOLS = (
-    "axle_kernel_abi_version",
-    "axle_run",
-    "vehicle_kernel_abi_version",
-    "vehicle_run",
+#: The one public run surface.  Version symbols are checked separately.
+CONTRACT_SYMBOLS = (
+    "suspension_kernel_run",
+    "suspension_kernel_contract_version",
+    "suspension_kernel_capabilities",
 )
 
 EXPECTED_ABI = 15
@@ -101,13 +100,13 @@ def test_abi_mismatch_is_reported_with_both_versions(tmp_path: Path) -> None:
     assert captured.value.expected == EXPECTED_ABI + 1
 
 
-def test_existing_c_abi_symbols_are_all_exported() -> None:
+def test_contract_entry_symbols_are_all_exported() -> None:
     library = load_kernel_library(
         abi_symbols={
             "axle_kernel_abi_version": EXPECTED_ABI,
             "vehicle_kernel_abi_version": EXPECTED_VEHICLE_ABI,
         },
-        required_symbols=EXISTING_SYMBOLS,
+        required_symbols=CONTRACT_SYMBOLS,
     )
     assert library.identity.abi_versions == {
         "axle_kernel_abi_version": EXPECTED_ABI,
@@ -318,8 +317,10 @@ def test_a_library_without_the_kernel_symbols_is_refused_by_name(
         load_kernel_library(required_symbols=("mb_core_run",), directory=stub_dir)
     assert captured.value.symbol == "mb_core_run"
     with pytest.raises(KernelSymbolMissingError) as captured:
-        load_kernel_library(required_symbols=("axle_run",), directory=stub_dir)
-    assert captured.value.symbol == "axle_run"
+        load_kernel_library(
+            required_symbols=("suspension_kernel_run",), directory=stub_dir
+        )
+    assert captured.value.symbol == "suspension_kernel_run"
 
 
 def test_library_handle_is_a_cdll() -> None:

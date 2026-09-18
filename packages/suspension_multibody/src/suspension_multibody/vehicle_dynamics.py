@@ -4,21 +4,17 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from . import __version__
-from .axle_dynamics.native import (
-    _run_native,
-    _VehicleRoadBuffers,
-    _VehicleSteeringBuffers,
-)
 from .axle_dynamics.result import AxleDynamicsResult
 from .axle_dynamics.schema import (
     AxleAerodynamicDrag,
+    AxleAntiRollBar,
     AxleBody,
     AxleBushing,
     AxleCoordinateCoupler,
@@ -73,6 +69,40 @@ _ROAD_KIND = {
 
 
 @dataclass(frozen=True)
+class _VehicleSteeringBuffers:
+    """Per-actuator steering geometry and per-sample targets."""
+
+    names: tuple[str, ...]
+    actuator_type: np.ndarray
+    body: np.ndarray
+    reaction_body: np.ndarray
+    point_local: np.ndarray
+    reaction_point_local: np.ndarray
+    axis_local: np.ndarray
+    reference_quaternion: np.ndarray
+    target: np.ndarray
+    target_rate: np.ndarray
+    stiffness: np.ndarray
+    damping: np.ndarray
+    output: np.ndarray
+
+
+@dataclass(frozen=True)
+class _VehicleRoadBuffers:
+    """The road profile a vehicle case declares."""
+
+    kind: int
+    origin_x: float
+    origin_z: float
+    amplitude: float
+    wavelength: float
+    phase: float
+    bump_start: float
+    bump_length: float
+    corner_scale: np.ndarray
+
+
+@dataclass(frozen=True)
 class _NativeVehicleModel:
     """允许整车底盘自由运动的 native model 视图."""
 
@@ -82,7 +112,7 @@ class _NativeVehicleModel:
     coordinate_couplers: tuple[AxleCoordinateCoupler, ...]
     springs: tuple[AxleSpringDamper, ...]
     bushings: tuple[AxleBushing, ...]
-    anti_roll_bars: tuple[object, ...]
+    anti_roll_bars: tuple[AxleAntiRollBar, ...]
     tires: tuple[AxleTire, ...]
     aerodynamic_drags: tuple[AxleAerodynamicDrag, ...]
     gravity_m_per_s2: tuple[float, float, float]
@@ -91,6 +121,39 @@ class _NativeVehicleModel:
     # carries the field so the driven-coordinate machinery has one model shape to
     # work with on both entry points.
     driven_coordinates: tuple[AxleDrivenCoordinate, ...] = ()
+
+
+@dataclass(frozen=True)
+class _PreparedVehicleRun:
+    """
+    Everything a native vehicle run needs, before anything is marshalled.
+
+    The setup is the same whether the run goes through the ctypes structures or
+    through contract documents, so it lives in one place and the two boundaries
+    differ only in how they consume it.  Keeping it here rather than in the
+    contract layer is what stops the two from drifting: there is one assembly,
+    one steering buffer, one road.
+    """
+
+    native_model: _NativeVehicleModel
+    axle_case: AxleDynamicsCase
+    steering: _VehicleSteeringBuffers
+    road: _VehicleRoadBuffers
+    road_height: dict[str, tuple[float, ...]]
+    road_velocity: dict[str, tuple[float, ...]]
+    wheel_torque: dict[str, tuple[float, ...]]
+    brake_torque: dict[str, tuple[float, ...]]
+    static_rotation_gauges: tuple[tuple[str, tuple[float, float, float]], ...]
+    static_gauge_body: str | None
+    static_gauge_dof_mask: int
+    trim_then_release: bool
+    initial_state_angle_tolerance: float
+    solver: AxleSolverSettings
+    times: np.ndarray
+    body_names: tuple[str, ...]
+    #: The assembly the native model was built from.  A case that prescribes
+    #: driven coordinates needs the attachment points, and they live here.
+    assembly: object
 
 
 @dataclass(frozen=True)
@@ -193,10 +256,10 @@ class VehicleDynamicsResult:
         return self.axle.bushing_state(bushing)
 
 
-def run_vehicle_dynamics(
+def prepare_vehicle_run(
     model: VehicleModel, case: VehicleDynamicCase
-) -> VehicleDynamicsResult:
-    """运行一个真实前后悬架、车身和轮端的 native 整车动力学算例."""
+) -> _PreparedVehicleRun:
+    """Assemble everything a native vehicle run needs, without running it."""
     if case.vehicle is not model and case.vehicle.model_dump() != model.model_dump():
         raise ValueError("case.vehicle must describe the supplied VehicleModel")
     length_scale = _length_scale(model.units)
@@ -228,6 +291,10 @@ def run_vehicle_dynamics(
     solver = _native_solver_settings(case.solver, case.static_equilibrium, length_scale)
     springs, bushings = _build_elements(assembly, body_frames, length_scale)
     static_rotation_gauges = _build_static_rotation_gauges(model, assembly)
+    gauge_active = (
+        _uses_horizontal_static_gauge(case, road)
+        and not assembly.bodies[model.chassis.name].fixed
+    )
     native_model = _NativeVehicleModel(
         name=model.name,
         bodies=body_state,
@@ -259,38 +326,110 @@ def run_vehicle_dynamics(
         wheel_torque_n_m=wheel_torque,
         solver=solver,
     )
-    native_run = _run_native(
-        native_model,
-        axle_case,
+    return _PreparedVehicleRun(
+        native_model=native_model,
+        axle_case=axle_case,
         steering=steering,
         road=road,
-        brake_torque=brake_torque,
-        static_gauge_body=(
-            model.chassis.name
-            if _uses_horizontal_static_gauge(case, road)
-            and not assembly.bodies[model.chassis.name].fixed
-            else None
-        ),
-        static_gauge_dof_mask=(
-            (1 << 0) | (1 << 1) | (1 << 5)
-            if _uses_horizontal_static_gauge(case, road)
-            and not assembly.bodies[model.chassis.name].fixed
-            else 0
-        ),
-        static_trim_then_release=(
+        road_height=road_height,
+        road_velocity=road_velocity,
+        wheel_torque=wheel_torque,
+        brake_torque={} if brake_torque is None else brake_torque,
+        static_rotation_gauges=static_rotation_gauges,
+        static_gauge_body=model.chassis.name if gauge_active else None,
+        static_gauge_dof_mask=(1 << 0) | (1 << 1) | (1 << 5) if gauge_active else 0,
+        trim_then_release=bool(
             case.static_equilibrium and case.initial_forward_speed_mps > 0.0
         ),
-        static_rotation_gauges=static_rotation_gauges,
-        initial_state_angle_tolerance_rad=(
+        initial_state_angle_tolerance=float(
             case.solver.initial_state_angle_tolerance_rad
             or case.solver.constraint_tolerance
         ),
+        solver=solver,
+        times=np.asarray(times, dtype=float),
+        body_names=body_names,
+        assembly=assembly,
+    )
+
+
+_PRESCRIBED_STEERING_TYPES = (2, 3)
+
+
+def _contract_constraint_names(prepared: _PreparedVehicleRun) -> tuple[str, ...]:
+    """Return the kernel's constraint-row names in contract order."""
+    return (
+        *(joint.name for joint in prepared.native_model.joints),
+        *(
+            prepared.steering.names[index]
+            for index, kind in enumerate(prepared.steering.actuator_type)
+            if int(kind) in _PRESCRIBED_STEERING_TYPES
+        ),
+        *(driven.name for driven in prepared.native_model.driven_coordinates),
+    )
+
+
+def _vehicle_axle_result(prepared: _PreparedVehicleRun, run, *, stop: int | None = None):
+    """Map the common contract result blocks through the axle reporting adapter."""
+    # The axle adapter owns the diagnostics, performance and ledger layout.  A
+    # vehicle differs only in that a prescribed steering actuator adds a
+    # constraint row, so reuse the adapter and replace that one name list rather
+    # than maintaining a second, subtly different decoder here.
+    from .axle_dynamics.contract_run import build_result
+
+    result = build_result(
+        prepared.native_model,  # ty: ignore[invalid-argument-type]
+        prepared.axle_case,
+        run,
+        stop=stop,
+    )
+    return replace(result, constraint_names=_contract_constraint_names(prepared))
+
+
+def run_vehicle_dynamics(
+    model: VehicleModel, case: VehicleDynamicCase
+) -> VehicleDynamicsResult:
+    """运行一个真实前后悬架、车身和轮端的 native 整车动力学算例."""
+    from time import perf_counter
+
+    from .axle_dynamics.errors import NativeAxleError
+    from .cases.vehicle_dynamic import run_vehicle_dynamics_contract
+    from .kernel import KernelContractError
+
+    prepared = prepare_vehicle_run(model, case)
+    started = perf_counter()
+    try:
+        run = run_vehicle_dynamics_contract(model, case, prepared=prepared)
+    except KernelContractError as error:
+        partial = error.partial_run
+        if partial is None:
+            raise NativeAxleError(str(error), status=3) from error
+        manifest = partial.document.get("manifest", {})
+        index = int(manifest.get("failed_sample_index", 0))
+        from .axle_dynamics.contract_run import failure_row
+
+        raise NativeAxleError(
+            str(error),
+            status=int(manifest.get("failed_status", 3)),
+            partial_result=(
+                _vehicle_axle_result(prepared, partial, stop=index)
+                if index > 0
+                else None
+            ),
+            failure_diagnostics=failure_row(partial, index),
+            failed_sample_index=index,
+            failed_time_s=float(manifest.get("failed_time_s", 0.0)),
+        ) from error
+
+    steering_output = (
+        None
+        if prepared.steering is None
+        else run.block("steering_output").copy()
     )
     return VehicleDynamicsResult(
-        axle=native_run.result,
-        steering_names=() if steering is None else steering.names,
-        steering_output=native_run.steering_output,
-        native_kernel_wall_time_s=native_run.kernel_wall_time_s,
+        axle=_vehicle_axle_result(prepared, run),
+        steering_names=() if prepared.steering is None else prepared.steering.names,
+        steering_output=steering_output,
+        native_kernel_wall_time_s=perf_counter() - started,
     )
 
 
@@ -772,17 +911,17 @@ def _build_joints(
             AxleJoint(
                 name=constraint.name,
                 kind=kind,
-                body_a=constraint.body_a,
-                body_b=constraint.body_b,
+                body_a=constraint.body_a,  # ty: ignore[unresolved-attribute]
+                body_b=constraint.body_b,  # ty: ignore[unresolved-attribute]
                 point_a_m=_shift_point(
-                    constraint.body_a,
-                    constraint.point_a,
+                    constraint.body_a,  # ty: ignore[unresolved-attribute]
+                    constraint.point_a,  # ty: ignore[unresolved-attribute]
                     body_frames,
                     scale,
                 ),
                 point_b_m=_shift_point(
-                    constraint.body_b,
-                    constraint.point_b,
+                    constraint.body_b,  # ty: ignore[unresolved-attribute]
+                    constraint.point_b,  # ty: ignore[unresolved-attribute]
                     body_frames,
                     scale,
                 ),
@@ -813,7 +952,7 @@ def _build_coordinate_couplers(
             payload["scale_a"] = coupler.scale_a / scale
         if coupler.coordinate_b == "translation":
             payload["scale_b"] = coupler.scale_b / scale
-        result.append(AxleCoordinateCoupler(**payload))
+        result.append(AxleCoordinateCoupler(**payload))  # ty: ignore[missing-argument]
     return tuple(result)
 
 

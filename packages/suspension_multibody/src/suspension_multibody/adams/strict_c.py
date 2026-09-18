@@ -24,8 +24,8 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from ..analysis import CModeSolver, KReferenceCache, LoadPath
 from ..model import build_front_axle, side_hardpoints
+from ..native_kc.load_paths import LoadPath
 from ..schema import Bushing6x6, FrontAxleModel, MassSpec, Pose, Vec3
 from .adapter import SmokeResult, Tolerance
 from .probe import AdamsProfile, _adams_environment, producer_id
@@ -114,44 +114,75 @@ def build_strict_c_model(profile: AdamsProfile) -> FrontAxleModel:
 def run_suspension_multibody_strict_c(
     profile: AdamsProfile,
 ) -> list[dict[str, float | str]]:
-    """Solve all strict C load states from the canonical physical model."""
+    """
+    Solve all strict C load states through the contract boundary.
+
+    This reaches the native kernel the same way every other family does: a model
+    document, a case document, one result.  It used to call the Python
+    equilibrium solver, and that was a measured decision rather than an
+    oversight -- the native quasi-static C path missed this gate's tolerance
+    (2.26x the limit on 18 of the 66 x 26 compared components, all in the
+    small-rotation channel).
+
+    The cause turned out to be the case reader, not the solver.  A `c` path
+    loads the wheel centre, which is a point of the upright rather than the
+    upright's origin, and the reader pre-transferred that force into a
+    body-origin wrench using the *reference* pose.  The lever arm of a force
+    applied at a marker is ``cross(R * p_local, F)`` with the deformed ``R``,
+    so freezing it dropped the first-order geometry of the swept upright --
+    a correction quadratic in the load, which is why the moment paths were
+    bit-exact while the force paths were not.  The model now declares
+    ``body_wrench_markers``, the kernel resolves the arm at the pose it solves
+    for, and this gate lands at 0.0019 of tolerance with no component over the
+    limit.  See PROGRESS.md for the measurement.
+
+    The paths are run one at a time because they do not share a maximum: the
+    force paths sweep to 100 N and the moment paths to 10 000 N*mm, and a case
+    document declares one maximum.
+    """
+    from ..native_kc import run_c_paths_contract
+
     assembly = build_front_axle(build_strict_c_model(profile), "C")
-    solver = CModeSolver()
-    cache = KReferenceCache()
     states: list[dict[str, float | str]] = []
     for path in LOAD_PATHS:
-        for state in solver.run_path(assembly, path, k_cache=cache):
+        records = run_c_paths_contract(
+            assembly, paths=(path.name,), levels=path.levels, maximum=path.maximum
+        )
+        for index, record in enumerate(records):
+            left = [float(value) for value in record["deformation_left"]]
+            right = [float(value) for value in record["deformation_right"]]
+            load_left = [float(value) for value in record["load_left"]]
+            deltas = record["c_minus_k"]
             states.append(
                 {
-                    "case_id": state.case_id,
+                    "case_id": f"c-{path.name}-{index:02d}",
                     "path": path.name,
-                    "level": state.level,
-                    "left_load_fx_n": state.load_left.fx,
-                    "left_load_fy_n": state.load_left.fy,
-                    "left_load_fz_n": state.load_left.fz,
-                    "left_load_mx_n_mm": state.load_left.mx,
-                    "left_load_my_n_mm": state.load_left.my,
-                    "left_load_mz_n_mm": state.load_left.mz,
-                    "left_wheel_center_dx_mm": state.deformation_left.fx,
-                    "left_wheel_center_dy_mm": state.deformation_left.fy,
-                    "left_wheel_center_dz_mm": state.deformation_left.fz,
-                    "left_rotation_x_rad": state.deformation_left.mx,
-                    "left_rotation_y_rad": state.deformation_left.my,
-                    "left_rotation_z_rad": state.deformation_left.mz,
-                    "right_wheel_center_dx_mm": state.deformation_right.fx,
-                    "right_wheel_center_dy_mm": state.deformation_right.fy,
-                    "right_wheel_center_dz_mm": state.deformation_right.fz,
-                    "right_rotation_x_rad": state.deformation_right.mx,
-                    "right_rotation_y_rad": state.deformation_right.my,
-                    "right_rotation_z_rad": state.deformation_right.mz,
-                    "left_toe_delta_deg": state.c_minus_k["left_toe_deg"],
-                    "left_camber_delta_deg": state.c_minus_k["left_camber_deg"],
-                    "right_toe_delta_deg": state.c_minus_k["right_toe_deg"],
-                    "right_camber_delta_deg": state.c_minus_k["right_camber_deg"],
+                    "level": float(record["level"]),
+                    "left_load_fx_n": load_left[0],
+                    "left_load_fy_n": load_left[1],
+                    "left_load_fz_n": load_left[2],
+                    "left_load_mx_n_mm": load_left[3],
+                    "left_load_my_n_mm": load_left[4],
+                    "left_load_mz_n_mm": load_left[5],
+                    "left_wheel_center_dx_mm": left[0],
+                    "left_wheel_center_dy_mm": left[1],
+                    "left_wheel_center_dz_mm": left[2],
+                    "left_rotation_x_rad": left[3],
+                    "left_rotation_y_rad": left[4],
+                    "left_rotation_z_rad": left[5],
+                    "right_wheel_center_dx_mm": right[0],
+                    "right_wheel_center_dy_mm": right[1],
+                    "right_wheel_center_dz_mm": right[2],
+                    "right_rotation_x_rad": right[3],
+                    "right_rotation_y_rad": right[4],
+                    "right_rotation_z_rad": right[5],
+                    "left_toe_delta_deg": float(deltas["left_toe_deg"]),
+                    "left_camber_delta_deg": float(deltas["left_camber_deg"]),
+                    "right_toe_delta_deg": float(deltas["right_toe_deg"]),
+                    "right_camber_delta_deg": float(deltas["right_camber_deg"]),
                 }
             )
     return states
-
 
 def write_raw_adams_models(
     model: FrontAxleModel, runtime: str | Path

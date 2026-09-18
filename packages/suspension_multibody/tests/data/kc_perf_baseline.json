@@ -1,0 +1,59 @@
+{
+  "implementation": "python",
+  "median_seconds": {
+    "c-6600": 2.143644100000529,
+    "k-100": 1.4228756000011344
+  },
+  "min_seconds": {
+    "c-6600": 2.0353797000025224,
+    "k-100": 1.1505537999983062
+  },
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+  "python": "3.12.13",
+  "repeats": 3,
+  "reports": {
+    "c-6600": {
+      "converged_count": 6600,
+      "elapsed_seconds": 1.999777199998789,
+      "hardware": {
+        "physical_or_logical_cpus": 16,
+        "platform": "Windows-11-10.0.26200-SP0",
+        "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+        "python": "3.12.13"
+      },
+      "max_constraint_residual": 0.0,
+      "max_force_residual": 0.0,
+      "name": "c-6600",
+      "output_dir": null,
+      "state_count": 6600
+    },
+    "k-100": {
+      "converged_count": 100,
+      "elapsed_seconds": 1.1471094000007724,
+      "hardware": {
+        "physical_or_logical_cpus": 16,
+        "platform": "Windows-11-10.0.26200-SP0",
+        "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+        "python": "3.12.13"
+      },
+      "max_constraint_residual": 9.096424946619663e-09,
+      "max_force_residual": 3.703087111298505e-12,
+      "name": "k-100",
+      "output_dir": null,
+      "state_count": 100
+    }
+  },
+  "samples_seconds": {
+    "c-6600": [
+      2.2997591999992437,
+      2.143644100000529,
+      2.0353797000025224
+    ],
+    "k-100": [
+      3.8096689000012702,
+      1.4228756000011344,
+      1.1505537999983062
+    ]
+  }
+}

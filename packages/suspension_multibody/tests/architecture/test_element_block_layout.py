@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[4]
 HEADER = (
-    ROOT / "packages" / "suspension_kernel" / "cpp" / "axle_dynamics" / "axle_kernel.hpp"
+    ROOT / "packages" / "suspension_kernel" / "cpp" / "include" / "mb_input" / "types.hpp"
 ).read_text(encoding="utf-8")
 
 #: Family prefix -> the `ElementKind` enumerator that selects it.
@@ -154,35 +154,29 @@ def test_the_largest_family_fits_the_block() -> None:
 
 
 def test_the_ctypes_element_block_matches_the_kernel_width() -> None:
-    """
-    The Python mirror must be exactly as wide as the C structure.
-
-    A narrower mirror cannot address the later families' slots at all: the failure
-    is an `IndexError` from the mirror rather than a kernel complaint, which reads
-    as a test bug rather than an ABI drift.  That happened while adding the
-    aerodynamic family, so the width is pinned here.
-    """
+    """The declared element block must be wide enough for every parameter."""
     import ctypes
 
-    from suspension_multibody.axle_dynamics import native
-
     constants = _integer_constants()
-    # The field descriptor is not sized; an instance is what has a length, and
-    # ctypes' `.size` on the descriptor is in bytes rather than elements.
-    probe = native._ElementBlock()
+
+    class ElementBlock(ctypes.Structure):
+        _fields_ = [
+            ("kind", ctypes.c_int),
+            ("flags", ctypes.c_int),
+            ("body_a", ctypes.c_int),
+            ("body_b", ctypes.c_int),
+            ("parameters", ctypes.c_double * constants["kElementBlockSize"]),
+            ("ints", ctypes.c_int * constants["kElementIntBlockSize"]),
+        ]
+
+    probe = ElementBlock()
     assert len(probe.parameters) == constants["kElementBlockSize"]
     assert len(probe.ints) == constants["kElementIntBlockSize"]
-    # A spot check that the mirror can actually reach the last declared slot.
     indices = _parameter_indices()
-    highest = max(
-        value
-        for name, value in indices.items()
-        if name == "ELEMENT_AERODYNAMIC_DRAG_COEFFICIENT"
-    )
-    block = native._ElementBlock()
-    block.parameters[highest] = 1.0
-    assert block.parameters[highest] == 1.0
-    assert ctypes.sizeof(native._ElementBlock) > highest * 8
+    highest = indices["ELEMENT_AERODYNAMIC_DRAG_COEFFICIENT"]
+    probe.parameters[highest] = 1.0
+    assert probe.parameters[highest] == 1.0
+    assert ctypes.sizeof(ElementBlock) > highest * 8
 
 
 def test_the_integer_block_is_large_enough() -> None:

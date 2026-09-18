@@ -303,20 +303,6 @@ _LEGITIMATE_NON_ABI_TIRE_KEYS = frozenset(
         "TIME",
         "DEFLECTION_LOAD_CURVE_POINT_COUNT",
         "BOTTOMING_CURVE_POINT_COUNT",
-        # Declared validity ranges.  Every tire file has these, so they cannot be
-        # treated as a feature request for fail-closed purposes -- see
-        # ``UNCLAMPED_VALIDITY_RANGE_COEFFICIENTS`` in ``pac2002_scope``.  They
-        # are a real open gap instead: the kernel receives the bounds but never
-        # clamps to them.  Listed here so the gate stays green only as long as
-        # that gap is explicitly acknowledged rather than forgotten.
-        "KPUMIN",
-        "KPUMAX",
-        "ALPMIN",
-        "ALPMAX",
-        "CAMMIN",
-        "CAMMAX",
-        "FZMIN",
-        "FZMAX",
     }
 )
 

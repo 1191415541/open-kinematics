@@ -7,8 +7,12 @@ engineering products.
   optimization.
 - `packages/suspension_contracts`: versioned, solver-independent geometry
   exchange contracts.
+- `packages/suspension_kernel`: the C++ multibody kernel -- static, quasi-static
+  and dynamic solvers plus the suspension and tire element semantics -- and the
+  contract boundary (`suspension_kernel_run`) every product solve goes through.
 - `packages/suspension_multibody`: quasi-static suspension K&C, load, and Adams
-  validation analysis.
+  validation analysis.  It owns the authoring model, the result schema and the
+  reporting; the solve is the kernel.
 
 Each product has its own package metadata, tests, CLI, and release version.
 

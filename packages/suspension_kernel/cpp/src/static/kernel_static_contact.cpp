@@ -11,6 +11,17 @@
 
 #include "mb_static/functions.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+#include "mb_constraint/functions.hpp"
+#include "mb_integrator/functions.hpp"
+#include "mb_linalg/functions.hpp"
+#include "mb_model/functions.hpp"
+#include "mb_tire/common/functions.hpp"
+#include "mb_tire_state/functions.hpp"
+
 namespace axle_kernel {
 bool static_global_contact_pretrim(
     const Model& model, const SampleInput& sample,
@@ -641,17 +652,28 @@ bool audit_constraint_system(const Model& m, std::string& error) {
         audit_state.v[i] = m.bodies[i].v;
         audit_state.omega[i] = m.bodies[i].omega;
     }
-    const auto jacobian = constraint_jacobian(m, audit_state);
-    if (matrix_rank(jacobian, m.rows, m.ndof) < m.rows) {
-        error = "constraint Jacobian is rank deficient at the initial pose";
-        return false;
-    }
+    // The Jacobian the solver will use has to be the Jacobian of the residual
+    // before anything can be said about its rank: a verdict on a wrong Jacobian
+    // is a verdict about the wrong system.  The correctness check therefore runs
+    // first, and it reports by how much the two disagree.
     double jacobian_error = 0.0;
     if (!analytic_constraint_jacobian_matches_reference(
             m, audit_state, jacobian_error
         )) {
         error = "analytic constraint Jacobian disagrees with central "
             "differences by " + std::to_string(jacobian_error);
+        return false;
+    }
+    const auto jacobian = constraint_jacobian(m, audit_state);
+    const int rank = matrix_rank(jacobian, m.rows, m.ndof);
+    if (rank < m.rows) {
+        const int reference_rank = matrix_rank(
+            constraint_jacobian_central_difference(m, audit_state), m.rows, m.ndof
+        );
+        error = "constraint Jacobian is rank deficient at the initial pose: rank " +
+            std::to_string(rank) + " of " + std::to_string(m.rows) + " rows over " +
+            std::to_string(m.ndof) + " columns (central differences give rank " +
+            std::to_string(reference_rank) + ")";
         return false;
     }
     return true;

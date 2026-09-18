@@ -13,7 +13,13 @@
 // Moving a contiguous run of top-level functions between translation units
 // needs no include-order reasoning.
 
+#include <algorithm>
 #include "mb_tire/pac2002/functions.hpp"
+
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_tire_state/functions.hpp"
 
 namespace axle_kernel {
 double pac2002_contact_stiffness(
@@ -150,24 +156,12 @@ bool pac2002_mode_uses_transient_state(int use_mode) {
     return (use_mode >= 10 && use_mode < 20) || (use_mode >= 21 && use_mode <= 25);
 }
 
+// The supported set lives in `scope.cpp`, next to the capability declaration
+// the authoring layer reads, so this predicate cannot disagree with what this
+// kernel tells the outside world it implements.
 bool pac2002_mode_supported_by_native(int use_mode) {
-    switch (use_mode) {
-    case 0:
-    case 1: case 2: case 3: case 4:
-    case 11: case 12: case 13: case 14:
-    case 23: case 24:
-    // Mode 25 is accepted so its turn-slip path can be measured against Adams, but
-    // the model is NOT complete: only the quasi-static turn slip of Eq3968 and the
-    // spin factors of Eq3329-Eq3356 are in place.  The phi'_c/phi'_F2/phi'_1/phi'_2
-    // relaxation set (Eq3963-Eq3966) and the beta/beta_st coupling of Eq3961 are
-    // still missing, so the library keeps mode 25 fail-closed in
-    // pac2002_scope.py until its own Adams gate exists.  Nothing user-facing reaches
-    // this path: the ABI is loaded by that library only.
-    case 25:
-        return true;
-    default:
-        return false;
-    }
+    const std::vector<int>& modes = pac2002_supported_use_modes();
+    return std::find(modes.begin(), modes.end(), use_mode) != modes.end();
 }
 
 bool pac2002_mode_uses_turn_slip(int use_mode) {

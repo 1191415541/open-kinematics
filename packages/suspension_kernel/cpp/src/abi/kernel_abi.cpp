@@ -4,6 +4,17 @@
 
 #include "abi/functions.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+#include "mb_integrator/functions.hpp"
+#include "mb_model/functions.hpp"
+#include "mb_output/functions.hpp"
+#include "mb_static/functions.hpp"
+#include "mb_tire_state/functions.hpp"
+#include "mb_vehicle/functions.hpp"
+
 namespace axle_kernel {
 
 int run_model(
@@ -837,13 +848,17 @@ static_assert(
     "the vehicle constant in version.hpp and VehicleInput::abi_version disagree"
 );
 
-// --- exported C ABI entry points (file scope) --------------------
+// --- version symbols and the retired flat entry implementations --------
+// The flat entry points are retained only as internal C++ functions while
+// their body is shared with historical diagnostics.  They intentionally have
+// no C linkage, so the shared library exposes exactly one run entry point:
+// `suspension_kernel_run` in `kernel_contract_run.cpp`.
 
 extern "C" int axle_kernel_abi_version() {
     return static_cast<int>(axle_kernel::kAxleKernelAbiVersion);
 }
 
-extern "C" int axle_run(
+[[maybe_unused]] static int run_axle_flat_legacy(
     const AxleInput* input, AxleOutput* output,
     char* error_buffer, std::size_t error_capacity
 ) {
@@ -858,7 +873,7 @@ extern "C" int vehicle_kernel_abi_version() {
     return static_cast<int>(kVehicleKernelAbiVersion);
 }
 
-extern "C" int vehicle_run(
+[[maybe_unused]] static int run_vehicle_flat_legacy(
     const VehicleInput* input, VehicleOutput* output,
     char* error_buffer, std::size_t error_capacity
 ) {
@@ -1081,7 +1096,7 @@ extern "C" int vehicle_run(
     if (trace) {
         std::fprintf(
             stderr,
-            "[axle-trace] vehicle_run: tire_block_width=%d tire_state_width=%d "
+            "[axle-trace] run_vehicle_flat_legacy: tire_block_width=%d tire_state_width=%d "
             "adaptive_step=%d internal_step=%.6g min_step=%.6g max_step=%.6g\n",
             tire_block_width(model), tire_state_width(model),
             static_cast<int>(input->axle.adaptive_step),
@@ -1094,7 +1109,7 @@ extern "C" int vehicle_run(
         error_buffer, error_capacity, &model
     );
     if (trace) {
-        std::fprintf(stderr, "[axle-trace] vehicle_run: run_model -> %d\n", status);
+        std::fprintf(stderr, "[axle-trace] run_vehicle_flat_legacy: run_model -> %d\n", status);
     }
     if (status == 0) {
         write_vehicle_steering_output(

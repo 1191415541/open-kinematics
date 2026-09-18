@@ -1,0 +1,29 @@
+{
+  "c_grid": {
+    "levels": 11,
+    "paths": [
+      "fx",
+      "fy",
+      "fz",
+      "mx",
+      "my",
+      "mz"
+    ]
+  },
+  "c_state_count": 66,
+  "contract": "kc-parity-v1",
+  "k_grid": {
+    "rack_mm": [
+      -5.0,
+      0.0,
+      5.0
+    ],
+    "wheel_mm": [
+      -10.0,
+      0.0,
+      10.0
+    ]
+  },
+  "k_state_count": 9,
+  "model": "benchmark_front_double_wishbone"
+}

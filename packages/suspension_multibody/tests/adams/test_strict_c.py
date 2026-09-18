@@ -12,7 +12,7 @@ from suspension_multibody.adams.strict_c import (
     compare_c_states,
     write_raw_adams_models,
 )
-from suspension_multibody.analysis import LoadPath
+from suspension_multibody.native_kc.load_paths import LoadPath
 from suspension_multibody.schema import FrontAxleModel, MassSpec, Vec3
 
 

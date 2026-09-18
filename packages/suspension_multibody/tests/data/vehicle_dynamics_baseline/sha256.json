@@ -1,0 +1,92 @@
+{
+  "cases": {
+    "braking": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "constraint_wrench": "75d021dad37cc4b5af7b28b16bb7b23b5974a0bdf75aa584c52a73c8e292b9b8",
+      "diagnostics": "e22fd3723c67edf76b123900279f506ec62ef61534c4d395e7bff9106c83ab9e",
+      "energy": "b54ebf4ff6a8523ec53238ca4e4b26885f660c2918bc916226d72b3b9ae49664",
+      "spring_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "states": "11a87441b12a86fead49a741cbc4d4b85136f43016d61328bceb8a47af01fa22",
+      "steering_output": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+      "tire_output": "9384a36dca0377be53c3a387726fcb099a96d130a9eacc3f6ed66a361a3be51f"
+    },
+    "bushing force curves": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "f73acc3f220f8fce7917cda6fdabade356ee5fdd0508e14cd8d836e79c1fa06c",
+      "constraint_wrench": "b067e69bf42bbada16ad95b1fefc634931a73469f34f26cbbaa3a6a4a91fab42",
+      "diagnostics": "2bded7e300f55c5c90ec8f8434201f3aa381c0b73128147f4e10811c187f9aaa",
+      "energy": "3eeb7bcf8d2dc7aedc2528371bc7684fa312584863468f6e21cc71b1363b2628",
+      "spring_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "states": "391f044b49ea5928fa1b96c0c6d1f42701a8c12c4e57a97dd0b3746f66b583c0",
+      "steering_output": "f078f192badeec36bdc201513bf8f785c77fbcb00e98b48adbcd20f18272998b",
+      "tire_output": "4c193ec9db3f8f8e104d875c5c41937d7098350382386e625bf27f68c5550f8b"
+    },
+    "default": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "constraint_wrench": "75d021dad37cc4b5af7b28b16bb7b23b5974a0bdf75aa584c52a73c8e292b9b8",
+      "diagnostics": "e22fd3723c67edf76b123900279f506ec62ef61534c4d395e7bff9106c83ab9e",
+      "energy": "b54ebf4ff6a8523ec53238ca4e4b26885f660c2918bc916226d72b3b9ae49664",
+      "spring_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "states": "11a87441b12a86fead49a741cbc4d4b85136f43016d61328bceb8a47af01fa22",
+      "steering_output": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+      "tire_output": "9384a36dca0377be53c3a387726fcb099a96d130a9eacc3f6ed66a361a3be51f"
+    },
+    "measured tire table": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "constraint_wrench": "75d021dad37cc4b5af7b28b16bb7b23b5974a0bdf75aa584c52a73c8e292b9b8",
+      "diagnostics": "e22fd3723c67edf76b123900279f506ec62ef61534c4d395e7bff9106c83ab9e",
+      "energy": "b54ebf4ff6a8523ec53238ca4e4b26885f660c2918bc916226d72b3b9ae49664",
+      "spring_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "states": "11a87441b12a86fead49a741cbc4d4b85136f43016d61328bceb8a47af01fa22",
+      "steering_output": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+      "tire_output": "628be9b68f5b58ff585810de2a69ea7c9a288bbf1e29a1970614433206a2f723"
+    },
+    "nondefault road and initial state": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "constraint_wrench": "a9de5c5ad503e2b33b5d3e7a652bbcae6f79c34e2b94a42818e109a943c67166",
+      "diagnostics": "b1225f93de104ca7516f29f01488bde13f5623fa50bf484bb5c9101e44a681a5",
+      "energy": "a69a8a99fca04bb84457bdc655271db6984dab8685cef6a7a5f7c27248186e42",
+      "spring_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "states": "818174bce34f669d62828766c935363344e9ac46b614ea12b366e19817cd826d",
+      "steering_output": "ab02dc03907303bb71d3cab107e6afd48893b4385743d700ef4d763eea059c71",
+      "tire_output": "a5e2ec2476b0019ff02923dcfcab931fab69e5f6146124978b88ffbaa3ac70b9"
+    },
+    "pac2002": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "constraint_wrench": "75d021dad37cc4b5af7b28b16bb7b23b5974a0bdf75aa584c52a73c8e292b9b8",
+      "diagnostics": "e22fd3723c67edf76b123900279f506ec62ef61534c4d395e7bff9106c83ab9e",
+      "energy": "b54ebf4ff6a8523ec53238ca4e4b26885f660c2918bc916226d72b3b9ae49664",
+      "spring_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "states": "11a87441b12a86fead49a741cbc4d4b85136f43016d61328bceb8a47af01fa22",
+      "steering_output": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+      "tire_output": "628be9b68f5b58ff585810de2a69ea7c9a288bbf1e29a1970614433206a2f723"
+    },
+    "pac2002 adams": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "constraint_wrench": "75d021dad37cc4b5af7b28b16bb7b23b5974a0bdf75aa584c52a73c8e292b9b8",
+      "diagnostics": "e22fd3723c67edf76b123900279f506ec62ef61534c4d395e7bff9106c83ab9e",
+      "energy": "b54ebf4ff6a8523ec53238ca4e4b26885f660c2918bc916226d72b3b9ae49664",
+      "spring_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "states": "11a87441b12a86fead49a741cbc4d4b85136f43016d61328bceb8a47af01fa22",
+      "steering_output": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+      "tire_output": "628be9b68f5b58ff585810de2a69ea7c9a288bbf1e29a1970614433206a2f723"
+    },
+    "steering": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "constraint_wrench": "bec178ebfe1e6d1de3a42b127348fc800094c2ee0f1055da870725fa0e7c9858",
+      "diagnostics": "1f9abbc63ad44be6abf82439280ca80cf35b3d1a54abfda03d245226af0038aa",
+      "energy": "ac73ec1c412b27d513db400b08ad183c8521e45018a9df5842dae465c1d8281f",
+      "spring_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "states": "dd55534b224754abdf7923b6cae6ab53b8bb93cf7dca6e73eddae68e531fe26c",
+      "steering_output": "f453133ee52da8998b8a939808e5ba5f6ecbde1478ff7e23689b9bc9fb918f49",
+      "tire_output": "cba6e77a0723aaeace4ca3c71409eb1b9b0cf8113a609699db7ca4fc32fa90b9"
+    }
+  }
+}

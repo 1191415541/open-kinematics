@@ -21,7 +21,7 @@
 // header used to define both, and its includers relied on getting both from it.
 // Keeping the include here preserves that without making the model layer depend on
 // the ABI header.
-#include "abi/version.hpp"
+#include "mb_base/version.hpp"
 
 extern "C" {
 

@@ -8,6 +8,15 @@
 
 #include "mb_output/functions.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+#include "mb_constraint/functions.hpp"
+#include "mb_integrator/functions.hpp"
+#include "mb_model/functions.hpp"
+#include "mb_vehicle/functions.hpp"
+
 namespace axle_kernel {
 
 void copy_state(const State& s, const Model& m, double* out, std::size_t sample) {

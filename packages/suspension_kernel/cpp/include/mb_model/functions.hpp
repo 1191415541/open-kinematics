@@ -19,11 +19,8 @@
 #include "mb_base/util.hpp"
 #include "mb_base/dual.hpp"
 #include "mb_base/dual_geometry.hpp"
-#include "mb_base/functions.hpp"
 #include "mb_base/prelude.hpp"
 #include "mb_model/enums.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_base/functions.hpp"
 
 namespace axle_kernel {
 double road_profile_height( const Model& model, const State& state, std::size_t tire_index );

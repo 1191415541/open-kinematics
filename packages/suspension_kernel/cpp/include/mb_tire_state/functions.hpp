@@ -20,13 +20,8 @@
 #include "mb_base/util.hpp"
 #include "mb_base/dual.hpp"
 #include "mb_base/dual_geometry.hpp"
-#include "mb_base/functions.hpp"
 #include "mb_base/prelude.hpp"
 #include "mb_model/enums.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_tire_state/functions.hpp"
-#include "mb_base/functions.hpp"
-#include "mb_model/functions.hpp"
 
 namespace axle_kernel {
 void resize_tire_states(const Model& model, State& state);

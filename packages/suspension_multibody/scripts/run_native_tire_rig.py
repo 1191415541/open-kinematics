@@ -43,8 +43,8 @@ from suspension_multibody.axle_dynamics import (
     AxleJoint,
     AxleSolverSettings,
     AxleTire,
+    run_axle_dynamics,
 )
-from suspension_multibody.axle_dynamics.native import _run_native
 from suspension_multibody.axle_dynamics.result import TIRE_OUTPUT_COLUMNS
 from suspension_multibody.pac2002_scope import validate_pac2002_native_scope
 
@@ -826,14 +826,11 @@ def run_rig(model: AxleDynamicsModel, case: AxleDynamicsCase):
     """
     跑一次台架并返回轴级结果.
 
-    公开入口 ``run_axle_dynamics`` 只接受 ``native_brush``：``native.py:936-955`` 把
-    ``fiala`` 映射为 tire kind **3**，而 ``native.py:1193`` 在非 ``vehicle_mode`` 下
-    拒绝任何 ``tire_model_kind != 0``。因此 Fiala 台架必须走**版本化整车接口**——
-    与 ``vehicle_dynamics.py:256`` 的做法相同：调用 ``_run_native`` 并传入
-    ``brake_torque`` 把它切到该接口。这里传全零，故不施加任何制动力矩。
+    The public axle entry now follows the same versioned contract route for every
+    tire law, including Fiala; the rig no longer needs a private flat-ABI call or
+    a zero brake-torque side channel just to select the vehicle stages.
     """
-    zeros = {tire.name: tuple(0.0 for _ in case.times_s) for tire in model.tires}
-    return _run_native(model, case, brake_torque=zeros).result
+    return run_axle_dynamics(model, case)
 
 
 def _rotate_vectors_by_quaternions(

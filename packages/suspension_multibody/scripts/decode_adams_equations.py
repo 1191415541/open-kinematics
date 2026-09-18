@@ -327,7 +327,7 @@ def main() -> None:
     # Greek glyphs cannot be encoded by a legacy console code page (GBK on this
     # host raises UnicodeEncodeError mid-equation), so pin the stream to UTF-8.
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # ty: ignore[call-non-callable]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "equations",

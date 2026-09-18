@@ -14,6 +14,12 @@
 
 #include "mb_constraint/registry.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+#include "mb_model/functions.hpp"
+
 namespace axle_kernel {
 double joint_coordinate_value(
     const Model& model, const State& state, int joint_index, int coordinate,

@@ -11,6 +11,11 @@
 
 #include "mb_constraint/types.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+
 namespace axle_kernel {
 void set_error(char* buffer, std::size_t capacity, const std::string& text) {
     if (!buffer || capacity == 0) return;

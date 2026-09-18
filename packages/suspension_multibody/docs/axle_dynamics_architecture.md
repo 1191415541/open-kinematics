@@ -52,7 +52,7 @@ packages/suspension_multibody/scripts/build_axle_native.py
 packages/suspension_multibody/src/suspension_multibody/
   native/                                 轴语义侧加载的那份共享库副本
   axle_dynamics/schema.py   闭集 SI 物理模型与工况（Pydantic StrictModel）
-  axle_dynamics/native.py   共享库查找、ABI 校验、ctypes 编组、错误码转异常
+  axle_dynamics/native.py   共享库查找、ABI 门、镜像新鲜度检查（不做结构体编组）
   axle_dynamics/result.py   结果对象与全部输出列名
   axle_dynamics/io.py       模型/工况加载、NPZ+JSON 结果 artifact
   adams/axle_contract.py    冻结 manifest、通道角色绑定与哈希
@@ -60,7 +60,7 @@ packages/suspension_multibody/src/suspension_multibody/
   adams/axle_equivalence.py 独立 runner、证据包、严格比较与门禁
   adams/axle_channels.py    结果到 33 个冻结通道的导出
   model/vehicle.py           车身、前后悬架和四轮的装配及固定轮端质量凝聚
-  vehicle_dynamics.py        整车输入编组、路面/转向/驱制动映射和统一 native 调用
+  vehicle_dynamics.py        整车输入编组、路面/转向/驱制动映射与契约文档发射
   adams/full_vehicle_model.py Adams 源模型的部件、关节、力元和轮胎参数导入
 scripts/
   build_axle_native.py/.ps1        跨平台构建入口
@@ -69,38 +69,48 @@ scripts/
 
 ## C ABI
 
-跨边界只使用显式长度的 POD 数组和标量；没有 C++ 对象或句柄跨越边界，因此不存在
-跨边界所有权问题。实际接口只有两个函数：
+跨边界只使用显式长度的 POD 数组、标量与契约容器（`mb_contract` 线格式）；没有 C++ 对象或
+句柄跨越边界，因此不存在跨边界所有权问题。共享库导出七个符号：三个内部结构版本探测
+（`axle_kernel_abi_version`、`vehicle_kernel_abi_version`、`mb_core_abi_version`）、
+通用内核入口 `mb_core_run`，以及契约面的三个入口
 
 ```c
-int axle_kernel_abi_version(void);
+int32_t suspension_kernel_contract_version(void);
 
-int axle_run(
-    const AxleInput* input,
-    AxleOutput* output,
-    char* error_buffer,
-    size_t error_capacity);
+int32_t suspension_kernel_capabilities(
+    char* buffer, size_t capacity, size_t* written);
+
+int32_t suspension_kernel_run(
+    const uint8_t* model_payload, size_t model_length,
+    const uint8_t* case_payload,  size_t case_length,
+    uint8_t* result_out, size_t* result_length_in_out,
+    char* error_buffer, size_t error_capacity);
 ```
 
-`AxleInput` 以并列数组携带刚体、关节、弹簧、衬套、稳定杆、轮胎、采样时间、路面、
-驱动力矩、外载和全部求解设置；`AxleOutput` 以调用方分配的缓冲区接收 body state、
-约束反力、元件输出、轮胎接触、能量账本、诊断和已定位的接触事件。当前 ABI 版本为
-**15**，整车扩展 ABI 版本为 **30**；`native.py` 与 `native_build.json` 必须与之一致，
-否则拒绝加载。**30 相对 29 的改动是加法**：两个入口各在结构体末尾追加同一组通用元素字段
-（`element_count` / `elements` / `element_curves` / `topology_extension_count` /
-`topology_extensions`），轴侧另在开头补 `struct_size` / `abi_version` / `reserved`。
-既有字段偏移全部未变，版本号仍必须前进——调用方编译所依据的结构体大小已经不同，
-按 14/29 编译的调用方会被明确拒绝，而不是越过自己的边界读内存。
-整车 ABI 此前的追加历史：轮端框架、自转轴与 PAC2002 参数（15），
-缩放/压力/附加力矩字段，`[DEFLECTION_LOAD_CURVE]` 与 `[BOTTOMING_CURVE]` 的曲线数组，
-以及**通用运动学驱动**的坐标数组（29：`driven_*`，把任意两体之间的一个自由度按规定时间
-函数驱动，对应 Adams 的关节 `MOTION`）。
+模型与工况以版本化契约文档进入内核，结果以同格式的结果文档返回；缓冲不足时返回 11 并把
+所需长度写回 `result_length_in_out`，调用方扩容后重调。内部结构版本为 **15**（轴）与
+**30**（整车），`native.py` 与 `native_build.json` 必须与之一致，否则拒绝加载。
 
-ABI 只传输 SI 数值；字符串仅用于错误缓冲区。所有数组由调用方分配，C++ 不跨边界释放内存。
+**扁平入口已退役。** `axle_run` / `vehicle_run` 不再导出：它们的内核只剩 `kernel_abi.cpp`
+里的内部 static 函数，保留的唯一原因是历史诊断仍与它们共用主体。
+`AxleInput` / `VehicleInput` 以并列数组携带刚体、关节、弹簧、衬套、稳定杆、轮胎、采样时间、
+路面、驱动力矩、外载和全部求解设置；`AxleOutput` / `VehicleOutput` 以调用方分配的缓冲区接收
+body state、约束反力、元件输出、轮胎接触、能量账本、诊断和已定位的接触事件。这两个结构体
+仍是内核内部装配的数据形状，但**不再跨越边界**：调用方不填它们，契约读取器按文档填。
+结构体自身的历史（轮端框架、自转轴与 PAC2002 参数，缩放/压力/附加力矩字段，
+`[DEFLECTION_LOAD_CURVE]` 与 `[BOTTOMING_CURVE]` 曲线数组，**通用运动学驱动**坐标数组——
+把任意两体之间的一个自由度按规定时间函数驱动，对应 Adams 的关节 `MOTION`）
+只影响内部布局，版本号仍作为「DLL 与加载器是否配套」的判据。
+
+ABI 只传输 SI 数值；字符串仅用于错误缓冲区，以及 `suspension_kernel_capabilities` 返回的能力
+文档。所有数组由调用方分配，C++ 不跨边界释放内存。
 返回码：`1` 参数缺失、`2` 模型构建失败（含约束秩亏）、`3` 输出缓冲区过小、
 `4` 求解设置非法、`5` 时域积分失败、`6` 初始化失败、`7` 初速度违反速度约束、
-`8` 初始加速度 KKT 失败、`9` 初始轮胎压缩超限、`10` 内部状态或事件缓冲区问题。
-失败时已接受样本、失败时刻和诊断行仍然返回。
+`8` 初始加速度 KKT 失败、`9` 初始轮胎压缩超限、`10` 内部状态或事件缓冲区问题、
+`11` 契约结果缓冲区不足（所需长度写回调用方变量）。
+失败时已接受样本、失败时刻和诊断行仍然返回；契约入口在某个用例失败时停止用例循环，
+把 `failed_case` / `failed_sample_index` / `failed_time_s` / `failed_status` 写进结果 manifest，
+并让块保持成功运行的形状（未跑的样本为 NaN）。
 
 ## 整车装配与求解
 
@@ -151,7 +161,7 @@ Chrono 万向连接方程替换。
 
 ## Python 封装
 
-`native.py` 负责按平台查找包内共享库、校验 ABI 版本、将 Pydantic 闭集模型转换为连续 `float64` 数组，并将错误码转换为带诊断的 Python 异常。未构建共享库时只允许导入，运行动态求解必须抛出明确的 `NativeKernelUnavailableError`。
+`native.py` 只负责按平台查找包内共享库、校验 ABI 版本与镜像是否新鲜、要求三个契约符号存在，并把加载错误转换为带诊断的 Python 异常。把 Pydantic 闭集模型转换成连续 `float64` 数组这件事已不在 Python：模型与工况以契约文档交付内核，`kernel/` 薄壳只做组包与拆包。未构建共享库时只允许导入，运行求解必须抛出明确的 `NativeKernelUnavailableError`。
 
 ## 构建和打包
 

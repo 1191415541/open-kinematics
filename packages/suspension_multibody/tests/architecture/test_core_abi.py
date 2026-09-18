@@ -7,9 +7,10 @@ entirely from the generic surfaces -- bodies, spherical joints and one element
 block -- so it exercises `mb_core_run` without any vehicle or tire semantics in
 view.
 
-The input structure is mirrored here rather than imported from the axle product on
-purpose: `mb_core_*` is a separate ABI, and a test that reached through the axle
-package's private mirrors would not be checking that.
+The input structure is mirrored here rather than imported from a product package on
+purpose: `mb_core_*` is a separate ABI whose layout belongs to the kernel, and reaching
+through a Python mirror of the axle payloads -- which no longer exists -- would not be
+checking that.
 """
 
 from __future__ import annotations
@@ -19,17 +20,7 @@ import math
 from pathlib import Path
 
 import numpy as np
-import pytest
 from suspension_kernel.binding import library_path, load_kernel_library
-
-from suspension_multibody.axle_dynamics import (
-    AxleBody,
-    AxleDynamicsCase,
-    AxleDynamicsModel,
-    AxleSolverSettings,
-    AxleSpringDamper,
-    native,
-)
 
 #: `AxleConstraintType` values the example uses.
 AXLE_SPHERICAL = 0
@@ -106,6 +97,25 @@ class _MbCoreInput(ctypes.Structure):
     ]
 
 
+class _ElementBlock(ctypes.Structure):
+    """The dependency-free element block shared by the core surface."""
+
+    _fields_ = [
+        ("kind", ctypes.c_int),
+        ("flags", ctypes.c_int),
+        ("body_a", ctypes.c_int),
+        ("body_b", ctypes.c_int),
+        ("parameters", ctypes.c_double * 176),
+        ("ints", ctypes.c_int * 16),
+        ("cached_parameters", ctypes.c_void_p),
+        ("cached_parameter_count", ctypes.c_size_t),
+    ]
+
+
+class _ElementCurveReference(ctypes.Structure):
+    _fields_ = [("values", ctypes.c_void_p), ("count", ctypes.c_size_t)]
+
+
 class _MbCoreOutput(ctypes.Structure):
     """Mirror of `MbCoreOutput` in `core_abi.hpp`."""
 
@@ -176,9 +186,9 @@ def _spring_element(
     point_b: tuple[float, float, float],
     stiffness: float,
     free_length: float,
-) -> native._ElementBlock:
+) -> _ElementBlock:
     """Build the same block the axle product's builder makes, from the core side."""
-    block = native._ElementBlock()
+    block = _ElementBlock()
     block.kind = ELEMENT_SPRING
     block.body_a = body_a
     block.body_b = body_b
@@ -205,7 +215,7 @@ def _run_core(
     motion: np.ndarray,
     fixed: np.ndarray,
     joints: tuple[tuple[int, int, tuple[float, float, float], tuple[float, float, float]], ...],
-    blocks: tuple[native._ElementBlock, ...],
+    blocks: tuple[_ElementBlock, ...],
     seconds: float,
     sample_count: int = 21,
     rho_inf: float = 0.9,
@@ -240,8 +250,8 @@ def _run_core(
     joint_axis_a = np.zeros(0, dtype=np.float64)
     joint_axis_b = np.zeros(0, dtype=np.float64)
 
-    block_array = (native._ElementBlock * len(blocks))(*blocks)
-    curve_array = (native._ElementCurveReference * (len(blocks) * ELEMENT_CURVE_SLOTS))()
+    block_array = (_ElementBlock * len(blocks))(*blocks)
+    curve_array = (_ElementCurveReference * (len(blocks) * ELEMENT_CURVE_SLOTS))()
     for index in range(len(blocks) * ELEMENT_CURVE_SLOTS):
         curve_array[index].values = None
         curve_array[index].count = 0
@@ -341,7 +351,7 @@ def _run_core(
 
 
 def _run_pair(
-    blocks: tuple[native._ElementBlock, ...],
+    blocks: tuple[_ElementBlock, ...],
     *,
     seconds: float = 0.2,
     initial_velocity: tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -386,7 +396,7 @@ def _bushing_element(
     body_b: int,
     stiffness: float,
     damping: float,
-) -> native._ElementBlock:
+) -> _ElementBlock:
     """
     Build one BUSHING element block with diagonal 6x6 stiffness and damping.
 
@@ -395,8 +405,8 @@ def _bushing_element(
     blocks.  Identity frames and a zero reference pose mean the bushing is aligned
     with both bodies, so only the diagonal terms above act.
     """
-    block = native._ElementBlock()
-    block.kind = native.ELEMENT_BUSHING
+    block = _ElementBlock()
+    block.kind = 1
     block.body_a = body_a
     block.body_b = body_b
     parameters = block.parameters
@@ -441,15 +451,15 @@ def _aerodynamic_element(
     body: int,
     coefficient: float,
     forward_axis: tuple[float, float, float] = (1.0, 0.0, 0.0),
-) -> native._ElementBlock:
+) -> _ElementBlock:
     """
     Build one AERODYNAMIC_DRAG element block.
 
     A drag acts on a single body, so the block's second body slot is -1 and only
     the application point, the forward axis and the coefficient carry data.
     """
-    block = native._ElementBlock()
-    block.kind = native.ELEMENT_AERODYNAMIC_DRAG
+    block = _ElementBlock()
+    block.kind = 4
     block.body_a = body
     block.body_b = -1
     parameters = block.parameters
@@ -708,21 +718,12 @@ def test_double_pendulum_with_a_spring_solves_and_closes_energy() -> None:
     )
 
 
-def test_both_entry_points_read_one_kind_table() -> None:
-    """
-    One `kind` table serves every entry point that accepts element blocks.
-
-    The evidence is a refusal rather than a trajectory: a block whose `kind` is not
-    in `kElementLayouts` must be rejected by `mb_core_run` *and* by the axle entry
-    point, and by the same rule.  Two per-entry-point tables could drift until one
-    accepted a kind the other rejected; one table cannot, and the epic's whole
-    generic surface rests on there being one.
-    """
-    unknown = native._ElementBlock()
+def test_core_entry_reads_the_one_kind_table() -> None:
+    """An unknown block kind is rejected by the core entry point by name."""
+    unknown = _ElementBlock()
     unknown.kind = 9999
     unknown.body_a = 0
     unknown.body_b = 1
-
     poses = np.array(
         [
             0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
@@ -743,47 +744,6 @@ def test_both_entry_points_read_one_kind_table() -> None:
         sample_count=3,
     )
     assert "unknown element kind" in core_error, core_error
-
-    model = AxleDynamicsModel(
-        name="one-kind-table",
-        gravity_m_per_s2=(0.0, 0.0, 0.0),
-        bodies=(
-            AxleBody(
-                name="fixture",
-                mass_kg=0.0,
-                inertia_kg_m2=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
-                fixed=True,
-            ),
-            AxleBody(
-                name="body",
-                mass_kg=1.0,
-                inertia_kg_m2=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
-            ),
-        ),
-        joints=(),
-        springs=(
-            AxleSpringDamper(
-                name="spring",
-                body_a="fixture",
-                body_b="body",
-                point_a_m=(0.0, 0.0, 0.0),
-                point_b_m=(0.0, 0.0, 0.0),
-                stiffness_n_per_m=50.0,
-                compression_damping_n_s_per_m=0.0,
-                rebound_damping_n_s_per_m=0.0,
-                free_length_m=0.1,
-            ),
-        ),
-    )
-    case = AxleDynamicsCase(
-        name="one-kind-table",
-        times_s=(0.0, 0.001, 0.002),
-        solver=AxleSolverSettings(internal_step_s=0.00025),
-    )
-    with pytest.raises(Exception) as captured:  # noqa: B017 - the message is the evidence
-        native._run_native(model, case, element_blocks=(unknown,))
-    assert "unknown element kind" in str(captured.value), str(captured.value)
-
 
 
 def test_core_input_rejects_a_struct_size_mismatch() -> None:

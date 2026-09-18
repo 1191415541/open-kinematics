@@ -9,6 +9,14 @@
 
 #include "mb_static/functions.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_constraint/functions.hpp"
+#include "mb_integrator/functions.hpp"
+#include "mb_linalg/functions.hpp"
+#include "mb_tire/common/functions.hpp"
+
 namespace axle_kernel {
 bool normalized_static_constraint_matrix(
     const Model& model, const State& state,

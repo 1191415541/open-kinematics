@@ -14,10 +14,6 @@ from suspension_multibody.axle_dynamics import (
     NativeAxleError,
     run_axle_dynamics,
 )
-from suspension_multibody.axle_dynamics.native import (
-    _run_native,
-    _VehicleRoadBuffers,
-)
 
 _I = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _ZERO_I = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
@@ -141,7 +137,7 @@ def test_vehicle_aerodynamic_drag_uses_current_body_velocity() -> None:
             ),
         ),
     )
-    result = _run_native(
+    result = run_axle_dynamics(
         model,
         AxleDynamicsCase(
             name="aerodynamic-drag",
@@ -153,19 +149,7 @@ def test_vehicle_aerodynamic_drag_uses_current_body_velocity() -> None:
                 maximum_step_s=0.00001,
             ),
         ),
-        road=_VehicleRoadBuffers(
-            kind=1,
-            origin_x=0.0,
-            origin_z=0.0,
-            amplitude=0.0,
-            wavelength=1.0,
-            phase=0.0,
-            bump_start=0.0,
-            bump_length=1.0,
-            corner_scale=np.ones(4, dtype=float),
-        ),
-        initial_state_angle_tolerance_rad=1.0e-8,
-    ).result
+    )
 
     assert result.body_state("body")[0, 13] == pytest.approx(-5.0)
 
@@ -207,7 +191,7 @@ def test_pac2002_cambered_contact_applies_normal_force_at_ground_intersection() 
             ),
         ),
     )
-    result = _run_native(
+    result = run_axle_dynamics(
         model,
         AxleDynamicsCase(
             name="cambered-pac-contact",
@@ -219,19 +203,7 @@ def test_pac2002_cambered_contact_applies_normal_force_at_ground_intersection() 
                 maximum_step_s=0.00001,
             ),
         ),
-        road=_VehicleRoadBuffers(
-            kind=1,
-            origin_x=0.0,
-            origin_z=0.0,
-            amplitude=0.0,
-            wavelength=1.0,
-            phase=0.0,
-            bump_start=0.0,
-            bump_length=1.0,
-            corner_scale=np.ones(4, dtype=float),
-        ),
-        initial_state_angle_tolerance_rad=1.0e-8,
-    ).result
+    )
 
     normal_force = float(result.tire_state("tire")[0, 4])
     expected_roll_acceleration = center_height * np.tan(camber) * normal_force

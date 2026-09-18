@@ -8,6 +8,11 @@
 
 #include "mb_integrator/functions.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_tire/common/functions.hpp"
+
 namespace axle_kernel {
 
 std::vector<int> contact_modes(

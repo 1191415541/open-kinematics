@@ -424,7 +424,7 @@ def _condense_welded_bodies(assembly: VehicleAssembly) -> VehicleAssembly:
             updates["axis_b_secondary"] = axis_to_body(
                 getattr(constraint, "axis_b_secondary"), body_b, mapped_body(body_b)
             )
-        transformed = replace(constraint, **updates)
+        transformed = replace(constraint, **updates)  # ty: ignore[invalid-argument-type]
         if getattr(transformed, "body_a", None) == getattr(transformed, "body_b", None):
             raise ValueError(
                 f"weld condensation collapses constraint {constraint.name!r} onto one body"

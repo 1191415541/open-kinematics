@@ -13,6 +13,25 @@ builtin = "clear,rare,informal,usage"
 dictionary = ".codespell-british.txt,-"
 
 [tool.ty.src]
+# Two kinds of exemption are in force, and they are different things.
+#
+# Whole-tree exclusions below are for code that is *not* part of the gate's
+# subject: GUI and visualization modules that sit on dynamically typed
+# third-party APIs, and the test trees.
+#
+# ``# ty: ignore[rule]`` comments in the checked trees are for individual
+# expressions where the checker cannot follow *correct* code.  They are
+# per-line and per-rule on purpose, so every other line of the file stays
+# checked.  The two patterns that account for almost all of them:
+#
+#   * ``**kwargs`` expanded into a dataclass constructor -- ty reports
+#     ``missing-argument`` for a call it cannot expand;
+#   * an unparameterised ``Mapping`` narrowed by ``isinstance``, which ty
+#     resolves to ``Mapping[Never, Never]`` and then rejects every key against.
+#
+# The rest are numpy scalars where a ``float`` is declared, sibling-script
+# imports that are resolved at run time through ``sys.path``, and
+# ``sys.stdout.reconfigure``.
 # GUI and visualization code relies on dynamically typed third-party APIs.
 # Keep the workspace gate focused on solver, contract, and adapter code until
 # those modules receive dedicated type annotations.

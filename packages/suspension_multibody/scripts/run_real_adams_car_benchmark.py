@@ -29,7 +29,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 try:
-    from run_dynamic_kc_correlation import bindings_for, build_case_and_model
+    from run_dynamic_kc_correlation import (  # ty: ignore[unresolved-import]
+        bindings_for,
+        build_case_and_model,
+    )
 except ModuleNotFoundError:
     from packages.suspension_multibody.scripts.run_dynamic_kc_correlation import (
         bindings_for,
@@ -498,7 +501,7 @@ def _run_case(
     )
     adams_history = axle_history_from_result(
         model,
-        adams_result,
+        adams_result,  # ty: ignore[invalid-argument-type]
         manifest.bindings,
         case=case,
     )
@@ -570,7 +573,7 @@ def _run_case(
         )
         adams_refined_history = axle_history_from_result(
             model,
-            adams_refined_result,
+            adams_refined_result,  # ty: ignore[invalid-argument-type]
             refined_manifest.bindings,
             case=refined_case,
         )
@@ -581,7 +584,7 @@ def _run_case(
         adams_convergence = audit_axle_time_convergence(
             adams_history,
             adams_refined_history,
-            acceptance=manifest.payload["acceptance"],
+            acceptance=manifest.payload["acceptance"],  # ty: ignore[invalid-argument-type]
         )
         adams_evidence: dict[str, object] = {
             "primary_manifest_sha256": manifest.sha256,
@@ -618,7 +621,7 @@ def _run_case(
         dynamic_result = compare_strict_axle_histories(
             adams_refined_history or adams_history,
             native_refined_history,
-            acceptance=manifest.payload["acceptance"],
+            acceptance=manifest.payload["acceptance"],  # ty: ignore[invalid-argument-type]
             case_name=case_name,
             harmonic_frequency_hz=(
                 float(case.harmonic_roads[0].frequency_hz)
@@ -640,7 +643,7 @@ def _run_case(
             adams_refined_history,
             native_refined_history,
             tire_model=tire_model,
-            acceptance=manifest.payload["acceptance"],
+            acceptance=manifest.payload["acceptance"],  # ty: ignore[invalid-argument-type]
         )
     dynamic_comparison = {
         "contract": "dynamic-axle-channel-comparison-v2",
@@ -864,7 +867,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             summary["dynamic_precision_gate_passed"]
         ),
         "precision_and_physics_gate_passed": bool(
-            all(summary["native_physics_gates"].values())
+            all(summary["native_physics_gates"].values())  # ty: ignore[unresolved-attribute]
         ),
     }
     report_path = output_dir / "summary.json"

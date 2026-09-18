@@ -71,7 +71,7 @@ def diagnose(adams_result: Path, native_artifact: Path) -> dict[str, Any]:
     case = VehicleDynamicCase.model_validate(manifest["case"])
     scale = _length_scale(model.units)
     assembly = build_vehicle(
-        model, mode=_select_assembly_mode(model, case.suspension_mode)
+        model, mode=_select_assembly_mode(model, case.suspension_mode)  # ty: ignore[invalid-argument-type]
     )
     _, body_frames = _initial_body_state(assembly, case, scale)
     native_tires = {

@@ -32,7 +32,7 @@
 
 #include "mb_base/vector.hpp"
 #include "mb_model/types.hpp"
-#include "mb_vehicle/energy.hpp"
+#include "mb_energy/types.hpp"
 
 namespace axle_kernel {
 

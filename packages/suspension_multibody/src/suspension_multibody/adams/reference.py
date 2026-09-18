@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ..analysis.k_mode import KModeSolver
 from ..model import build_front_axle
+from ..native_kc import run_k_grid_contract
 from ..schema import FrontAxleModel, MassSpec
 from .probe import AdamsProfile
 
@@ -55,12 +55,17 @@ def build_default_reference(profile: AdamsProfile) -> dict[str, dict[str, float]
         mass=MassSpec(sprung_mass=1200.0),
     )
     assembly = build_front_axle(model, "K")
-    solver = KModeSolver()
-    rebound = solver.solve(assembly, wheel_travel_left=-10.0, wheel_travel_right=-10.0)
-    bump = solver.solve(assembly, wheel_travel_left=10.0, wheel_travel_right=10.0)
+    states = {
+        (float(state["wheel_travel_mm"]), float(state["rack_displacement_mm"])): state
+        for state in run_k_grid_contract(
+            assembly, wheel_values_mm=(-10.0, 10.0), rack_values_mm=(0.0,)
+        )
+    }
+    rebound = states[(-10.0, 0.0)]
+    bump = states[(10.0, 0.0)]
 
     def change(field: str) -> float:
-        return abs(bump.metrics[field] - rebound.metrics[field])
+        return abs(float(bump[field]) - float(rebound[field]))
 
     static_wheel_load = 1200.0 * 9.81 / 4.0
     return {

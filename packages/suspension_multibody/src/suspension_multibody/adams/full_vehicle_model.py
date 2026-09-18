@@ -2335,7 +2335,7 @@ def _source_joint_specs(
             raise ValueError(
                 f"supported Adams source joint {joint.joint_id} has unknown kind {kind!r}"
             )
-        result.append(IdealJointSpec(**kwargs))
+        result.append(IdealJointSpec(**kwargs))  # ty: ignore[missing-argument]
     return tuple(result)
 
 
@@ -2424,7 +2424,7 @@ def _source_bushing_specs(
             ("tr_rear_suspension.", "tr_powertrain.")
             if allowed_part_ids
             and any(
-                (data.compiled_parts.get(part_id).adams_name or "").lower().startswith(
+                (data.compiled_parts.get(part_id).adams_name or "").lower().startswith(  # ty: ignore[possibly-unbound-attribute]
                     "tr_rear_suspension."
                 )
                 for part_id in allowed_part_ids

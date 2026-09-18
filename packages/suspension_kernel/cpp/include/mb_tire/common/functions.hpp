@@ -20,13 +20,8 @@
 #include "mb_base/dual.hpp"
 #include "mb_base/dual_geometry.hpp"
 #include "mb_tire/common/kinematics.hpp"
-#include "mb_base/functions.hpp"
 #include "mb_base/prelude.hpp"
 #include "mb_model/enums.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_tire/common/functions.hpp"
-#include "mb_base/functions.hpp"
-#include "mb_model/functions.hpp"
 
 namespace axle_kernel {
 TireContactKinematics tire_contact_kinematics( const Model& model, const State& state, const SampleInput& input, std::size_t tire_index );

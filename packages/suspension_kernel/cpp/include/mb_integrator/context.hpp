@@ -12,7 +12,7 @@
 /// linearization cache's key comparison is the only thing that needs it, and
 /// the cache is declared with a forward reference (epic section 8-D-H).
 
-#include "axle_kernel.hpp"
+#include "mb_input/types.hpp"
 #include "mb_base/constants.hpp"
 #include "mb_base/diagnostics.hpp"
 #include "mb_linalg/factorization_types.hpp"

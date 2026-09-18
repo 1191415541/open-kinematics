@@ -1,0 +1,123 @@
+{
+  "cases": {
+    "braking": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "67ae50ff5b4cfc96b43537778c85625dde0ef9300ea3de7d2394ea134de7adc8",
+      "constraint_wrench": "4ef4c11c8ae57e1bd3363f7dac172d49f5de807710ff5ba41c01f8b787d911f1",
+      "energy": "a5b8a4e338f2cdcc40c75f667bb4b2a77509212610deee34a315b0f123f41c9c",
+      "spring_output": "fb422c9a0a5b3cdc9da5a2ebb6829347aa220d5dbdc41d4172901bd4a783e3a5",
+      "states": "b75cabe43c64361197ab208d890b0b74a469a99eed5c29ac34c49ddb7ce79ac0",
+      "tire_output": "c7a0b4cfd4e39198e03f65add8affe80163213aa301895d1837e6faa53891013"
+    },
+    "combined_load": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "a90d4e18208f99f4ebb88db47f38f4fd27bc0873030819b4018a0866e14adef1",
+      "constraint_wrench": "89ae5ed5175b75e8db93fb58ca6c3ffaaa245fb29cc3ccf91567966b9857d0eb",
+      "energy": "fba077567c7b469dd0699467059631258337f6c4c53528e5c7fe2548ff2ad414",
+      "spring_output": "50da391223be68be0bc9b410480ad558c37e7ebdb4f645195be2d490ea86476f",
+      "states": "90d0f756e899e15a32d37418492ac64b5904898ba7b7bfd89dfded4fa8ddb333",
+      "tire_output": "1480d342b46f804bf4d80f8f089341dfb42956c33ae9c5bc56c2526388692931"
+    },
+    "driving": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "22b1289f36ff948e1a0a90c45fce15c98dbc839e538f582040b1e744431ffa22",
+      "constraint_wrench": "a64be8a6ba4d15985b85f951d14c4f78d8ee3a7a1b4415b9d81ec6e51ece172e",
+      "energy": "3accf8e639f80f8c819d01bf3cabbb7c4098edd418349be0dde33d4f0175146a",
+      "spring_output": "2c5ad720896e13d138163f1bc505c06aa411edefc673ce3da770b08e5baa175b",
+      "states": "e6efb106d55b88ed3ee73c10e7678638225a23e1d88a3bd5a2502db0a36ba750",
+      "tire_output": "ba979f0d8fd613cf4685fc56f333d4b02dde4b9c8343bb3c5bc7092e876b839d"
+    },
+    "in_phase_road": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "942e4ca0fe3b06ebc8efa7f5f189ba7443804b7e9c46053ae2254574fccda0fa",
+      "constraint_wrench": "e2268b9b2ade79a1bc447ad5414630d8c9d4baefa1ac03883a77694b143f4f09",
+      "energy": "ddc14dec6eaccf63c52490942b993f435e6443a4ba6e92fd7a98fdade8caeaba",
+      "spring_output": "48ffdbaa064615253f692d2b1c561cb4022b6e55f473f84a2dc38a9e03637d6f",
+      "states": "8797fc7a60a41780f37c261632c0632502c584c60bdbd2fa3160eab7fae8080b",
+      "tire_output": "7ba6237d82eb5ee6789c7544f17c86bf26f3b19bac3814dde8f53515cb2189f4"
+    },
+    "large_amplitude_high_frequency": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "1b254ccc9378ea7f3c8c54a62a356f0ba5450202ca98fb8b3e07c2e3c97e898d",
+      "constraint_wrench": "10db585637b295fca3e3c7a09844f74c7c727d9019c55d227cb1ad315dadc6dd",
+      "energy": "7a55b4418e6c72bb43373f7a474b2e698267b27beb531633b0e3143123ab4b11",
+      "spring_output": "46449882d495f1975e258ce24cefe246da61e2ddb0474d6e73e517c4343731e7",
+      "states": "5e056dc42132d9736bffbbf50f481d391fc74a4e6e0429cc6c36a718339fa185",
+      "tire_output": "84abadd76663343740e385cb3e1e80ce73545448830cdc1ec62bdf6bf9e1d537"
+    },
+    "lateral_or_steering": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "c6315c01eb899027b14848471602a1928c939e81f08f7f18e706f4b85d726764",
+      "constraint_wrench": "ff71d16e79992a50642c03620d123b02a8888d6bf3b2c9bb31408eae8a030d89",
+      "energy": "023ce7a9cb8a381d0c95ec3d2156763f06b5dfc763684eafdf5b93dd89674376",
+      "spring_output": "45862e08c026afd04d468547b3d7f40f5072fd9453f2c14dd303991b516b3562",
+      "states": "d3548364229c594824964d02e2dc52c148b2ab2905321fd76be2521ab6102b35",
+      "tire_output": "f5786ff904c5c49979a70fedc88445459239d95f4b4182ea37367f1554639787"
+    },
+    "opposite_phase_road": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "45f7991c340db14a43d151e409f92a7e111d43f84cbf4e9b0767a6f463a19a00",
+      "constraint_wrench": "fca090ef85e6127f5df6c9eb7c80a433a04f6ba2e6041efffc4d34131102c72e",
+      "energy": "61e3aaffb930fa69c8741eed5a163005ffac71bbfb866837b02c53163a2877aa",
+      "spring_output": "306a50f23f67370a510f10c175e5d3ecfbba604adffdf67d1c2648f2336e8961",
+      "states": "8b961766f407132034a3dec6f2809777d2c18467c2f0c3dd5d6b9030058f9c5e",
+      "tire_output": "946c6bcad1200278d29d759879366f1363237db9843b78ef966a2d1c02448235"
+    },
+    "road_pulse": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "754d127042458d09f91ad7af04501bbc3915815a83822b6a7c1f3370c87bd5b6",
+      "constraint_wrench": "428cca5161c75cdc303331c5bd4429e17161b738280862810bfad28006633039",
+      "energy": "c56ec23e6e330e02acea414a7525266d01374a61fdb7b19b2253739e9cad6428",
+      "spring_output": "285c84304f030a914be5b0b3968540f651cf546329654d48ab380bc63dc0a58a",
+      "states": "08b824177656e1e0ca4e7296f96a66fd14f13af5e60b99fb9bd36470eb92af4c",
+      "tire_output": "97631f525386459a61918431284be8cd4538cbb4349236d27d407c6b1c5f2a5a"
+    },
+    "road_sine": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "70c71e244978f023ba472713d6f94b4d6f2402a9ec716a2048808dfba9d2f52b",
+      "constraint_wrench": "8a843b5acee9ec294b651721f7ad6c950c3cce99c503a5a8779d92d475a99497",
+      "energy": "9a859952c5663f0980cf1cde5cfd3fc459b4723b794dfc0d25184534c90a0e6d",
+      "spring_output": "e4ee3feb38a8b993f6e84b5badb1664c398f4394f1d5f2d61fbe2adf638704e9",
+      "states": "47c760d0e33fe41526a9e3c5fc88267e745d07085aa59a2db25fe219b0ebc7d5",
+      "tire_output": "29a7d7b83daf944282e01ef68539d2ce5f9d9648b140bde5cc486dcde7c5adf2"
+    },
+    "road_step_finite_rise": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "dfa5649e14244961f2996e842c61c42422eff99a7cda0569441d5e594885e798",
+      "constraint_wrench": "a48734427ef9721dc672a7faecc2566b2d1bf1ca56a5b4ab8642bcf927d246b1",
+      "energy": "2aa4ab5b9ad2941788a6ae51d8b8cfacd5b68285330d894bc13551643ff4932d",
+      "spring_output": "4854defcf8eb5c8dad3e120bf4b1bc41d90652686586d85af9dee0e79dbe1567",
+      "states": "45b5638d1fc1dfc06db090523a9b97669afd4aefda8c1a282e73f32a105e766b",
+      "tire_output": "3b35a23e5cc94b313455832b37788e22a48b0fdaf598b27c78ad46ec02c46d43"
+    },
+    "single_wheel_road": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "8ffcff4280249bc2637d083f0226b3fe0d11ddb4813f9d046c46e6bd164b5064",
+      "constraint_wrench": "d3cc681c52cf921a6023ecf21265f0c6ff0ccb958fdacee9f3827914b5d637f3",
+      "energy": "442bfd56ab0ee6e2e6ece949ea98c5cb6b1e088c5aa937f596454aae24a9078c",
+      "spring_output": "aa33db9dcf4ac3866345a1a04e469b85e2d02e587f57ccaf65c32d22e3b34f6c",
+      "states": "8434da838b3318157ae22d48345e3b844889f468d1ede31ef955a13d66c055c4",
+      "tire_output": "451d73b04effe6588e80a33df90dd39d2df9a1dda5c3a66867b1f8bf2cbf733a"
+    },
+    "static_equilibrium": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "521ee9a6ebcee7f4d4aa123e89778abdbadb0ec965944e1687b0c7552e7d8461",
+      "constraint_wrench": "7503184b7ffaa006c8d149ca43ce0354b18ee5dbcf3f277c79712c8002ce9ae9",
+      "energy": "6430abe786b431df9ebf158f94dc5a15492986bc4980e0c967032ead465800ea",
+      "spring_output": "0e09ecedfc87c9b6903480901c2cd12e039a0b0bc23f63343b8d745b7fabe985",
+      "states": "3895af91f00ec70cb4076f7574244668b43eb20779887824b107b960724cf928",
+      "tire_output": "9bab69be5a915edb51499047436d4efedea5e8106e3ff3b818868a18e36b333b"
+    },
+    "tire_liftoff_and_recontact": {
+      "anti_roll_output": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bushing_output": "bf07975dcd16773778e7a8b0d5968e0ebed972c91a7782f0f62c3fa3bb006e61",
+      "constraint_wrench": "25973b29f08dba89f05535beec9d810adab43964d9d38b5493107a60f1a70d25",
+      "energy": "4ea400412162da72eafc2d2dae16df3dde7621d6a4d12e2c04311b7c05592e74",
+      "spring_output": "8f5e4bb1a1e5dfc35b504f1f4b7986ed3ccc150050e29195e721022965e3fa42",
+      "states": "801251a05cc5321c2b8e34e8114335da3016cbee1a31d72d2802c6e9eb60d317",
+      "tire_output": "7839516457224d9015c76b119dec999162c2b7c9337ac027d905b01706421de5"
+    }
+  },
+  "contract": "axle-dynamics-snapshot-v1",
+  "recorded_from": "the ctypes route (axle_run), before run_axle_dynamics moved to the contract; the digests are of the float64 bytes of each array"
+}

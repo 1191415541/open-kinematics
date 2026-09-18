@@ -12,10 +12,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-from ..analysis.vehicle_correlation_model import Vehicle14DofParameters
 from .probe import AdamsProfile, _adams_environment, producer_id
 from .time_domain import AdamsResultChannel, TimeHistory, parse_adams_result_history
 from .vehicle_acceptance import HANDLING_CASES
+from .vehicle_parameters import Vehicle14DofParameters
 from .vehicle_reference import write_vehicle_reference_bundle
 
 HandlingRunner = Callable[[AdamsProfile, str, Path], TimeHistory]

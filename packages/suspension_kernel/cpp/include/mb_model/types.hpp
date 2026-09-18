@@ -263,6 +263,16 @@ struct Model {
     double initial_state_angle_tolerance{0.0};
     std::vector<Vec3> release_velocity;
     std::vector<Vec3> release_omega;
+    // Body-fixed points at which the per-sample ``body_wrench`` acts, in metres
+    // and in body order, one entry per body.  Empty means every wrench acts at
+    // its body origin.  A force applied at a body-fixed point makes a moment
+    // about the origin equal to ``cross(R*p_local, F)``, and that lever arm is
+    // a function of the pose being solved for: the solver has to resolve it
+    // rather than accept a wrench already transferred at a reference pose.
+    // Frozen at the reference pose the arm loses the first-order geometry of
+    // the swept body -- measured as 2.8e-8 rad on a 2.5e-5 rad response,
+    // against a 1e-8 rad acceptance tolerance.
+    std::vector<Vec3> body_wrench_point_local;
     std::vector<int> free_body;
     std::vector<int> body_to_free;
     int rows{0};

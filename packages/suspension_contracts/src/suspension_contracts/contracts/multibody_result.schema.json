@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-kinematics.dev/contracts/multibody_result_v1.json",
+  "title": "Multibody Result Contract V1",
+  "description": "Solver output. Scalars, identities and diagnostics live in JSON; every numeric array lives in the blob section and is described by a named block entry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "contract_version", "kind", "case_identity", "status"],
+  "properties": {
+    "contract": {"const": "multibody-result"},
+    "contract_version": {"const": 1},
+    "kind": {"const": "result"},
+    "case_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_sha256", "case_sha256"],
+      "properties": {
+        "model_sha256": {"type": "string", "minLength": 64, "maxLength": 64},
+        "case_sha256": {"type": "string", "minLength": 64, "maxLength": 64},
+        "grid_sha256": {"type": "string"},
+        "contract_version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "status": {"enum": ["success", "failed", "blocked"]},
+    "diagnostics": {"type": "object"},
+    "manifest": {"type": "object"},
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "offset", "length", "dtype", "shape"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "offset": {"type": "integer", "minimum": 0},
+          "length": {"type": "integer", "minimum": 0},
+          "dtype": {"enum": ["float64", "int32", "uint8"]},
+          "shape": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+          "order": {"const": "C"}
+        }
+      }
+    },
+    "blobs": {"type": "array", "items": {"type": "object"}}
+  }
+}

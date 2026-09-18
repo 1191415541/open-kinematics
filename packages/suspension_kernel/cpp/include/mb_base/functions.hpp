@@ -18,7 +18,6 @@
 #include "mb_base/util.hpp"
 #include "mb_base/dual.hpp"
 #include "mb_base/dual_geometry.hpp"
-#include "mb_base/functions.hpp"
 #include "mb_base/prelude.hpp"
 
 

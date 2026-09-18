@@ -375,7 +375,7 @@ def _audit_solver_conditions(
     if adams_convergence is None and isinstance(adams_evidence, Mapping):
         nested = adams_evidence.get("time_convergence")
         if isinstance(nested, Mapping):
-            adams_convergence = _bool_or_none(nested.get("passed"))
+            adams_convergence = _bool_or_none(nested.get("passed"))  # ty: ignore[invalid-argument-type]
     if require_runtime:
         if comparison_basis != "continuous_problem_convergence":
             blockers.append(
@@ -455,7 +455,7 @@ def _evidence_flag(
         return direct
     diagnostics = evidence.get("diagnostics")
     if isinstance(diagnostics, Mapping):
-        return _bool_or_none(diagnostics.get(key))
+        return _bool_or_none(diagnostics.get(key))  # ty: ignore[invalid-argument-type]
     return None
 
 
@@ -535,7 +535,7 @@ def _audit_model_coverage(
     missing: list[str] = []
 
     def require(key: str, label: str | None = None) -> None:
-        value = ids.get(key)
+        value = ids.get(key)  # ty: ignore[invalid-argument-type]
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             missing.append(label or key)
         else:
@@ -821,7 +821,7 @@ def _audit_channels(
         if isinstance(contract, Mapping)
         else {}
     )
-    expected_names = tuple(str(name) for name in expected_payload)
+    expected_names = tuple(str(name) for name in expected_payload)  # ty: ignore[not-iterable]
     expected_units = {
         str(name): str(cast(Mapping[str, object], value).get("unit"))
         for name, value in cast(Mapping[str, object], expected_payload).items()
@@ -889,12 +889,12 @@ def _audit_initialization(
         else None
     )
     state = (
-        evidence_initialization.get("state")
+        evidence_initialization.get("state")  # ty: ignore[invalid-argument-type]
         if isinstance(evidence_initialization, Mapping)
         else None
     )
     state_hash = (
-        evidence_initialization.get("state_sha256")
+        evidence_initialization.get("state_sha256")  # ty: ignore[invalid-argument-type]
         if isinstance(evidence_initialization, Mapping)
         else None
     )
@@ -970,7 +970,7 @@ def _compare_initial_state(
     body_velocity = 0.0
     body_omega = 0.0
     for index, body in enumerate(model.bodies):
-        native = bodies.get(body.name)
+        native = bodies.get(body.name)  # ty: ignore[unresolved-attribute]
         if not isinstance(native, Mapping):
             return _incomplete_initial_state(f"missing body {body.name!r}")
         values = _mapping_values(native, BODY_STATE_COLUMNS)
@@ -978,24 +978,24 @@ def _compare_initial_state(
         body_position = max(body_position, float(np.max(np.abs(values[:3] - actual[:3]))))
         body_quaternion = max(
             body_quaternion,
-            _quaternion_angle(values[3:7], actual[3:7]),
+            _quaternion_angle(values[3:7], actual[3:7]),  # ty: ignore[invalid-argument-type]
         )
         body_velocity = max(body_velocity, float(np.max(np.abs(values[7:10] - actual[7:10]))))
         body_omega = max(body_omega, float(np.max(np.abs(values[10:13] - actual[10:13]))))
     constraint_error, constraint_scale = _mapped_array_error(
-        constraints,
+        constraints,  # ty: ignore[invalid-argument-type]
         adams_result.constraint_names,
         adams_result.constraint_wrench[0],
         CONSTRAINT_WRENCH_COLUMNS,
     )
     spring_error, spring_scale = _mapped_array_error(
-        springs,
+        springs,  # ty: ignore[invalid-argument-type]
         adams_result.spring_names,
         adams_result.spring_output[0],
         SPRING_OUTPUT_COLUMNS,
     )
     tire_error, tire_scale = _mapped_array_error(
-        tires,
+        tires,  # ty: ignore[invalid-argument-type]
         adams_result.tire_names,
         adams_result.tire_output[0],
         TIRE_OUTPUT_COLUMNS,
@@ -1039,30 +1039,30 @@ def _audit_output_conventions(
     conventions = dataset.get("conventions")
     conventions_map = conventions if isinstance(conventions, Mapping) else {}
     blockers: list[str] = []
-    units_match = model.units == "SI" and "SI" in str(conventions_map.get("units", ""))
+    units_match = model.units == "SI" and "SI" in str(conventions_map.get("units", ""))  # ty: ignore[no-matching-overload]
     coordinates_match = model.coordinate_system == "vehicle_x_rear_y_right_z_up"
     if not units_match:
         blockers.append("model and Adams dataset units are not both SI")
     if not coordinates_match:
         blockers.append("model coordinate system is not the frozen vehicle frame")
-    if conventions_map.get("damper_curve_interpolation") != (
+    if conventions_map.get("damper_curve_interpolation") != (  # ty: ignore[invalid-argument-type]
         "piecewise linear with constant extrapolation beyond the measured "
         "velocity endpoints, matching the native curve evaluator"
     ):
         blockers.append("damper curve interpolation convention is not frozen")
-    if conventions_map.get("part_pose_reconstruction") != (
+    if conventions_map.get("part_pose_reconstruction") != (  # ty: ignore[invalid-argument-type]
         "canonical body pose, velocity, and acceleration are read from explicit "
         "CM-marker VARIABLE expressions in the ground frame; no PART_XFORM "
         "reconstruction is applied"
     ):
         blockers.append("Adams CM body state convention is not frozen")
-    if conventions_map.get("initial_state_canonicalization") != (
+    if conventions_map.get("initial_state_canonicalization") != (  # ty: ignore[invalid-argument-type]
         "at the common t=0 sample, the canonical body quaternion is taken from "
         "the shared manifest to remove finite-precision Euler round-trip error; "
         "all later samples are read from Adams CM variables"
     ):
         blockers.append("Adams initial quaternion canonicalization is not frozen")
-    if conventions_map.get("fixture_wrench_reconstruction") != (
+    if conventions_map.get("fixture_wrench_reconstruction") != (  # ty: ignore[invalid-argument-type]
         FIXTURE_WRENCH_CONVENTION
     ):
         blockers.append("fixture wrench reconstruction convention is not frozen")
@@ -1071,19 +1071,19 @@ def _audit_output_conventions(
             "passed": not blockers,
             "model_units": model.units,
             "model_coordinate_system": model.coordinate_system,
-            "dataset_units": conventions_map.get("units"),
-            "dataset_coordinate_convention": conventions_map.get("part_reference_frame"),
+            "dataset_units": conventions_map.get("units"),  # ty: ignore[invalid-argument-type]
+            "dataset_coordinate_convention": conventions_map.get("part_reference_frame"),  # ty: ignore[invalid-argument-type]
             "damper_curve_interpolation": conventions_map.get(
-                "damper_curve_interpolation"
+                "damper_curve_interpolation"  # ty: ignore[invalid-argument-type]
             ),
             "part_pose_reconstruction": conventions_map.get(
-                "part_pose_reconstruction"
+                "part_pose_reconstruction"  # ty: ignore[invalid-argument-type]
             ),
             "initial_state_canonicalization": conventions_map.get(
-                "initial_state_canonicalization"
+                "initial_state_canonicalization"  # ty: ignore[invalid-argument-type]
             ),
             "fixture_wrench_reconstruction": conventions_map.get(
-                "fixture_wrench_reconstruction"
+                "fixture_wrench_reconstruction"  # ty: ignore[invalid-argument-type]
             ),
             "native_history_units_present": (
                 native_history.units is not None if native_history is not None else None
@@ -1132,7 +1132,7 @@ def _mapped_array_error(
     for index, name in enumerate(names):
         values = native.get(name)
         if isinstance(values, Mapping):
-            expected = _mapping_values(values, columns)
+            expected = _mapping_values(values, columns)  # ty: ignore[invalid-argument-type]
         elif isinstance(values, Sequence) and not isinstance(values, (str, bytes)):
             try:
                 expected = np.asarray([float(value) for value in values], dtype=float)

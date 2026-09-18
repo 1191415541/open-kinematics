@@ -408,7 +408,7 @@ def generate(
     )
     native_models: dict[str, object] = {}
     for tire_kind in tire_kinds:
-        source_model = build_adams_source_vehicle_model(data, tire_kind=tire_kind)
+        source_model = build_adams_source_vehicle_model(data, tire_kind=tire_kind)  # ty: ignore[invalid-argument-type]
         model = build_native_rack_steering_model(source_model)
         rack_steering = adams_rack_displacement_signal_from_result(adams_result_path)
         case = _native_case(

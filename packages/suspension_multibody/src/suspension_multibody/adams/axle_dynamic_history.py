@@ -144,7 +144,7 @@ def adams_axle_history_from_result(
 ) -> TimeHistory:
     """Parse one real Adams result and evaluate all frozen axle channels."""
     result = adams_axle_result_from_result(model, dataset, result_path)
-    return axle_history_from_result(model, result, bindings, case=case)
+    return axle_history_from_result(model, result, bindings, case=case)  # ty: ignore[invalid-argument-type]
 
 
 def adams_axle_result_from_result(
@@ -446,7 +446,7 @@ def _entity_ids(
     entity_ids = dataset.get("entity_ids")
     if not isinstance(entity_ids, Mapping):
         raise ValueError("Adams dataset entity_ids must be a mapping")
-    return entity_ids
+    return entity_ids  # ty: ignore[invalid-return-type]
 
 
 def _entity_id(ids: Mapping[str, object], key: str) -> int:

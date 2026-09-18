@@ -12,8 +12,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-from ..analysis import KModeSolver
 from ..model import build_front_axle
+from ..native_kc import run_k_grid_contract
 from ..schema import FrontAxleModel, MassSpec
 from .adapter import SmokeResult, Tolerance
 from .equivalent_model import write_equivalent_sources
@@ -204,7 +204,16 @@ def build_equivalence_manifest(profile: AdamsProfile) -> dict[str, Any]:
 
 
 def run_suspension_multibody_pure_k(profile: AdamsProfile) -> list[dict[str, Any]]:
-    """Solve the fixed grid from installed hardpoints without reading Adams results."""
+    """
+    Solve the fixed grid from installed hardpoints without reading Adams results.
+
+    The reference is the native kernel reached through the contract boundary.
+    That is the point of the gate: the two sides being compared are Adams and
+    this package's own kernel, not Adams and a second copy of the same physics
+    written in Python.  The Python solver's numbers for this grid are frozen
+    separately (`tests/data/kc_baseline`), so the independent oracle is kept
+    without keeping the implementation.
+    """
     manifest = build_equivalence_manifest(profile)
     physical = manifest["physical_input"]
     model = FrontAxleModel(
@@ -213,41 +222,16 @@ def run_suspension_multibody_pure_k(profile: AdamsProfile) -> list[dict[str, Any
         mass=MassSpec(sprung_mass=1.0),
     )
     assembly = build_front_axle(model, "K")
-    solver = KModeSolver()
-    states: list[dict[str, Any]] = []
-    for wheel in WHEEL_VALUES_MM:
-        for rack in RACK_VALUES_MM:
-            solved = solver.solve(
-                assembly,
-                wheel_travel_left=wheel,
-                wheel_travel_right=wheel,
-                rack_displacement=rack,
-                drive="wheel_center",
-                case_id=_case_id(wheel, rack),
-            )
-            if not solved.equilibrium.converged:
-                raise RuntimeError(
-                    f"suspension_multibody did not converge for {solved.case_id}"
-                )
-            metric = solved.metrics
-            states.append(
-                {
-                    "case_id": solved.case_id,
-                    "wheel_travel_mm": wheel,
-                    "rack_displacement_mm": rack,
-                    **{
-                        f"{side}_wheel_center_{axis}_mm": metric[
-                            f"{side}_wheel_center_{axis}"
-                        ]
-                        for side in ("left", "right")
-                        for axis in ("x", "y", "z")
-                    },
-                    **{
-                        f"{side}_{angle}_deg": metric[f"{side}_{angle}_deg"]
-                        for side in ("left", "right")
-                        for angle in ("toe", "camber")
-                    },
-                }
+    states = run_k_grid_contract(
+        assembly,
+        wheel_values_mm=WHEEL_VALUES_MM,
+        rack_values_mm=RACK_VALUES_MM,
+    )
+    for state in states:
+        expected = _case_id(float(state["wheel_travel_mm"]), float(state["rack_displacement_mm"]))
+        if state["case_id"] != expected:
+            raise RuntimeError(
+                f"the kernel expanded {state['case_id']!r} where {expected!r} was expected"
             )
     return states
 

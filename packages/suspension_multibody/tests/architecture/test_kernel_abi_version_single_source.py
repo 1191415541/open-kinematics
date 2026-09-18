@@ -22,7 +22,7 @@ ROOT = Path(__file__).parents[4]
 #: `cpp/src/<module>/`, so these tests locate a unit by name rather than by path:
 #: a test that hard-codes the directory breaks on every move and teaches nothing.
 KERNEL_CPP = ROOT / "packages" / "suspension_kernel" / "cpp"
-VERSION_HEADER = KERNEL_CPP / "include" / "abi" / "version.hpp"
+VERSION_HEADER = KERNEL_CPP / "include" / "mb_base" / "version.hpp"
 
 
 def _kernel_source(name: str) -> Path:

@@ -14,11 +14,22 @@ product-independent part of the ctypes boundary.
 
 ## What does not live here
 
-Anything that knows what a spring, bushing, or tire is. Those semantics stay in
-the product package that owns them; `suspension_kernel` must never import
-`suspension_multibody`. The axle product keeps its own `ctypes.Structure`
-mirrors and its marshalling, and loads the shared library through
-`suspension_kernel.binding`.
+Anything that knows what a *product* is. The kernel owns the element semantics --
+springs, bushings, anti-roll bars, the tire force laws, the static and dynamic
+solvers -- because that is what it was built to take over; what it must never do
+is reach back into a product package: `suspension_kernel` never imports
+`suspension_multibody`, and the dependency runs one way only.
+
+The boundary is the contract, not a set of structs: a caller sends a model
+document and a case document and gets a result document back, through
+`suspension_kernel_run`. The product keeps its own `ctypes.Structure` mirrors
+and its marshalling for the older entry points and loads the shared library
+through `suspension_kernel.binding`.
+
+An earlier version of this section said the kernel contains no element
+semantics. That was true of the kernel's first incarnation and has not been true
+since the takeover: `mb_suspension`, `mb_tire` and `mb_static` are the element
+and solver layers, and this file is the place that has to say so.
 
 ## Build
 

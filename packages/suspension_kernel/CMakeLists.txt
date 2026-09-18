@@ -48,6 +48,26 @@ set(MB_STATIC_SOURCES
     cpp/src/static/kernel_static_projection.cpp
     cpp/src/static/kernel_static_trim.cpp
 )
+set(MB_CONTRACT_SOURCES
+    cpp/src/contract/contract_container.cpp
+    cpp/src/contract/contract_json.cpp
+    cpp/src/contract/contract_registry.cpp
+    cpp/src/contract/contract_sha256.cpp
+)
+#: The case layer translates contract documents into solver runs.  It sits at
+#: L5: it may read the contract and describe the model, but it never calls the
+#: solver, so `abi` stays the only module that knows the call sequence.
+set(MB_CASES_SOURCES
+    cpp/src/cases/axle_dynamic.cpp
+    cpp/src/cases/case_dispatch.cpp
+    cpp/src/cases/contract_model.cpp
+    cpp/src/cases/handling.cpp
+    cpp/src/cases/kc_quasi_static.cpp
+    cpp/src/cases/ride_four_post.cpp
+    cpp/src/cases/ride_random_road.cpp
+    cpp/src/cases/vehicle_dynamic.cpp
+    cpp/src/cases/vehicle_kc.cpp
+)
 set(MB_OUTPUT_SOURCES
     cpp/src/output/kernel_output.cpp
 )
@@ -86,6 +106,7 @@ set(MB_TIRE_PAC2002_SOURCES
     cpp/src/tire/pac2002/directional.cpp
     cpp/src/tire/pac2002/parameters.cpp
     cpp/src/tire/pac2002/law.cpp
+    cpp/src/tire/pac2002/scope.cpp
     cpp/src/tire/pac2002/model.cpp
     cpp/src/tire/pac2002/spin.cpp
     cpp/src/tire/pac2002/vertical.cpp
@@ -120,6 +141,7 @@ set(MB_BASE_SOURCES
 set(MB_ABI_SOURCES
     cpp/src/abi/element_reader.cpp
     cpp/src/abi/kernel_abi.cpp
+    cpp/src/abi/kernel_contract_run.cpp
     cpp/src/abi/kernel_core.cpp
     cpp/src/abi/kernel_model_build.cpp
 )
@@ -156,6 +178,8 @@ target_link_options(mb_linalg PRIVATE -fopenmp)
 
 add_library(mb_tire_pac2002 STATIC ${MB_TIRE_PAC2002_SOURCES})
 add_library(mb_integrator STATIC ${MB_INTEGRATOR_SOURCES})
+add_library(mb_contract STATIC ${MB_CONTRACT_SOURCES})
+add_library(mb_cases STATIC ${MB_CASES_SOURCES})
 add_library(mb_static STATIC ${MB_STATIC_SOURCES})
 add_library(mb_output STATIC ${MB_OUTPUT_SOURCES})
 add_library(mb_vehicle STATIC ${MB_VEHICLE_SOURCES})
@@ -182,7 +206,7 @@ foreach(_tire_target mb_tire_pac2002 mb_tire_fiala mb_tire_brush)
     target_link_options(${_tire_target} PRIVATE -fopenmp)
 endforeach()
 
-foreach(_module_target mb_integrator mb_static mb_output mb_vehicle mb_suspension mb_tire mb_constraint mb_model mb_tire_pac2002 mb_tire_fiala mb_tire_brush mb_tire_common mb_tire_state mb_linalg mb_base)
+foreach(_module_target mb_contract mb_cases mb_integrator mb_static mb_output mb_vehicle mb_suspension mb_tire mb_constraint mb_model mb_tire_pac2002 mb_tire_fiala mb_tire_brush mb_tire_common mb_tire_state mb_linalg mb_base)
     set_target_properties(
         ${_module_target} PROPERTIES POSITION_INDEPENDENT_CODE ON
     )
@@ -212,6 +236,8 @@ target_link_options(suspension_kernel PRIVATE -fopenmp)
 target_link_libraries(
     suspension_kernel PRIVATE
     "-Wl,--start-group"
+    mb_contract
+    mb_cases
     mb_integrator
     mb_static
     mb_output
@@ -279,7 +305,7 @@ set_property(
     PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
 )
 set_property(
-    TARGET mb_integrator mb_static mb_output mb_vehicle mb_suspension mb_tire mb_constraint mb_model mb_tire_pac2002 mb_tire_fiala mb_tire_brush mb_tire_common mb_tire_state mb_linalg mb_base
+    TARGET mb_contract mb_cases mb_integrator mb_static mb_output mb_vehicle mb_suspension mb_tire mb_constraint mb_model mb_tire_pac2002 mb_tire_fiala mb_tire_brush mb_tire_common mb_tire_state mb_linalg mb_base
     PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
 )
 
@@ -293,3 +319,19 @@ set_property(TARGET suspension_kernel PROPERTY PREFIX "")
 # The product stays in the build tree; the build driver copies it into
 # `src/suspension_kernel/native`.  Linking straight into the package directory
 # was tried first and the MinGW linker refused to create the file there.
+
+# The contract layer is verified by a standalone executable rather than through
+# the product C ABI: it must be exercised without bumping any ABI version.
+add_executable(mb_contract_selftest cpp/tests/contract_selftest.cpp)
+target_include_directories(
+    mb_contract_selftest PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/cpp/include"
+)
+target_compile_options(mb_contract_selftest PRIVATE ${KERNEL_COMPILE_OPTIONS})
+target_link_options(mb_contract_selftest PRIVATE -fopenmp)
+# Keep the self-test runnable without the MinGW runtime on PATH, so it can
+# be invoked directly from CI and from the local gate scripts.
+target_link_options(
+    mb_contract_selftest PRIVATE -static -static-libgcc -static-libstdc++
+)
+target_link_libraries(mb_contract_selftest PRIVATE mb_contract)

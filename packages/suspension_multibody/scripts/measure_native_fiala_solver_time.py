@@ -12,7 +12,7 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
-from run_full_native_three_model_comparison import (  # noqa: E402
+from run_full_native_three_model_comparison import (  # noqa: E402  # ty: ignore[unresolved-import]
     _assert_adams_tire_geometry_matches,
     _native_case,
 )
@@ -137,7 +137,7 @@ def measure(
         "case": "full_native_fiala_step_steer",
         "timing_contract": {
             "adams": "solver elapsed from Adams .msg, excluding Python wrapper and file copy",
-            "native": "kernel wall time around the C++ vehicle_run call; Python assembly/wrapper time is reported separately",
+            "native": "kernel wall time around the C++ contract entry call; Python assembly/wrapper time is reported separately",
         },
         "solver_settings": {
             "end_time_s": end_time,

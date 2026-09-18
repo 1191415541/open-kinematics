@@ -9,6 +9,11 @@
 
 #include "mb_tire/pac2002/functions.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+
 namespace axle_kernel {
 
 double pac2002_effective_rolling_radius(

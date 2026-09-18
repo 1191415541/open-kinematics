@@ -1,33 +1,23 @@
-"""K/C analysis API."""
+"""
+C&K reporting and vehicle-level analysis.
 
-from .axle_quasi_static import AxleTimeDomainSolver
-from .benchmarks import (
-    PerformanceReport,
-    benchmark_grid,
-    benchmark_model,
-    run_c_6600_benchmark,
-    run_k_100_benchmark,
-)
-from .c_mode import CModeSolver, CState, LoadPath
+What is left here after the solver takeover is *reporting*: the geometry metrics
+a K/C state is summarised by, the compliance numbers derived from a load and its
+response, and the vehicle-level load and roll-centre algebra.  The solvers that
+used to live beside them -- `k_mode`, `c_mode`, `k_reference` and the KKT
+equilibrium -- are gone; K and C states come from the native kernel through
+`suspension_multibody.kernel`.  So is the independent 14/15-DOF correlation model
+and the tire laws it needed: that family of Adams gates was retired rather than
+turned into a kernel-versus-kernel comparison.
+"""
+
+from .benchmarks import benchmark_grid, benchmark_model
 from .compliance import secant_compliance, tangent_compliance, validate_compliance
-from .k_mode import KModeSolver, KState
-from .k_reference import KReferenceCache
 from .metrics import compute_k_metrics, wheel_metrics
-from .roll_center import (
-    DynamicRollCenterResult,
-    DynamicRollCenterSample,
-    diagnose_dynamic_roll_centers,
-)
-from .sweeps import CGrid, KGrid, run_c_grid, run_k_grid
 from .time_domain_physics import (
     DynamicLoadTransferResult,
     DynamicLoadTransferSample,
     diagnose_dynamic_load_transfer,
-)
-from .vehicle_correlation_model import (
-    Vehicle14DofParameters,
-    VehicleCorrelationRun,
-    simulate_vehicle_correlation_case,
 )
 from .vehicle_kc_time_domain import VehicleKCTimeDomainSolver
 from .vehicle_physics import (
@@ -41,42 +31,22 @@ from .vehicle_physics import (
 )
 
 __all__ = [
-    "CGrid",
-    "CModeSolver",
-    "CState",
-    "AxleTimeDomainSolver",
-    "KGrid",
-    "KModeSolver",
-    "KReferenceCache",
-    "KState",
-    "LoadPath",
-    "PerformanceReport",
-    "Vehicle14DofParameters",
-    "VehicleCorrelationRun",
-    "VehicleKCTimeDomainSolver",
     "DynamicLoadTransferResult",
     "DynamicLoadTransferSample",
-    "diagnose_dynamic_load_transfer",
-    "DynamicRollCenterResult",
-    "DynamicRollCenterSample",
-    "diagnose_dynamic_roll_centers",
+    "RollCenterResult",
+    "StaticWheelLoadResult",
+    "VehicleKCTimeDomainSolver",
+    "WheelLoadSummary",
     "benchmark_grid",
     "benchmark_model",
     "compute_k_metrics",
-    "run_c_grid",
-    "run_c_6600_benchmark",
-    "run_k_grid",
-    "run_k_100_benchmark",
-    "secant_compliance",
-    "simulate_vehicle_correlation_case",
-    "tangent_compliance",
-    "validate_compliance",
-    "wheel_metrics",
-    "RollCenterResult",
-    "StaticWheelLoadResult",
-    "WheelLoadSummary",
     "compute_static_wheel_loads",
     "compute_vehicle_roll_centers",
+    "diagnose_dynamic_load_transfer",
+    "secant_compliance",
     "summarize_wheel_loads",
+    "tangent_compliance",
+    "validate_compliance",
     "wheel_load_metrics",
+    "wheel_metrics",
 ]

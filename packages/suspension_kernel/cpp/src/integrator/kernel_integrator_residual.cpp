@@ -12,6 +12,16 @@
 
 #include "mb_integrator/functions.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+#include "mb_constraint/functions.hpp"
+#include "mb_model/functions.hpp"
+#include "mb_tire/fiala/functions.hpp"
+#include "mb_tire_state/functions.hpp"
+#include "mb_vehicle/functions.hpp"
+
 namespace axle_kernel {
 void residual(
     const ResidualContext& ctx, const std::vector<double>& x,

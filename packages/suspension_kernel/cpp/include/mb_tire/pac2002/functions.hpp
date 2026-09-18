@@ -24,17 +24,8 @@
 #include "mb_tire/pac2002/turn_slip.hpp"
 #include "mb_tire/pac2002/spin.hpp"
 #include "mb_tire/common/kinematics.hpp"
-#include "mb_base/functions.hpp"
 #include "mb_base/prelude.hpp"
 #include "mb_model/enums.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_tire/common/functions.hpp"
-#include "mb_tire/pac2002/functions.hpp"
-#include "mb_tire_state/functions.hpp"
-#include "mb_base/functions.hpp"
-#include "mb_model/functions.hpp"
-#include "mb_tire/common/functions.hpp"
-#include "mb_tire_state/functions.hpp"
 
 namespace axle_kernel {
 double pac2002_parameter(const Tire& tire, int index, double fallback);
@@ -72,6 +63,33 @@ double pac2002_low_speed_force_scale(const Tire& tire, double rolling_speed);
 bool pac2002_has_vertical_force_coupling_terms(const Tire& tire);
 
 int pac2002_use_mode(const Tire& tire);
+
+/// One PAC2002 coefficient family this kernel does not implement.
+///
+/// A tire that requests any of its coefficients has to be refused rather than
+/// solved with the family silently dropped.
+struct Pac2002RefusedFamily {
+    const char* name;
+    const char* reason;
+    std::vector<const char*> coefficients;
+};
+
+/// The USE_MODEs this kernel's PAC2002 mode tables implement.
+///
+/// `pac2002_mode_supported_by_native` reads this table rather than repeating it,
+/// so the declaration and the behaviour cannot disagree.
+const std::vector<int>& pac2002_supported_use_modes();
+
+/// Scalar coefficient names that must be zero for a tire to run exactly.
+const std::vector<const char*>& pac2002_refused_parameters();
+
+/// Importer-synthesised feature flags that must be zero for the same reason.
+const std::vector<const char*>& pac2002_refused_feature_flags();
+
+/// Whole coefficient families this kernel does not implement, with the reason
+/// each one is refused.
+const std::vector<Pac2002RefusedFamily>& pac2002_refused_families();
+
 
 bool pac2002_mode_allows_longitudinal(int use_mode);
 

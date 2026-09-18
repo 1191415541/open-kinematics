@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-kinematics.dev/contracts/multibody_model_v1.json",
+  "title": "Multibody Model Contract V1",
+  "description": "Declarative multibody model exchanged between the Python authoring layer and the C++ kernel. Scalar and topological data live in JSON; bulk numeric data (curves, time series, matrices) live in the blob section referenced by array descriptors.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "contract_version", "kind", "name", "units", "bodies"],
+  "properties": {
+    "contract": {"const": "multibody-model"},
+    "contract_version": {"const": 1},
+    "kind": {"const": "model"},
+    "name": {"type": "string", "minLength": 1},
+    "units": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["length", "mass", "time", "angle"],
+      "properties": {
+        "length": {"enum": ["mm", "m"]},
+        "mass": {"const": "kg"},
+        "time": {"const": "s"},
+        "angle": {"const": "rad"}
+      }
+    },
+    "gravity": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+    "capabilities": {"type": "array", "items": {"type": "string"}},
+    "bodies": {"type": "array", "items": {"$ref": "#/$defs/body"}},
+    "markers": {"type": "array", "items": {"$ref": "#/$defs/marker"}},
+    "body_wrench_markers": {
+      "description": "Markers whose body-fixed point is where that body's per-sample body_wrench force acts. Omitting the entry keeps the historical convention: the wrench acts at the body origin.",
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "couplers": {"type": "array", "items": {"$ref": "#/$defs/coupler"}},
+    "gauges": {"type": "array", "items": {"$ref": "#/$defs/gauge"}},
+    "joints": {"type": "array", "items": {"$ref": "#/$defs/joint"}},
+    "elements": {"type": "array", "items": {"$ref": "#/$defs/element"}},
+    "tires": {"type": "array", "items": {"$ref": "#/$defs/tire"}},
+    "road": {"$ref": "#/$defs/road"},
+    "blobs": {"type": "array", "items": {"$ref": "#/$defs/blob"}}
+  },
+  "$defs": {
+    "blob": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offset", "length", "dtype", "shape"],
+      "properties": {
+        "offset": {"type": "integer", "minimum": 0},
+        "length": {"type": "integer", "minimum": 0},
+        "dtype": {"enum": ["float64", "int32", "uint8"]},
+        "shape": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+        "order": {"const": "C"},
+        "offsets": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+        "counts": {"type": "array", "items": {"type": "integer", "minimum": 0}}
+      }
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "mass", "inertia"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "mass": {"type": "number", "minimum": 0},
+        "inertia": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}},
+        "fixed": {"type": "boolean"},
+        "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        "quaternion": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+        "velocity": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        "omega": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        "blob": {"type": "string"},
+        "role": {"type": "string"}
+      }
+    },
+    "joint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "body_a", "body_b"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "type": {
+          "enum": [
+            "spherical", "revolute", "fixed", "prismatic", "universal",
+            "cylindrical", "inplane", "convel", "driven_translation", "driven_rotation"
+          ]
+        },
+        "body_a": {"type": "string", "minLength": 1},
+        "body_b": {"type": "string", "minLength": 1},
+        "point_a": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        "point_b": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        "axis_a": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        "axis_b": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        "target": {"type": "string"},
+        "reference_quaternion": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+        "blob": {"type": "string"}
+      }
+    },
+    "coupler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "joint_a", "joint_b"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "joint_a": {"type": "string", "minLength": 1},
+        "coordinate_a": {"enum": ["rotation", "translation"]},
+        "scale_a": {"type": "number"},
+        "joint_b": {"type": "string", "minLength": 1},
+        "coordinate_b": {"enum": ["rotation", "translation"]},
+        "scale_b": {"type": "number"}
+      }
+    },
+    "gauge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["body"],
+      "properties": {
+        "body": {"type": "string", "minLength": 1},
+        "axis_local": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
+      }
+    },
+    "marker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "body"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "body": {"type": "string", "minLength": 1},
+        "point": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
+      }
+    },
+    "element": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "type": {
+          "enum": [
+            "spring_damper", "bushing", "anti_roll_bar", "bump_stop",
+            "aerodynamic_drag", "steering_actuator", "wheel_torque",
+            "point_wrench", "gravity"
+          ]
+        },
+        "body_a": {"type": "string"},
+        "body_b": {"type": "string"},
+        "parameters": {"type": "object"},
+        "blob": {"type": "string"}
+      }
+    },
+    "tire": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "model", "body"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "model": {"enum": ["vertical_linear", "fiala", "pac2002", "native_brush"]},
+        "body": {"type": "string", "minLength": 1},
+        "parameters": {"type": "object"},
+        "blob": {"type": "string"}
+      }
+    },
+    "road": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["plane", "sine", "bump", "random_fourier", "four_post"]},
+        "parameters": {"type": "object"}
+      }
+    }
+  }
+}

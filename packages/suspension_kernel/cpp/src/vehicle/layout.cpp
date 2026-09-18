@@ -13,6 +13,13 @@
 
 #include "mb_vehicle/functions.hpp"
 
+// Direct dependencies of this translation unit.  The module headers no
+// longer aggregate each other's declarations, so each unit includes the
+// modules whose functions it actually calls.
+#include "mb_base/functions.hpp"
+#include "mb_model/functions.hpp"
+#include "mb_tire_state/functions.hpp"
+
 namespace axle_kernel {
 
 double assemble_aerodynamic_force(
@@ -125,6 +132,22 @@ void assemble_external_and_gravity(
                     external_load_scale * input.body_wrench[static_cast<std::size_t>(6 * i + 4)],
                     external_load_scale * input.body_wrench[static_cast<std::size_t>(6 * i + 5)]
                 };
+                // The load a family hands over as a wrench may act at a
+                // body-fixed marker rather than at the body origin.  Such a
+                // force makes a moment about the origin of ``cross(R*p, F)``,
+                // and R is the pose being solved for, so the arm has to be
+                // resolved here.  A body with no declared point -- and a
+                // declared point of (0,0,0) -- is the origin, which adds
+                // nothing, so every other family is bit-for-bit unchanged.
+                if (i < static_cast<int>(model.body_wrench_point_local.size()) &&
+                    !model.bodies[static_cast<std::size_t>(i)].fixed) {
+                    const Vec3 point =
+                        model.body_wrench_point_local[static_cast<std::size_t>(i)];
+                    if (point.x != 0.0 || point.y != 0.0 || point.z != 0.0) {
+                        torque[i] += cross(rotate(state.q[i], point), force[i]);
+                    }
+                }
+
                 if (record_energy) {
                     const double applied_power =
                         dot(force[i], state.v[i]) +

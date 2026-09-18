@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-kinematics.dev/contracts/multibody_case_v1.json",
+  "title": "Multibody Case Contract V1",
+  "description": "Declarative case definition. The document never carries an expanded case list: the case layer expands grids, load paths, side modes and excitations itself. Family-specific requirements beyond the structural rules below are enforced by the case layer, and the expanded identity is reported back in the result manifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "contract_version", "kind", "family", "name"],
+  "properties": {
+    "contract": {"const": "multibody-case"},
+    "contract_version": {"const": 1},
+    "kind": {"const": "case"},
+    "family": {
+      "enum": [
+        "kc_quasi_static", "axle_dynamic", "vehicle_kc", "vehicle_dynamic",
+        "handling", "ride_four_post", "ride_random_road", "comparison"
+      ]
+    },
+    "name": {"type": "string", "minLength": 1},
+    "description": {"type": "string"},
+    "solver": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "integrator": {"enum": ["ggl_generalized_alpha", "hht"]},
+        "rho_inf": {"type": "number", "minimum": 0},
+        "hht_alpha": {"type": "number"},
+        "initialization_mode": {"enum": ["static_equilibrium", "provided_consistent_state"]},
+        "adaptive_step": {"type": "boolean"},
+        "internal_step_s": {"type": "number", "minimum": 0},
+        "minimum_step_s": {"type": "number", "minimum": 0},
+        "maximum_step_s": {"type": "number", "minimum": 0},
+        "local_relative_tolerance": {"type": "number", "minimum": 0},
+        "local_position_tolerance_m": {"type": "number", "minimum": 0},
+        "local_angle_tolerance_rad": {"type": "number", "minimum": 0},
+        "local_velocity_tolerance_m_per_s": {"type": "number", "minimum": 0},
+        "local_angular_velocity_tolerance_rad_per_s": {"type": "number", "minimum": 0},
+        "local_brush_tolerance_m": {"type": "number", "minimum": 0},
+        "contact_event_tolerance_s": {"type": "number", "minimum": 0},
+        "max_newton_iterations": {"type": "integer", "minimum": 1},
+        "max_line_search_iterations": {"type": "integer", "minimum": 1},
+        "position_tolerance_m": {"type": "number", "minimum": 0},
+        "velocity_tolerance_m_per_s": {"type": "number", "minimum": 0},
+        "dynamics_tolerance": {"type": "number", "minimum": 0},
+        "increment_tolerance": {"type": "number", "minimum": 0}
+      }
+    },
+    "k": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wheel_values_mm": {"type": "array", "items": {"type": "number"}},
+        "axes": {
+          "description": "A general driven-coordinate grid: one entry per driven coordinate, each with the values it takes, expanded as a cartesian product with the last axis varying fastest. The shorthand (wheel_values_mm + rack_values_mm + axis_map) is the equivalent form for an axle sweep.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["coordinate", "values_mm"],
+            "properties": {
+              "coordinate": {"type": "string", "minLength": 1},
+              "values_mm": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "number"}
+              }
+            }
+          }
+        },
+        "ramp_s": {"type": "number", "minimum": 0},
+        "body_wrench": {
+          "description": "Constant wrenches applied to named bodies for the whole K run -- forces in N, moments in N*mm. One wrench per body rather than a per-sample table: a K state is a kinematic solution.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["body", "wrench"],
+            "properties": {
+              "body": {"type": "string", "minLength": 1},
+              "wrench": {
+                "type": "array",
+                "items": {"type": "number"},
+                "minItems": 6,
+                "maxItems": 6
+              }
+            }
+          }
+        },
+        "rack_values_mm": {"type": "array", "items": {"type": "number"}},
+        "drive": {"enum": ["wheel_center", "contact_point"]},
+        "left_right_mode": {"enum": ["single", "symmetric", "opposite"]},
+        "axis_map": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "wheel": {"type": "array", "items": {"type": "string"}},
+            "rack": {"type": "string"}
+          }
+        }
+      }
+    },
+    "c": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "paths": {"type": "array", "items": {"type": "string"}},
+        "levels": {"type": "integer", "minimum": 3},
+        "maximum": {"type": "number"},
+        "side_mode": {"enum": ["single", "symmetric", "opposite"]},
+        "mirror_marker": {
+          "description": "The marker the other side's load is applied at; required when side_mode is not single.",
+          "type": "string",
+          "minLength": 1
+        },
+        "loads": {
+          "description": "Explicit six-component loads -- forces in N, moments in N*mm -- as an alternative to the paths/levels/maximum sweep.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "fx": {"type": "number"},
+              "fy": {"type": "number"},
+              "fz": {"type": "number"},
+              "mx": {"type": "number"},
+              "my": {"type": "number"},
+              "mz": {"type": "number"}
+            }
+          }
+        },
+        "load_marker": {"type": "string"}
+      }
+    },
+    "time": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start_s": {"type": "number"},
+        "end_s": {"type": "number"},
+        "step_s": {"type": "number"},
+        "output_step_s": {"type": "number"}
+      }
+    },
+    "inputs": {"type": "object"},
+    "vehicle": {"type": "object"},
+    "four_post": {"type": "object"},
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reference": {"type": "string"},
+        "channels": {"type": "array", "items": {"type": "string"}},
+        "tolerance": {"type": "object"}
+      }
+    },
+    "blobs": {"type": "array", "items": {"type": "object"}}
+  }
+}
