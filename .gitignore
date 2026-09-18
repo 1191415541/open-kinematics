@@ -209,3 +209,15 @@ GEMINI.md
 
 # The virtual workspace owns the single tracked lockfile at its root.
 /packages/*/uv.lock
+# Root-level generated local evidence and analysis scratch.
+/.tmpmsg
+/.zcode/
+/_classified.csv
+/_decls.txt
+/_defs.txt
+/_fndefs.txt
+/_fnindex.txt
+/_layers*.csv
+/static_kkt_debug.bin
+/docs/visuals/
+/data/
