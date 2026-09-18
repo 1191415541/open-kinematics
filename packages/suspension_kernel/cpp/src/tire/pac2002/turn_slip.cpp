@@ -26,6 +26,13 @@ Pac2002TurnSlip pac2002_state_turn_slip(
         2.0*tire_state_value(state, index, 8)
         -tire_state_value(state, index, 9)
     );
+    // Diagnostic sign adjudication: the turn-slip moment chain is already matched
+    // to Adams, while the force chain is the remaining D23 residual.  Keeping this
+    // switch separate from SPIN_SIGN lets the force channel be flipped without
+    // touching the moment channel.
+    turn_slip.force *= pac2002_turn_slip_switch(
+        "PAC2002_TURN_SLIP_FORCE_SIGN", 1.0
+    );
     turn_slip.moment = spin_sign*(
         pac2002_parameter(tire, PAC_EP, 1.0)*tire_state_value(state, index, 8)
         +pac2002_parameter(tire, PAC_EP12, 3.0)

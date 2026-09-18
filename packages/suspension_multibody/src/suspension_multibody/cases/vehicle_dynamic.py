@@ -75,7 +75,7 @@ def _quaternion(values) -> list[float]:
 
 
 def _joint_entry(joint) -> dict[str, Any]:
-    return {
+    entry = {
         "name": joint.name,
         "type": "convel" if joint.kind == "constant_velocity" else joint.kind,
         "body_a": joint.body_a,
@@ -85,6 +85,15 @@ def _joint_entry(joint) -> dict[str, Any]:
         "axis_a": _vec3(joint.axis_a),
         "axis_b": _vec3(joint.axis_b),
     }
+    if joint.kind == "constant_velocity":
+        entry.update(
+            {
+                "axis_a_secondary": _vec3(joint.axis_a_secondary),
+                "axis_b_secondary": _vec3(joint.axis_b_secondary),
+                "convel_angle_target": float(joint.constant_velocity_angle_target),
+            }
+        )
+    return entry
 
 
 def _spring_element(spring) -> dict[str, Any]:
@@ -109,6 +118,29 @@ def _spring_element(spring) -> dict[str, Any]:
             [float(velocity), float(force)]
             for velocity, force in zip(
                 spring.damper_curve_velocity_m_per_s, spring.damper_curve_force_n
+            )
+        ]
+    if spring.elastic_curve_deflection_m:
+        parameters["elastic_curve"] = [
+            [float(deflection), float(force)]
+            for deflection, force in zip(
+                spring.elastic_curve_deflection_m, spring.elastic_curve_force_n
+            )
+        ]
+    if spring.compression_stop_curve_penetration_m:
+        parameters["compression_stop_curve"] = [
+            [float(penetration), float(force)]
+            for penetration, force in zip(
+                spring.compression_stop_curve_penetration_m,
+                spring.compression_stop_curve_force_n,
+            )
+        ]
+    if spring.rebound_stop_curve_penetration_m:
+        parameters["rebound_stop_curve"] = [
+            [float(penetration), float(force)]
+            for penetration, force in zip(
+                spring.rebound_stop_curve_penetration_m,
+                spring.rebound_stop_curve_force_n,
             )
         ]
     return {
@@ -451,6 +483,7 @@ def _append_table(
     blob.extend(array.tobytes())
     tables.append(
         {
+            "name": role,
             "role": role,
             "offset": offset,
             "length": array.size * array.dtype.itemsize,
@@ -500,13 +533,20 @@ def case_document(
     if times.size < 2:
         raise ValueError("a dynamic case needs at least two sample times")
     steps = np.diff(times)
-    if not np.allclose(steps, steps[0], rtol=0.0, atol=1e-15):
-        raise ValueError(
-            "the contract time grid is a start/end/step, so the samples must be uniform"
-        )
+    uniform = bool(np.allclose(steps, steps[0], rtol=0.0, atol=1e-15))
 
     blob = bytearray()
     tables: list[dict[str, Any]] = []
+    time_entry: dict[str, Any] = {
+        "start_s": float(times[0]),
+        "end_s": float(times[-1]),
+        # Uniform grids are rules; irregular histories carry their exact sample
+        # instants in the case payload so the kernel does not re-derive them.
+        "step_s": float(steps[0] if uniform else np.min(steps)),
+    }
+    if not uniform:
+        _append_table(blob, tables, times, role="sample_times")
+        time_entry["samples"] = "sample_times"
     for tire in prepared.native_model.tires:
         height = prepared.road_height.get(tire.name)
         if height is not None:
@@ -581,11 +621,7 @@ def case_document(
         "kind": "case",
         "family": "vehicle_dynamic",
         "name": name or case.name,
-        "time": {
-            "start_s": float(times[0]),
-            "end_s": float(times[-1]),
-            "step_s": float(steps[0]),
-        },
+        "time": time_entry,
         "solver": _solver_block(prepared.solver),
         "inputs": inputs,
         "blobs": tables,

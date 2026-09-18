@@ -1260,6 +1260,9 @@ void assemble_directional_pac2002_force(
             "PAC2002_TURN_SLIP_SPIN_SIGN", 1.0
         );
         turn_slip.force = spin_sign*(2.0*phi_c-phi_f2);
+        turn_slip.force = turn_slip.force * DirectionalScalar{
+            pac2002_turn_slip_switch("PAC2002_TURN_SLIP_FORCE_SIGN", 1.0)
+        };
         turn_slip.moment = spin_sign*(
             pac2002_parameter(t, PAC_EP, 1.0)*phi_c
             +pac2002_parameter(t, PAC_EP12, 3.0)*(phi_1-phi_2)

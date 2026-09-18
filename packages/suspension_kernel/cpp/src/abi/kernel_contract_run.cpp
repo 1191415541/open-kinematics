@@ -366,7 +366,20 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   // zero-filled arrays here would erase every measured vertical curve before
   // registration sees it.
 
-  Model built = build_model(input.axle, error);
+  Model built = build_model(
+      input.axle,
+      error,
+      input.constraint_axis_a_secondary,
+      input.constraint_axis_b_secondary,
+      input.constraint_convel_angle_target,
+      input.coordinate_coupler_count,
+      input.coordinate_coupler_joint_a,
+      input.coordinate_coupler_coordinate_a,
+      input.coordinate_coupler_scale_a,
+      input.coordinate_coupler_joint_b,
+      input.coordinate_coupler_coordinate_b,
+      input.coordinate_coupler_scale_b
+  );
   // A model that declares application points for its external loads says the
   // load is a force at a body-fixed marker, so the lever arm is the deformed
   // one.  `build_model` cannot know that -- the declaration is contract-level,

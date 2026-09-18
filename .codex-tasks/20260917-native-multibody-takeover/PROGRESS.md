@@ -2836,5 +2836,36 @@ check_module_layering.py --strict   -> OK（86 边 / 0 环 / 0 自包含 / 0 跨
 kernel 15/15 ｜ contracts 22/22 ｜ ruff All checks passed ｜ ty All checks passed
 ```
 
+## Contract Takeover Follow-up（2026-09-18）
+
+本轮继续收口整车契约路径，先修复真实测试暴露的契约表达与入口转发缺口，再完成全量复核。
+
+### 根因与修复
+
+- `vehicle_dynamic.py` 补齐弹簧 elastic/compression-stop/rebound-stop 曲线，支持非均匀时间网格，并为 blob 描述符补齐 `name`。
+- 恒速副的 `axis_a_secondary`、`axis_b_secondary`、`convel_angle_target` 原先未进入模型文档；已同步加入 Python 作者层、模型 schema、C++ `ContractModel` 解析与 `VehicleInput` 扩展数组。
+- `kernel_contract_run.cpp` 原先调用旧的 `build_model(input.axle, error)`，丢弃恒速副扩展字段和 coordinate coupler；现已完整转发这些参数。
+- 该缺口会让 Adams 源模型的初始恒速约束角残差约为 0.99，统一触发 status 6；修复后源模型整车初始状态可正常通过。
+
+### 本轮验证
+
+```text
+build_axle_native.py --configuration Release -> 成功
+packages/suspension_contracts/tests              -> 22 passed
+tests/cases/test_vehicle_dynamic_contract.py    -> 7 passed
+tests/adams/test_full_vehicle_model.py           -> 37 passed / 1 skipped
+tests/adams Fiala + PAC2002 gates               -> 31 passed
+packages/suspension_multibody/tests              -> 554 passed / 1 skipped / 1 xfailed
+case_parity_check.py                             -> 8 families accepted
+kc_parity_check.py --check                       -> OK
+kc_perf_gate.py --check-native                   -> OK
+kc_legacy_path_check.py --strict                 -> OK（native 0、legacy 0）
+check_module_layering.py --strict                -> OK（86 边 / 0 环 / 0 自包含 / 0 跨聚合包含）
+dynamic_hash_sentinel.py --check                 -> OK，combined SHA-256 = e7407656731ed556efc28fb89d8fc69881725b3bfb2f39066eb898986389d48e
+ruff                                             -> All checks passed
+```
+
+dynamic hash 工具仍报告仓库既有 9 个 acceptance `force_z` NRMSE 失败，但 26 个产物与冻结基线逐字节一致；这些报告不是本轮修复造成的 hash 漂移。
+
 
 

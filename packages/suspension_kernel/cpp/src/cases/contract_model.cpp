@@ -425,10 +425,22 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
       double point_b[3] = {0.0, 0.0, 0.0};
       double axis_a[3] = {0.0, 0.0, 1.0};
       double axis_b[3] = {0.0, 0.0, 1.0};
+      double axis_a_secondary[3] = {0.0, 1.0, 0.0};
+      double axis_b_secondary[3] = {1.0, 0.0, 0.0};
+      double convel_angle_target = 0.0;
       if (!optional_vec3(joint, "point_a", point_a, point_a) ||
           !optional_vec3(joint, "point_b", point_b, point_b) ||
           !optional_vec3(joint, "axis_a", axis_a, axis_a) ||
-          !optional_vec3(joint, "axis_b", axis_b, axis_b)) {
+          !optional_vec3(joint, "axis_b", axis_b, axis_b) ||
+          !optional_vec3(
+              joint, "axis_a_secondary", axis_a_secondary, axis_a_secondary
+          ) ||
+          !optional_vec3(
+              joint, "axis_b_secondary", axis_b_secondary, axis_b_secondary
+          ) ||
+          !optional_number(
+              joint, "convel_angle_target", convel_angle_target
+          )) {
         return fail(error, "joint " + quote(*joint_name) + " has a malformed point or axis");
       }
 
@@ -441,6 +453,13 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
         for (double value : point_b) constraint_point_b_.push_back(value * length_scale_);
         for (double value : axis_a) constraint_axis_a_.push_back(value);
         for (double value : axis_b) constraint_axis_b_.push_back(value);
+        for (double value : axis_a_secondary) {
+          constraint_axis_a_secondary_.push_back(value);
+        }
+        for (double value : axis_b_secondary) {
+          constraint_axis_b_secondary_.push_back(value);
+        }
+        constraint_convel_angle_target_.push_back(convel_angle_target);
         continue;
       }
 
@@ -566,6 +585,51 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
             spring_damper_curve_velocity_.push_back(pair[0] * length_scale_);
             spring_damper_curve_force_.push_back(pair[1]);
           }
+        }
+
+        const auto read_spring_curve = [this, &parameters, &element_name, &error](
+            const char* key, std::vector<int>& offsets,
+            std::vector<int>& counts, std::vector<double>& abscissa,
+            std::vector<double>& force, const char* label) -> bool {
+          offsets.push_back(static_cast<int>(abscissa.size()));
+          const Json* table = parameters->find(key);
+          if (table == nullptr) {
+            counts.push_back(0);
+            return true;
+          }
+          if (!table->is_array()) {
+            return fail(error, "spring " + quote(*element_name) +
+                                " has a malformed " + label);
+          }
+          counts.push_back(static_cast<int>(table->items.size()));
+          for (const Json& point : table->items) {
+            double pair[2] = {0.0, 0.0};
+            if (!pair_at(point, pair)) {
+              return fail(error, "spring " + quote(*element_name) +
+                                  " has a malformed " + label + " point");
+            }
+            abscissa.push_back(pair[0] * length_scale_);
+            force.push_back(pair[1]);
+          }
+          return true;
+        };
+        if (!read_spring_curve(
+                "elastic_curve", spring_elastic_curve_offset_,
+                spring_elastic_curve_count_, spring_elastic_curve_deflection_,
+                spring_elastic_curve_force_, "elastic_curve") ||
+            !read_spring_curve(
+                "compression_stop_curve", spring_compression_stop_curve_offset_,
+                spring_compression_stop_curve_count_,
+                spring_compression_stop_curve_penetration_,
+                spring_compression_stop_curve_force_,
+                "compression_stop_curve") ||
+            !read_spring_curve(
+                "rebound_stop_curve", spring_rebound_stop_curve_offset_,
+                spring_rebound_stop_curve_count_,
+                spring_rebound_stop_curve_penetration_,
+                spring_rebound_stop_curve_force_,
+                "rebound_stop_curve")) {
+          return false;
         }
         continue;
       }
@@ -1330,6 +1394,9 @@ void ContractModel::fill(VehicleInput& input) const {
   axle.constraint_point_b = constraint_point_b_.data();
   axle.constraint_axis_a = constraint_axis_a_.data();
   axle.constraint_axis_b = constraint_axis_b_.data();
+  input.constraint_axis_a_secondary = constraint_axis_a_secondary_.data();
+  input.constraint_axis_b_secondary = constraint_axis_b_secondary_.data();
+  input.constraint_convel_angle_target = constraint_convel_angle_target_.data();
 
   axle.spring_count = spring_body_a_.size();
   // A spring's optional length limits and its damper curve are indexed per
@@ -1364,6 +1431,55 @@ void ContractModel::fill(VehicleInput& input) const {
   axle.spring_damper_curve_force =
       spring_damper_curve_force_.empty() ? spring_fallback_minimum_.data()
                                          : spring_damper_curve_force_.data();
+
+  input.vehicle_spring_elastic_curve_offset =
+      spring_elastic_curve_offset_.empty()
+          ? spring_fallback_offset_.data()
+          : spring_elastic_curve_offset_.data();
+  input.vehicle_spring_elastic_curve_count =
+      spring_elastic_curve_count_.empty()
+          ? spring_fallback_count_.data()
+          : spring_elastic_curve_count_.data();
+  input.vehicle_spring_elastic_curve_deflection =
+      spring_elastic_curve_deflection_.empty()
+          ? spring_fallback_minimum_.data()
+          : spring_elastic_curve_deflection_.data();
+  input.vehicle_spring_elastic_curve_force =
+      spring_elastic_curve_force_.empty()
+          ? spring_fallback_minimum_.data()
+          : spring_elastic_curve_force_.data();
+  input.vehicle_spring_compression_stop_curve_offset =
+      spring_compression_stop_curve_offset_.empty()
+          ? spring_fallback_offset_.data()
+          : spring_compression_stop_curve_offset_.data();
+  input.vehicle_spring_compression_stop_curve_count =
+      spring_compression_stop_curve_count_.empty()
+          ? spring_fallback_count_.data()
+          : spring_compression_stop_curve_count_.data();
+  input.vehicle_spring_compression_stop_curve_penetration =
+      spring_compression_stop_curve_penetration_.empty()
+          ? spring_fallback_minimum_.data()
+          : spring_compression_stop_curve_penetration_.data();
+  input.vehicle_spring_compression_stop_curve_force =
+      spring_compression_stop_curve_force_.empty()
+          ? spring_fallback_minimum_.data()
+          : spring_compression_stop_curve_force_.data();
+  input.vehicle_spring_rebound_stop_curve_offset =
+      spring_rebound_stop_curve_offset_.empty()
+          ? spring_fallback_offset_.data()
+          : spring_rebound_stop_curve_offset_.data();
+  input.vehicle_spring_rebound_stop_curve_count =
+      spring_rebound_stop_curve_count_.empty()
+          ? spring_fallback_count_.data()
+          : spring_rebound_stop_curve_count_.data();
+  input.vehicle_spring_rebound_stop_curve_penetration =
+      spring_rebound_stop_curve_penetration_.empty()
+          ? spring_fallback_minimum_.data()
+          : spring_rebound_stop_curve_penetration_.data();
+  input.vehicle_spring_rebound_stop_curve_force =
+      spring_rebound_stop_curve_force_.empty()
+          ? spring_fallback_minimum_.data()
+          : spring_rebound_stop_curve_force_.data();
 
   axle.tire_count = tire_names_.size();
   axle.tire_body = tire_body_.data();

@@ -264,6 +264,9 @@ class ContractModel {
   std::vector<double> constraint_point_b_;
   std::vector<double> constraint_axis_a_;
   std::vector<double> constraint_axis_b_;
+  std::vector<double> constraint_axis_a_secondary_;
+  std::vector<double> constraint_axis_b_secondary_;
+  std::vector<double> constraint_convel_angle_target_;
 
   std::vector<int> driven_type_;
   std::vector<int> driven_body_;
@@ -318,6 +321,19 @@ class ContractModel {
   std::vector<int> spring_damper_curve_count_;
   std::vector<double> spring_damper_curve_velocity_;
   std::vector<double> spring_damper_curve_force_;
+
+  std::vector<int> spring_elastic_curve_offset_;
+  std::vector<int> spring_elastic_curve_count_;
+  std::vector<double> spring_elastic_curve_deflection_;
+  std::vector<double> spring_elastic_curve_force_;
+  std::vector<int> spring_compression_stop_curve_offset_;
+  std::vector<int> spring_compression_stop_curve_count_;
+  std::vector<double> spring_compression_stop_curve_penetration_;
+  std::vector<double> spring_compression_stop_curve_force_;
+  std::vector<int> spring_rebound_stop_curve_offset_;
+  std::vector<int> spring_rebound_stop_curve_count_;
+  std::vector<double> spring_rebound_stop_curve_penetration_;
+  std::vector<double> spring_rebound_stop_curve_force_;
 
   std::vector<std::string> tire_names_;
   std::vector<int> tire_body_;
