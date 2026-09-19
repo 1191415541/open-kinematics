@@ -104,22 +104,204 @@ def _load_vehicle_fixture():
     return module
 
 
+def _k_grid_records(assembly) -> list[dict[str, object]]:
+    """Solve the K grid through the unified simulation service."""
+    from suspension_multibody.cases.kc_quasi_static import (
+        NativeKcError,
+        case_document,
+        model_document,
+    )
+    from suspension_multibody.cases.kc_quasi_static.workflow import (
+        DEFAULT_SETTINGS,
+        DEFAULT_TIMES,
+        _side_fields,
+    )
+    from suspension_multibody.simulation import SimulationRequest, run_request
+
+    wheels = (-10.0, 0.0, 10.0)
+    racks = (-5.0, 0.0, 5.0)
+    model = model_document(assembly, name="native-k", drive_wheels=True)
+    case = case_document(
+        assembly,
+        family="kc_quasi_static",
+        name="kc-k",
+        wheel_values_mm=wheels,
+        rack_values_mm=racks,
+        times_s=DEFAULT_TIMES,
+        settings=DEFAULT_SETTINGS,
+        drive_wheels=True,
+    )
+    run = run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model,
+            case=case,
+        )
+    ).raw
+    left_states = run.body_state("upright_L")
+    right_states = run.body_state("upright_R")
+    records: list[dict[str, object]] = []
+    for index, entry in enumerate(run.cases()):
+        wheel = wheels[index // len(racks)]
+        rack = racks[index % len(racks)]
+        case_id = f"k-w{wheel:+.0f}-r{rack:+.0f}"
+        # The case layer expands the grid in document order; checking the name
+        # it reported turns a silent reordering into a failure.
+        if str(entry["name"]) != case_id:
+            raise NativeKcError(
+                f"the kernel expanded {entry['name']!r} where {case_id!r} was expected"
+            )
+        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
+        record: dict[str, object] = {
+            "case_id": case_id,
+            "wheel_travel_mm": float(wheel),
+            "rack_displacement_mm": float(rack),
+        }
+        record.update(
+            _side_fields(assembly, "L", left_states[last, :3], left_states[last, 3:7])
+        )
+        record.update(
+            _side_fields(assembly, "R", right_states[last, :3], right_states[last, 3:7])
+        )
+        records.append(record)
+    return records
+
+
+def _c_path_records(assembly, *, paths: tuple[str, ...]) -> list[dict[str, object]]:
+    """Solve the C load paths through the unified simulation service."""
+    from suspension_multibody.cases.kc_quasi_static import (
+        AXIS_ORDER,
+        MM,
+        NativeKcError,
+        case_document,
+        model_document,
+        quaternion_to_rotation,
+    )
+    from suspension_multibody.cases.kc_quasi_static.workflow import (
+        DEFAULT_SETTINGS,
+        DEFAULT_TIMES,
+        SIDES,
+        _assembling_pose,
+        _side_fields,
+        quaternion_conjugate,
+        quaternion_multiply,
+        wheel_center_world,
+    )
+    from suspension_multibody.core import quaternion_to_rotation_vector
+    from suspension_multibody.simulation import SimulationRequest, run_request
+
+    levels = 11
+    maximum = 1.0
+    model = model_document(assembly, name="native-c", drive_wheels=False)
+    case = case_document(
+        assembly,
+        family="kc_quasi_static",
+        name="kc-c",
+        paths=tuple(paths),
+        levels=levels,
+        maximum=maximum,
+        side_mode="single",
+        times_s=DEFAULT_TIMES,
+        settings=DEFAULT_SETTINGS,
+        drive_wheels=False,
+    )
+    run = run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model,
+            case=case,
+        )
+    ).raw
+    left_states = run.body_state("upright_L")
+    right_states = run.body_state("upright_R")
+    # The C deformation is measured against the neutral K pose, which is the
+    # assembling pose: at the design separation every driven target has zero
+    # residual, so the reference is the model document's own initial state.
+    reference = {side: _assembling_pose(model, side) for side in SIDES}
+    # The K reference the C response is measured from.  The driven case's zero
+    # target resolves to the separation the model was assembled with, so the
+    # assembling pose *is* the K reference -- the same thing the Python solver's
+    # `KReferenceCache` solves for, reached without solving it again.
+    reference_metrics = {
+        ("left" if side == "L" else "right"): _side_fields(
+            assembly, side, reference[side][0], reference[side][1]
+        )
+        for side in SIDES
+    }
+
+    records: list[dict[str, object]] = []
+    for index, entry in enumerate(run.cases()):
+        axis = paths[index // levels]
+        position_in_path = index % levels
+        if position_in_path == 0:
+            level = -maximum
+        elif position_in_path == levels - 1:
+            level = maximum
+        else:
+            level = -maximum + position_in_path * (2.0 * maximum / (levels - 1))
+        case_id = f"c-{axis}-{level:+.2f}"
+        if str(entry["name"]) != case_id:
+            raise NativeKcError(
+                f"the kernel expanded {entry['name']!r} where {case_id!r} was expected"
+            )
+        load = [0.0] * 6
+        load[AXIS_ORDER.index(axis)] = float(level)
+        record = {
+            "case_id": case_id,
+            "path": axis,
+            "level": float(level),
+            "side_mode": "single",
+            "load_left": list(load),
+            "load_right": [0.0] * 6,
+        }
+        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
+        metrics: dict[str, dict[str, float]] = {}
+        for side, key, states in (
+            ("L", "deformation_left", left_states),
+            ("R", "deformation_right", right_states),
+        ):
+            state = states[last]
+            metrics["left" if side == "L" else "right"] = _side_fields(
+                assembly, side, state[:3], state[3:7]
+            )
+            ref_position, ref_quaternion = reference[side]
+            centre = wheel_center_world(assembly, side, state[:3], state[3:7])
+            ref_centre = wheel_center_world(assembly, side, ref_position, ref_quaternion)
+            relative = quaternion_multiply(
+                quaternion_conjugate(np.asarray(ref_quaternion, dtype=float)),
+                np.asarray(state[3:7], dtype=float),
+            )
+            rotation = quaternion_to_rotation(
+                ref_quaternion
+            ) @ quaternion_to_rotation_vector(relative)
+            record[key] = [
+                float(value)
+                for value in np.concatenate(((centre - ref_centre) / MM, rotation))
+            ]
+        record["metrics"] = metrics
+        record["c_minus_k"] = {
+            key: float(value - reference_metrics[side][key])
+            for side in ("left", "right")
+            for key, value in metrics[side].items()
+        }
+        records.append(record)
+    return records
+
+
 def check_kc_quasi_static() -> tuple[bool, str]:
     """Compare the contract-path K grid and C load paths with the snapshot."""
     from suspension_multibody.analysis.benchmarks import benchmark_model
+    from suspension_multibody.cases.kc_quasi_static import AXIS_ORDER
     from suspension_multibody.model import build_front_axle
-    from suspension_multibody.native_kc import (
-        AXIS_ORDER,
-        run_c_paths_contract,
-        run_k_grid_contract,
-    )
 
     # Loaded by path rather than imported: the fixture is a test module, and a
     # module reached through `sys.path` is neither resolvable by a type checker
     # nor obviously a test dependency.  `_load_vehicle_fixture` does the same.
     fixture = (
         REPOSITORY_ROOT
-        / "packages/suspension_multibody/tests/native_kc/test_native_kc_parity.py"
+        / "packages/suspension_multibody/tests/cases/kc_quasi_static/kc_fixtures.py"
     )
     spec = importlib.util.spec_from_file_location("kc_parity_fixture", fixture)
     assert spec is not None and spec.loader is not None
@@ -131,7 +313,7 @@ def check_kc_quasi_static() -> tuple[bool, str]:
         state["case_id"]: state
         for state in json.loads((TEST_DATA / "k_states.json").read_text(encoding="utf-8"))
     }
-    k_produced = run_k_grid_contract(build_front_axle(benchmark_model(), "K"))
+    k_produced = _k_grid_records(build_front_axle(benchmark_model(), "K"))
     if {state["case_id"] for state in k_produced} != set(k_expected):
         return False, "the K grid did not cover the frozen case set"
     for state in k_produced:
@@ -148,7 +330,9 @@ def check_kc_quasi_static() -> tuple[bool, str]:
         state["case_id"]: state
         for state in json.loads((TEST_DATA / "c_states.json").read_text(encoding="utf-8"))
     }
-    c_produced = run_c_paths_contract(build_front_axle(_compliant_model(), "C"), paths=AXIS_ORDER)
+    c_produced = _c_path_records(
+        build_front_axle(_compliant_model(), "C"), paths=AXIS_ORDER
+    )
     if {state["case_id"] for state in c_produced} != set(c_expected):
         return False, "the C load paths did not cover the frozen case set"
     for state in c_produced:
@@ -384,13 +568,9 @@ def check_ride_four_post() -> tuple[bool, str]:
         FourPostCorner,
         ride_four_post_case_document,
         ride_four_post_corner_signals,
-        run_ride_four_post_contract,
         vehicle_dynamic_model_document,
     )
-    from suspension_multibody.cases.vehicle_dynamic import (
-        case_document as vehicle_case_document,
-    )
-    from suspension_multibody.kernel import run_contract
+    from suspension_multibody.simulation import SimulationRequest, run_request
     from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
     fixture = _load_vehicle_fixture()
@@ -410,23 +590,35 @@ def check_ride_four_post() -> tuple[bool, str]:
     )
     model_document, model_blob = vehicle_dynamic_model_document(model, prepared)
     model_payload = pack_container(model_document, model_blob)
-    produced = run_ride_four_post_contract(
-        model_document, model_payload=model_payload, case=document
-    )
+    produced = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="ride_four_post",
+            model=model_document,
+            case=document,
+            context={"model_payload": model_payload},
+        )
+    ).raw
 
     height, velocity = ride_four_post_corner_signals(corners, times)
-    explicit = replace(prepared, road_height=height, road_velocity=velocity)
-    explicit_case, explicit_blob = vehicle_case_document(model, case, explicit)
-    explicit_case = explicit_case | {
-        "time": document["time"],
-        "solver": document["solver"],
-    }
-    reference = run_contract(
-        model_document,
-        explicit_case,
-        model_payload=model_payload,
-        case_payload=pack_container(explicit_case, explicit_blob),
+    # The explicit reference has to run on the solver block the family document
+    # declares, so it is prepared with that solver rather than the fixture
+    # case's own settings.
+    explicit = replace(
+        prepared,
+        road_height=height,
+        road_velocity=velocity,
+        solver=AxleSolverSettings(),
     )
+    reference = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="vehicle_dynamic",
+            model=model,
+            case=case,
+            context={"prepared": explicit},
+        )
+    ).raw
     difference = float(
         np.abs(produced.block("body_state") - reference.block("body_state")).max()
     )
@@ -453,14 +645,11 @@ def check_handling() -> tuple[bool, str]:
         SteeringShape,
         handling_case_document,
         handling_steering_signals,
-        run_handling_contract,
         vehicle_dynamic_model_document,
     )
-    from suspension_multibody.cases.vehicle_dynamic import (
-        case_document as vehicle_case_document,
-    )
-    from suspension_multibody.kernel import KernelContractError, run_contract
+    from suspension_multibody.kernel import KernelContractError
     from suspension_multibody.schema import Vec3
+    from suspension_multibody.simulation import SimulationRequest, run_request
     from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
     fixture = _load_vehicle_fixture()
@@ -499,27 +688,36 @@ def check_handling() -> tuple[bool, str]:
             name=f"handling-{shape}", shapes=shapes, times_s=times,
             settings=AxleSolverSettings(),
         )
-        produced = run_handling_contract(
-            model_document, model_payload=model_payload, case=document
-        )
+        produced = run_request(
+            SimulationRequest(
+                assembly="vehicle",
+                family="handling",
+                model=model_document,
+                case=document,
+                context={"model_payload": model_payload},
+            )
+        ).raw
         target, rate = handling_steering_signals(shapes, times)
         steering = replace(
             prepared.steering,
             target=np.asarray(target[actuator], dtype=float),
             target_rate=np.asarray(rate[actuator], dtype=float),
         )
-        explicit = replace(prepared, steering=steering)
-        explicit_case, explicit_blob = vehicle_case_document(model, case, explicit)
-        explicit_case = explicit_case | {
-            "time": document["time"],
-            "solver": document["solver"],
-        }
-        reference = run_contract(
-            model_document,
-            explicit_case,
-            model_payload=model_payload,
-            case_payload=pack_container(explicit_case, explicit_blob),
+        # The explicit reference has to run on the solver block the family
+        # document declares, so it is prepared with that solver rather than the
+        # fixture case's own settings.
+        explicit = replace(
+            prepared, steering=steering, solver=AxleSolverSettings()
         )
+        reference = run_request(
+            SimulationRequest(
+                assembly="vehicle",
+                family="vehicle_dynamic",
+                model=model,
+                case=case,
+                context={"prepared": explicit},
+            )
+        ).raw
         difference = float(
             np.abs(produced.block("body_state") - reference.block("body_state")).max()
         )
@@ -534,7 +732,15 @@ def check_handling() -> tuple[bool, str]:
     )
     closed["handling"]["steering"][0]["shape"] = "iso_lane_change"
     try:
-        run_handling_contract(model_document, model_payload=model_payload, case=closed)
+        run_request(
+            SimulationRequest(
+                assembly="vehicle",
+                family="handling",
+                model=model_document,
+                case=closed,
+                context={"model_payload": model_payload},
+            )
+        )
     except KernelContractError:
         pass
     else:
@@ -561,13 +767,9 @@ def check_ride_random_road() -> tuple[bool, str]:
         RoadComponent,
         ride_random_road_case_document,
         ride_random_road_signals,
-        run_ride_random_road_contract,
         vehicle_dynamic_model_document,
     )
-    from suspension_multibody.cases.vehicle_dynamic import (
-        case_document as vehicle_case_document,
-    )
-    from suspension_multibody.kernel import run_contract
+    from suspension_multibody.simulation import SimulationRequest, run_request
     from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
     fixture = _load_vehicle_fixture()
@@ -604,23 +806,35 @@ def check_ride_random_road() -> tuple[bool, str]:
     )
     model_document, model_blob = vehicle_dynamic_model_document(model, prepared)
     model_payload = pack_container(model_document, model_blob)
-    produced = run_ride_random_road_contract(
-        model_document, model_payload=model_payload, case=document
-    )
+    produced = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="ride_random_road",
+            model=model_document,
+            case=document,
+            context={"model_payload": model_payload},
+        )
+    ).raw
 
     height, velocity = ride_random_road_signals(wheels, speed, times)
-    explicit = replace(prepared, road_height=height, road_velocity=velocity)
-    explicit_case, explicit_blob = vehicle_case_document(model, case, explicit)
-    explicit_case = explicit_case | {
-        "time": document["time"],
-        "solver": document["solver"],
-    }
-    reference = run_contract(
-        model_document,
-        explicit_case,
-        model_payload=model_payload,
-        case_payload=pack_container(explicit_case, explicit_blob),
+    # The explicit reference has to run on the solver block the family document
+    # declares, so it is prepared with that solver rather than the fixture
+    # case's own settings.
+    explicit = replace(
+        prepared,
+        road_height=height,
+        road_velocity=velocity,
+        solver=AxleSolverSettings(),
     )
+    reference = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="vehicle_dynamic",
+            model=model,
+            case=case,
+            context={"prepared": explicit},
+        )
+    ).raw
     difference = float(
         np.abs(produced.block("body_state") - reference.block("body_state")).max()
     )
@@ -701,11 +915,11 @@ def check_vehicle_kc() -> tuple[bool, str]:
     """
     from suspension_multibody.axle_dynamics.schema import AxleSolverSettings
     from suspension_multibody.cases import (
-        run_vehicle_kc_contract,
         vehicle_kc_case_document,
         vehicle_kc_model_document,
     )
     from suspension_multibody.core.spatial import quaternion_to_matrix
+    from suspension_multibody.simulation import SimulationRequest, run_request
     from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
     fixture = _load_vehicle_fixture()
@@ -728,12 +942,20 @@ def check_vehicle_kc() -> tuple[bool, str]:
         ),
         settings=AxleSolverSettings(),
     )
-    produced = run_vehicle_kc_contract(
-        vehicle_kc_model_document(model, base),
-        case=sweep,
-        wheels=(),
-        assembly=base.assembly,
-    )
+    model_document_pair = vehicle_kc_model_document(model, base)
+    produced = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="vehicle_kc",
+            model=model_document_pair,
+            case=sweep,
+            context={
+                "model_document_pair": model_document_pair,
+                "wheels": (),
+                "vehicle_assembly": base.assembly,
+            },
+        )
+    ).raw
 
     expected = [f"k-w{w:+.0f}-r{r:+.0f}" for w in wheels for r in racks]
     given = [str(entry["name"]) for entry in produced.cases()]

@@ -9,7 +9,7 @@ in common beyond the identity fields every document carries.
 
 Nothing here solves anything.  These modules turn the product's in-memory model
 and case objects into the versioned documents of ``suspension_contracts``, and
-they are the only place that knows the unit convention: a document declares the
+are the only place that knows the unit convention: a document declares the
 length unit it is written in, and the kernel honours that declaration rather
 than assuming one.
 """
@@ -20,6 +20,15 @@ from .axle_dynamic import run_axle_dynamic_contract
 from .handling import SteeringShape, run_handling_contract
 from .handling import case_document as handling_case_document
 from .handling import steering_signals as handling_steering_signals
+from .kc_quasi_static import (
+    AXIS_ORDER as kc_axis_order,
+)
+from .kc_quasi_static import (
+    case_document as kc_case_document,
+)
+from .kc_quasi_static import (
+    model_document as kc_model_document,
+)
 from .ride_four_post import FourPostCorner, run_ride_four_post_contract
 from .ride_four_post import case_document as ride_four_post_case_document
 from .ride_four_post import corner_signals as ride_four_post_corner_signals
@@ -47,18 +56,21 @@ __all__ = [
     "axle_dynamic_model_document",
     "handling_case_document",
     "handling_steering_signals",
+    "kc_axis_order",
+    "kc_case_document",
+    "kc_model_document",
     "ride_four_post_case_document",
     "ride_four_post_corner_signals",
     "ride_random_road_case_document",
     "ride_random_road_signals",
-    "run_axle_dynamic_contract",
     "run_handling_contract",
+    "run_axle_dynamic_contract",
     "run_ride_four_post_contract",
     "run_ride_random_road_contract",
     "run_vehicle_dynamics_contract",
     "run_vehicle_kc_contract",
     "vehicle_dynamic_case_document",
+    "vehicle_dynamic_model_document",
     "vehicle_kc_case_document",
     "vehicle_kc_model_document",
-    "vehicle_dynamic_model_document",
 ]

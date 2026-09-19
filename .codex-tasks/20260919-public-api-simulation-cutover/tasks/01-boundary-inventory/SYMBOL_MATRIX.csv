@@ -1,0 +1,38 @@
+layer,symbol,path,current_state,target_owner,migration_task,deletion_condition,validation
+public_api,run_case,packages/suspension_multibody/src/suspension_multibody/api.py,legacy_entry,simulation.run_request,06,public API no direct kernel/case runner/decoder,api architecture tests
+public_api,run_dynamic_case,packages/suspension_multibody/src/suspension_multibody/api.py,legacy_entry,simulation.run_request + TimeSeriesResult,03;06,new production path returns TimeSeriesResult,results/api/adams regression
+public_api,_run_axle_quasi_static,packages/suspension_multibody/src/suspension_multibody/api.py,legacy_glue,axle service + simulation.run_request,04;06,replay glue no native/block decode,api and replay tests
+public_api,_k_grid,packages/suspension_multibody/src/suspension_multibody/api.py,legacy_glue,kc_quasi_static compiler/service,02;06,K replay uses unified service,KC probe
+public_api,_run_k,packages/suspension_multibody/src/suspension_multibody/api.py,legacy_glue,kc_quasi_static compiler/service,02;06,no direct contract runner,KC parity
+public_api,_run_c,packages/suspension_multibody/src/suspension_multibody/api.py,legacy_glue,kc_quasi_static compiler/service,02;06,no direct contract runner,C probe
+axle_service,run_axle_dynamics,packages/suspension_multibody/src/suspension_multibody/axle_dynamics/contract_run.py,compat_service,simulation.run_request + results.decoder,04,no duplicate execution/decode,axle regression
+axle_service,native facade,packages/suspension_multibody/src/suspension_multibody/axle_dynamics/native.py,compat_facade,suspension_multibody.kernel.native,08,no production/test/script import,strict architecture gate
+vehicle_service,run_vehicle_dynamics,packages/suspension_multibody/src/suspension_multibody/vehicle_dynamics.py,compat_entry,simulation.run_request + results.decoder,05,no unique execution/decode owner,vehicle regression
+vehicle_service,prepare_vehicle_run,packages/suspension_multibody/src/suspension_multibody/vehicle_dynamics.py,domain_preparation,vehicle_dynamic compiler/service,05,preparation no native submission,vehicle contract tests
+results,decode_contract_run,packages/suspension_multibody/src/suspension_multibody/results/raw.py,legacy_decode,results.decoder,03,no public caller invokes raw decoder directly,architecture audit
+artifact,write_bundle,packages/suspension_multibody/src/suspension_multibody/io/results.py,legacy_writer,io.artifacts.write_artifact,06;07,no new artifact writer call,artifact tests
+artifact,write_dynamic_bundle,packages/suspension_multibody/src/suspension_multibody/io/results.py,legacy_writer,io.artifacts.write_artifact,06;07,no new DynamicResultBundle output,artifact tests
+artifact,write_axle_dynamics_artifact,packages/suspension_multibody/src/suspension_multibody/axle_dynamics/io.py,legacy_writer,io.artifacts.write_artifact,06;07,no new non-unified format,artifact tests
+artifact,write_vehicle_dynamics_artifact,packages/suspension_multibody/src/suspension_multibody/vehicle_dynamics.py,legacy_writer,io.artifacts.write_artifact,06;07,no new non-unified format,artifact tests
+kernel,run_contract,packages/suspension_multibody/src/suspension_multibody/kernel/__init__.py,shared_runtime,NativeContractBackend,02;08,only backend production call,architecture gate
+backend,NativeContractBackend,packages/suspension_multibody/src/suspension_multibody/simulation/backend.py,target_owner,NativeContractBackend,02,remains sole native caller,contract parity
+results,TimeSeriesResult,packages/suspension_multibody/src/suspension_multibody/results/timeseries.py,planned_type,results.timeseries,03,used by dynamic/replay production paths,results snapshots
+metrics,case_specific,packages/suspension_multibody/src/suspension_multibody/metrics/case_specific.py,planned_owner,metrics.case_specific,07,all seven families registered or not_applicable,metrics regression
+artifact,write_artifact,packages/suspension_multibody/src/suspension_multibody/io/artifacts.py,planned_owner,io.artifacts,06;07,sole new writer/reader owner,artifact roundtrip
+baseline,direct_kernel_run_contract,packages/suspension_multibody/src/suspension_multibody/api.py,baseline_bypass,NativeContractBackend,02;04;06,lines 217/368/441 removed after request cutover,architecture gate
+baseline,direct_kernel_run_contract,packages/suspension_multibody/scripts/case_parity_check.py,baseline_bypass,simulation.run_request,06,lines 393/424/462/517/570/618 removed after script cutover,parity regression
+baseline,direct_case_contract_import,packages/suspension_multibody/src/suspension_multibody/adams,baseline_bypass,simulation.run_request,06,reference/strict_k/strict_c imports removed,Adams regression
+baseline,direct_case_contract_call,packages/suspension_multibody/src/suspension_multibody/adams,baseline_bypass,simulation.run_request,06,reference/strict_k/strict_c calls removed,Adams regression
+baseline,direct_case_contract_import,packages/suspension_multibody/scripts,baseline_bypass,simulation.run_request,02;06,probe/performance/parity imports removed,script regression
+baseline,direct_case_contract_call,packages/suspension_multibody/scripts,baseline_bypass,simulation.run_request,02;06,probe/performance/parity calls removed,script regression
+baseline,direct_raw_decoder,packages/suspension_multibody/src/suspension_multibody/cases/kc_quasi_static/workflow.py,baseline_bypass,results.decoder,02;03,workflow decodes only through results layer,KC regression
+baseline,direct_raw_decoder,packages/suspension_multibody/src/suspension_multibody/axle_dynamics/contract_run.py,baseline_bypass,results.decoder,04,service no longer decodes raw contract directly,axle regression
+baseline,direct_raw_decoder,packages/suspension_multibody/src/suspension_multibody/vehicle_dynamics.py,baseline_bypass,results.decoder,05,service no longer decodes raw contract directly,vehicle regression
+baseline,direct_raw_decoder,packages/suspension_multibody/src/suspension_multibody/results/vehicle.py,baseline_bypass,results.decoder,03,decoder ownership consolidated,results regression
+baseline,dynamic_bundle_reference,packages/suspension_multibody/src/suspension_multibody/api.py,baseline_bypass,results.timeseries.TimeSeriesResult,03;06,new dynamic output no bundle reference,API regression
+baseline,dynamic_bundle_creation,packages/suspension_multibody/src/suspension_multibody/api.py,baseline_bypass,results.timeseries.TimeSeriesResult,03;06,new dynamic output no bundle creation,results regression
+baseline,dynamic_bundle_creation,packages/suspension_multibody/src/suspension_multibody/analysis/vehicle_kc_time_domain.py,baseline_bypass,results.timeseries.TimeSeriesResult,03,history aggregation migrated,vehicle K&C regression
+baseline,legacy_artifact_writer,packages/suspension_multibody/src/suspension_multibody/cli.py,baseline_bypass,io.artifacts,06,CLI no domain-specific writer imports/calls,CLI regression
+baseline,legacy_artifact_writer,packages/suspension_multibody/src/suspension_multibody/adams/axle_equivalence.py,baseline_bypass,io.artifacts,06;07,Adams equivalence no legacy axle writer,Adams artifact regression
+baseline,legacy_artifact_writer,packages/suspension_multibody/scripts/run_full_native_three_model_comparison.py,baseline_bypass,io.artifacts,06,comparison script uses unified writer,script regression
+baseline,axle_native_facade_import,packages/suspension_multibody/tests,compatibility_reference,suspension_multibody.kernel.native,08,test facade references removed before deletion,strict architecture gate

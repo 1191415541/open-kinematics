@@ -9,6 +9,7 @@ from suspension_multibody.adams import AdamsProfile
 from suspension_multibody.adams.time_domain import history_from_dynamic_bundle
 from suspension_multibody.adams.time_domain_gate import validate_axle_time_domain
 from suspension_multibody.api import run_dynamic_case
+from suspension_multibody.results import TimeSeriesResult, TimeSeriesSample
 from suspension_multibody.schema import (
     DynamicCaseSpec,
     DynamicSolverSettings,
@@ -129,3 +130,23 @@ def test_axle_gate_rejects_runner_without_result(tmp_path: Path) -> None:
 
     assert not result.ok
     assert "did not produce" in result.report["error"]
+
+def test_history_adapter_consumes_time_series_result() -> None:
+    result = TimeSeriesResult.from_samples(
+        (
+            TimeSeriesSample(time=0.0, body="axle", metrics={"heave": 0.0}),
+            TimeSeriesSample(time=0.1, body="axle", metrics={"heave": 0.5}),
+        ),
+        mode="axle_dynamic",
+    )
+
+    history = history_from_dynamic_bundle(
+        result,
+        body="axle",
+        channels=("heave",),
+        units={"heave": "m"},
+    )
+
+    assert history.time == (0.0, 0.1)
+    assert history.channels["heave"] == (0.0, 0.5)
+    assert history.units == {"heave": "m"}

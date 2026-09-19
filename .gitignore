@@ -181,7 +181,9 @@ GEMINI.md
 .ace-tool/
 
 # Local analysis outputs and tool evidence.
-/.codex-tasks/
+/.codex-tasks/*
+!/.codex-tasks/20260919-public-api-simulation-cutover/
+!/.codex-tasks/20260919-public-api-simulation-cutover/**
 /artifacts/
 /packages/*/artifacts/
 /packages/*/.codex-tasks/

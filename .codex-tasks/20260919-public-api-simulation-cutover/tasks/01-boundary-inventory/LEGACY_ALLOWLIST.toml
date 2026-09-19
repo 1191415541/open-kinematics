@@ -1,0 +1,15 @@
+version = 2
+mode = "strict"
+source = "task 01 repository scan; cleared by task 08 after every listed bypass was deleted"
+root = "."
+
+# The gate is exact to path, scope, rule, symbol, and line, and in strict mode it
+# allows no entries at all: task 08 deleted the last compatibility facade, the
+# duplicate writers, the dead raw decoder export and the legacy K&C contract
+# runners, so the repository scan finds nothing.  Any new entry here is a
+# regression rather than a record.
+#
+# Kept out of the scanner by construction instead of by an entry:
+#   * `schema/__init__.py`, `schema/loader.py` and `adams/time_domain.py` are the
+#     historical `DynamicResultBundle` read boundary -- they may name the type but
+#     no new production path may create it (see `_is_history_compat_owner`).

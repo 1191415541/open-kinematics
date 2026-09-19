@@ -146,6 +146,8 @@
     "inputs": {"type": "object"},
     "vehicle": {"type": "object"},
     "four_post": {"type": "object"},
+    "handling": {"type": "object"},
+    "ride_random_road": {"type": "object"},
     "comparison": {
       "type": "object",
       "additionalProperties": false,

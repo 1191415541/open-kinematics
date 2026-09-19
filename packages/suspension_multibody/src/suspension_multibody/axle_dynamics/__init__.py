@@ -1,13 +1,9 @@
 """Physical SI axle dynamics implemented by the native C++ kernel."""
 
+from ..kernel.native import NativeKernelUnavailableError, native_build_metadata
 from .contract_run import run_axle_dynamics
 from .errors import NativeAxleError
-from .io import (
-    load_axle_dynamics_case,
-    load_axle_dynamics_model,
-    write_axle_dynamics_artifact,
-)
-from .native import NativeKernelUnavailableError, native_build_metadata
+from .io import load_axle_dynamics_case, load_axle_dynamics_model
 from .result import (
     ANTI_ROLL_OUTPUT_COLUMNS,
     BODY_STATE_COLUMNS,
@@ -72,5 +68,4 @@ __all__ = [
     "load_axle_dynamics_model",
     "native_build_metadata",
     "run_axle_dynamics",
-    "write_axle_dynamics_artifact",
 ]

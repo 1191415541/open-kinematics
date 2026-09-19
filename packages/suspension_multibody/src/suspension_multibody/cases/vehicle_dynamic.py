@@ -24,13 +24,13 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from suspension_contracts import pack_container
 
 from ..axle_dynamics.schema import (
     PAC2002_PARAMETER_DEFAULTS,
     PAC2002_PARAMETER_NAMES,
 )
-from ..kernel import ContractRun, run_contract
+from ..kernel.solver import solver_settings_document
+from ..results.raw import RawContractResult
 from ..schema import VehicleDynamicCase, VehicleModel
 from ..vehicle_dynamics import prepare_vehicle_run
 
@@ -495,34 +495,8 @@ def _append_table(
 
 
 def _solver_block(settings) -> dict[str, Any]:
-    """Return the solver block, spelled out rather than left to a default."""
-    return {
-        "integrator": "hht" if settings.integrator == "hht" else "ggl_generalized_alpha",
-        "rho_inf": float(settings.rho_inf),
-        "hht_alpha": float(settings.hht_alpha),
-        "initialization_mode": str(settings.initialization_mode),
-        "adaptive_step": bool(settings.adaptive_step),
-        "internal_step_s": float(settings.internal_step_s),
-        "minimum_step_s": float(settings.minimum_step_s),
-        "maximum_step_s": float(settings.maximum_step_s),
-        "local_relative_tolerance": float(settings.local_relative_tolerance),
-        "local_position_tolerance_m": float(settings.local_position_tolerance_m),
-        "local_angle_tolerance_rad": float(settings.local_angle_tolerance_rad),
-        "local_velocity_tolerance_m_per_s": float(
-            settings.local_velocity_tolerance_m_per_s
-        ),
-        "local_angular_velocity_tolerance_rad_per_s": float(
-            settings.local_angular_velocity_tolerance_rad_per_s
-        ),
-        "local_brush_tolerance_m": float(settings.local_brush_tolerance_m),
-        "contact_event_tolerance_s": float(settings.contact_event_tolerance_s),
-        "max_newton_iterations": int(settings.max_newton_iterations),
-        "max_line_search_iterations": int(settings.max_line_search_iterations),
-        "position_tolerance_m": float(settings.position_tolerance_m),
-        "velocity_tolerance_m_per_s": float(settings.velocity_tolerance_m_per_s),
-        "dynamics_tolerance": float(settings.dynamics_tolerance),
-        "increment_tolerance": float(settings.increment_tolerance),
-    }
+    """Compatibility wrapper for the shared neutral solver serializer."""
+    return solver_settings_document(settings)
 
 
 def case_document(
@@ -634,21 +608,21 @@ def run_vehicle_dynamics_contract(
     case: VehicleDynamicCase,
     *,
     prepared=None,
-) -> ContractRun:
+) -> RawContractResult:
     """
-    Run one vehicle case through the contract boundary.
+    Run one vehicle case through the unified simulation runner.
 
-    ``prepared`` is an internal fast path for the public vehicle API, which has
-    already assembled the model.  Keeping the assembly single-sourced is more
-    important than making every caller pass it: omitting the argument performs
-    the same preparation here.
+    ``prepared`` remains an internal fast path for the public vehicle API.
     """
+    from ..simulation import SimulationRequest, run_request
+
     prepared = prepare_vehicle_run(model, case) if prepared is None else prepared
-    document, blob = case_document(model, case, prepared)
-    model_doc, model_blob = model_document(model, prepared)
-    return run_contract(
-        model_doc,
-        document,
-        model_payload=pack_container(model_doc, model_blob),
-        case_payload=pack_container(document, blob),
-    )
+    return run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="vehicle_dynamic",
+            model=model,
+            case=case,
+            context={"prepared": prepared},
+        )
+    ).raw

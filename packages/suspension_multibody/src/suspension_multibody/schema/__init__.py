@@ -46,7 +46,6 @@ from .loader import (
     load_dynamic_case,
     load_dynamic_result,
     load_model,
-    load_result,
     load_vehicle_dynamic_case,
     load_vehicle_model,
 )
@@ -137,7 +136,6 @@ __all__ = [
     "load_dynamic_case",
     "load_dynamic_result",
     "load_model",
-    "load_result",
     "load_vehicle_dynamic_case",
     "load_vehicle_model",
 ]

@@ -19,7 +19,7 @@ from .time_domain import (
     TimeHistory,
     TimeHistoryTolerance,
     compare_time_histories,
-    history_from_dynamic_bundle,
+    history_from_result_series,
     read_time_history,
 )
 
@@ -145,7 +145,7 @@ def validate_axle_time_domain(
     """Validate an axle time trace, including its prescribed motions and wrenches."""
     if case.mode != "axle_dynamic":
         raise ValueError("axle Adams gate requires mode='axle_dynamic'")
-    reference = history_from_dynamic_bundle(
+    reference = history_from_result_series(
         run_dynamic_case(model, case),
         body="axle",
         channels=channels,

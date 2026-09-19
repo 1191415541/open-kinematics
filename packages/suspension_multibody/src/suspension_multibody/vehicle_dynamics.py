@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import math
-from dataclasses import asdict, dataclass, replace
-from pathlib import Path
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
 
-from . import __version__
 from .axle_dynamics.result import AxleDynamicsResult
 from .axle_dynamics.schema import (
     AxleAerodynamicDrag,
@@ -46,8 +44,8 @@ from .elements import (
     StaticDamperElement,
     VerticalTireElement,
 )
-from .io import canonical_hash
 from .model import VehicleAssembly, build_vehicle
+from .results.raw import RawContractResult
 from .schema import (
     DynamicSolverSettings,
     RoadSurfaceSpec,
@@ -57,6 +55,7 @@ from .schema import (
     VehicleModel,
     WheelSpec,
 )
+from .simulation import SimulationRequest, run_request
 
 _WHEEL_NAMES = ("front_left", "front_right", "rear_left", "rear_right")
 _ROAD_KIND = {
@@ -202,7 +201,8 @@ class VehicleDynamicsResult:
     steering_names: tuple[str, ...] = ()
     steering_output: np.ndarray | None = None
     native_kernel_wall_time_s: float = 0.0
-
+    static_wheel_loads: Mapping[str, float] | None = None
+    metrics: dict[str, Any] = field(default_factory=dict)
     @property
     def times_s(self) -> np.ndarray:
         return self.axle.times_s
@@ -391,182 +391,75 @@ def run_vehicle_dynamics(
     """运行一个真实前后悬架、车身和轮端的 native 整车动力学算例."""
     from time import perf_counter
 
+    from .analysis.vehicle_physics import compute_static_wheel_loads
+    from .axle_dynamics.contract_run import safe_failure_row
     from .axle_dynamics.errors import NativeAxleError
-    from .cases.vehicle_dynamic import run_vehicle_dynamics_contract
     from .kernel import KernelContractError
-
+    from .metrics import compute_case_metrics
+    from .results.decoder import decode_result
     prepared = prepare_vehicle_run(model, case)
+    static_wheel_loads: Mapping[str, float] | None = None
+    try:
+        static_wheel_loads = compute_static_wheel_loads(model).wheel_loads
+    except (ValueError, np.linalg.LinAlgError):
+        static_wheel_loads = None
     started = perf_counter()
     try:
-        run = run_vehicle_dynamics_contract(model, case, prepared=prepared)
+        simulation_run = run_request(
+            SimulationRequest(
+                assembly="vehicle",
+                family="vehicle_dynamic",
+                model=model,
+                case=case,
+                context={"prepared": prepared},
+            )
+        )
     except KernelContractError as error:
-        partial = error.partial_run
-        if partial is None:
+        partial = error.partial_raw_result
+        if not isinstance(partial, RawContractResult):
             raise NativeAxleError(str(error), status=3) from error
         manifest = partial.document.get("manifest", {})
         index = int(manifest.get("failed_sample_index", 0))
-        from .axle_dynamics.contract_run import failure_row
-
+        partial_vehicle = None
+        try:
+            partial_vehicle = decode_result(
+                partial,
+                assembly="vehicle",
+                family="vehicle_dynamic",
+                prepared=prepared,
+                stop=index,
+            )
+            partial_vehicle = replace(
+                partial_vehicle,
+                static_wheel_loads=static_wheel_loads,
+                metrics=compute_case_metrics("vehicle_dynamic", partial_vehicle),
+            )
+        except Exception:
+            partial_vehicle = None
         raise NativeAxleError(
             str(error),
-            status=int(manifest.get("failed_status", 3)),
-            partial_result=(
-                _vehicle_axle_result(prepared, partial, stop=index)
-                if index > 0
-                else None
-            ),
-            failure_diagnostics=failure_row(partial, index),
+            status=int(manifest.get("failed_status", 3) or 3),
+            partial_result=partial_vehicle,
+            failure_diagnostics=safe_failure_row(partial, index),
             failed_sample_index=index,
-            failed_time_s=float(manifest.get("failed_time_s", 0.0)),
+            failed_time_s=float(manifest.get("failed_time_s") or 0.0),
         ) from error
 
-    steering_output = (
-        None
-        if prepared.steering is None
-        else run.block("steering_output").copy()
-    )
-    return VehicleDynamicsResult(
-        axle=_vehicle_axle_result(prepared, run),
-        steering_names=() if prepared.steering is None else prepared.steering.names,
-        steering_output=steering_output,
+    result = simulation_run.result
+    if not isinstance(result, VehicleDynamicsResult):
+        raise TypeError("vehicle simulation did not produce VehicleDynamicsResult")
+    completed = replace(
+        result,
         native_kernel_wall_time_s=perf_counter() - started,
+        static_wheel_loads=static_wheel_loads,
     )
+    completed = replace(
+        completed,
+        metrics=compute_case_metrics("vehicle_dynamic", completed),
+    )
+    return completed
 
 
-def write_vehicle_dynamics_artifact(
-    result: VehicleDynamicsResult | None,
-    model: VehicleModel,
-    case: VehicleDynamicCase,
-    output_dir: str | Path,
-    *,
-    failure: Exception | None = None,
-) -> Path:
-    """写入整车原始数组和可复现性清单."""
-    destination = Path(output_dir)
-    destination.mkdir(parents=True, exist_ok=True)
-    from .axle_dynamics.native import native_build_metadata
-    from .axle_dynamics.result import (
-        ANTI_ROLL_OUTPUT_COLUMNS,
-        BODY_STATE_COLUMNS,
-        BUSHING_OUTPUT_COLUMNS,
-        CONSTRAINT_WRENCH_COLUMNS,
-        DIAGNOSTIC_COLUMNS,
-        ENERGY_COLUMNS,
-        PERFORMANCE_COLUMNS,
-        SPRING_OUTPUT_COLUMNS,
-        TIRE_OUTPUT_COLUMNS,
-    )
-
-    model_payload = model.model_dump(mode="json")
-    case_payload = case.model_dump(mode="json")
-    axle = None if result is None else result.axle
-    failure_row = getattr(failure, "failure_diagnostics", None)
-    manifest: dict[str, Any] = {
-        "schema_version": 1,
-        "artifact_type": "vehicle_dynamics_result",
-        "status": "failed" if failure is not None else "success",
-        "package_version": __version__,
-        "model_name": model.name,
-        "case_name": case.name,
-        "model_sha256": canonical_hash(model_payload),
-        "case_sha256": canonical_hash(case_payload),
-        "model": model_payload,
-        "case": case_payload,
-        "native_assembly_mode": _select_assembly_mode(
-            model, case.suspension_mode
-        ),
-        "native_build": native_build_metadata(),
-        "completed_sample_count": 0 if axle is None else len(axle.times_s),
-        "failed_sample_index": getattr(failure, "failed_sample_index", None),
-        "failed_time_s": getattr(failure, "failed_time_s", None),
-        "native_status": getattr(failure, "status", 0),
-        "performance": None if axle is None else asdict(axle.performance),
-        "native_kernel_wall_time_s": (
-            None if result is None else result.native_kernel_wall_time_s
-        ),
-        "error": None if failure is None else str(failure),
-        "failure_diagnostics": (
-            None
-            if failure_row is None
-            else {
-                name: float(value)
-                for name, value in zip(DIAGNOSTIC_COLUMNS, failure_row)
-            }
-        ),
-        "steering_names": None if result is None else result.steering_names,
-        "layouts": {
-            "body_state": BODY_STATE_COLUMNS,
-            "constraint_wrench": CONSTRAINT_WRENCH_COLUMNS,
-            "spring_output": SPRING_OUTPUT_COLUMNS,
-            "bushing_output": BUSHING_OUTPUT_COLUMNS,
-            "anti_roll_output": ANTI_ROLL_OUTPUT_COLUMNS,
-            "diagnostics": DIAGNOSTIC_COLUMNS,
-            "tire_output": TIRE_OUTPUT_COLUMNS,
-            "energy": ENERGY_COLUMNS,
-            "performance": PERFORMANCE_COLUMNS,
-            "steering_output": (
-                "coordinate_m_or_angle_rad",
-                "rate_per_s",
-                "target_m_or_angle_rad",
-                "actuator_force_or_torque",
-            ),
-        },
-        "arrays_file": "arrays.npz" if result is not None else None,
-    }
-    if result is not None:
-        diagnostics = result.diagnostics
-        np.savez_compressed(
-            destination / "arrays.npz",
-            times_s=result.times_s,
-            body_names=np.asarray(result.body_names),
-            constraint_names=np.asarray(result.axle.constraint_names),
-            spring_names=np.asarray(result.axle.spring_names),
-            bushing_names=np.asarray(result.axle.bushing_names),
-            anti_roll_bar_names=np.asarray(result.axle.anti_roll_bar_names),
-            tire_names=np.asarray(result.tire_names),
-            steering_names=np.asarray(result.steering_names),
-            states=result.states,
-            constraint_wrench=result.axle.constraint_wrench,
-            spring_output=result.axle.spring_output,
-            bushing_output=result.axle.bushing_output,
-            anti_roll_output=result.axle.anti_roll_output,
-            diagnostics=np.column_stack(
-                tuple(
-                    getattr(diagnostics, field)
-                    for field in (
-                        "accepted",
-                        "internal_steps",
-                        "rejected_attempts",
-                        "newton_iterations",
-                        "minimum_accepted_step_s",
-                        "maximum_accepted_step_s",
-                        "last_accepted_step_s",
-                        "position_residual",
-                        "velocity_residual",
-                        "dynamics_residual",
-                        "active_contacts",
-                        "contact_events",
-                        "local_error_ratio",
-                        "energy_residual",
-                        "failure_code",
-                        "pinned_null_directions",
-                    )
-                )
-            ),
-            tire_output=result.axle.tire_output,
-            energy=result.axle.energy,
-            steering_output=(
-                result.steering_output
-                if result.steering_output is not None
-                else np.empty((len(result.times_s), 0, 4), dtype=np.float64)
-            ),
-        )
-    manifest_path = destination / "manifest.json"
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    return manifest_path
 
 
 def _length_scale(units: UnitSystem) -> float:

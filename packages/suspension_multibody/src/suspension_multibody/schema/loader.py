@@ -12,7 +12,6 @@ from pydantic import BaseModel, ValidationError
 from .case import CaseSpec
 from .dynamic import DynamicCaseSpec, DynamicResultBundle
 from .model import FrontAxleModel
-from .result import ResultBundle
 from .vehicle import VehicleDynamicCase, VehicleModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -60,11 +59,6 @@ def load_vehicle_model(path: str | Path) -> VehicleModel:
 def load_vehicle_dynamic_case(path: str | Path) -> VehicleDynamicCase:
     """加载并校验整车动态算例 YAML/JSON 文件."""
     return _validate(_read(path), VehicleDynamicCase, path)
-
-
-def load_result(path: str | Path) -> ResultBundle:
-    """Load and validate a result JSON file."""
-    return _validate(_read(path), ResultBundle, path)
 
 
 def load_dynamic_result(path: str | Path) -> DynamicResultBundle:

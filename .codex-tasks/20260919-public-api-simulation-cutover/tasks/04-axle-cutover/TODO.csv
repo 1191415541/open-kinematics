@@ -1,0 +1,6 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,拆分 axle contract_run 的 preparation/执行/解码职责,DONE,输入准备与统一 service 解耦且无直接 native 提交,uv run --all-packages pytest packages/suspension_multibody/tests/axle_dynamics -q,2026-09-19,0,统一 runner 接线完成；axle service 不再直接调用 case runner
+2,接入 AxleResult 与 axle/common/case metrics,DONE,整轴 service 实际使用正式结果对象和指标层,uv run --all-packages pytest packages/suspension_multibody/tests/axle_dynamics -q,2026-09-19,AxleDynamicsResult/AxleResult 与 axle metrics 接入完成
+3,收敛 run_axle_dynamics 为薄兼容 service facade,DONE,兼容入口不直接提交 native、不内联解码且异常语义回归通过,uv run --all-packages pytest packages/suspension_multibody/tests/axle_dynamics packages/suspension_multibody/tests/architecture -q,2026-09-19,统一 runner facade 与异常传播回归通过
+4,验证整轴失败/partial/结果兼容语义,DONE,成功、失败、partial、diagnostics、performance 和公开字段回归通过,uv run --all-packages pytest packages/suspension_multibody/tests/axle_dynamics packages/suspension_multibody/tests/adams/test_time_domain_axle.py packages/suspension_multibody/tests/adams/test_axle_dynamics_equivalence.py -q,2026-09-19,163 passed；成功/失败/partial/diagnostics/performance 回归通过
+5,清理整轴 service 的 axle_dynamics.native 引用,DONE,新整轴 service 不再依赖 native facade,git diff --check,2026-09-19,architecture 41 passed；git diff --check 通过

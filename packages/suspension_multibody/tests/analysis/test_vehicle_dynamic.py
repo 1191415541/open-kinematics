@@ -1,10 +1,11 @@
-"""Tests for vehicle K/C replay and legacy dynamics rejection."""
+"""Vehicle time-domain result tests."""
 
 from __future__ import annotations
 
 import pytest
 
 from suspension_multibody.api import run_dynamic_case
+from suspension_multibody.results import TimeSeriesResult
 from suspension_multibody.schema import (
     DynamicCaseSpec,
     DynamicSolverSettings,
@@ -62,10 +63,10 @@ def test_vehicle_kc_dynamic_replays_body_roll() -> None:
             ),
         ),
     )
-
     bundle = run_dynamic_case(_model(), case)
-
+    assert isinstance(bundle, TimeSeriesResult)
     assert bundle.samples[-1].metrics["roll_angle"] == 0.1
+    assert bundle.metrics["case_specific"]["status"] == "not_applicable"
 
 
 def test_legacy_vehicle_integrator_is_rejected() -> None:

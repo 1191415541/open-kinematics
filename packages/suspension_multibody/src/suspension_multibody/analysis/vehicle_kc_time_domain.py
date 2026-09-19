@@ -2,19 +2,14 @@
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
-
 import numpy as np
 
 from .. import __version__
 from ..core import rotation_vector_to_quaternion
 from ..io import canonical_hash
+from ..results import TimeSeriesResult, TimeSeriesSample
 from ..schema import (
     DynamicCaseSpec,
-    DynamicManifest,
-    DynamicResultBundle,
-    DynamicTimeSample,
     FrontAxleModel,
     Pose,
     Provenance,
@@ -30,15 +25,15 @@ class VehicleKCTimeDomainSolver:
 
     def run(
         self, model: FrontAxleModel, case: DynamicCaseSpec
-    ) -> DynamicResultBundle:
+    ) -> TimeSeriesResult:
         if case.mode != "vehicle_kc_dynamic":
             raise ValueError(
                 "VehicleKCTimeDomainSolver requires mode='vehicle_kc_dynamic'"
             )
         if case.vehicle is None:
             raise ValueError("vehicle-level K/C replay requires vehicle data")
-        samples = [
-            DynamicTimeSample(
+        samples = tuple(
+            TimeSeriesSample(
                 time=time,
                 body=case.vehicle.name,
                 pose=_pose_from_angles(
@@ -51,20 +46,18 @@ class VehicleKCTimeDomainSolver:
                 metrics=_vehicle_metrics(case, time),
             )
             for time in time_grid(case)
-        ]
-        return DynamicResultBundle(
-            manifest=DynamicManifest(
-                run_id=uuid.uuid4().hex,
-                mode=case.mode,
-                sample_count=len(samples),
-                provenance=Provenance(
-                    package_version=__version__,
-                    model_hash=canonical_hash(model.model_dump(mode="json")),
-                    case_hash=canonical_hash(case.model_dump(mode="json")),
-                    created_at=datetime.now(timezone.utc).isoformat(),
-                ),
-            ),
-            samples=tuple(samples),
+        )
+        provenance = Provenance(
+            package_version=__version__,
+            model_hash=canonical_hash(model.model_dump(mode="json")),
+            case_hash=canonical_hash(case.model_dump(mode="json")),
+        ).model_dump(mode="json")
+        return TimeSeriesResult.from_samples(
+            samples,
+            times_s=tuple(sample.time for sample in samples),
+            provenance=provenance,
+            mode=case.mode,
+            metrics={"sample_count": len(samples)},
         )
 
 

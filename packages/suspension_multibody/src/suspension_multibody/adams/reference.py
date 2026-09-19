@@ -5,10 +5,22 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import numpy as np
+
+from ..analysis._geometry import _wheel_geometry
+from ..axle_dynamics import AxleSolverSettings
+from ..cases.kc_quasi_static.contract import case_document, model_document
+from ..cases.kc_quasi_static.convert import MM, NativeKcError, quaternion_to_rotation
 from ..model import build_front_axle
-from ..native_kc import run_k_grid_contract
 from ..schema import FrontAxleModel, MassSpec
+from ..simulation import SimulationRequest, run_request
 from .probe import AdamsProfile
+
+#: The K case time grid and solver settings the native contract expands.  They
+#: restate the case layer's defaults so this gate authors its own documents
+#: instead of borrowing the legacy workflow runner.
+_KC_TIMES_S = tuple(float(value) for value in np.linspace(0.0, 2e-3, 9))
+_KC_SETTINGS = AxleSolverSettings(internal_step_s=2.5e-4)
 
 _POINT_RE = re.compile(
     r"^\s*'(?P<name>[^']+)'\s+'[^']+'\s+"
@@ -57,7 +69,7 @@ def build_default_reference(profile: AdamsProfile) -> dict[str, dict[str, float]
     assembly = build_front_axle(model, "K")
     states = {
         (float(state["wheel_travel_mm"]), float(state["rack_displacement_mm"])): state
-        for state in run_k_grid_contract(
+        for state in _k_grid_states(
             assembly, wheel_values_mm=(-10.0, 10.0), rack_values_mm=(0.0,)
         )
     }
@@ -104,3 +116,78 @@ def _read_hardpoints(path: Path) -> dict[str, tuple[float, float, float]]:
                 float(match.group(axis)) for axis in ("x", "y", "z")
             )
     return points
+
+
+def _side_fields(assembly, side: str, position_m, quaternion) -> dict[str, float]:
+    """Return the wheel-centre and alignment fields a K/C case reports."""
+    rotation = quaternion_to_rotation(quaternion)
+    local = np.asarray(assembly.point(f"upright_{side}", "wheel_center"), dtype=float)
+    geometry = _wheel_geometry(
+        np.asarray(position_m, dtype=float) / MM,
+        rotation,
+        local,
+        side=side,
+    )
+    name = "left" if side == "L" else "right"
+    return {
+        f"{name}_wheel_center_x_mm": float(geometry.center[0]),
+        f"{name}_wheel_center_y_mm": float(geometry.center[1]),
+        f"{name}_wheel_center_z_mm": float(geometry.center[2]),
+        f"{name}_camber_deg": geometry.camber_deg,
+        f"{name}_toe_deg": geometry.toe_deg,
+    }
+
+
+def _k_grid_states(
+    assembly,
+    *,
+    wheel_values_mm: tuple[float, ...],
+    rack_values_mm: tuple[float, ...],
+) -> list[dict[str, object]]:
+    """Solve one K grid by authoring its documents and running the service."""
+    model = model_document(assembly, name="native-k", drive_wheels=True)
+    case = case_document(
+        assembly,
+        family="kc_quasi_static",
+        name="kc-k",
+        wheel_values_mm=wheel_values_mm,
+        rack_values_mm=rack_values_mm,
+        times_s=_KC_TIMES_S,
+        settings=_KC_SETTINGS,
+        drive_wheels=True,
+    )
+    run = run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model,
+            case=case,
+        )
+    ).raw
+    left_states = run.body_state("upright_L")
+    right_states = run.body_state("upright_R")
+    records: list[dict[str, object]] = []
+    for index, entry in enumerate(run.cases()):
+        wheel = wheel_values_mm[index // len(rack_values_mm)]
+        rack = rack_values_mm[index % len(rack_values_mm)]
+        case_id = f"k-w{wheel:+.0f}-r{rack:+.0f}"
+        # The case layer expands the grid in document order; checking the name
+        # it reported turns a silent reordering into a failure.
+        if str(entry["name"]) != case_id:
+            raise NativeKcError(
+                f"the kernel expanded {entry['name']!r} where {case_id!r} was expected"
+            )
+        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
+        record: dict[str, object] = {
+            "case_id": case_id,
+            "wheel_travel_mm": float(wheel),
+            "rack_displacement_mm": float(rack),
+        }
+        record.update(
+            _side_fields(assembly, "L", left_states[last, :3], left_states[last, 3:7])
+        )
+        record.update(
+            _side_fields(assembly, "R", right_states[last, :3], right_states[last, 3:7])
+        )
+        records.append(record)
+    return records

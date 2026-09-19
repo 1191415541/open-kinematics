@@ -229,7 +229,7 @@ def test_exported_metadata_and_boundary_versions_agree() -> None:
     assert metadata["vehicle_abi_version"] == exports["vehicle_kernel_abi_version"]
     assert metadata["core_abi_version"] == exports["mb_core_abi_version"]
 
-    from suspension_multibody.axle_dynamics import native
+    from suspension_multibody.kernel import native
 
     assert metadata["abi_version"] == native._NATIVE_KERNEL_ABI_VERSION
     assert metadata["vehicle_abi_version"] == native._NATIVE_VEHICLE_KERNEL_ABI_VERSION

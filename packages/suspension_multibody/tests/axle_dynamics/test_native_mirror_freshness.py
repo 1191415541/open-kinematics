@@ -1,11 +1,12 @@
 """
-The axle package must not silently load a stale copy of the kernel library.
+The packaged mirror must not be silently loaded when it is stale.
 
-`native.py` loads its own copy under `native/`, while the build that produces the
-canonical library lives in `suspension_kernel`.  A build that refreshed only the
-canonical copy leaves the mirror behind, and because the `ctypes` mirrors move
-with the source, the symptom is an access violation inside the kernel rather than
-a build error.  These tests pin the guard that turns it back into a build error.
+``kernel/native.py`` loads the product package's copy under ``native/``, while the
+build that produces the canonical library lives in ``suspension_kernel``.  A build
+that refreshed only the canonical copy leaves the mirror behind, and because the
+``ctypes`` mirrors move with the source, the symptom is an access violation inside
+the kernel rather than a build error.  These tests pin the guard that turns it
+back into a build error.
 
 The fixture is fully synthetic: real files in the working tree are never touched,
 so a failure here cannot leave the checkout in a doctored state.
@@ -18,11 +19,10 @@ from pathlib import Path
 
 import pytest
 
-from suspension_multibody.axle_dynamics import native
+from suspension_multibody.kernel import native
 
-#: The guard raises the axle package's own error type, which is the one callers
-#: of this package already catch.  Importing the kernel package's same-named
-#: class instead would not match, which is exactly the trap this comment marks.
+#: The guard raises the kernel runtime's error type, which is the one callers of
+#: this package already catch: ``axle_dynamics`` re-exports it unchanged.
 NativeKernelUnavailableError = native.NativeKernelUnavailableError
 
 

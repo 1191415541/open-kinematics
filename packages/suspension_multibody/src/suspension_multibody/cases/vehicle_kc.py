@@ -19,10 +19,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from suspension_contracts import pack_container
 
 from ..axle_dynamics.schema import AxleSolverSettings
-from ..kernel import ContractRun, run_contract
+from ..results.raw import RawContractResult
 from .vehicle_dynamic import _solver_block
 from .vehicle_dynamic import model_document as _vehicle_model_document
 
@@ -182,17 +181,23 @@ def run_vehicle_kc_contract(
     case: dict[str, Any],
     wheels: tuple[VehicleKcCorner, ...],
     assembly,
-) -> ContractRun:
-    """Run one vehicle K/C sweep."""
-    document, blob = model_document(
-        model_document_pair, wheels=wheels, assembly=assembly
-    )
-    return run_contract(
-        document,
-        case,
-        model_payload=pack_container(document, blob),
-        case_payload=pack_container(case),
-    )
+) -> RawContractResult:
+    """Run one vehicle K/C sweep through the unified simulation runner."""
+    from ..simulation import SimulationRequest, run_request
+
+    return run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="vehicle_kc",
+            model=model_document_pair,
+            case=case,
+            context={
+                "model_document_pair": model_document_pair,
+                "wheels": wheels,
+                "vehicle_assembly": assembly,
+            },
+        )
+    ).raw
 
 
 def vehicle_model_document(model, prepared) -> tuple[dict[str, Any], bytes]:

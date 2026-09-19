@@ -24,12 +24,12 @@ from suspension_multibody.axle_dynamics import (
     load_axle_dynamics_case,
     load_axle_dynamics_model,
     run_axle_dynamics,
-    write_axle_dynamics_artifact,
 )
 from suspension_multibody.axle_dynamics.schema import (
     PAC2002_PARAMETER_DEFAULTS,
     PAC2002_PARAMETER_NAMES,
 )
+from suspension_multibody.io import write_artifact
 
 
 def test_pac2002_parameter_abi_matches_native_header() -> None:
@@ -390,8 +390,11 @@ def test_axle_schema_loader_and_result_artifact_are_self_describing(
     loaded_model = load_axle_dynamics_model(model_path)
     loaded_case = load_axle_dynamics_case(case_path)
     result = run_axle_dynamics(loaded_model, loaded_case)
-    manifest_path = write_axle_dynamics_artifact(
-        result, loaded_model, loaded_case, tmp_path / "artifact"
+    manifest_path = write_artifact(
+        result,
+        tmp_path / "artifact",
+        model=loaded_model,
+        case=loaded_case,
     )
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

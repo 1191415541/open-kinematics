@@ -18,10 +18,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from suspension_contracts import pack_container
 
 from ..axle_dynamics.schema import AxleSolverSettings
-from ..kernel import ContractRun, run_contract
+from ..results.raw import RawContractResult
 from .vehicle_dynamic import _solver_block
 
 __all__ = ["FourPostCorner", "case_document", "run_ride_four_post_contract"]
@@ -110,11 +109,16 @@ def run_ride_four_post_contract(
     *,
     model_payload: bytes,
     case: dict[str, Any],
-) -> ContractRun:
-    """Run one four-post case against an already-built model payload."""
-    return run_contract(
-        model_document,
-        case,
-        model_payload=model_payload,
-        case_payload=pack_container(case),
-    )
+) -> RawContractResult:
+    """Run one four-post case through the unified simulation runner."""
+    from ..simulation import SimulationRequest, run_request
+
+    return run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="ride_four_post",
+            model=model_document,
+            case=case,
+            context={"model_payload": model_payload},
+        )
+    ).raw

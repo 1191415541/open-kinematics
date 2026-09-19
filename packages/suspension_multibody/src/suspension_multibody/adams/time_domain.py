@@ -13,6 +13,7 @@ from typing import cast
 
 import numpy as np
 
+from ..results import TimeSeriesResult
 from ..schema import DynamicResultBundle, TimeSignal
 
 
@@ -245,14 +246,49 @@ def write_time_history(history: TimeHistory, path: str | Path) -> Path:
     return destination
 
 
-def history_from_dynamic_bundle(
-    bundle: DynamicResultBundle,
+def history_from_result_series(
+    result: TimeSeriesResult,
     *,
     body: str,
     channels: Sequence[str],
     units: Mapping[str, str] | None = None,
 ) -> TimeHistory:
-    """Extract explicitly named metrics from one body in a dynamic result bundle."""
+    """Extract named channels from the formal ``TimeSeriesResult`` contract."""
+    samples = [sample for sample in result.samples if sample.body == body]
+    if not samples:
+        raise ValueError(f"time-series result has no samples for body {body!r}")
+    samples.sort(key=lambda sample: sample.time)
+    values: dict[str, tuple[float, ...]] = {}
+    for name in channels:
+        if not all(name in sample.metrics for sample in samples):
+            raise ValueError(
+                f"time-series result metric {name!r} is unavailable for body {body!r}"
+            )
+        values[name] = tuple(float(sample.metrics[name]) for sample in samples)
+    return TimeHistory(
+        time=tuple(float(sample.time) for sample in samples),
+        channels=values,
+        units=units,
+    )
+
+
+def history_from_dynamic_bundle(
+    bundle: DynamicResultBundle | TimeSeriesResult,
+    *,
+    body: str,
+    channels: Sequence[str],
+    units: Mapping[str, str] | None = None,
+) -> TimeHistory:
+    """
+    Extract explicitly named metrics from a legacy or unified time result.
+
+    New production callers must use :func:`history_from_result_series`; this
+    compatibility adapter remains for historical bundle inputs and old callers.
+    """
+    if isinstance(bundle, TimeSeriesResult):
+        return history_from_result_series(
+            bundle, body=body, channels=channels, units=units
+        )
     samples = [sample for sample in bundle.samples if sample.body == body]
     if not samples:
         raise ValueError(f"dynamic result has no samples for body {body!r}")

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
@@ -269,6 +269,7 @@ class AxleDynamicsResult:
     energy: np.ndarray
     contact_events: tuple[AxleContactEventRecord, ...] = ()
     performance: AxleRunPerformance = field(default_factory=AxleRunPerformance)
+    metrics: dict[str, Any] = field(default_factory=dict)
 
     def body_state(self, body: str) -> np.ndarray:
         """Return pose, velocity, omega, acceleration, and alpha samples."""

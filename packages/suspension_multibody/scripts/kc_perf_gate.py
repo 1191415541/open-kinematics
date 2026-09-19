@@ -53,11 +53,15 @@ def _native_workloads() -> dict[str, Callable[[], int]]:
     import importlib.util
 
     from suspension_multibody.analysis.benchmarks import benchmark_grid, benchmark_model
+    from suspension_multibody.cases.kc_quasi_static import case_document, model_document
+    from suspension_multibody.cases.kc_quasi_static.load_paths import LoadPath
+    from suspension_multibody.cases.kc_quasi_static.workflow import (
+        DEFAULT_SETTINGS,
+        DEFAULT_TIMES,
+    )
     from suspension_multibody.model import build_front_axle
-    from suspension_multibody.native_kc import run_c_paths_contract, run_k_grid_contract
-    from suspension_multibody.native_kc.load_paths import LoadPath
-
-    fixture = PACKAGE_ROOT / "tests/native_kc/test_native_kc_parity.py"
+    from suspension_multibody.simulation import SimulationRequest, run_request
+    fixture = PACKAGE_ROOT / "tests/cases/kc_quasi_static/kc_fixtures.py"
     spec = importlib.util.spec_from_file_location("kc_perf_fixture", fixture)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -72,16 +76,50 @@ def _native_workloads() -> dict[str, Callable[[], int]]:
     axes = tuple(path.name for path in LoadPath.standard())
 
     def k_100() -> int:
-        return len(
-            run_k_grid_contract(
-                k_assembly,
-                wheel_values_mm=wheel_values,
-                rack_values_mm=rack_values,
-            )
+        model = model_document(k_assembly, name="native-k", drive_wheels=True)
+        case = case_document(
+            k_assembly,
+            family="kc_quasi_static",
+            name="kc-k",
+            wheel_values_mm=wheel_values,
+            rack_values_mm=rack_values,
+            times_s=DEFAULT_TIMES,
+            settings=DEFAULT_SETTINGS,
+            drive_wheels=True,
         )
+        run = run_request(
+            SimulationRequest(
+                assembly="axle",
+                family="kc_quasi_static",
+                model=model,
+                case=case,
+            )
+        ).raw
+        return len(run.cases)
 
     def c_66() -> int:
-        return len(run_c_paths_contract(c_assembly, paths=axes, levels=11, maximum=1.0))
+        model = model_document(c_assembly, name="native-c", drive_wheels=False)
+        case = case_document(
+            c_assembly,
+            family="kc_quasi_static",
+            name="kc-c",
+            paths=axes,
+            levels=11,
+            maximum=1.0,
+            side_mode="single",
+            times_s=DEFAULT_TIMES,
+            settings=DEFAULT_SETTINGS,
+            drive_wheels=False,
+        )
+        run = run_request(
+            SimulationRequest(
+                assembly="axle",
+                family="kc_quasi_static",
+                model=model,
+                case=case,
+            )
+        ).raw
+        return len(run.cases)
 
     return {"k-100": k_100, "c-66": c_66}
 

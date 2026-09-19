@@ -30,11 +30,9 @@ from suspension_multibody.adams.time_domain import (
     read_time_history,
 )
 from suspension_multibody.axle_dynamics import NativeAxleError
+from suspension_multibody.io.artifacts import write_artifact
 from suspension_multibody.schema import UnitSystem
-from suspension_multibody.vehicle_dynamics import (
-    run_vehicle_dynamics,
-    write_vehicle_dynamics_artifact,
-)
+from suspension_multibody.vehicle_dynamics import run_vehicle_dynamics
 
 WHEELS = ("front_left", "front_right", "rear_left", "rear_right")
 TIRE_OUTPUT_COLUMNS = {
@@ -426,11 +424,11 @@ def generate(
         try:
             result = run_vehicle_dynamics(model, case)
         except NativeAxleError as exc:
-            write_vehicle_dynamics_artifact(
+            write_artifact(
                 None,
-                model,
-                case,
                 output_root / f"native_{tire_kind}_artifact",
+                model=model,
+                case=case,
                 failure=exc,
             )
             raise
@@ -466,8 +464,11 @@ def generate(
                 "tire_force_coordinates": f"{tire_kind}_tire_iso_output",
             },
         )
-        manifest_path = write_vehicle_dynamics_artifact(
-            result, model, case, output_root / f"native_{tire_kind}_artifact"
+        manifest_path = write_artifact(
+            result,
+            output_root / f"native_{tire_kind}_artifact",
+            model=model,
+            case=case,
         )
         native_models[tire_kind] = {
             "history": str(history_path),

@@ -19,10 +19,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from suspension_contracts import pack_container
 
 from ..axle_dynamics.schema import AxleSolverSettings
-from ..kernel import ContractRun, run_contract
+from ..results.raw import RawContractResult
 from .vehicle_dynamic import _solver_block
 
 __all__ = [
@@ -134,11 +133,16 @@ def case_document(
 
 def run_ride_random_road_contract(
     model_document: dict[str, Any], *, model_payload: bytes, case: dict[str, Any]
-) -> ContractRun:
-    """Run one random-road case against an already-built model payload."""
-    return run_contract(
-        model_document,
-        case,
-        model_payload=model_payload,
-        case_payload=pack_container(case),
-    )
+) -> RawContractResult:
+    """Run one random-road case through the unified simulation runner."""
+    from ..simulation import SimulationRequest, run_request
+
+    return run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="ride_random_road",
+            model=model_document,
+            case=case,
+            context={"model_payload": model_payload},
+        )
+    ).raw

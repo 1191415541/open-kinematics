@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..results.decoder import decode_result
+from ..results.raw import RawContractResult
 from .errors import NativeAxleError
 from .result import (
     AxleContactEventRecord,
@@ -88,41 +90,80 @@ def constraint_names(model: AxleDynamicsModel) -> tuple[str, ...]:
         *(driven.name for driven in model.driven_coordinates),
     )
 
-
 def run_axle_dynamics(
     model: AxleDynamicsModel, case: AxleDynamicsCase
 ) -> AxleDynamicsResult:
-    """Run one validated SI axle case through the contract boundary."""
-    from ..cases.axle_dynamic import run_axle_dynamic_contract
-    from ..kernel import KernelContractError
+    """Run one validated SI axle case through the unified simulation service."""
+    from dataclasses import replace
 
+    from ..kernel import KernelContractError
+    from ..metrics import compute_case_metrics
+    from ..simulation import SimulationRequest, run_request
     try:
-        run = run_axle_dynamic_contract(model, case)
+        simulation_run = run_request(
+            SimulationRequest(
+                assembly="axle",
+                family="axle_dynamic",
+                model=model,
+                case=case,
+            )
+        )
     except KernelContractError as error:
-        partial = error.partial_run
-        if partial is None:
-            # The kernel rejected the payload rather than failing a run, so there
-            # is no evidence to hand back.
+        partial = error.partial_raw_result
+        if not isinstance(partial, RawContractResult):
             raise NativeAxleError(str(error), status=3) from error
         manifest = partial.document.get("manifest", {})
         index = int(manifest.get("failed_sample_index", 0))
-        failure_diagnostics = failure_row(partial, index)
+        partial_result = None
+        try:
+            partial_result = decode_result(
+                partial,
+                assembly="axle",
+                family="axle_dynamic",
+                model=model,
+                case=case,
+                stop=index,
+            )
+            partial_result = replace(
+                partial_result,
+                metrics=compute_case_metrics("axle_dynamic", partial_result),
+            )
+        except Exception:
+            partial_result = None
         raise NativeAxleError(
             str(error),
-            status=int(manifest.get("failed_status", 3)),
-            partial_result=build_result(model, case, partial, stop=index),
-            failure_diagnostics=failure_diagnostics,
+            status=int(manifest.get("failed_status", 3) or 3),
+            partial_result=partial_result,
+            failure_diagnostics=safe_failure_row(partial, index),
             failed_sample_index=index,
-            failed_time_s=float(manifest.get("failed_time_s", 0.0)),
+            failed_time_s=float(manifest.get("failed_time_s") or 0.0),
         ) from error
-    return build_result(model, case, run)
+
+    result = simulation_run.result
+    if not isinstance(result, AxleDynamicsResult):
+        raise TypeError("axle simulation did not produce AxleDynamicsResult")
+    return replace(result, metrics=compute_case_metrics("axle_dynamic", result))
+
+
+def _raw_result(run) -> RawContractResult:
+    """Return the neutral read-only view for a contract run."""
+    return decode_result(run, assembly="axle", family="axle_dynamic")
 
 
 def failure_row(run, index: int) -> np.ndarray:
     """Return the diagnostics row of the sample a run failed on."""
-    entry = run.cases()[0]
+    raw = _raw_result(run)
+    entry = raw.cases[0]
     first = int(entry["sample_offset"])
-    return run.block("diagnostics")[first + index].copy()
+    return raw.block("diagnostics")[first + index].copy()
+
+
+def safe_failure_row(run, index: int) -> np.ndarray | None:
+    """Return failure diagnostics without masking the original kernel error."""
+    try:
+        return failure_row(run, index)
+    except Exception:
+        return None
 
 
 def build_result(
@@ -139,13 +180,14 @@ def build_result(
     is what a failed run has: the kernel writes the samples that converged and
     the one it failed on, so the partial result is the prefix before that row.
     """
-    entry = run.cases()[0]
+    raw = _raw_result(run)
+    entry = raw.cases[0]
     declared = int(entry["sample_count"])
     sample_count = declared if stop is None else min(stop, declared)
     first = int(entry["sample_offset"])
-    diagnostics = run.block("diagnostics")[first : first + sample_count]
+    diagnostics = raw.block("diagnostics")[first : first + sample_count]
 
-    tail = run.block("diagnostics")[first + declared : first + declared + 2]
+    tail = raw.block("diagnostics")[first + declared : first + declared + 2]
     performance_row = np.concatenate((tail[0], tail[1][:8]))
 
     def metric_int(index: int) -> int:
@@ -165,7 +207,8 @@ def build_result(
     )
 
     tire_names = tuple(tire.name for tire in model.tires)
-    events = run.blocks.get("contact_events")
+    tire_names = raw.tire_names
+    events = raw.blocks.get("contact_events")
     contact_events = (
         ()
         if events is None
@@ -183,18 +226,21 @@ def build_result(
         """Return one ledger, empty when the descriptor omitted the block."""
         if count == 0:
             return np.zeros((sample_count, 0, width), dtype=np.float64)
-        return run.block(name)[first : first + sample_count]
+        return raw.block(name)[first : first + sample_count]
 
+    times_s = raw.times_s
+    if times_s.size < sample_count:
+        times_s = np.asarray(case.times_s, dtype=np.float64)
     return AxleDynamicsResult(
-        times_s=np.asarray(case.times_s[:sample_count], dtype=np.float64),
-        body_names=tuple(str(name) for name in run.document["manifest"]["bodies"]),
+        times_s=np.asarray(times_s[:sample_count], dtype=np.float64),
+        body_names=raw.body_names,
         constraint_names=constraint_names(model),
         spring_names=tuple(spring.name for spring in model.springs),
         bushing_names=tuple(bushing.name for bushing in model.bushings),
         anti_roll_bar_names=tuple(bar.name for bar in model.anti_roll_bars),
         tire_names=tire_names,
-        states=run.block("body_state")[first : first + sample_count],
-        constraint_wrench=run.block("constraint_wrench")[first : first + sample_count],
+        states=raw.block("body_state")[first : first + sample_count],
+        constraint_wrench=raw.block("constraint_wrench")[first : first + sample_count],
         spring_output=ledger("spring_output", len(model.springs), 7),
         bushing_output=ledger("bushing_output", len(model.bushings), 12),
         anti_roll_output=ledger("anti_roll_output", len(model.anti_roll_bars), 3),
@@ -205,7 +251,7 @@ def build_result(
             }
         ),
         tire_output=ledger("tire_output", len(model.tires), 41),
-        energy=run.block("energy")[first : first + sample_count],
+        energy=raw.block("energy")[first : first + sample_count],
         contact_events=contact_events,
         performance=performance,
     )

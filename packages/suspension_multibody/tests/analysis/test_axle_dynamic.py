@@ -1,10 +1,11 @@
-"""Tests for retained quasi-static time-history behavior."""
+"""Axle time-domain result tests."""
 
 from __future__ import annotations
 
 import pytest
 
 from suspension_multibody.api import run_dynamic_case
+from suspension_multibody.results import TimeSeriesResult
 from suspension_multibody.schema import (
     DynamicCaseSpec,
     DynamicSolverSettings,
@@ -59,11 +60,20 @@ def test_axle_quasi_static_runs_time_series_with_motion_and_loads() -> None:
     )
 
     bundle = run_dynamic_case(_model(), case)
+    assert isinstance(bundle, TimeSeriesResult)
     axle_samples = [sample for sample in bundle.samples if sample.body == "axle"]
 
     assert len(axle_samples) == 3
     assert axle_samples[-1].metrics["wheel_travel_left"] == 5.0
     assert axle_samples[-1].loads["right"].fz == 25.0
+    assert set(bundle.metrics) >= {"common", "axle", "case_specific"}
+    assert bundle.metrics["common"]["sample_count"] == 3
+    assert bundle.metrics["axle"]["sample_count"] == 3
+    assert bundle.metrics["case_specific"]["status"] == "success"
+    assert (
+        bundle.metrics["case_specific"]["metrics"]["wheel_travel_left"]["final"]
+        == 5.0
+    )
 
 
 def test_legacy_axle_integrator_is_rejected() -> None:

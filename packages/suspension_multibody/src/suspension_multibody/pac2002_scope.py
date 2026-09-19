@@ -179,9 +179,9 @@ def _kernel_scope() -> tuple[
     """
     import ctypes
 
-    from .axle_dynamics.native import _load_library
+    from .kernel.native import load_library
 
-    reader = _load_library().suspension_kernel_capabilities
+    reader = load_library().suspension_kernel_capabilities
     reader.argtypes = [
         ctypes.c_char_p,
         ctypes.c_size_t,

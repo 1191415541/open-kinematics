@@ -14,7 +14,7 @@ from .probe import AdamsProfile, _adams_environment, producer_id
 from .time_domain import (
     AdamsResultChannel,
     TimeHistoryTolerance,
-    history_from_dynamic_bundle,
+    history_from_result_series,
     parse_adams_result_history,
     write_time_history,
 )
@@ -40,7 +40,7 @@ def validate_vehicle_kc_time_domain(
         raise ValueError("vehicle KC Adams gate requires mode='vehicle_kc_dynamic'")
     if case.vehicle is None:
         raise ValueError("vehicle KC Adams gate requires a vehicle body model")
-    reference = history_from_dynamic_bundle(
+    reference = history_from_result_series(
         run_dynamic_case(model, case),
         body=case.vehicle.name,
         channels=VEHICLE_KC_CHANNELS,

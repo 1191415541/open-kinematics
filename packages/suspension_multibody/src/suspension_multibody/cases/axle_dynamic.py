@@ -23,7 +23,8 @@ from typing import Any
 import numpy as np
 
 from ..axle_dynamics.schema import AxleDynamicsCase, AxleDynamicsModel
-from ..kernel import ContractRun, run_contract
+from ..kernel.solver import solver_settings_document
+from ..results.raw import RawContractResult
 
 __all__ = [
     "case_document",
@@ -524,33 +525,7 @@ def case_document(
         "family": "axle_dynamic",
         "name": name or case.name,
         "time": time_entry,
-        "solver": {
-            "integrator": str(solver.integrator),
-            "rho_inf": float(solver.rho_inf),
-            "hht_alpha": float(solver.hht_alpha),
-            "initialization_mode": str(solver.initialization_mode),
-            "adaptive_step": bool(solver.adaptive_step),
-            "internal_step_s": float(solver.internal_step_s),
-            "minimum_step_s": float(solver.minimum_step_s),
-            "maximum_step_s": float(solver.maximum_step_s),
-            "local_relative_tolerance": float(solver.local_relative_tolerance),
-            "local_position_tolerance_m": float(solver.local_position_tolerance_m),
-            "local_angle_tolerance_rad": float(solver.local_angle_tolerance_rad),
-            "local_velocity_tolerance_m_per_s": float(
-                solver.local_velocity_tolerance_m_per_s
-            ),
-            "local_angular_velocity_tolerance_rad_per_s": float(
-                solver.local_angular_velocity_tolerance_rad_per_s
-            ),
-            "local_brush_tolerance_m": float(solver.local_brush_tolerance_m),
-            "contact_event_tolerance_s": float(solver.contact_event_tolerance_s),
-            "max_newton_iterations": int(solver.max_newton_iterations),
-            "max_line_search_iterations": int(solver.max_line_search_iterations),
-            "position_tolerance_m": float(solver.position_tolerance_m),
-            "velocity_tolerance_m_per_s": float(solver.velocity_tolerance_m_per_s),
-            "dynamics_tolerance": float(solver.dynamics_tolerance),
-            "increment_tolerance": float(solver.increment_tolerance),
-        },
+        "solver": solver_settings_document(solver),
         "blobs": tables,
     }
     return document, bytes(blob)
@@ -558,15 +533,15 @@ def case_document(
 
 def run_axle_dynamic_contract(
     model: AxleDynamicsModel, case: AxleDynamicsCase
-) -> ContractRun:
-    """Run one time history through the contract boundary."""
-    from suspension_contracts import pack_container
+) -> RawContractResult:
+    """Run one time history through the unified simulation runner."""
+    from ..simulation import SimulationRequest, run_request
 
-    model_doc, model_blob = model_document(model)
-    document, blob = case_document(model, case)
-    return run_contract(
-        model_doc,
-        document,
-        model_payload=pack_container(model_doc, model_blob),
-        case_payload=pack_container(document, blob),
-    )
+    return run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="axle_dynamic",
+            model=model,
+            case=case,
+        )
+    ).raw

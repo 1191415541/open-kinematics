@@ -79,21 +79,10 @@ def summarize_wheel_loads(loads: Mapping[str, float]) -> WheelLoadSummary:
 
 
 def wheel_load_metrics(loads: Mapping[str, float]) -> dict[str, float]:
-    """Return stable result-channel names for wheel-load diagnostics."""
-    summary = summarize_wheel_loads(loads)
-    metrics = {f"normal_load_{name}": value for name, value in summary.wheel_loads.items()}
-    metrics.update(
-        {
-            "normal_load_total": summary.total,
-            "normal_load_front_axle": summary.front_axle,
-            "normal_load_rear_axle": summary.rear_axle,
-            "normal_load_left_side": summary.left_side,
-            "normal_load_right_side": summary.right_side,
-            "load_transfer_front_minus_rear": summary.front_rear_delta,
-            "load_transfer_right_minus_left": summary.right_left_delta,
-        }
-    )
-    return metrics
+    """Compatibility forwarder to the registered vehicle metric owner."""
+    from ..metrics.vehicle import wheel_load_metrics as _wheel_load_metrics
+
+    return _wheel_load_metrics(loads)
 
 
 def compute_static_wheel_loads(

@@ -12,13 +12,14 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
+from ..cases.kc_quasi_static.contract import case_document, model_document
 from ..model import build_front_axle
-from ..native_kc import run_k_grid_contract
 from ..schema import FrontAxleModel, MassSpec
+from ..simulation import SimulationRequest, run_request
 from .adapter import SmokeResult, Tolerance
 from .equivalent_model import write_equivalent_sources
 from .probe import AdamsProfile, _adams_environment, producer_id
-from .reference import _read_hardpoints
+from .reference import _KC_SETTINGS, _KC_TIMES_S, _read_hardpoints, _side_fields
 
 CONTRACT = "strict-adams-k-v1"
 SCHEMA_VERSION = 1
@@ -222,11 +223,44 @@ def run_suspension_multibody_pure_k(profile: AdamsProfile) -> list[dict[str, Any
         mass=MassSpec(sprung_mass=1.0),
     )
     assembly = build_front_axle(model, "K")
-    states = run_k_grid_contract(
+    model_doc = model_document(assembly, name="native-k", drive_wheels=True)
+    case_doc = case_document(
         assembly,
+        family="kc_quasi_static",
+        name="kc-k",
         wheel_values_mm=WHEEL_VALUES_MM,
         rack_values_mm=RACK_VALUES_MM,
+        times_s=_KC_TIMES_S,
+        settings=_KC_SETTINGS,
+        drive_wheels=True,
     )
+    run = run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model_doc,
+            case=case_doc,
+        )
+    ).raw
+    left_states = run.body_state("upright_L")
+    right_states = run.body_state("upright_R")
+    states: list[dict[str, Any]] = []
+    for index, entry in enumerate(run.cases()):
+        wheel = WHEEL_VALUES_MM[index // len(RACK_VALUES_MM)]
+        rack = RACK_VALUES_MM[index % len(RACK_VALUES_MM)]
+        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
+        state: dict[str, Any] = {
+            "case_id": _case_id(wheel, rack),
+            "wheel_travel_mm": float(wheel),
+            "rack_displacement_mm": float(rack),
+        }
+        state.update(
+            _side_fields(assembly, "L", left_states[last, :3], left_states[last, 3:7])
+        )
+        state.update(
+            _side_fields(assembly, "R", right_states[last, :3], right_states[last, 3:7])
+        )
+        states.append(state)
     for state in states:
         expected = _case_id(float(state["wheel_travel_mm"]), float(state["rack_displacement_mm"]))
         if state["case_id"] != expected:

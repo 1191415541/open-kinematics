@@ -22,11 +22,11 @@ from ..axle_dynamics import (
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleDynamicsResult,
-    native_build_metadata,
     run_axle_dynamics,
-    write_axle_dynamics_artifact,
 )
 from ..io import canonical_hash
+from ..io.artifacts import write_artifact
+from ..kernel.native import native_build_metadata
 from ..schema.common import StrictModel
 from .axle_channels import axle_history_from_result
 from .axle_contract import (
@@ -453,17 +453,17 @@ def run_native_axle_manifest(
     refined_result = run_axle_dynamics(manifest.model, refined_case)
     refined_elapsed_s = time.perf_counter() - refined_started
 
-    primary_manifest = write_axle_dynamics_artifact(
+    primary_manifest = write_artifact(
         result,
-        manifest.model,
-        manifest.case,
         destination / "native_result",
+        model=manifest.model,
+        case=manifest.case,
     )
-    refined_manifest = write_axle_dynamics_artifact(
+    refined_manifest = write_artifact(
         refined_result,
-        manifest.model,
-        refined_case,
         destination / "native_refined_result",
+        model=manifest.model,
+        case=refined_case,
     )
     history = axle_history_from_result(
         manifest.model,

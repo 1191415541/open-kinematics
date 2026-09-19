@@ -9,6 +9,7 @@ import typer
 from . import __version__
 from .adams.probe import DEFAULT_PROFILE
 from .api import run_case, run_dynamic_case
+from .io.artifacts import write_artifact
 from .schema import (
     load_case,
     load_dynamic_case,
@@ -114,11 +115,7 @@ def run_vehicle_dynamics_command(
 ) -> None:
     """Run native full-vehicle dynamics and retain raw result evidence."""
     from .axle_dynamics import NativeAxleError, NativeKernelUnavailableError
-    from .vehicle_dynamics import (
-        VehicleDynamicsResult,
-        run_vehicle_dynamics,
-        write_vehicle_dynamics_artifact,
-    )
+    from .vehicle_dynamics import VehicleDynamicsResult, run_vehicle_dynamics
 
     vehicle_model = load_vehicle_model(model)
     vehicle_case = load_vehicle_dynamic_case(case)
@@ -126,21 +123,28 @@ def run_vehicle_dynamics_command(
         result = run_vehicle_dynamics(vehicle_model, vehicle_case)
     except (NativeAxleError, NativeKernelUnavailableError) as exc:
         partial_result = getattr(exc, "partial_result", None)
-        artifact = write_vehicle_dynamics_artifact(
-            None if partial_result is None else VehicleDynamicsResult(
-                axle=partial_result
-            ),
-            vehicle_model,
-            vehicle_case,
+        partial = (
+            None
+            if partial_result is None
+            else (
+                partial_result
+                if isinstance(partial_result, VehicleDynamicsResult)
+                else VehicleDynamicsResult(axle=partial_result)
+            )
+        )
+        artifact = write_artifact(
+            partial,
             out,
+            partial=partial,
+            model=vehicle_model,
+            case=vehicle_case,
+            status="failed",
             failure=exc,
         )
         typer.echo(str(exc), err=True)
         typer.echo(f"artifact: {artifact}", err=True)
         raise typer.Exit(code=1) from exc
-    artifact = write_vehicle_dynamics_artifact(
-        result, vehicle_model, vehicle_case, out
-    )
+    artifact = write_artifact(result, out, model=vehicle_model, case=vehicle_case)
     typer.echo(f"{len(result.times_s)} sample(s): {artifact}")
 
 
@@ -181,7 +185,6 @@ def run_axle_dynamics_command(
         load_axle_dynamics_case,
         load_axle_dynamics_model,
         run_axle_dynamics,
-        write_axle_dynamics_artifact,
     )
 
     axle_model = load_axle_dynamics_model(model)
@@ -190,19 +193,19 @@ def run_axle_dynamics_command(
         result = run_axle_dynamics(axle_model, axle_case)
     except (NativeAxleError, NativeKernelUnavailableError) as exc:
         partial_result = getattr(exc, "partial_result", None)
-        manifest = write_axle_dynamics_artifact(
+        manifest = write_artifact(
             partial_result,
-            axle_model,
-            axle_case,
             out,
+            partial=partial_result,
+            model=axle_model,
+            case=axle_case,
+            status="failed",
             failure=exc,
         )
         typer.echo(str(exc), err=True)
         typer.echo(f"artifact: {manifest}", err=True)
         raise typer.Exit(code=1) from exc
-    manifest = write_axle_dynamics_artifact(
-        result, axle_model, axle_case, out
-    )
+    manifest = write_artifact(result, out, model=axle_model, case=axle_case)
     typer.echo(f"{len(result.times_s)} sample(s): {manifest}")
 
 

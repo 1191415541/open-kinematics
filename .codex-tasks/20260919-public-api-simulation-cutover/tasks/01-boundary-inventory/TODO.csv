@@ -1,0 +1,6 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,扫描生产入口与 native/decoder/writer 引用,DONE,形成带文件和符号位置的调用清单,uv run --all-packages pytest packages/suspension_multibody/tests/architecture -q && git diff --check,2026-09-19,0,"80 条精确 finding：production 47、script 30、test 3"
+2,建立工况族与结果/指标/artifact 边界矩阵,DONE,矩阵覆盖七类工况、TimeSeriesResult、artifact owner 和所有公共入口,uv run --all-packages python -m compileall -q packages/suspension_multibody/src packages/suspension_multibody/tests scripts,2026-09-19,0,"BOUNDARY.md 与 SYMBOL_MATRIX.csv 已补齐真实基线"
+3,建立基线 allowlist 与审计式架构门禁,DONE,逐条记录当前违规并拦截新增旁路；任务 8 可切 strict mode,uv run --all-packages pytest packages/suspension_multibody/tests/architecture -q,2026-09-19,0,"4 项 gate 通过；allowlist v2 共 80 条精确 entry"
+4,记录删除候选与保留兼容清单,DONE,每个候选都有 owner、依赖和删除前置条件,git diff --check,2026-09-19,0,"owner_task/remove_when 已写入 allowlist、BOUNDARY 与矩阵"
+5,重写兼容 facade 架构测试计划,DONE,明确测试 01 阶段 allowlist 语义和任务 8 strict 语义,uv run --all-packages pytest packages/suspension_multibody/tests/architecture -q,2026-09-19,0,"audit 允许既有精确旁路；strict 保留给任务 08"

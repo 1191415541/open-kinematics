@@ -12,6 +12,14 @@ ignore-words-list = "nd"
 builtin = "clear,rare,informal,usage"
 dictionary = ".codespell-british.txt,-"
 
+[tool.pytest.ini_options]
+addopts = "-m 'not manual' --import-mode=importlib"
+markers = [
+    "manual: requires interactive software",
+    "adams: requires local Adams/Car installation",
+    "performance: benchmark gate",
+]
+
 [tool.ty.src]
 # Two kinds of exemption are in force, and they are different things.
 #

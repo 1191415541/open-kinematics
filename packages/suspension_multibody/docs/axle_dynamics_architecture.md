@@ -48,11 +48,11 @@ packages/suspension_kernel/
 packages/suspension_multibody/scripts/build_axle_native.py
                       兼容包装：委派内核构建，并把产物镜像到本包 native/
                       注意：内核侧构建不会刷新这份镜像，改了 ABI 结构体后必须跑它，
-                      否则 native.py 的新鲜度守卫会拒绝加载并提示这条命令
+                      否则 kernel/native.py 的新鲜度守卫会拒绝加载并提示这条命令
 packages/suspension_multibody/src/suspension_multibody/
   native/                                 轴语义侧加载的那份共享库副本
   axle_dynamics/schema.py   闭集 SI 物理模型与工况（Pydantic StrictModel）
-  axle_dynamics/native.py   共享库查找、ABI 门、镜像新鲜度检查（不做结构体编组）
+  kernel/native.py          共享库查找、ABI 门、镜像新鲜度检查（不做结构体编组）
   axle_dynamics/result.py   结果对象与全部输出列名
   axle_dynamics/io.py       模型/工况加载、NPZ+JSON 结果 artifact
   adams/axle_contract.py    冻结 manifest、通道角色绑定与哈希
@@ -89,7 +89,7 @@ int32_t suspension_kernel_run(
 
 模型与工况以版本化契约文档进入内核，结果以同格式的结果文档返回；缓冲不足时返回 11 并把
 所需长度写回 `result_length_in_out`，调用方扩容后重调。内部结构版本为 **15**（轴）与
-**30**（整车），`native.py` 与 `native_build.json` 必须与之一致，否则拒绝加载。
+**30**（整车），`kernel/native.py` 与 `native_build.json` 必须与之一致，否则拒绝加载。
 
 **扁平入口已退役。** `axle_run` / `vehicle_run` 不再导出：它们的内核只剩 `kernel_abi.cpp`
 里的内部 static 函数，保留的唯一原因是历史诊断仍与它们共用主体。
@@ -161,7 +161,7 @@ Chrono 万向连接方程替换。
 
 ## Python 封装
 
-`native.py` 只负责按平台查找包内共享库、校验 ABI 版本与镜像是否新鲜、要求三个契约符号存在，并把加载错误转换为带诊断的 Python 异常。把 Pydantic 闭集模型转换成连续 `float64` 数组这件事已不在 Python：模型与工况以契约文档交付内核，`kernel/` 薄壳只做组包与拆包。未构建共享库时只允许导入，运行求解必须抛出明确的 `NativeKernelUnavailableError`。
+`kernel/native.py` 只负责按平台查找包内共享库、校验 ABI 版本与镜像是否新鲜、要求三个契约符号存在，并把加载错误转换为带诊断的 Python 异常。把 Pydantic 闭集模型转换成连续 `float64` 数组这件事已不在 Python：模型与工况以契约文档交付内核，`kernel/` 薄壳只做组包与拆包。未构建共享库时只允许导入，运行求解必须抛出明确的 `NativeKernelUnavailableError`。
 
 ## 构建和打包
 

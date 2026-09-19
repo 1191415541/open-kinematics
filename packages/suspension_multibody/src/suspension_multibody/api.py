@@ -32,10 +32,11 @@ import numpy as np
 
 from . import __version__
 from .analysis.compliance import secant_compliance
-from .analysis.metrics import compute_k_metrics
 from .analysis.time_signals import loads_at_time, motion, time_grid, wrenches_at_time
 from .analysis.vehicle_kc_time_domain import VehicleKCTimeDomainSolver
 from .axle_dynamics.schema import AxleSolverSettings
+from .cases.kc_quasi_static.contract import model_document, time_document
+from .cases.kc_quasi_static.convert import MM
 from .core import (
     SE3,
     RigidBody,
@@ -44,15 +45,11 @@ from .core import (
     wrench_global_to_local,
 )
 from .elements import BushingElement, evaluate_generalized_forces
-from .io import CheckpointStore, canonical_hash, write_bundle, write_dynamic_bundle
-from .kernel import run_contract
+from .io import CheckpointStore, canonical_hash, write_artifact
+from .kernel.solver import solver_settings_document
+from .metrics import compute_axle_metrics, compute_case_metrics, compute_common_metrics
 from .model import FrontAxleAssembly, build_front_axle
-from .native_kc.contract import (
-    model_document,
-    solver_settings_document,
-    time_document,
-)
-from .native_kc.convert import MM
+from .results import TimeSeriesResult, TimeSeriesSample
 from .schema import (
     BushingResult,
     CaseSpec,
@@ -60,9 +57,6 @@ from .schema import (
     CResponse,
     Diagnostic,
     DynamicCaseSpec,
-    DynamicManifest,
-    DynamicResultBundle,
-    DynamicTimeSample,
     FrontAxleModel,
     Manifest,
     Pose,
@@ -75,6 +69,7 @@ from .schema import (
     WheelResponse,
 )
 from .schema.case import DisplacementControl, LoadControl
+from .simulation import SimulationRequest, run_request
 
 #: The output grid a K/C case is solved on.  The kernel's case layer expands a
 #: start/end/step, so the product API has to state one; two samples is the
@@ -138,7 +133,7 @@ def run_case(
         diagnostics=tuple(),
     )
     if output_dir is not None:
-        write_bundle(bundle, output_dir)
+        write_artifact(bundle, output_dir, model=model, case=case)
     return bundle
 
 
@@ -146,12 +141,14 @@ def run_dynamic_case(
     model: FrontAxleModel,
     case: DynamicCaseSpec,
     output_dir: str | Path | None = None,
-) -> DynamicResultBundle:
+) -> TimeSeriesResult:
     """Run one validated time-domain case and optionally write result files."""
+    from dataclasses import replace
+
     if case.mode == "axle_dynamic" and case.solver.integrator == "quasi_static":
-        bundle = _run_axle_quasi_static(model, case)
+        result = _run_axle_quasi_static(model, case)
     elif case.mode == "vehicle_kc_dynamic":
-        bundle = VehicleKCTimeDomainSolver().run(model, case)
+        result = VehicleKCTimeDomainSolver().run(model, case)
     elif case.mode == "axle_dynamic":
         raise ValueError(
             "the legacy axle dynamics integrator was removed; "
@@ -162,9 +159,17 @@ def run_dynamic_case(
         raise ValueError(
             "the incomplete legacy vehicle dynamics integrator was removed"
         )
+    if case.mode == "vehicle_kc_dynamic":
+        result = replace(
+            result,
+            metrics={
+                **dict(result.metrics),
+                "case_specific": compute_case_metrics("vehicle_kc_dynamic", result),
+            },
+        )
     if output_dir is not None:
-        write_dynamic_bundle(bundle, output_dir)
-    return bundle
+        write_artifact(result, output_dir, model=model, case=case)
+    return result
 
 
 # --- quasi-static time replay ----------------------------------------------
@@ -172,26 +177,23 @@ def run_dynamic_case(
 
 def _run_axle_quasi_static(
     model: FrontAxleModel, case: DynamicCaseSpec
-) -> DynamicResultBundle:
+) -> TimeSeriesResult:
     """
     Replay sampled motion and loads through independent K equilibria.
 
     One contract run per sample rather than one run carrying a history: a K state
     is a kinematic solution, it does not depend on the sample before it, and the
     kernel would have to be given a per-sample target table to do it in one call.
-    Independence is not an approximation here -- replaying the samples apart is
-    the same answer, and it is the answer this mode has always given.
-
-    The whole of it is reporting: the kernel solves each sample, and what is
-    built here is the time series the result schema asks for.
     """
     assembly = build_front_axle(model, "K")
     document = model_document(assembly, name=f"{case.name}-k", drive_wheels=True)
     left = motion(case, "wheel_travel_left")
     right = motion(case, "wheel_travel_right")
     rack = motion(case, "rack")
-    samples: list[DynamicTimeSample] = []
-    for time in time_grid(case):
+    times = time_grid(case)
+    samples: list[TimeSeriesSample] = []
+    diagnostics: list[Any] = []
+    for time in times:
         section: dict[str, object] = {
             "axes": [
                 {
@@ -217,26 +219,34 @@ def _run_axle_quasi_static(
                 }
                 for body, wrench in wrenches.items()
             ]
-        run = run_contract(document, _case_envelope(case.name, {"k": section}))
-        bodies = list(run.document["manifest"]["bodies"])
-        entry = run.cases()[0]
-        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
-        physical = _rigid_state(assembly, bodies, run.block("body_state")[last])
-        metrics = compute_k_metrics(physical, assembly)
+        run = run_request(
+            SimulationRequest(
+                assembly="axle",
+                family="kc_quasi_static",
+                model=document,
+                case=_case_envelope(case.name, {"k": section}),
+            )
+        ).raw
+        if run.diagnostics is not None:
+            diagnostics.append(run.diagnostics)
+        physical = _rigid_state(
+            assembly,
+            list(run.body_names),
+            run.case_body_state(),
+        )
+        metrics = compute_case_metrics("kc_quasi_static", physical, assembly)
         metrics.update(
             {
                 "wheel_travel_left": left.value_at(time),
                 "wheel_travel_right": right.value_at(time),
                 "rack_displacement": rack.value_at(time),
-                # The kernel reports convergence by refusing the run, not by a
-                # per-case residual; see `_convergence_note`.
                 "constraint_residual": 0.0,
                 "force_residual": 0.0,
                 "moment_residual": 0.0,
             }
         )
         samples.append(
-            DynamicTimeSample(
+            TimeSeriesSample(
                 time=time,
                 body="axle",
                 pose=Pose(),
@@ -248,26 +258,58 @@ def _run_axle_quasi_static(
         )
         for body in ("upright_L", "upright_R", "rack"):
             samples.append(
-                DynamicTimeSample(
+                TimeSeriesSample(
                     time=time,
                     body=body,
                     pose=_schema_pose(physical.pose(body)),
                     converged=True,
                 )
             )
-    return DynamicResultBundle(
-        manifest=DynamicManifest(
-            run_id=uuid.uuid4().hex,
-            mode=case.mode,
-            sample_count=len(samples),
-            provenance=Provenance(
-                package_version=__version__,
-                model_hash=canonical_hash(model.model_dump(mode="json")),
-                case_hash=canonical_hash(case.model_dump(mode="json")),
-                created_at=datetime.now(timezone.utc).isoformat(),
+    provenance = Provenance(
+        package_version=__version__,
+        model_hash=canonical_hash(model.model_dump(mode="json")),
+        case_hash=canonical_hash(case.model_dump(mode="json")),
+        created_at=datetime.now(timezone.utc).isoformat(),
+    ).model_dump(mode="json")
+    result_metrics = {
+        "common": compute_common_metrics(
+            TimeSeriesResult.from_samples(
+                samples,
+                times_s=times,
+                diagnostics=tuple(diagnostics),
+                provenance=provenance,
+                mode=case.mode,
+            )
+        ),
+        "axle": compute_axle_metrics(
+            TimeSeriesResult.from_samples(
+                samples,
+                times_s=times,
+                diagnostics=tuple(diagnostics),
+                provenance=provenance,
+                mode=case.mode,
+            )
+        ),
+        "case_specific": compute_case_metrics(
+            "kc_quasi_static",
+            TimeSeriesResult.from_samples(
+                samples,
+                times_s=times,
+                diagnostics=tuple(diagnostics),
+                provenance=provenance,
+                mode=case.mode,
             ),
         ),
-        samples=tuple(samples),
+        "sample_count": len(samples),
+        "time_count": len(times),
+    }
+    return TimeSeriesResult.from_samples(
+        samples,
+        times_s=times,
+        diagnostics=tuple(diagnostics),
+        provenance=provenance,
+        mode=case.mode,
+        metrics=result_metrics,
     )
 
 
@@ -352,7 +394,7 @@ def _case_envelope(name: str, sections: dict[str, object]) -> dict[str, object]:
         "family": "kc_quasi_static",
         "name": name,
         "time": time_document(_TIMES_S),
-        "solver": solver_settings_document(AxleSolverSettings(), times_s=_TIMES_S),
+        "solver": solver_settings_document(AxleSolverSettings()),
         **sections,
     }
 
@@ -368,20 +410,28 @@ def _run_k(
     ]
     section, combinations = _k_grid(controls)
     model = model_document(assembly, name=f"{case.name}-k", drive_wheels=True)
-    run = run_contract(model, _k_case_document(case, section))
+    run = run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model,
+            case=_k_case_document(case, section),
+        )
+    ).raw
 
     states: list[StateResult] = []
     component_loads: list[ComponentLoad] = []
     bushings: list[BushingResult] = []
-    bodies = list(run.document["manifest"]["bodies"])
-    block = run.block("body_state")
-    diagnostics_block = run.block("diagnostics")
-    for index, entry in enumerate(run.cases()):
+    for index in range(len(run.cases)):
         left, right, rack = combinations[index]
         state_id = f"{case.name}-{index:04d}"
-        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
-        physical = _rigid_state(assembly, bodies, block[last])
-        constraint, force, moment = _case_residuals(diagnostics_block, entry, index)
+        physical = _rigid_state(
+            assembly,
+            list(run.body_names),
+            run.case_body_state(index),
+        )
+        constraint, force, moment = run.case_residuals(index)
+        constraint /= MM
         states.append(
             StateResult(
                 state_id=state_id,
@@ -391,7 +441,7 @@ def _run_k(
                     "wheel_travel_right": right,
                     "rack_displacement": rack,
                 },
-                metrics=compute_k_metrics(physical, assembly),
+                metrics=compute_case_metrics("kc_quasi_static", physical, assembly),
                 tire_compression=_tire_compression(case),
                 constraint_residual=constraint,
                 force_residual=force,
@@ -441,26 +491,34 @@ def _run_c(
     controls = [control for control in case.controls if isinstance(control, LoadControl)]
     loads = _c_control_loads(controls, case.external_loads)
     model = model_document(assembly, name=f"{case.name}-c", drive_wheels=False)
-    run = run_contract(model, _c_case_document(case, loads))
+    run = run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model,
+            case=_c_case_document(case, loads),
+        )
+    ).raw
 
     reference = _reference_state(assembly)
-    reference_metrics = compute_k_metrics(reference, assembly)
+    reference_metrics = compute_case_metrics("kc_quasi_static", reference, assembly)
     states: list[StateResult] = []
     component_loads: list[ComponentLoad] = []
     bushings: list[BushingResult] = []
-    bodies = list(run.document["manifest"]["bodies"])
-    block = run.block("body_state")
-    diagnostics_block = run.block("diagnostics")
-    for index, entry in enumerate(run.cases()):
+    for index in range(len(run.cases)):
         applied = {
             "left": loads[index],
             "right": _mirror_load(loads[index], case.left_right_mode),
         }
         state_id = f"{case.name}-{index:04d}"
-        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
-        physical = _rigid_state(assembly, bodies, block[last])
-        metrics = compute_k_metrics(physical, assembly)
-        constraint, force, moment = _case_residuals(diagnostics_block, entry, index)
+        physical = _rigid_state(
+            assembly,
+            list(run.body_names),
+            run.case_body_state(index),
+        )
+        metrics = compute_case_metrics("kc_quasi_static", physical, assembly)
+        constraint, force, moment = run.case_residuals(index)
+        constraint /= MM
         left = _wheel_response(physical, reference, assembly, "L")
         right = _wheel_response(physical, reference, assembly, "R")
         states.append(
@@ -581,27 +639,6 @@ def _wheel_response_schema(value: np.ndarray) -> WheelResponse:
     )
 
 
-def _case_residuals(
-    diagnostics: np.ndarray, entry: dict[str, Any], index: int
-) -> tuple[float, float, float]:
-    """
-    Return one case's constraint, force and moment residuals.
-
-    The kernel's diagnostics block holds `sample_count + 2 * case_count` rows, so
-    a case's own rows begin at `sample_offset + 2 * case_index` and the last one
-    is the state the run converged to.  The position column is metres -- the unit
-    the kernel solves in -- and the reporting model is millimetres, which is the
-    only conversion here.  There is no moment column to read: the kernel reports
-    a single dynamics residual over its force *and* moment rows, so
-    `moment_residual` is zero rather than invented.
-    """
-    first = int(entry["sample_offset"]) + _DIAGNOSTIC_ROWS_PER_CASE * index
-    row = diagnostics[first + int(entry["sample_count"]) - 1]
-    return (
-        float(row[_DIAGNOSTIC_POSITION_RESIDUAL]) / MM,
-        float(row[_DIAGNOSTIC_DYNAMICS_RESIDUAL]),
-        0.0,
-    )
 
 
 def _convergence_note(state_id: str) -> tuple[Diagnostic, ...]:

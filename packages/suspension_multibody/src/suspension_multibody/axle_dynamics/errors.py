@@ -8,9 +8,11 @@ have to know to catch a failed run.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
-from .result import DIAGNOSTIC_COLUMNS, AxleDynamicsResult
+from .result import DIAGNOSTIC_COLUMNS
 
 
 class NativeAxleError(RuntimeError):
@@ -21,7 +23,7 @@ class NativeAxleError(RuntimeError):
         message: str,
         *,
         status: int,
-        partial_result: AxleDynamicsResult | None = None,
+        partial_result: Any | None = None,
         failure_diagnostics: np.ndarray | None = None,
         failed_sample_index: int | None = None,
         failed_time_s: float | None = None,

@@ -7,9 +7,9 @@ physics: the case layer inside the kernel expands grids and load paths, the
 solver computes states, and everything this module does with the answer is
 turning a blob into arrays.
 
-The ctypes mirror in ``axle_dynamics.native`` stays alongside it until the
-callers that were compiled against it are migrated; both load the same shared
-library, so there is exactly one kernel.
+The ctypes loader lives in ``kernel.native``: it finds the packaged shared
+library, applies the ABI and mirror-freshness gates, and raises
+``NativeKernelUnavailableError`` when the kernel cannot be loaded.
 
 The concrete block layout a caller gets back: ``body_state`` is
 ``[sample, body, 19]`` with ``[x, y, z, qw, qx, qy, qz, v, omega, ...]``, and
@@ -25,7 +25,7 @@ from typing import Any
 import numpy as np
 from suspension_contracts import pack_container, unpack_container
 
-from ..axle_dynamics.native import _load_library
+from .native import load_library
 
 __all__ = ["KernelContractError", "ContractRun", "contract_version", "run_contract"]
 
@@ -45,6 +45,9 @@ class KernelContractError(RuntimeError):
     def __init__(self, message: str, *, partial_run: "ContractRun | None" = None) -> None:
         super().__init__(message)
         self.partial_run = partial_run
+        # The unified simulation runner fills this with a RawContractResult
+        # while preserving the original ContractRun for legacy callers.
+        self.partial_raw_result: object | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +56,9 @@ class ContractRun:
 
     document: dict[str, Any]
     blocks: dict[str, np.ndarray]
+    model_document: dict[str, Any] | None = None
+    case_document: dict[str, Any] | None = None
+    times_s: np.ndarray | None = None
 
     def block(self, name: str) -> np.ndarray:
         """Return a named block, or raise if the kernel did not emit it."""
@@ -71,8 +77,46 @@ class ContractRun:
         return list(manifest.get("cases", []))
 
 
+def _case_times(case_document: dict[str, Any], case_payload: bytes) -> np.ndarray | None:
+    """Recover the case's output times from its document and payload."""
+    direct = case_document.get("times_s")
+    if direct is not None:
+        return np.asarray(direct, dtype=np.float64)
+    time = case_document.get("time", {})
+    samples_name = time.get("samples")
+    if samples_name:
+        _, blob = unpack_container(case_payload)
+        descriptor = next(
+            (
+                item
+                for item in case_document.get("blobs", [])
+                if str(item.get("name", item.get("role", ""))) == str(samples_name)
+            ),
+            None,
+        )
+        if descriptor is None:
+            return None
+        dtype = _DTYPE[str(descriptor["dtype"])]
+        values = np.frombuffer(
+            blob,
+            dtype=dtype,
+            count=int(descriptor["length"]) // dtype().itemsize,
+            offset=int(descriptor["offset"]),
+        )
+        return np.asarray(values, dtype=np.float64).copy()
+    if {"start_s", "end_s", "step_s"} <= set(time):
+        start = float(time["start_s"])
+        end = float(time["end_s"])
+        step = float(time["step_s"])
+        if step <= 0.0:
+            return None
+        count = int(round((end - start) / step)) + 1
+        return start + step * np.arange(count, dtype=np.float64)
+    return None
+
+
 def _library() -> ctypes.CDLL:
-    library = _load_library()
+    library = load_library()
     if not hasattr(library, "suspension_kernel_run"):
         raise KernelContractError(
             "the loaded kernel has no suspension_kernel_run entry point; "
@@ -149,24 +193,26 @@ def run_contract(
     """
     Run one model document against one case document.
 
-    ``model_payload`` and ``case_payload`` let a caller that already built the
-    container -- one whose document describes tables in the blob, so it cannot
-    be packed from the document alone -- hand the finished payload over instead.
+    The parsed result keeps the source documents and recovered output times so
+    neutral result adapters can expose model/case metadata without re-authoring
+    the contract boundary.
     """
-    payload = _invoke(
-        _library(),
-        model_payload if model_payload is not None else pack_container(model_document),
-        case_payload if case_payload is not None else pack_container(case_document),
-    )
+    model_bytes = model_payload if model_payload is not None else pack_container(model_document)
+    case_bytes = case_payload if case_payload is not None else pack_container(case_document)
+    payload = _invoke(_library(), model_bytes, case_bytes)
     document, blob = unpack_container(payload)
+    parsed = ContractRun(
+        document=document,
+        blocks=_read_blocks(document, blob),
+        model_document=model_document,
+        case_document=case_document,
+        times_s=_case_times(case_document, case_bytes),
+    )
     if document.get("status") != "success":
         manifest = document.get("manifest", {})
         message = str(
             manifest.get("failure_message")
             or f"kernel reported {document.get('status')}"
         )
-        raise KernelContractError(
-            message,
-            partial_run=ContractRun(document=document, blocks=_read_blocks(document, blob)),
-        )
-    return ContractRun(document=document, blocks=_read_blocks(document, blob))
+        raise KernelContractError(message, partial_run=parsed)
+    return parsed
