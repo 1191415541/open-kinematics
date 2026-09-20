@@ -60,6 +60,25 @@ def _validate_request_identity(
         )
 
 
+def _axle_dynamic_prepared(request: SimulationRequest) -> Any:
+    """Return the axle dynamic preparation carried by a request, if any."""
+    from ..preparation.axle_dynamic import PREPARED_KEY, AxleDynamicPrepared
+    from .preparation import _is_document_request
+
+    if _is_document_request(request):
+        return None
+
+    prepared = request.context.get(PREPARED_KEY)
+    if prepared is None:
+        return None
+    if not isinstance(prepared, AxleDynamicPrepared):
+        raise TypeError(
+            f"axle_dynamic requests must carry an AxleDynamicPrepared under "
+            f"{PREPARED_KEY!r}, got {type(prepared).__name__}"
+        )
+    return prepared
+
+
 def compile_document_pair(
     request: SimulationRequest,
     *,
@@ -317,7 +336,7 @@ class RideRandomRoadCompiler(DocumentPairCompiler):
 
 @dataclass(frozen=True)
 class AxleDynamicCompiler:
-    """Adapter over the existing axle dynamic document authoring functions."""
+    """Frames the axle dynamic documents prepared for one request."""
 
     assembly: str = "axle"
     family: str = "axle_dynamic"
@@ -333,18 +352,24 @@ class AxleDynamicCompiler:
             family=self.family,
             expected_request_kind=self.expected_request_kind,
         )
-        from ..cases.axle_dynamic import case_document, model_document
-
-        if request.model is None or request.case is None:
-            raise ValueError("axle_dynamic requests require model and case objects")
-        model, model_blob = model_document(request.model, name=request.name)
-        case, case_blob = case_document(request.model, request.case, name=request.name)
+        prepared = _axle_dynamic_prepared(request)
+        if prepared is None:
+            # An authored document request carries its own documents: its
+            # preparation was bypassed, so the pair is compiled as it stands.
+            return DocumentPairCompiler(
+                assembly=self.assembly,
+                family=self.family,
+                compiler_name=self.compiler_name,
+                payload_schema=self.payload_schema,
+                expected_request_kind=self.expected_request_kind,
+                validate_contract_family=True,
+            ).compile(request)
         return compile_document_pair(
             request,
-            model_document=model,
-            case_document=case,
-            model_payload=pack_container(model, model_blob),
-            case_payload=pack_container(case, case_blob),
+            model_document=prepared.model_document,
+            case_document=prepared.case_document,
+            model_payload=pack_container(prepared.model_document, prepared.model_payload),
+            case_payload=pack_container(prepared.case_document, prepared.case_payload),
             compiler_name=self.compiler_name,
             payload_schema=self.payload_schema,
         )
@@ -368,18 +393,27 @@ class VehicleDynamicCompiler:
             family=self.family,
             expected_request_kind=self.expected_request_kind,
         )
-        from ..cases.vehicle_dynamic import (
-            case_document,
-            model_document,
-            prepare_vehicle_run,
-        )
+        from ..preparation.vehicle_dynamic import PREPARED_KEY
+        from .preparation import _is_document_request
+
+        prepared = request.context.get(PREPARED_KEY)
+        if _is_document_request(request) or prepared is None:
+            # An authored document request carries its own documents: its
+            # preparation was bypassed, so the pair is compiled as it stands --
+            # still validated against the contract identity.
+            return DocumentPairCompiler(
+                assembly=self.assembly,
+                family=self.family,
+                compiler_name=self.compiler_name,
+                payload_schema=self.payload_schema,
+                expected_request_kind=self.expected_request_kind,
+                validate_contract_family=True,
+            ).compile(request)
+
+        from ..cases.vehicle_dynamic import case_document, model_document
 
         if request.model is None or request.case is None:
             raise ValueError("vehicle_dynamic requests require model and case objects")
-        prepared = request.context.get("prepared")
-        prepared_was_supplied = prepared is not None
-        if prepared is None:
-            prepared = prepare_vehicle_run(request.model, request.case)
         model, model_blob = model_document(request.model, prepared, name=request.name)
         case, case_blob = case_document(
             request.model, request.case, prepared, name=request.name
@@ -404,7 +438,7 @@ class VehicleDynamicCompiler:
             case_payload=pack_container(case, case_blob),
             compiler_name=self.compiler_name,
             payload_schema=self.payload_schema,
-            metadata={"prepared": prepared_was_supplied},
+            metadata={"prepared": True},
         )
 
 

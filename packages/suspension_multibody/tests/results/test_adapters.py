@@ -46,7 +46,7 @@ def test_vehicle_decoder_preserves_axle_and_steering_compatibility(monkeypatch) 
     from types import SimpleNamespace
 
     from suspension_multibody.results import decode_vehicle_result
-    from suspension_multibody.vehicle_dynamics import VehicleDynamicsResult
+    from suspension_multibody.results.vehicle import VehicleDynamicsResult
 
     axle = SimpleNamespace()
     prepared = SimpleNamespace(steering=SimpleNamespace(names=("rack",)))
@@ -60,7 +60,7 @@ def test_vehicle_decoder_preserves_axle_and_steering_compatibility(monkeypatch) 
         times_s=np.array([0.0, 0.1]),
     )
     monkeypatch.setattr(
-        "suspension_multibody.vehicle_dynamics._vehicle_axle_result",
+        "suspension_multibody.results.vehicle._vehicle_axle_result",
         lambda _prepared, _run: axle,
     )
 

@@ -137,24 +137,30 @@ def test_document_pair_compiler_checks_contract_version_and_request_identity() -
         )
 
 
-def test_axle_dynamic_compiler_owns_document_and_blob_authoring(monkeypatch) -> None:
-    from suspension_multibody.cases import axle_dynamic
+def test_axle_dynamic_compiler_frames_the_prepared_documents() -> None:
+    """The compiler frames the family's preparation; it authors no document."""
+    from suspension_multibody.preparation.axle_dynamic import (
+        PREPARED_KEY,
+        AxleDynamicPrepared,
+    )
 
     model_document = _documents("axle_dynamic")[0]
     case_document = _documents("axle_dynamic")[1]
-    monkeypatch.setattr(
-        axle_dynamic,
-        "model_document",
-        lambda model, name=None: (model_document, b"model-blob"),
-    )
-    monkeypatch.setattr(
-        axle_dynamic,
-        "case_document",
-        lambda model, case, name=None: (case_document, b"case-blob"),
+    prepared = AxleDynamicPrepared(
+        model_document=model_document,
+        model_payload=b"model-blob",
+        case_document=case_document,
+        case_payload=b"case-blob",
     )
 
     compiled = AxleDynamicCompiler().compile(
-        _request("axle", "axle_dynamic", model=object(), case=object())
+        _request(
+            "axle",
+            "axle_dynamic",
+            model=object(),
+            case=object(),
+            context={PREPARED_KEY: prepared},
+        )
     )
     model, model_blob = unpack_container(compiled.model_payload)
     case, case_blob = unpack_container(compiled.case_payload)
@@ -163,6 +169,20 @@ def test_axle_dynamic_compiler_owns_document_and_blob_authoring(monkeypatch) -> 
     assert case == case_document
     assert model_blob == b"model-blob"
     assert case_blob == b"case-blob"
+
+
+def test_axle_dynamic_compiler_carries_authored_documents_through() -> None:
+    """A request that already owns its documents bypasses preparation."""
+    model_document = _documents("axle_dynamic")[0]
+    case_document = _documents("axle_dynamic")[1]
+
+    compiled = AxleDynamicCompiler().compile(
+        _request(
+            "axle", "axle_dynamic", model=model_document, case=case_document
+        )
+    )
+
+    assert compiled.documents() == (model_document, case_document)
 
 
 def test_vehicle_dynamic_compiler_uses_prepared_context(monkeypatch) -> None:
@@ -190,7 +210,7 @@ def test_vehicle_dynamic_compiler_uses_prepared_context(monkeypatch) -> None:
             "vehicle_dynamic",
             model=object(),
             case=object(),
-            context={"prepared": prepared},
+            context={"vehicle_dynamic_prepared": prepared},
         )
     )
 

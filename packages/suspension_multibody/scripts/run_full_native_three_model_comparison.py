@@ -32,7 +32,7 @@ from suspension_multibody.adams.time_domain import (
 from suspension_multibody.axle_dynamics import NativeAxleError
 from suspension_multibody.io.artifacts import write_artifact
 from suspension_multibody.schema import UnitSystem
-from suspension_multibody.vehicle_dynamics import run_vehicle_dynamics
+from suspension_multibody.vehicle.service import run_vehicle_dynamics
 
 WHEELS = ("front_left", "front_right", "rear_left", "rear_right")
 TIRE_OUTPUT_COLUMNS = {

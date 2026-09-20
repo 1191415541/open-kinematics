@@ -33,10 +33,17 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
 )
 from suspension_multibody.kernel import contract_version
 from suspension_multibody.model import build_front_axle
+from suspension_multibody.preparation.kc_quasi_static import (
+    KcQuasiStaticCase,
+    KcQuasiStaticPrepared,
+)
 from suspension_multibody.simulation import (
     CompilerRegistry,
     DocumentPairCompiler,
     SimulationRequest,
+    compile_request,
+    default_preparation_registry,
+    prepare_request,
     run_request,
 )
 
@@ -200,3 +207,88 @@ def test_the_case_layer_expands_the_grid_and_the_load_paths() -> None:
     bodies = run.document["manifest"]["bodies"]
     assert run.block("body_state").shape == (4 * len(DEFAULT_TIMES), len(bodies), 19)
     assert json.dumps(_plain_document(run.document), sort_keys=True)
+
+
+def test_the_family_prepares_the_k_documents_through_the_default_registry() -> None:
+    """The domain path: an assembly and a K case, prepared and then compiled."""
+    assembly = build_front_axle(benchmark_model(), "K")
+    request = SimulationRequest(
+        assembly="axle",
+        family="kc_quasi_static",
+        model=assembly,
+        case=KcQuasiStaticCase(
+            name="prepared-k",
+            wheel_values_mm=(0.0,),
+            rack_values_mm=(0.0,),
+            times_s=DEFAULT_TIMES,
+            settings=DEFAULT_SETTINGS,
+            drive_wheels=True,
+        ),
+    )
+
+    registry = default_preparation_registry()
+    assert ("axle", "kc_quasi_static") in registry.keys()
+    result = prepare_request(request)
+
+    assert isinstance(result.value, KcQuasiStaticPrepared)
+    assert result.context["prepared_simulation"].value is result.value
+    assert result.context["kc_assembly"] is assembly
+    assert result.context["model_document"] == result.value.model_document
+    assert result.context["case_document"]["family"] == "kc_quasi_static"
+    # The compiler consumes the prepared context rather than authoring anything.
+    compiled = compile_request(result.request)
+    assert compiled.model_document == result.value.model_document
+    assert compiled.case_document == result.value.case_document
+    # And the submission is one the kernel accepts: the one-point grid the case
+    # states is the one it expands.
+    run = run_request(request).raw
+    assert run.status == "success"
+    assert [entry["name"] for entry in run.cases] == ["k-w+0-r+0"]
+
+
+def test_a_document_request_bypasses_preparation_and_still_validates_the_contract(
+    monkeypatch,
+) -> None:
+    from suspension_multibody.preparation import kc_quasi_static as kc_preparation
+
+    assembly = build_front_axle(benchmark_model(), "K")
+    model = model_document(assembly, name="bypass", drive_wheels=True)
+    case = case_document(
+        assembly,
+        family="kc_quasi_static",
+        name="bypass",
+        wheel_values_mm=(0.0,),
+        rack_values_mm=(0.0,),
+        times_s=DEFAULT_TIMES,
+        settings=DEFAULT_SETTINGS,
+        drive_wheels=True,
+    )
+    calls: list[SimulationRequest] = []
+    monkeypatch.setattr(
+        kc_preparation, "prepare_request", lambda request: calls.append(request)
+    )
+    request = SimulationRequest(
+        assembly="axle", family="kc_quasi_static", model=model, case=case
+    )
+
+    bypassed = prepare_request(request)
+
+    # The request already carries its documents, so no family preparation runs
+    # and the axle is not assembled a second time.
+    assert calls == []
+    assert "prepared_simulation" not in bypassed.context
+    compiled = compile_request(bypassed.request)
+    assert compiled.case_document == case
+    # Bypassing preparation is not skipping the compiler: the documents still
+    # have to satisfy the family's contract identity.
+    wrong_family = dict(case)
+    wrong_family["family"] = "comparison"
+    with pytest.raises(ValueError, match="case family"):
+        compile_request(
+            SimulationRequest(
+                assembly="axle",
+                family="kc_quasi_static",
+                model=model,
+                case=wrong_family,
+            )
+        )

@@ -20,7 +20,7 @@ from suspension_multibody.adams import (
 from suspension_multibody.adams.full_vehicle_model import (
     build_adams_source_vehicle_model,
 )
-from suspension_multibody.vehicle_dynamics import run_vehicle_dynamics
+from suspension_multibody.vehicle.service import run_vehicle_dynamics
 
 MOMENT_PREFIXES = ("QSX", "QSY", "QDZ", "SSZ")
 

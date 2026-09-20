@@ -52,9 +52,19 @@ from suspension_multibody.cases import (
     vehicle_kc_model_document,
 )
 from suspension_multibody.core.spatial import quaternion_to_matrix
+from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+from suspension_multibody.preparation.vehicle_kc import (
+    VehicleKcPrepared,
+    VehicleKcSweep,
+)
 from suspension_multibody.schema import Bushing6x6, Pose, Vec3
-from suspension_multibody.simulation import SimulationRequest, run_request
-from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
+from suspension_multibody.simulation import (
+    SimulationRequest,
+    compile_request,
+    default_preparation_registry,
+    prepare_request,
+    run_request,
+)
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "vehicle" / "test_native_vehicle.py"
 
@@ -241,6 +251,120 @@ def test_an_unknown_mode_is_refused(prepared) -> None:
                 family="vehicle_kc",
                 model=document,
                 case=sweep,
+                context={
+                    "model_document_pair": document,
+                    "wheels": (),
+                    "vehicle_assembly": base.assembly,
+                },
+            )
+        )
+
+
+def _domain_request(model, case, *, wheels, mode):
+    """Return one sweep as a domain request rather than as authored documents."""
+    return SimulationRequest(
+        assembly="vehicle",
+        family="vehicle_kc",
+        model=model,
+        case=VehicleKcSweep(
+            vehicle_case=case,
+            wheel_values_mm=wheels,
+            rack_values_mm=(0.0,),
+            left_right_mode=mode,
+            times_s=_TIMES_S,
+        ),
+    )
+
+
+def test_the_family_prepares_the_sweep_through_the_default_registry(prepared) -> None:
+    """The domain path: the registry prepares the sweep the compiler submits."""
+    model, case, base = prepared
+    request = _domain_request(model, case, wheels=(0.0,), mode="symmetric")
+
+    registry = default_preparation_registry()
+    assert ("vehicle", "vehicle_kc") in registry.keys()
+    result = prepare_request(request)
+
+    assert isinstance(result.value, VehicleKcPrepared)
+    assert result.context["prepared_simulation"].value is result.value
+    assert result.context["vehicle_assembly"] is result.value.assembly
+    assert result.context["wheels"] == ()
+    assert result.context["case_document"]["family"] == "vehicle_kc"
+    assert result.context["case_document"]["k"]["wheel_values_mm"] == [0.0]
+
+    compiled = compile_request(result.request)
+    # The compiler consumes the prepared pair and reads the sweep's driven
+    # coordinates off the prepared assembly: one row per wheel plus the rack.
+    driven = [
+        joint
+        for joint in compiled.model_document["joints"]
+        if joint["type"] == "driven_translation"
+    ]
+    assert compiled.metadata["derived_model"] is True
+    assert len(driven) == len(_WHEELS) + 1
+    assert compiled.case_document == result.value.case_document
+
+    # The prepared request runs natively, and a zero sweep returns the pose the
+    # model was assembled at.
+    run = run_request(request).raw
+    assert run.status == "success"
+    bodies = list(run.document["manifest"]["bodies"])
+    for body in base.native_model.bodies:
+        found = run.block("body_state")[-1, bodies.index(body.name)]
+        assert found[0] == pytest.approx(body.position_m[0], abs=1e-9)
+        assert found[1] == pytest.approx(body.position_m[1], abs=1e-9)
+        assert found[2] == pytest.approx(body.position_m[2], abs=1e-9)
+
+
+def test_a_document_request_bypasses_preparation_and_still_validates_identity(
+    prepared, monkeypatch
+) -> None:
+    from suspension_multibody.preparation import vehicle_kc as vehicle_kc_preparation
+
+    model, case, base = prepared
+    calls: list[SimulationRequest] = []
+    monkeypatch.setattr(
+        vehicle_kc_preparation, "prepare_request", lambda request: calls.append(request)
+    )
+    sweep = vehicle_kc_case_document(
+        name="vehicle-kc-bypass",
+        wheel_values_mm=(0.0,),
+        rack_values_mm=(0.0,),
+        times_s=_TIMES_S,
+        settings=AxleSolverSettings(),
+    )
+    document = vehicle_kc_model_document(model, base)
+    request = SimulationRequest(
+        assembly="vehicle",
+        family="vehicle_kc",
+        model=document,
+        case=sweep,
+        context={
+            "model_document_pair": document,
+            "wheels": (),
+            "vehicle_assembly": base.assembly,
+        },
+    )
+
+    bypassed = prepare_request(request)
+
+    # The request already carries its documents, so no family preparation runs
+    # and the vehicle is not assembled a second time.
+    assert calls == []
+    assert "prepared_simulation" not in bypassed.context
+    compiled = compile_request(bypassed.request)
+    assert compiled.case_document == sweep
+    # Bypassing preparation is not skipping the compiler: the documents still
+    # have to satisfy the family's contract identity.
+    wrong_family = dict(sweep)
+    wrong_family["family"] = "handling"
+    with pytest.raises(ValueError, match="case family"):
+        compile_request(
+            SimulationRequest(
+                assembly="vehicle",
+                family="vehicle_kc",
+                model=document,
+                case=wrong_family,
                 context={
                     "model_document_pair": document,
                     "wheels": (),

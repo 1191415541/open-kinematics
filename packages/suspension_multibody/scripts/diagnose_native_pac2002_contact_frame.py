@@ -14,13 +14,13 @@ from suspension_multibody.adams.time_domain import (
     parse_adams_result_history,
 )
 from suspension_multibody.model import build_vehicle
-from suspension_multibody.schema import VehicleDynamicCase, VehicleModel
-from suspension_multibody.vehicle_dynamics import (
+from suspension_multibody.preparation.vehicle_dynamic import (
     _build_tires,
     _initial_body_state,
     _length_scale,
     _select_assembly_mode,
 )
+from suspension_multibody.schema import VehicleDynamicCase, VehicleModel
 
 WHEELS = (
     ("front_left", "til", "front", "front_spindle_L"),

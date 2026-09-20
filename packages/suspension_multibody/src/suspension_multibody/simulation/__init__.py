@@ -17,6 +17,13 @@ from .compiler import (
     compile_request,
 )
 from .dispatch import compiler_for, default_registry, dispatch_request
+from .preparation import (
+    Preparation,
+    PreparationRegistry,
+    PreparedSimulation,
+    default_preparation_registry,
+    prepare_request,
+)
 from .request import SimulationRequest
 from .runner import SimulationRun, run_compiled, run_request
 
@@ -29,6 +36,9 @@ __all__ = [
     "HandlingCompiler",
     "KcQuasiStaticCompiler",
     "NativeContractBackend",
+    "Preparation",
+    "PreparationRegistry",
+    "PreparedSimulation",
     "RideFourPostCompiler",
     "RideRandomRoadCompiler",
     "SimulationBackend",
@@ -39,8 +49,10 @@ __all__ = [
     "compile_document_pair",
     "compile_request",
     "compiler_for",
+    "default_preparation_registry",
     "default_registry",
     "dispatch_request",
+    "prepare_request",
     "run_compiled",
     "run_request",
 ]

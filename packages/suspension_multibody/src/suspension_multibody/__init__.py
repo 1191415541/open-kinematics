@@ -5,6 +5,7 @@ __version__ = "0.1.0"
 from .api import run_case, run_dynamic_case
 from .axle_dynamics import AxleDynamicsResult
 from .io.artifacts import read_artifact, write_artifact
+from .results.vehicle import VehicleDynamicsResult
 from .schema import (
     CaseSpec,
     FrontAxleModel,
@@ -16,7 +17,7 @@ from .schema import (
     load_vehicle_dynamic_case,
     load_vehicle_model,
 )
-from .vehicle_dynamics import VehicleDynamicsResult, run_vehicle_dynamics
+from .vehicle.service import run_vehicle_dynamics
 
 __all__ = [
     "AxleDynamicsResult",

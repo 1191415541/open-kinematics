@@ -10,7 +10,7 @@ from suspension_multibody.axle_dynamics.result import (
 )
 from suspension_multibody.io import read_artifact, write_artifact
 from suspension_multibody.results import TimeSeriesResult, TimeSeriesSample
-from suspension_multibody.vehicle_dynamics import VehicleDynamicsResult
+from suspension_multibody.results.vehicle import VehicleDynamicsResult
 
 
 def _axle_result() -> AxleDynamicsResult:

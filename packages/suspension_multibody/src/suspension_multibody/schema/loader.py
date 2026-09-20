@@ -17,7 +17,18 @@ from .vehicle import VehicleDynamicCase, VehicleModel
 T = TypeVar("T", bound=BaseModel)
 
 
-def _read(path: str | Path) -> Any:
+def _read(
+    path: str | Path, *, version_path: tuple[str, ...] = ("schema_version",)
+) -> Any:
+    """
+    Read one schema file and check the version found at ``version_path``.
+
+    Every v1 input document carries ``schema_version`` at the document root.
+    The historical ``DynamicResultBundle`` instead keeps its version inside
+    ``manifest``, so the result loader points at that nested key rather than
+    accepting a second root-level version field: the strict models keep
+    forbidding unknown keys.
+    """
     source = Path(path)
     try:
         text = source.read_text(encoding="utf-8")
@@ -30,10 +41,19 @@ def _read(path: str | Path) -> Any:
         raise ValueError(f"cannot read schema file {source}: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError(f"schema file {source} must contain an object")
-    version = data.get("schema_version")
+    version = _version_at(data, version_path)
     if version != 1:
         raise ValueError(f"unsupported schema_version {version!r}; expected 1")
     return data
+
+
+def _version_at(data: dict[str, Any], version_path: tuple[str, ...]) -> Any:
+    current: Any = data
+    for key in version_path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
 
 
 def load_model(path: str | Path) -> FrontAxleModel:
@@ -62,8 +82,17 @@ def load_vehicle_dynamic_case(path: str | Path) -> VehicleDynamicCase:
 
 
 def load_dynamic_result(path: str | Path) -> DynamicResultBundle:
-    """Load and validate a dynamic result JSON file."""
-    return _validate(_read(path), DynamicResultBundle, path)
+    """
+    Load and validate a dynamic result JSON file.
+
+    The bundle keeps its version in ``manifest.schema_version``; the document
+    root still forbids a second ``schema_version`` key.
+    """
+    return _validate(
+        _read(path, version_path=("manifest", "schema_version")),
+        DynamicResultBundle,
+        path,
+    )
 
 
 def _validate(data: Any, model: type[T], path: str | Path) -> T:

@@ -9,6 +9,7 @@ from ..results.decoder import decode_result
 from ..results.raw import RawContractResult
 from .backend import NativeContractBackend, SimulationBackend
 from .compiler import CompilerRegistry, compile_request
+from .preparation import PreparationRegistry, prepare_request
 from .request import CompiledSimulation, SimulationRequest
 
 
@@ -63,7 +64,10 @@ def run_compiled(
         family=compiled.family,
         model=request.model,
         case=request.case,
-        prepared=request.context.get("prepared"),
+        # The vehicle family publishes its preparation under this key; the
+        # legacy ``prepared`` key is a migration input the adapter consumes and
+        # never a decoding protocol.
+        prepared=request.context.get("vehicle_dynamic_prepared"),
     )
     if isinstance(typed, RawContractResult):
         typed = None
@@ -71,14 +75,18 @@ def run_compiled(
 
 
 def run_request(
-    request: SimulationRequest,
+    request: SimulationRequest | CompiledSimulation,
     *,
+    preparation_registry: PreparationRegistry | None = None,
     registry: CompilerRegistry | None = None,
     backend: SimulationBackend | None = None,
 ) -> SimulationRun:
-    """Compile and submit one request without interpreting business metrics."""
+    """Prepare and compile a domain request, or submit an already compiled one."""
+    if isinstance(request, CompiledSimulation):
+        return run_compiled(request, backend=backend)
+    prepared = prepare_request(request, registry=preparation_registry)
     return run_compiled(
-        compile_request(request, registry=registry),
+        compile_request(prepared.request, registry=registry),
         backend=backend,
     )
 

@@ -30,7 +30,7 @@ from suspension_multibody.pac2002_scope import (
 )
 from suspension_multibody.schema import RoadSurfaceSpec, Vec3
 from suspension_multibody.schema.dynamic import DynamicSolverSettings
-from suspension_multibody.vehicle_dynamics import run_vehicle_dynamics
+from suspension_multibody.vehicle.service import run_vehicle_dynamics
 
 
 def _load_sibling_helpers():

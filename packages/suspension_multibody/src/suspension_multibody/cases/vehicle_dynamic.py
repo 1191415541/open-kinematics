@@ -8,8 +8,8 @@ bars, aerodynamic drag) -- and the case document carries the excitation: the
 steering history, the road, brake and wheel torque, body wrenches and the
 static-trim gauge.
 
-The setup below is the same sequence `vehicle_dynamics.run_vehicle_dynamics`
-performs before it marshals anything, and it calls the same builders.  What
+The setup below follows `preparation.vehicle_dynamic.prepare_vehicle_run`
+and calls the same builders before marshalling.  What
 changes is the destination: instead of filling a ctypes structure, the model
 becomes a document and the kernel reads it.  The two paths are held together by
 a bit-exact comparison test rather than by discipline.
@@ -30,8 +30,8 @@ from ..axle_dynamics.schema import (
     PAC2002_PARAMETER_NAMES,
 )
 from ..kernel.solver import solver_settings_document
+from ..preparation.vehicle_dynamic import prepare_vehicle_run
 from ..schema import VehicleDynamicCase, VehicleModel
-from ..vehicle_dynamics import prepare_vehicle_run
 
 __all__ = [
     "case_document",

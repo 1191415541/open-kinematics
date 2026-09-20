@@ -34,9 +34,11 @@ def decode_result(
         and model is not None
         and case is not None
     ):
+        from ..axle_dynamics.schema import AxleDynamicsCase, AxleDynamicsModel
         from .axle import decode_axle_result
 
-        return decode_axle_result(model, case, run, stop=stop)
+        if isinstance(model, AxleDynamicsModel) and isinstance(case, AxleDynamicsCase):
+            return decode_axle_result(model, case, run, stop=stop)
 
     if (
         normalized_assembly == "vehicle"

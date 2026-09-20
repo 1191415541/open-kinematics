@@ -27,7 +27,7 @@ from suspension_multibody.adams import (  # noqa: E402
 from suspension_multibody.adams.full_vehicle_model import (  # noqa: E402
     build_adams_source_vehicle_model,
 )
-from suspension_multibody.vehicle_dynamics import run_vehicle_dynamics  # noqa: E402
+from suspension_multibody.vehicle.service import run_vehicle_dynamics  # noqa: E402
 
 
 def _default_fiala_tire_property() -> Path:

@@ -115,7 +115,8 @@ def run_vehicle_dynamics_command(
 ) -> None:
     """Run native full-vehicle dynamics and retain raw result evidence."""
     from .axle_dynamics import NativeAxleError, NativeKernelUnavailableError
-    from .vehicle_dynamics import VehicleDynamicsResult, run_vehicle_dynamics
+    from .results.vehicle import VehicleDynamicsResult
+    from .vehicle.service import run_vehicle_dynamics
 
     vehicle_model = load_vehicle_model(model)
     vehicle_case = load_vehicle_dynamic_case(case)

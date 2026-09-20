@@ -536,7 +536,7 @@ def _vehicle_case_matrix(fixture):
 
 def check_vehicle_dynamic() -> tuple[bool, str]:
     """Compare the public contract route with the frozen ctypes snapshot."""
-    from suspension_multibody.vehicle_dynamics import run_vehicle_dynamics
+    from suspension_multibody.vehicle.service import run_vehicle_dynamics
 
     fixture = _load_vehicle_fixture()
     cases = _vehicle_case_matrix(fixture)
@@ -570,8 +570,8 @@ def check_ride_four_post() -> tuple[bool, str]:
         ride_four_post_corner_signals,
         vehicle_dynamic_model_document,
     )
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
     from suspension_multibody.simulation import SimulationRequest, run_request
-    from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
     fixture = _load_vehicle_fixture()
     model = fixture._positioned_vehicle(fixture._vehicle())
@@ -648,9 +648,9 @@ def check_handling() -> tuple[bool, str]:
         vehicle_dynamic_model_document,
     )
     from suspension_multibody.kernel import KernelContractError
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
     from suspension_multibody.schema import Vec3
     from suspension_multibody.simulation import SimulationRequest, run_request
-    from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
     fixture = _load_vehicle_fixture()
     model = fixture._positioned_vehicle(fixture._vehicle())
@@ -769,8 +769,8 @@ def check_ride_random_road() -> tuple[bool, str]:
         ride_random_road_signals,
         vehicle_dynamic_model_document,
     )
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
     from suspension_multibody.simulation import SimulationRequest, run_request
-    from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
     fixture = _load_vehicle_fixture()
     model = fixture._positioned_vehicle(fixture._vehicle())
@@ -919,8 +919,8 @@ def check_vehicle_kc() -> tuple[bool, str]:
         vehicle_kc_model_document,
     )
     from suspension_multibody.core.spatial import quaternion_to_matrix
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
     from suspension_multibody.simulation import SimulationRequest, run_request
-    from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
     fixture = _load_vehicle_fixture()
     rigid = fixture._positioned_vehicle(fixture._vehicle())

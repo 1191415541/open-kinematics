@@ -677,7 +677,7 @@ class Pac2002RigTire:
     """
     PAC2002 台架胎：内核系数载荷（文件单位）+ 台架需要的 SI 标量.
 
-    系数保持**文件单位**，与 ``vehicle_dynamics.py:1217`` 一致：内核在每个使用点各自
+    系数保持**文件单位**，与 ``preparation/vehicle_dynamic.py`` 一致：内核在每个使用点各自
     换算，提前换到 SI 反而会二次换算。
     """
 
@@ -760,7 +760,7 @@ def build_pac2002_rig(
     nominal_load = float(
         coefficients.get("FNOMIN_N", coefficients.get("FNOMIN", 4850.0))
     )
-    # 与 ``_adams_tire_spec`` / ``vehicle_dynamics`` 同源的换算。这几项只喂底层的刷子
+    # 与 ``_adams_tire_spec`` / ``preparation/vehicle_dynamic`` 同源的换算。这几项只喂底层的刷子
     # 状态与阻尼，PAC2002 纯滑移力律不读它们（弛豫长度对 kind 2 由 PTX1/PTY1 决定，
     # 见 axle_kernel.cpp:5680），但 schema 要求为正。
     reference_relaxation = min(

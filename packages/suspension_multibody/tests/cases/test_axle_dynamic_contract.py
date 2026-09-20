@@ -235,3 +235,207 @@ def test_an_unknown_blob_role_is_rejected(acceptance) -> None:
             ),
             registry=registry,
         )
+
+
+def test_the_family_prepares_its_documents_through_the_default_registry(
+    acceptance,
+) -> None:
+    """The domain path: the registry authors the documents the compiler frames."""
+    from suspension_contracts import unpack_container
+
+    from suspension_multibody.cases import axle_dynamic_model_document
+    from suspension_multibody.cases.axle_dynamic import case_document
+    from suspension_multibody.preparation.axle_dynamic import AxleDynamicPrepared
+    from suspension_multibody.simulation import (
+        compile_request,
+        default_preparation_registry,
+        prepare_request,
+    )
+
+    model = acceptance.build_axle_model()
+    case = acceptance.build_case("static_equilibrium")
+    request = SimulationRequest(
+        assembly="axle", family="axle_dynamic", model=model, case=case
+    )
+
+    registry = default_preparation_registry()
+    assert ("axle", "axle_dynamic") in registry.keys()
+    result = prepare_request(request)
+
+    assert isinstance(result.value, AxleDynamicPrepared)
+    assert result.context["prepared_simulation"].value is result.value
+    assert result.context["axle_dynamic_prepared"] is result.value
+    # The compiler consumes the preparation: it frames the prepared documents
+    # and their payloads into the submission.
+    compiled = compile_request(result.request)
+    assert compiled.model_document == result.value.model_document
+    assert compiled.case_document == result.value.case_document
+    assert unpack_container(compiled.model_payload) == (
+        result.value.model_document,
+        result.value.model_payload,
+    )
+    assert unpack_container(compiled.case_payload) == (
+        result.value.case_document,
+        result.value.case_payload,
+    )
+    assert axle_dynamic_model_document(model)[0] == result.value.model_document
+    assert case_document(model, case)[0] == result.value.case_document
+
+
+def test_a_document_request_bypasses_preparation_and_still_validates_identity(
+    acceptance, monkeypatch
+) -> None:
+    from suspension_contracts import pack_container
+
+    from suspension_multibody.cases import axle_dynamic_model_document
+    from suspension_multibody.cases.axle_dynamic import case_document
+    from suspension_multibody.preparation import axle_dynamic as axle_preparation
+    from suspension_multibody.simulation import compile_request, prepare_request
+
+    model = acceptance.build_axle_model()
+    model_document, model_blob = axle_dynamic_model_document(model)
+    case_document_emitted, case_blob = case_document(
+        model, acceptance.build_case("road_pulse")
+    )
+    calls: list[SimulationRequest] = []
+    monkeypatch.setattr(
+        axle_preparation, "prepare_request", lambda request: calls.append(request)
+    )
+    context = {
+        "model_payload": pack_container(model_document, model_blob),
+        "case_payload": pack_container(case_document_emitted, case_blob),
+    }
+    request = SimulationRequest(
+        assembly="axle",
+        family="axle_dynamic",
+        model=model_document,
+        case=case_document_emitted,
+        context=context,
+    )
+
+    bypassed = prepare_request(request)
+
+    # The request already carries its documents, so no family preparation runs
+    # and the axle model is not authored a second time.
+    assert calls == []
+    assert "prepared_simulation" not in bypassed.context
+    compiled = compile_request(bypassed.request)
+    assert compiled.model_document == model_document
+    assert compiled.case_document == case_document_emitted
+    # Bypassing preparation is not skipping the compiler: the request identity
+    # is still validated.
+    with pytest.raises(ValueError, match="request kind"):
+        compile_request(
+            SimulationRequest(
+                assembly="axle",
+                family="axle_dynamic",
+                model=model_document,
+                case=case_document_emitted,
+                request_kind="wrong",
+                context=context,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("target", "field", "bad_value"),
+    [
+        ("model", "contract", "wrong"),
+        ("model", "contract_version", -1),
+        ("model", "kind", "case"),
+        ("case", "contract", "wrong"),
+        ("case", "contract_version", -1),
+        ("case", "kind", "model"),
+        ("case", "family", "handling"),
+    ],
+)
+@pytest.mark.parametrize("with_prepared", [False, True])
+def test_document_bypass_rejects_invalid_contract_identity(
+    target, field, bad_value, with_prepared, monkeypatch
+) -> None:
+    from suspension_contracts import CONTRACT_VERSION
+
+    from suspension_multibody.simulation import (
+        PreparationRegistry,
+        compile_request,
+        prepare_request,
+    )
+
+    model = {
+        "contract": "multibody-model",
+        "contract_version": CONTRACT_VERSION,
+        "kind": "model",
+    }
+    case = {
+        "contract": "multibody-case",
+        "contract_version": CONTRACT_VERSION,
+        "kind": "case",
+        "family": "axle_dynamic",
+    }
+    (model if target == "model" else case)[field] = bad_value
+    registry = PreparationRegistry()
+
+    def refuse(*args):
+        pytest.fail("document bypass must not consult preparation registry")
+
+    monkeypatch.setattr(registry, "resolve", refuse)
+    request = SimulationRequest(
+        "axle", "axle_dynamic", model=model, case=case,
+        context={"axle_dynamic_prepared": object()} if with_prepared else {},
+    )
+    prepared = prepare_request(request, registry=registry)
+    assert prepared.request is request
+    with pytest.raises(ValueError, match="requires"):
+        compile_request(prepared.request)
+
+
+@pytest.mark.parametrize("document_side", ["both", "model", "case"])
+@pytest.mark.parametrize("staged", [False, True])
+def test_document_request_runs_without_domain_decoding(
+    acceptance, monkeypatch, document_side, staged
+) -> None:
+    from suspension_contracts import pack_container
+
+    from suspension_multibody.cases import axle_dynamic_model_document
+    from suspension_multibody.cases.axle_dynamic import case_document
+    from suspension_multibody.preparation import axle_dynamic as axle_preparation
+    from suspension_multibody.simulation import compile_request, prepare_request
+    from suspension_multibody.simulation.backend import NativeContractBackend
+
+    model = acceptance.build_axle_model()
+    case = acceptance.build_case("road_pulse")
+    model_doc, model_blob = axle_dynamic_model_document(model)
+    case_doc, case_blob = case_document(model, case)
+
+    def refuse_preparation(request):
+        pytest.fail("document request must not repeat preparation")
+
+    monkeypatch.setattr(axle_preparation, "prepare_request", refuse_preparation)
+    request = SimulationRequest(
+        "axle", "axle_dynamic",
+        model=model if document_side == "case" else model_doc,
+        case=case if document_side == "model" else case_doc,
+        context={
+            "model_payload": pack_container(model_doc, model_blob),
+            "model_document": model_doc,
+            "case_document": case_doc,
+            "case_payload": pack_container(case_doc, case_blob),
+            "axle_dynamic_prepared": object(),
+        },
+    )
+    submissions = []
+
+    class CountingBackend:
+        def run(self, compiled):
+            submissions.append(compiled)
+            return NativeContractBackend().run(compiled)
+
+    submitted = compile_request(prepare_request(request).request) if staged else request
+    run = run_request(submitted, backend=CountingBackend())
+
+    assert len(submissions) == 1
+    assert run.status == "success"
+    assert run.result is None
+    assert run.raw.block("body_state").shape[0] == len(run.raw.times_s)
+    assert len(run.raw.times_s) > 0
+    assert np.isfinite(run.raw.block("body_state")).all()

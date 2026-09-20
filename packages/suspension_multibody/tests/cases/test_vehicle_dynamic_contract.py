@@ -15,9 +15,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
 from suspension_multibody.schema import RoadSurfaceSpec, TimeSignal, Vec3
 from suspension_multibody.simulation import SimulationRequest, run_request
-from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "vehicle" / "test_native_vehicle.py"
 
@@ -113,7 +113,7 @@ def test_a_measured_vertical_table_reaches_the_contract(fixture) -> None:
 
 def test_the_model_document_declares_the_vehicle_path(fixture) -> None:
     from suspension_multibody.cases.vehicle_dynamic import model_document
-    from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
 
     model = fixture._positioned_vehicle(fixture._vehicle())
     prepared = prepare_vehicle_run(model, fixture._case(model))
@@ -135,7 +135,7 @@ def test_the_model_document_declares_the_vehicle_path(fixture) -> None:
 
 def test_the_case_document_carries_the_road_and_the_steering(fixture) -> None:
     from suspension_multibody.cases.vehicle_dynamic import case_document
-    from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
 
     model = fixture._positioned_vehicle(fixture._vehicle())
     case = fixture._case(model, brake=0.3, steering=TimeSignal(constant=0.02))
@@ -147,3 +147,50 @@ def test_the_case_document_carries_the_road_and_the_steering(fixture) -> None:
     assert {"steering_target", "steering_rate", "brake_torque"} <= roles
     for entry in document["blobs"]:
         assert entry["offset"] + entry["length"] <= len(blob)
+
+
+@pytest.mark.parametrize("document_location", ["values", "context"])
+@pytest.mark.parametrize("case_family", ["vehicle_dynamic", "handling"])
+def test_documents_take_priority_over_prepared_context(
+    document_location: str, case_family: str, monkeypatch
+) -> None:
+    from suspension_contracts import CONTRACT_VERSION
+
+    from suspension_multibody.cases import vehicle_dynamic
+    from suspension_multibody.simulation import compile_request, prepare_request
+
+    model_document = {
+        "contract": "multibody-model",
+        "contract_version": CONTRACT_VERSION,
+        "kind": "model",
+    }
+    case_document = {
+        "contract": "multibody-case",
+        "contract_version": CONTRACT_VERSION,
+        "kind": "case",
+        "family": case_family,
+    }
+    context = {"vehicle_dynamic_prepared": object()}
+    if document_location == "context":
+        context.update(model_document=model_document, case_document=case_document)
+        model, case = object(), object()
+    else:
+        model, case = model_document, case_document
+
+    def refuse_authoring(*args, **kwargs):
+        raise AssertionError("document bypass must not reauthor model or case")
+
+    monkeypatch.setattr(vehicle_dynamic, "model_document", refuse_authoring)
+    monkeypatch.setattr(vehicle_dynamic, "case_document", refuse_authoring)
+    request = SimulationRequest(
+        assembly="vehicle", family="vehicle_dynamic", model=model, case=case,
+        context=context,
+    )
+    prepared = prepare_request(request)
+    if case_family != "vehicle_dynamic":
+        with pytest.raises(ValueError, match="family"):
+            compile_request(prepared.request)
+    else:
+        compiled = compile_request(prepared.request)
+        assert compiled.model_document == model_document
+        assert compiled.case_document == case_document

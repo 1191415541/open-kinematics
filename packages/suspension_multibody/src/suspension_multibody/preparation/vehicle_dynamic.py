@@ -1,16 +1,27 @@
-"""原生整车多体动力学入口."""
+"""
+Preparation for the ``vehicle_dynamic`` family.
+
+The family owns the whole assembled vehicle: two suspensions, four wheels, a
+chassis, the steering actuator and everything the model declares.  This module
+turns those domain objects into the native model view and the per-sample
+excitation the contract authors need, exactly as the legacy module did, and
+publishes the result as a :class:`PreparedVehicleRun` under the
+``vehicle_dynamic_prepared`` context key.
+
+The preparation also carries the domain objects it was built from, so the legacy
+``prepared`` migration adapter can tell a matching preparation from a stale one
+without re-deriving anything.  Those references never reach the contract.
+"""
 
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
 
-from .axle_dynamics.result import AxleDynamicsResult
-from .axle_dynamics.schema import (
+from ..axle_dynamics.schema import (
     AxleAerodynamicDrag,
     AxleAntiRollBar,
     AxleBody,
@@ -23,7 +34,7 @@ from .axle_dynamics.schema import (
     AxleSpringDamper,
     AxleTire,
 )
-from .core import (
+from ..core import (
     BallJoint,
     ConstantVelocityJoint,
     CoordinateDrive,
@@ -36,7 +47,7 @@ from .core import (
     UniversalJoint,
     WeldJoint,
 )
-from .elements import (
+from ..elements import (
     AntiRollBarElement,
     BumpStopElement,
     BushingElement,
@@ -44,9 +55,8 @@ from .elements import (
     StaticDamperElement,
     VerticalTireElement,
 )
-from .model import VehicleAssembly, build_vehicle
-from .results.raw import RawContractResult
-from .schema import (
+from ..model import VehicleAssembly, build_vehicle
+from ..schema import (
     DynamicSolverSettings,
     RoadSurfaceSpec,
     SteeringSystemSpec,
@@ -55,7 +65,8 @@ from .schema import (
     VehicleModel,
     WheelSpec,
 )
-from .simulation import SimulationRequest, run_request
+from ..simulation.preparation import PreparedSimulation
+from ..simulation.request import SimulationRequest
 
 _WHEEL_NAMES = ("front_left", "front_right", "rear_left", "rear_right")
 _ROAD_KIND = {
@@ -123,7 +134,7 @@ class _NativeVehicleModel:
 
 
 @dataclass(frozen=True)
-class _PreparedVehicleRun:
+class PreparedVehicleRun:
     """
     Everything a native vehicle run needs, before anything is marshalled.
 
@@ -153,6 +164,11 @@ class _PreparedVehicleRun:
     #: The assembly the native model was built from.  A case that prescribes
     #: driven coordinates needs the attachment points, and they live here.
     assembly: object
+    #: The domain objects this preparation was built from.  The legacy
+    #: ``prepared`` migration adapter uses them to reject a stale preparation;
+    #: they never take part in equality, repr or the contract.
+    source_model: VehicleModel = field(compare=False, repr=False)
+    source_case: VehicleDynamicCase = field(compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -193,72 +209,9 @@ def _validate_steering_topology(model: VehicleModel) -> None:
         )
 
 
-@dataclass(frozen=True)
-class VehicleDynamicsResult:
-    """整车运行结果；底层状态和诊断保持 native axle 结果协议."""
-
-    axle: AxleDynamicsResult
-    steering_names: tuple[str, ...] = ()
-    steering_output: np.ndarray | None = None
-    native_kernel_wall_time_s: float = 0.0
-    static_wheel_loads: Mapping[str, float] | None = None
-    metrics: dict[str, Any] = field(default_factory=dict)
-    @property
-    def times_s(self) -> np.ndarray:
-        return self.axle.times_s
-
-    @property
-    def body_names(self) -> tuple[str, ...]:
-        return self.axle.body_names
-
-    @property
-    def tire_names(self) -> tuple[str, ...]:
-        return self.axle.tire_names
-
-    @property
-    def states(self) -> np.ndarray:
-        """返回所有刚体的状态数组."""
-        return self.axle.states
-
-    @property
-    def diagnostics(self):
-        return self.axle.diagnostics
-
-    @property
-    def performance(self):
-        return self.axle.performance
-
-    def body_state(self, body: str) -> np.ndarray:
-        return self.axle.body_state(body)
-
-    def tire_state(self, tire: str) -> np.ndarray:
-        return self.axle.tire_state(tire)
-
-    def steering_state(self, actuator: str) -> np.ndarray:
-        if self.steering_output is None:
-            raise KeyError("this run has no steering actuator output")
-        try:
-            index = self.steering_names.index(actuator)
-        except ValueError as exc:
-            raise KeyError(f"unknown steering actuator {actuator!r}") from exc
-        return self.steering_output[:, index, :]
-
-    def joint_wrench(self, joint: str) -> np.ndarray:
-        """返回一个约束在 body_b 上的世界坐标系力和力矩."""
-        return self.axle.joint_wrench_on_body_b(joint)
-
-    def spring_state(self, spring: str) -> np.ndarray:
-        """返回一个弹簧阻尼器的长度、速度和力分量."""
-        return self.axle.spring_state(spring)
-
-    def bushing_state(self, bushing: str) -> np.ndarray:
-        """返回一个衬套的局部变形和力."""
-        return self.axle.bushing_state(bushing)
-
-
 def prepare_vehicle_run(
     model: VehicleModel, case: VehicleDynamicCase
-) -> _PreparedVehicleRun:
+) -> PreparedVehicleRun:
     """Assemble everything a native vehicle run needs, without running it."""
     if case.vehicle is not model and case.vehicle.model_dump() != model.model_dump():
         raise ValueError("case.vehicle must describe the supplied VehicleModel")
@@ -326,7 +279,7 @@ def prepare_vehicle_run(
         wheel_torque_n_m=wheel_torque,
         solver=solver,
     )
-    return _PreparedVehicleRun(
+    return PreparedVehicleRun(
         native_model=native_model,
         axle_case=axle_case,
         steering=steering,
@@ -349,117 +302,12 @@ def prepare_vehicle_run(
         times=np.asarray(times, dtype=float),
         body_names=body_names,
         assembly=assembly,
+        source_model=model,
+        source_case=case,
     )
 
 
 _PRESCRIBED_STEERING_TYPES = (2, 3)
-
-
-def _contract_constraint_names(prepared: _PreparedVehicleRun) -> tuple[str, ...]:
-    """Return the kernel's constraint-row names in contract order."""
-    return (
-        *(joint.name for joint in prepared.native_model.joints),
-        *(
-            prepared.steering.names[index]
-            for index, kind in enumerate(prepared.steering.actuator_type)
-            if int(kind) in _PRESCRIBED_STEERING_TYPES
-        ),
-        *(driven.name for driven in prepared.native_model.driven_coordinates),
-    )
-
-
-def _vehicle_axle_result(prepared: _PreparedVehicleRun, run, *, stop: int | None = None):
-    """Map the common contract result blocks through the axle reporting adapter."""
-    # The axle adapter owns the diagnostics, performance and ledger layout.  A
-    # vehicle differs only in that a prescribed steering actuator adds a
-    # constraint row, so reuse the adapter and replace that one name list rather
-    # than maintaining a second, subtly different decoder here.
-    from .axle_dynamics.contract_run import build_result
-
-    result = build_result(
-        prepared.native_model,  # ty: ignore[invalid-argument-type]
-        prepared.axle_case,
-        run,
-        stop=stop,
-    )
-    return replace(result, constraint_names=_contract_constraint_names(prepared))
-
-
-def run_vehicle_dynamics(
-    model: VehicleModel, case: VehicleDynamicCase
-) -> VehicleDynamicsResult:
-    """运行一个真实前后悬架、车身和轮端的 native 整车动力学算例."""
-    from time import perf_counter
-
-    from .analysis.vehicle_physics import compute_static_wheel_loads
-    from .axle_dynamics.contract_run import safe_failure_row
-    from .axle_dynamics.errors import NativeAxleError
-    from .kernel import KernelContractError
-    from .metrics import compute_case_metrics
-    from .results.decoder import decode_result
-    prepared = prepare_vehicle_run(model, case)
-    static_wheel_loads: Mapping[str, float] | None = None
-    try:
-        static_wheel_loads = compute_static_wheel_loads(model).wheel_loads
-    except (ValueError, np.linalg.LinAlgError):
-        static_wheel_loads = None
-    started = perf_counter()
-    try:
-        simulation_run = run_request(
-            SimulationRequest(
-                assembly="vehicle",
-                family="vehicle_dynamic",
-                model=model,
-                case=case,
-                context={"prepared": prepared},
-            )
-        )
-    except KernelContractError as error:
-        partial = error.partial_raw_result
-        if not isinstance(partial, RawContractResult):
-            raise NativeAxleError(str(error), status=3) from error
-        manifest = partial.document.get("manifest", {})
-        index = int(manifest.get("failed_sample_index", 0))
-        partial_vehicle = None
-        try:
-            partial_vehicle = decode_result(
-                partial,
-                assembly="vehicle",
-                family="vehicle_dynamic",
-                prepared=prepared,
-                stop=index,
-            )
-            partial_vehicle = replace(
-                partial_vehicle,
-                static_wheel_loads=static_wheel_loads,
-                metrics=compute_case_metrics("vehicle_dynamic", partial_vehicle),
-            )
-        except Exception:
-            partial_vehicle = None
-        raise NativeAxleError(
-            str(error),
-            status=int(manifest.get("failed_status", 3) or 3),
-            partial_result=partial_vehicle,
-            failure_diagnostics=safe_failure_row(partial, index),
-            failed_sample_index=index,
-            failed_time_s=float(manifest.get("failed_time_s") or 0.0),
-        ) from error
-
-    result = simulation_run.result
-    if not isinstance(result, VehicleDynamicsResult):
-        raise TypeError("vehicle simulation did not produce VehicleDynamicsResult")
-    completed = replace(
-        result,
-        native_kernel_wall_time_s=perf_counter() - started,
-        static_wheel_loads=static_wheel_loads,
-    )
-    completed = replace(
-        completed,
-        metrics=compute_case_metrics("vehicle_dynamic", completed),
-    )
-    return completed
-
-
 
 
 def _length_scale(units: UnitSystem) -> float:
@@ -1717,3 +1565,152 @@ def _native_solver_settings(
         dynamics_tolerance=tolerance,
         increment_tolerance=tolerance * scale,
     )
+
+
+ASSEMBLY = "vehicle"
+FAMILY = "vehicle_dynamic"
+
+#: The context key the family's compiler reads its preparation from.
+PREPARED_KEY = "vehicle_dynamic_prepared"
+
+#: Legacy family-specific key.  Only :func:`adapt_legacy_prepared_request`
+#: reads it; the compiler and the runner consume ``PREPARED_KEY``.
+LEGACY_PREPARED_KEY = "prepared"
+
+_PREPARED_SIMULATION_KEY = "prepared_simulation"
+
+_IDENTITY = (ASSEMBLY, FAMILY)
+
+
+def _normalized_identity(assembly: Any, family: Any) -> tuple[str, str]:
+    """Return the registry key one request or preparation is addressed by."""
+    return (str(assembly).strip().casefold(), str(family).strip().casefold())
+
+
+def _validate_request_identity(request: SimulationRequest) -> None:
+    """Reject a request this family does not own."""
+    if _normalized_identity(request.assembly, request.family) != _IDENTITY:
+        raise ValueError(
+            f"vehicle dynamic preparation expects {ASSEMBLY}/{FAMILY}, "
+            f"got {request.assembly}/{request.family}"
+        )
+
+
+def prepare_request(request: SimulationRequest) -> PreparedSimulation:
+    """Prepare one vehicle dynamic request for the unified lifecycle."""
+    _validate_request_identity(request)
+    model = request.model
+    case = request.case
+    if not isinstance(model, VehicleModel):
+        raise TypeError(
+            "vehicle dynamic preparation requires a VehicleModel, got "
+            f"{type(model).__name__}"
+        )
+    if not isinstance(case, VehicleDynamicCase):
+        raise TypeError(
+            "vehicle dynamic preparation requires a VehicleDynamicCase, got "
+            f"{type(case).__name__}"
+        )
+    prepared = prepare_vehicle_run(model, case)
+    return PreparedSimulation(
+        request=request,
+        value=prepared,
+        context={PREPARED_KEY: prepared},
+        metadata={"assembly": ASSEMBLY, "family": FAMILY},
+    )
+
+
+def adapt_legacy_prepared_request(request: SimulationRequest) -> SimulationRequest:
+    """
+    Wrap a legacy ``prepared`` request into the unified preparation protocol.
+
+    The legacy key is a migration input, not a family protocol: this adapter
+    checks the routing identity, the preparation type and the source model/case
+    identity, then hands the unified lifecycle a ``prepared_simulation`` so the
+    preparation is reused instead of run twice.  A preparation whose source
+    model or case is not the request's own is stale, so the request is returned
+    untouched and the registry prepares the current objects instead.  A value
+    that is not a :class:`PreparedVehicleRun` is a programming error and is
+    reported as one.
+    """
+    if _normalized_identity(request.assembly, request.family) != _IDENTITY:
+        raise ValueError(
+            "legacy prepared adaptation expects "
+            f"{ASSEMBLY}/{FAMILY}, got {request.assembly}/{request.family}"
+        )
+    prepared = request.context.get(LEGACY_PREPARED_KEY)
+    if prepared is None:
+        return request
+    if not isinstance(prepared, PreparedVehicleRun):
+        raise TypeError(
+            "legacy vehicle dynamic requests must carry a PreparedVehicleRun "
+            f"under {LEGACY_PREPARED_KEY!r}, got {type(prepared).__name__}"
+        )
+    if prepared.source_model is not request.model or prepared.source_case is not request.case:
+        return request
+    wrapped = PreparedSimulation(
+        request=request,
+        value=prepared,
+        context={PREPARED_KEY: prepared},
+        metadata={"assembly": ASSEMBLY, "family": FAMILY, "legacy_prepared": True},
+    )
+    return replace(
+        request,
+        context={
+            **request.context,
+            _PREPARED_SIMULATION_KEY: wrapped,
+            PREPARED_KEY: prepared,
+        },
+    )
+
+
+__all__ = [
+    "ASSEMBLY",
+    "FAMILY",
+    "LEGACY_PREPARED_KEY",
+    "PREPARED_KEY",
+    "PreparedVehicleRun",
+    "adapt_legacy_prepared_request",
+    "prepare_request",
+    "prepare_vehicle_run",
+    "_BodyFrame",
+    "_NativeVehicleModel",
+    "_PRESCRIBED_STEERING_TYPES",
+    "_ROAD_KIND",
+    "_VehicleRoadBuffers",
+    "_VehicleSteeringBuffers",
+    "_WHEEL_NAMES",
+    "_build_aerodynamic_drags",
+    "_build_coordinate_couplers",
+    "_build_elements",
+    "_build_joints",
+    "_build_road",
+    "_build_static_rotation_gauges",
+    "_build_steering",
+    "_build_tires",
+    "_build_wheel_torque_signals",
+    "_bushing_force_curves",
+    "_damper_curve",
+    "_initial_body_state",
+    "_length_force_curve",
+    "_length_scale",
+    "_matrix3",
+    "_native_solver_settings",
+    "_output_times",
+    "_resolve_named_body",
+    "_resolve_steering_rack",
+    "_resolve_vehicle_body",
+    "_rotation_from_quaternion",
+    "_select_assembly_mode",
+    "_shift_point",
+    "_spring_force_curve",
+    "_steering_target_rate",
+    "_steering_target_value",
+    "_tuple3",
+    "_tuple4",
+    "_tuple6",
+    "_uses_horizontal_static_gauge",
+    "_validate_steering_topology",
+    "_validate_units",
+    "_wheel_forward_local",
+]

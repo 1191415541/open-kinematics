@@ -4,6 +4,14 @@ import numpy as np
 import pytest
 
 from suspension_multibody.model import build_vehicle
+from suspension_multibody.preparation.vehicle_dynamic import (
+    _build_elements,
+    _build_joints,
+    _build_road,
+    _build_wheel_torque_signals,
+    _initial_body_state,
+    _shift_point,
+)
 from suspension_multibody.schema import (
     AerodynamicDragSpec,
     BumpStop,
@@ -29,15 +37,7 @@ from suspension_multibody.schema import (
     VehicleModel,
     WheelSpec,
 )
-from suspension_multibody.vehicle_dynamics import (
-    _build_elements,
-    _build_joints,
-    _build_road,
-    _build_wheel_torque_signals,
-    _initial_body_state,
-    _shift_point,
-    run_vehicle_dynamics,
-)
+from suspension_multibody.vehicle.service import run_vehicle_dynamics
 
 _BODY_NAMES = (
     "rack",

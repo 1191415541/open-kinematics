@@ -48,7 +48,7 @@ from suspension_multibody.pac2002_scope import (
     pac2002_unsupported_native_reasons,
 )
 from suspension_multibody.schema import TimeSignal, TireModelSpec
-from suspension_multibody.vehicle_dynamics import run_vehicle_dynamics
+from suspension_multibody.vehicle.service import run_vehicle_dynamics
 
 _CASE = Path("artifacts/adams/correlation-reference-real-si/handling-pac2002-v1/step_steer")
 _SOURCE_CASE = Path("artifacts/adams-full-source/step_steer")
