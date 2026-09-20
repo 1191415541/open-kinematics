@@ -15,25 +15,36 @@
 ## Registration and staged execution
 
 - `simulation/preparation.py::default_preparation_registry()` 是唯一默认 registry 组装点；family modules export preparation implementations but do not mutate this registry.
+- 七个 family 模块均导出 `prepare_request(request: SimulationRequest) -> PreparedSimulation`，供中央延迟注册表调用；准备类型与该函数不修改共享 registry。
 - The explicit staged path is `SimulationRequest → prepare_request() → compile_request(prepared.request) → run_request(compiled) → NativeContractBackend`.
 - `run_request(SimulationRequest)` is only a convenience facade over the same staged path and must call preparation once.
-- `results.decoder.decode_result()` is the only unified raw-to-typed dispatcher. `results.vehicle` owns the typed vehicle result and its family adapter, not the unified dispatcher.
+- `results.decoder.decode_result()` is the only unified raw-to-typed dispatcher. `results.vehicle` owns the typed vehicle result and its family adapter, not the unified dispatcher. 子任务 03 负责把 `results.decoder` 的整车分派接线到 `results.vehicle.decode_vehicle_result()` 并清理旧模块导入；统一 `decode_result()` 定义仍只留在 `results/decoder.py`。
 
 ## Document request bypass
 
-以下任一条件成立时，`prepare_request()` 必须返回直通 `PreparedSimulation`，且不得调用 family preparation：
+以下任一 document 形态条件成立时，`prepare_request()` 必须返回直通 `PreparedSimulation`，且不得调用 family preparation：
 
 - `request.context` 含 `model_document` 或 `case_document`；
 - `request.context` 含 `model_document_pair`、`model_payload` 或 `case_payload`；
-- `request.model` 或 `request.case` 是 contract document / `(document, payload)` pair；
-- `request.context` 含匹配当前 request 的 `prepared_simulation`；匹配定义为值是 `PreparedSimulation`，规范化 assembly/family 相同，且 `prepared.request.model is request.model`、`prepared.request.case is request.case`。
+- `request.model` 或 `request.case` 是 contract document / `(document, payload)` pair。
 
-直通路径仍由 compiler 做 contract identity 校验；bypass 不是跳过 compiler。registry key 规范化统一使用 `str(value).strip().casefold()`，空键报 `ValueError`，不定义别名。
+document bypass 优先于其它路由（含 `prepared_simulation` 复用和 legacy `prepared` 适配）；直通路径仍由 compiler 做 contract identity 校验，bypass 不是跳过 compiler。registry key 规范化统一使用 `str(value).strip().casefold()`，空键报 `ValueError`，不定义别名。
+
+## Prepared simulation 复用
+
+`prepared_simulation` 复用是与 document bypass 分离的独立规则，只有下列条件全部成立时才复用：
+
+- `request.context` 的 `prepared_simulation` 值是 `PreparedSimulation`；
+- 其规范化 assembly/family 与当前 request 相同；
+- `prepared.request.model is request.model` 且 `prepared.request.case is request.case`。
+
+满足时 `prepare_request()` 复用该准备结果（不查 registry、不调用 family preparation），按 EPIC 的上下文合并规则返回与当前 request context 合并后的包装；不保证返回包装与缓存实例相同。准备上下文覆盖当前同名键，保留当前请求的其它 context，值图保持无环。值类型错误、assembly/family 不匹配或 model/case identity 不匹配（stale）时忽略该键并按 registry 重新 preparation，不得静默复用 stale 准备结果。document 形态请求仍先按 bypass 处理。
 ## Legacy `prepared` 适配
 
 - `preparation.vehicle_dynamic.adapt_legacy_prepared_request()` 是旧 vehicle dynamic `prepared` 输入的唯一适配器；它校验规范化 assembly/family、`PreparedVehicleRun` 类型以及 model/case identity，并产生带 `prepared_simulation` 和 `vehicle_dynamic_prepared` context 的新 request。
 - `simulation.prepare_request()` 在 document bypass 之后调用该适配器；当 request 同时含 document context 和旧 `prepared` 时，document bypass 优先，既不查 adapter 也不查 family preparation，但仍由 compiler 做 contract identity 校验。
 - 适配后的 `prepared_simulation` 仍遵守统一匹配/stale 规则；其它 family、compiler 和 service 不得直接读取旧 `prepared` 键。
+- 子任务 03 同步迁移 `simulation/runner.py` 的解码上下文读取到 `vehicle_dynamic_prepared`，不把旧 `prepared` 保留为新协议。
 - 必测组合为：旧 `prepared` 包装、document + 旧 `prepared` bypass 优先、包装后匹配复用、model/case stale 时重新 preparation，以及错误类型/身份的可诊断异常。
 
 
@@ -45,7 +56,7 @@
 | `prepare_vehicle_run` | `preparation.vehicle_dynamic.prepare_vehicle_run` | tests、cases、compiler、scripts 改为新导入 |
 | `_PreparedVehicleRun` | `preparation.vehicle_dynamic.PreparedVehicleRun` | 不再从旧模块引用私有名 |
 | `VehicleDynamicsResult` | `results.vehicle.VehicleDynamicsResult` | 顶层导出、IO、测试和 CLI 改为 results/service 路径 |
-| `_vehicle_axle_result` | `results.vehicle.vehicle_axle_result` 或私有等价实现 | `results.vehicle` 内部自持，不反向导入旧模块 |
+| `_vehicle_axle_result` | `results.vehicle._vehicle_axle_result`（保持同一私有名，与子任务 03 验收一致） | `results.vehicle` 内部自持该私有名，不反向导入旧模块，不引入公开别名或 `vehicle_axle_result` 等价导出 |
 | `run_vehicle_dynamics` | `vehicle.service.run_vehicle_dynamics`，顶层公开导出可转发 | CLI、scripts、Adams、tests 改为 service 或顶层公开路径 |
 | `decode_result` | `results.decoder.decode_result` | 统一 raw-to-typed 分派不得留在旧模块或 `results.vehicle` |
 
@@ -73,3 +84,16 @@
 6. `results.decoder.decode_result()` 是全仓唯一统一 raw-to-typed dispatcher，`results.vehicle` 只提供 vehicle family adapter；
 7. `vehicle_dynamics.py` 完整顶层定义清单均迁入指定新归属，删除后交付目录无旧模块 import 或文件路径引用；
 8. 独立 `test_dynamic_result_compat.py` 覆盖历史 `DynamicResultBundle` 读取，历史边界不回退。
+
+## 阶段验证策略
+
+- registry 组装使用固定的延迟 import 表登记七个 key：key 枚举、document bypass 和 `prepared_simulation` 复用检查不得触发 family 模块 import；只有对某个 key 执行 family preparation 时才 import 对应模块。
+- 子任务 01 阶段 `preparation/` 包中六个非整车 family 模块和 `preparation/vehicle_dynamic.py` 尚未实现，因此 `tests/simulation/test_preparation.py` 用可注入的 `PreparationRegistry`/`Preparation` 替身和计数 backend 验证 adapter 协议、包装、document bypass 优先级、匹配复用与 stale 重新准备；01 不得捕获或改写 `ImportError`/`ModuleNotFoundError`，不得在生产代码放置占位 family。
+- 现有 `tests/cases`、`tests/results` 中以领域对象调用 `run_request(SimulationRequest)` 的用例（如 axle dynamic、K/C quasi-static）在 02/03 注册真实 family 之前无法通过；这些 family 的回归由子任务 02（六个非整车 family）和 03（vehicle_dynamic）各自门禁负责，01 的阶段门禁只覆盖 `tests/simulation` 与 `tests/architecture`。
+- 终局 04/05 门禁必须在真实 family 模块存在时运行全量专项测试；替身只用于 01 阶段证明协议与生命周期，不得成为任何 family 集成的唯一覆盖。
+
+## 整车阶段接缝
+
+- 03 迁出全部定义后，旧文件仅作临时重导出薄壳，确保包入口与新 decoder/service 使用同一结果类；不保留旧实现。04 调用方迁移和删除门禁通过后再删除薄壳。
+- `PreparedVehicleRun` 增加来源 model/case 身份引用（不参与比较/repr、不写入contract），用于 adapter 校验；既有物理字段保持不变。
+- `tests/results/test_adapters.py` 的 `_vehicle_axle_result` monkeypatch 随结果归属迁到 `results.vehicle`，03测试同时证明新模块不依赖旧路径。

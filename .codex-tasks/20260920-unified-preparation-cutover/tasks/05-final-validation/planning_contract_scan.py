@@ -1,9 +1,23 @@
-"""Validate the durable planning and evidence contracts for this Epic."""
+"""Validate the durable planning and evidence contracts for this Epic.
+
+Record model enforced here:
+
+* gate commands are executed one by one and recorded immediately with the real
+  exit code and an existing evidence file;
+* a task's ``validation_command`` may be a ``&&`` chain, but each atomic command
+  in that chain (quotes aware) needs its own successful record with the same
+  task label;
+* record-audit commands (``planning_contract_scan.py``) are never required as
+  execution evidence, while functional/static commands always are;
+* ``--final-preclose`` is the pre-close check run before the final status is
+  written, ``--final`` is the post-hoc full state and evidence verification.
+"""
 
 from __future__ import annotations
 
 import argparse
 import csv
+import os
 import re
 from pathlib import Path
 
@@ -24,6 +38,14 @@ EXPECTED_KEYS = (
     ("vehicle", "vehicle_dynamic"),
 )
 RECORD_FIELDS = ("时间", "子任务/门禁", "命令", "退出码", "摘要", "证据文件")
+PHASE_RECORD_LABELS = ("04-pre-delete", "04-post-delete")
+PHASE_SCAN_MARKERS = {
+    "04-pre-delete": "legacy_reference_scan.py --pre-delete",
+    "04-post-delete": "legacy_reference_scan.py --post-delete",
+}
+# Only this script audits records; it never has to be its own execution evidence.
+RECORD_AUDIT_MARKER = "planning_contract_scan.py"
+PHASE_LABEL_PREFIX = "子任务 "
 
 
 def _rows(path: Path) -> list[dict[str, str]]:
@@ -73,7 +95,9 @@ def _assert_planning_files() -> None:
         rows = _task_rows(task_id)
         assert rows, task_id
         assert all(row["status"] == "TODO" for row in rows), task_id
-        assert all(row["acceptance_criteria"] and row["validation_command"] for row in rows), task_id
+        assert all(
+            row["acceptance_criteria"] and row["validation_command"] for row in rows
+        ), task_id
 
 
 def _record_blocks() -> list[str]:
@@ -103,17 +127,67 @@ def _normalise_command(value: str) -> str:
     return " ".join(value.replace("`", "").split())
 
 
+def _split_atomic_commands(command: str) -> list[str]:
+    """Split a ``&&`` chain into atomic commands, ignoring quoted ``&&``."""
+    parts: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    index = 0
+    while index < len(command):
+        char = command[index]
+        if quote is not None:
+            current.append(char)
+            if char == "\\" and quote == '"' and index + 1 < len(command):
+                index += 1
+                current.append(command[index])
+            elif char == quote:
+                quote = None
+        elif char in "\"'":
+            quote = char
+            current.append(char)
+        elif char == "&" and command[index : index + 2] == "&&":
+            parts.append("".join(current))
+            current = []
+            index += 1
+        else:
+            current.append(char)
+        index += 1
+    parts.append("".join(current))
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _is_record_audit(command: str) -> bool:
+    return RECORD_AUDIT_MARKER in _normalise_command(command)
+
+
 def _task_blocks(task_id: int) -> list[str]:
+    """Collect records of a task, including its ``子任务 NN-<phase>`` blocks."""
     prefix = f"子任务 {task_id:02d}"
     return [
         block
         for block in _record_blocks()
-        if (
-            (label := _record_value(block, "子任务/门禁")) == prefix
-            or (label is not None and label.startswith(prefix + " /"))
-            or (label is not None and label.startswith(prefix + ":"))
+        if (label := _record_value(block, "子任务/门禁")) is not None
+        and (
+            label == prefix
+            or label.startswith(prefix + " /")
+            or label.startswith(prefix + ":")
+            or label.startswith(prefix + "-")
         )
     ]
+
+
+def _evidence_path(value: str) -> Path:
+    raw = value.strip().strip("`").strip()
+    expanded = os.path.expanduser(os.path.expandvars(raw))
+    path = Path(expanded)
+    return path if path.is_absolute() else REPO_ROOT / expanded
+
+
+def _assert_evidence(values: dict[str, str]) -> None:
+    evidence = values["证据文件"]
+    assert evidence != "无", evidence
+    evidence_path = _evidence_path(evidence)
+    assert evidence_path.is_file(), evidence_path
 
 
 def _validate_record_block(block: str, *, require_evidence: bool) -> dict[str, str]:
@@ -125,10 +199,7 @@ def _validate_record_block(block: str, *, require_evidence: bool) -> dict[str, s
     assert re.fullmatch(r"-?\d+", values["退出码"]), values["退出码"]
     assert _normalise_command(values["命令"]) != "同上", values["命令"]
     if require_evidence:
-        evidence = values["证据文件"]
-        assert evidence != "无", evidence
-        evidence_path = REPO_ROOT / evidence.strip("`").strip()
-        assert evidence_path.is_file(), evidence_path
+        _assert_evidence(values)
     return values
 
 
@@ -141,45 +212,112 @@ def _assert_progress_template() -> None:
     assert "原始输出" in text
 
 
-def _assert_progress_records(
-    *, require_task: int | None = None, require_evidence: bool = False
-) -> None:
+def _assert_progress_records(*, require_task: int | None = None) -> None:
     blocks = _record_blocks()
     assert blocks, "no verification record blocks"
     for block in blocks:
-        _validate_record_block(block, require_evidence=require_evidence)
+        _validate_record_block(block, require_evidence=False)
     if require_task is not None:
-        task_blocks = _task_blocks(require_task)
-        assert task_blocks, require_task
-        for block in task_blocks:
-            _validate_record_block(block, require_evidence=require_evidence)
+        _assert_task_records(require_task)
 
 
-def _assert_task_records(task_id: int) -> None:
+def _phase_blocks(label: str) -> list[str]:
+    expected = f"{PHASE_LABEL_PREFIX}{label}"
+    return [
+        block
+        for block in _record_blocks()
+        if _record_value(block, "子任务/门禁") == expected
+    ]
+
+
+def _assert_phase_records(label: str) -> None:
+    blocks = _phase_blocks(label)
+    assert blocks, f"missing progress record for {label}"
+    values = [
+        _validate_record_block(block, require_evidence=False) for block in blocks
+    ]
+    marker = PHASE_SCAN_MARKERS[label]
+    other_markers = [
+        other for key, other in PHASE_SCAN_MARKERS.items() if key != label
+    ]
+    for value in values:
+        command = _normalise_command(value["命令"])
+        assert all(other not in command for other in other_markers), (label, command)
+    successful = [value for value in values if value["退出码"] == "0"]
+    assert successful, (label, [value["退出码"] for value in values])
+    marked = [
+        value
+        for value in successful
+        if marker in _normalise_command(value["命令"])
+    ]
+    assert marked, (label, marker)
+    for value in marked:
+        _assert_evidence(value)
+
+
+def _assert_task_records(
+    task_id: int, *, rows: list[dict[str, str]] | None = None
+) -> None:
     blocks = _task_blocks(task_id)
     assert blocks, task_id
     values = [
-        _validate_record_block(block, require_evidence=True)
-        for block in blocks
+        _validate_record_block(block, require_evidence=False) for block in blocks
     ]
-    actual_commands = [_normalise_command(value["命令"]) for value in values]
-    for row in _task_rows(task_id):
-        expected = _normalise_command(row["validation_command"])
-        assert any(expected in command for command in actual_commands), (task_id, expected)
+    successful = [value for value in values if value["退出码"] == "0"]
+    for value in successful:
+        _assert_evidence(value)
+    actual_commands = [_normalise_command(value["命令"]) for value in successful]
+    for row in _task_rows(task_id) if rows is None else rows:
+        for atomic in _split_atomic_commands(row["validation_command"]):
+            if _is_record_audit(atomic):
+                continue
+            expected = _normalise_command(atomic)
+            assert expected in actual_commands, (task_id, expected)
+
+
+def _assert_task_done(task_id: int) -> None:
+    rows = _task_rows(task_id)
+    assert rows and all(row["status"] == "DONE" for row in rows), task_id
+    assert all(
+        row["completed_at"]
+        and row["notes"]
+        and row["acceptance_criteria"]
+        and row["validation_command"]
+        for row in rows
+    ), task_id
 
 
 def _assert_preclose_state() -> None:
+    """Pre-close check: 01-04 DONE and 05 steps 1-4 DONE with real evidence.
+
+    The last 05 step is still open and therefore needs no self-attestation yet.
+    """
     _assert_matrix()
     subtasks = _rows(SUBTASKS)
     assert [row["status"] for row in subtasks[:4]] == ["DONE"] * 4
     assert subtasks[4]["status"] in {"TODO", "IN_PROGRESS"}
     for task_id in range(1, 5):
-        rows = _task_rows(task_id)
-        assert rows and all(row["status"] == "DONE" for row in rows), task_id
+        _assert_task_done(task_id)
         _assert_task_records(task_id)
+    rows = _task_rows(5)
+    assert len(rows) == 5, 5
+    done_rows = rows[:4]
+    assert all(row["status"] == "DONE" for row in done_rows), 5
+    assert all(row["status"] in {"TODO", "IN_PROGRESS"} for row in rows[4:]), 5
+    assert all(
+        row["completed_at"]
+        and row["notes"]
+        and row["acceptance_criteria"]
+        and row["validation_command"]
+        for row in done_rows
+    ), 5
+    _assert_task_records(5, rows=done_rows)
+    for label in PHASE_RECORD_LABELS:
+        _assert_phase_records(label)
 
 
 def _assert_final_state() -> None:
+    """Post-hoc full state and evidence verification, run after statuses close."""
     _assert_matrix()
     subtasks = _rows(SUBTASKS)
     assert all(row["status"] == "DONE" for row in subtasks)
@@ -189,16 +327,10 @@ def _assert_final_state() -> None:
     )
     assert "- **状态**：DONE" in EPIC.read_text(encoding="utf-8")
     for task_id in range(1, 6):
-        rows = _task_rows(task_id)
-        assert rows and all(row["status"] == "DONE" for row in rows), task_id
-        assert all(
-            row["completed_at"]
-            and row["notes"]
-            and row["acceptance_criteria"]
-            and row["validation_command"]
-            for row in rows
-        ), task_id
+        _assert_task_done(task_id)
         _assert_task_records(task_id)
+    for label in PHASE_RECORD_LABELS:
+        _assert_phase_records(label)
 
 
 def main() -> int:
@@ -223,10 +355,15 @@ def main() -> int:
     elif args.progress_template:
         _assert_progress_template()
     elif args.progress_records:
-        if args.progress_records == "planning":
+        label = args.progress_records
+        if label.startswith(PHASE_LABEL_PREFIX):
+            label = label[len(PHASE_LABEL_PREFIX) :]
+        if label == "planning":
             _assert_progress_records()
+        elif label in PHASE_RECORD_LABELS:
+            _assert_phase_records(label)
         else:
-            _assert_progress_records(require_task=int(args.progress_records), require_evidence=True)
+            _assert_progress_records(require_task=int(args.progress_records))
     elif args.final_preclose:
         _assert_preclose_state()
     elif args.final:

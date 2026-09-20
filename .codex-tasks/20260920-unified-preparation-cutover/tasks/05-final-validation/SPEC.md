@@ -10,7 +10,16 @@
 - 运行独立 `test_dynamic_result_compat.py` 历史 `DynamicResultBundle` 读取回归和统一 artifact 回归。
 - 运行 scoped ruff、compileall、全仓 ty、git diff check 和统一 `legacy_reference_scan.py --post-delete`。
 - 核对 staged `prepare_request → compiler → run_request(compiled)`、便捷 facade、legacy `prepared` adapter 的 bypass/复用/stale 组合、native 唯一提交点、`results.decoder` 唯一解码入口和 metrics/artifact 证据。
-- 在父级 `.codex-tasks/20260920-unified-preparation-cutover/PROGRESS.md` 逐条记录每个命令的完整文本、实际退出码、通过数量/关键断言/失败首因和必要的原始输出路径；更新子任务、Epic、父级 PROGRESS，只有全部验收通过才标记 DONE。
+- 在父级 `.codex-tasks/20260920-unified-preparation-cutover/PROGRESS.md` 逐条记录每个命令的完整文本、实际退出码、通过数量/关键断言/失败首因和证据文件路径（允许绝对 scratch 路径或工作区相对路径）；更新子任务、Epic、父级 PROGRESS，只有全部验收通过才标记 DONE。
+- 新增 `tasks/05-final-validation/test_planning_contract_scan.py`（unittest 标准库，无依赖）回归覆盖门禁记录语义：逐条成功记录通过，失败/缺记录/缺证据拒绝，阶段标签可识别且 pre/post 不混用，预收口无需本次自证而终局仍拒绝功能证据缺失。
+
+## 执行顺序与记录
+
+1. 逐条运行前 4 个步骤的命令，每条命令单独执行后立即写入父级 PROGRESS 的一条 `子任务 05` 验证记录（真实退出码和存在的证据文件）。
+2. 运行 `planning_contract_scan.py --final-preclose` 预收口：要求 01-04 DONE、05 前 4 步 DONE 且有真实证据，并核对 `子任务 04-pre-delete`/`子任务 04-post-delete` 记录；收口步骤本身无需自证。
+3. 预收口通过后写入 DONE 状态（`SUBTASKS.csv`、`EPIC.md` 和各 `TODO.csv` 的 status/completed_at/notes），并记录 `--final-preclose` 的真实退出码。
+4. 运行 `planning_contract_scan.py --final` 做事后全量状态与证据核对：逐行检查每个 `validation_command` 的原子命令（`&&` 链按引号感知拆分），记录审计命令自身不作为执行证据，功能/静态命令证据缺失一律拒绝。
+5. `--final` 失败时回退状态并修复，不得保留 DONE。
 
 ## 终局验收
 

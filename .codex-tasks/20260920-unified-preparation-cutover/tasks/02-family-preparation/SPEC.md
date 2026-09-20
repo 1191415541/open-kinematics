@@ -13,7 +13,7 @@
 - `ride_four_post`
 - `ride_random_road`
 
-本子任务不得修改 `simulation/preparation.py`、`tests/simulation/test_preparation.py`、`preparation/vehicle_dynamic.py`、`results/vehicle.py` 或整车 service；默认 registry 的注册表结构由子任务 01 提供。
+本子任务不得修改 `simulation/preparation.py`、`tests/simulation/test_preparation.py`、`preparation/vehicle_dynamic.py`、`results/vehicle.py`、`results/decoder.py` 或整车 service；默认 registry 的注册表结构由子任务 01 提供。
 
 ## 交付范围
 
@@ -21,6 +21,7 @@
 - 将现有 `build_front_axle`、车辆装配、输入信号转换、solver 配置等前置工作包装为矩阵指定的显式准备对象。
 - 仅修改 `simulation/compiler.py` 中六个指定 compiler section，使其消费准备上下文；不得改动 `VehicleDynamicCompiler` section。
 - 修改六个 family 自有 cases 和 contract 测试；每个 family 测试至少断言默认 registry key、准备对象类型和矩阵声明的 compiler context。
+- 每个 family 模块必须导出 `prepare_request(request: SimulationRequest) -> PreparedSimulation`；中央延迟注册表按此固定函数名加载。
 
 ## 约束
 
