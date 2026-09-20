@@ -184,6 +184,8 @@ GEMINI.md
 /.codex-tasks/*
 !/.codex-tasks/20260919-public-api-simulation-cutover/
 !/.codex-tasks/20260919-public-api-simulation-cutover/**
+!/.codex-tasks/20260920-unified-preparation-cutover/
+!/.codex-tasks/20260920-unified-preparation-cutover/**
 /artifacts/
 /packages/*/artifacts/
 /packages/*/.codex-tasks/

@@ -1,0 +1,5 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,盘点现有 family 前处理与 request 形态,TODO,形成可执行的 family→准备对象→compiler 消费矩阵并包含七个 registry key 与 legacy prepared adapter 责任,python .codex-tasks/20260920-unified-preparation-cutover/tasks/05-final-validation/planning_contract_scan.py --matrix,,0,
+2,实现 preparation registry 运行时接线,TODO,统一入口、legacy adapter 和 document 直通行为有测试证据,uv run --package suspension-multibody pytest packages/suspension_multibody/tests/simulation -q,,0,
+3,补齐协议/重复准备/异常测试,TODO,测试客观覆盖成功失败、legacy prepared adapter、document bypass、匹配复用和 stale 重新准备,uv run --package suspension-multibody pytest packages/suspension_multibody/tests/simulation packages/suspension_multibody/tests/architecture -q,,0,
+4,更新任务记录,TODO,PROGRESS 与父级状态反映实际验证结果并含每条记录的完整命令/实际退出码/摘要/证据文件,python .codex-tasks/20260920-unified-preparation-cutover/tasks/05-final-validation/planning_contract_scan.py --progress-records 01,,0,
