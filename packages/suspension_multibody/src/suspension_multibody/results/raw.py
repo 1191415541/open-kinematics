@@ -53,10 +53,7 @@ def _readonly_array(value: np.ndarray) -> np.ndarray:
 
 
 class _CaseSequence(tuple[Mapping[str, Any], ...]):
-    """Tuple of case spans that remains callable for legacy consumers."""
-
-    def __call__(self) -> list[Mapping[str, Any]]:
-        return list(self)
+    """Tuple of case spans from the native manifest."""
 
 
 def _case_spans(document: Mapping[str, Any]) -> _CaseSequence:
@@ -246,12 +243,12 @@ class RawContractResult:
 
 
 
-def decode_contract_run(run: ContractRun | RawContractResult) -> RawContractResult:
+def _decode_contract_run(run: ContractRun | RawContractResult) -> RawContractResult:
     """Adapt one parsed kernel run to the neutral result surface."""
     if isinstance(run, RawContractResult):
         return run
     if not isinstance(run, ContractRun):
-        raise TypeError("decode_contract_run expects a kernel ContractRun")
+        raise TypeError("the internal result adapter expects a parsed kernel ContractRun")
     document = _readonly(run.document)
     blocks = MappingProxyType(
         {name: _readonly_array(value) for name, value in run.blocks.items()}

@@ -142,7 +142,7 @@ def _k_grid_records(assembly) -> list[dict[str, object]]:
     left_states = run.body_state("upright_L")
     right_states = run.body_state("upright_R")
     records: list[dict[str, object]] = []
-    for index, entry in enumerate(run.cases()):
+    for index, entry in enumerate(run.cases):
         wheel = wheels[index // len(racks)]
         rack = racks[index % len(racks)]
         case_id = f"k-w{wheel:+.0f}-r{rack:+.0f}"
@@ -232,7 +232,7 @@ def _c_path_records(assembly, *, paths: tuple[str, ...]) -> list[dict[str, objec
     }
 
     records: list[dict[str, object]] = []
-    for index, entry in enumerate(run.cases()):
+    for index, entry in enumerate(run.cases):
         axis = paths[index // levels]
         position_in_path = index % levels
         if position_in_path == 0:
@@ -958,7 +958,7 @@ def check_vehicle_kc() -> tuple[bool, str]:
     ).raw
 
     expected = [f"k-w{w:+.0f}-r{r:+.0f}" for w in wheels for r in racks]
-    given = [str(entry["name"]) for entry in produced.cases()]
+    given = [str(entry["name"]) for entry in produced.cases]
     if given != expected:
         return False, f"the driven grid expanded to {given}, not {expected}"
 
@@ -969,7 +969,7 @@ def check_vehicle_kc() -> tuple[bool, str]:
     states = produced.block("body_state")
     last = {
         str(entry["name"]): int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
-        for entry in produced.cases()
+        for entry in produced.cases
     }
 
     # A zero sweep is resolved to the separation the model was assembled with,

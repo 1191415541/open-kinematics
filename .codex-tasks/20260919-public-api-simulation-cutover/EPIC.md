@@ -2,7 +2,7 @@
 
 - **任务编号**：20260919-public-api-simulation-cutover
 - **创建日期**：2026-09-19
-- **状态**：IN_PROGRESS（任务 01–07 已完成，任务 08 待执行）
+- **状态**：DONE（任务 01–08 全部完成）
 - **范围**：`packages/suspension_multibody` 及其直接 CLI、Adams、脚本和测试入口
 - **形态**：Epic
 - **前置条件**：`simulation/`、`results/`、`metrics/` 基础设施已落地；`native_kc/` 已迁移并删除；现有 contract parity、K/C probe、动态/整车基础回归可运行。
@@ -305,7 +305,14 @@ K&C 指标从 `analysis/metrics.py::compute_k_metrics` 迁移到 `metrics/` 的�
 
 - **任务**：将 Public API / CLI / Adams / IO 全面切换到统一 simulation/results/metrics/artifact 架构
 - **形态**：epic
-- **进度**：7/8 子任务完成
-- **当前**：任务 01–07 已完成；任务 08 依赖已满足，尚未开始
-- **文件**：`.codex-tasks/20260919-public-api-simulation-cutover/tasks/08-final-deletion-gates/`
-- **下一步**：执行兼容代码删除、全仓残留扫描和最终 strict 门禁
+- **进度**：8/8 子任务完成
+- **当前**：任务 01–08 全部完成；最终 strict 门禁、专项回归与静态门禁均已通过
+- **文件**：`.codex-tasks/20260919-public-api-simulation-cutover/`
+- **下一步**：无；Epic 已完成
+## 最终收口证据
+
+- 生产 `kernel.run_contract()` 唯一调用点为 `NativeContractBackend`；strict allowlist 为 `0 entries / 0 findings`。
+- 六个 cases `run_*_contract` facade、旧 raw decoder 公共暴露、测试/脚本直接 kernel 旁路和 `_CaseSequence.__call__` 兼容层已清理。
+- 专项回归：`566 passed, 47 skipped, 1 xfailed`；architecture/CLI：`49 passed`。
+- `ruff`、实际脚本目录 `compileall`、`ty check .`、`git diff --check` 全部通过。
+- 历史 `DynamicResultBundle` 读取边界保留，新生产路径不创建旧 bundle。

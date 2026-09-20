@@ -245,7 +245,7 @@ def run_suspension_multibody_pure_k(profile: AdamsProfile) -> list[dict[str, Any
     left_states = run.body_state("upright_L")
     right_states = run.body_state("upright_R")
     states: list[dict[str, Any]] = []
-    for index, entry in enumerate(run.cases()):
+    for index, entry in enumerate(run.cases):
         wheel = WHEEL_VALUES_MM[index // len(RACK_VALUES_MM)]
         rack = RACK_VALUES_MM[index % len(RACK_VALUES_MM)]
         last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1

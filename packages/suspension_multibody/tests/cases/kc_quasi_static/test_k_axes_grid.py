@@ -23,8 +23,8 @@ from suspension_contracts import validate_case
 
 from suspension_multibody.analysis.benchmarks import benchmark_model
 from suspension_multibody.cases.kc_quasi_static import case_document, model_document
-from suspension_multibody.kernel import run_contract
 from suspension_multibody.model import build_front_axle
+from suspension_multibody.simulation import SimulationRequest, run_request
 
 _TIMES_S = (0.0, 1e-3)
 _WHEEL_DRIVES = ("wheel_drive_L", "wheel_drive_R")
@@ -50,7 +50,14 @@ def _grid_case(axes: dict[str, tuple[float, ...]]) -> dict[str, object]:
 
 def _run(assembly, case: dict[str, object]):
     model = model_document(assembly, name="axes-grid", drive_wheels=True)
-    return run_contract(model, case)
+    return run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model,
+            case=case,
+        )
+    ).raw
 
 
 def test_a_single_axis_grid_is_the_shorthand_that_drives_the_wheels_by_zero() -> None:
@@ -69,7 +76,7 @@ def test_a_single_axis_grid_is_the_shorthand_that_drives_the_wheels_by_zero() ->
     )
     produced = _run(assembly, axes_case)
     reference = _run(assembly, shorthand)
-    assert len(produced.cases()) == len(racks)
+    assert len(produced.cases) == len(racks)
     assert np.array_equal(produced.block("body_state"), reference.block("body_state")), (
         "the general grid and the shorthand disagreed on the same targets"
     )
@@ -85,7 +92,7 @@ def test_a_two_axis_grid_drives_the_two_sides_independently() -> None:
             {"wheel_drive_L": left_values, "wheel_drive_R": right_values}
         ),
     )
-    entries = run.cases()
+    entries = run.cases
     assert len(entries) == len(left_values) * len(right_values)
     states = run.block("body_state")
     bodies = list(run.document["manifest"]["bodies"])

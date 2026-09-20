@@ -30,14 +30,13 @@ from ..axle_dynamics.schema import (
     PAC2002_PARAMETER_NAMES,
 )
 from ..kernel.solver import solver_settings_document
-from ..results.raw import RawContractResult
 from ..schema import VehicleDynamicCase, VehicleModel
 from ..vehicle_dynamics import prepare_vehicle_run
 
 __all__ = [
     "case_document",
     "model_document",
-    "run_vehicle_dynamics_contract",
+    "prepare_vehicle_run",
 ]
 
 _UNITS = {"length": "m", "mass": "kg", "time": "s", "angle": "rad"}
@@ -601,28 +600,3 @@ def case_document(
         "blobs": tables,
     }
     return document, bytes(blob)
-
-
-def run_vehicle_dynamics_contract(
-    model: VehicleModel,
-    case: VehicleDynamicCase,
-    *,
-    prepared=None,
-) -> RawContractResult:
-    """
-    Run one vehicle case through the unified simulation runner.
-
-    ``prepared`` remains an internal fast path for the public vehicle API.
-    """
-    from ..simulation import SimulationRequest, run_request
-
-    prepared = prepare_vehicle_run(model, case) if prepared is None else prepared
-    return run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="vehicle_dynamic",
-            model=model,
-            case=case,
-            context={"prepared": prepared},
-        )
-    ).raw

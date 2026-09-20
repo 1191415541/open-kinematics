@@ -21,14 +21,10 @@ from suspension_multibody.cases import (
     SteeringShape,
     handling_case_document,
     handling_steering_signals,
-    run_handling_contract,
     vehicle_dynamic_model_document,
 )
-from suspension_multibody.cases.vehicle_dynamic import (
-    case_document as vehicle_case_document,
-)
-from suspension_multibody.kernel import run_contract
 from suspension_multibody.schema import Vec3
+from suspension_multibody.simulation import SimulationRequest, run_request
 from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "vehicle" / "test_native_vehicle.py"
@@ -96,7 +92,15 @@ def test_the_family_matches_an_independently_expanded_manoeuvre(
     )
     model_doc, model_blob = vehicle_dynamic_model_document(model, base)
     model_payload = pack_container(model_doc, model_blob)
-    produced = run_handling_contract(model_doc, model_payload=model_payload, case=document)
+    produced = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="handling",
+            model=model_doc,
+            case=document,
+            context={"model_payload": model_payload},
+        )
+    ).raw
 
     target, rate = handling_steering_signals(shapes, times)
     steering = replace(
@@ -104,18 +108,19 @@ def test_the_family_matches_an_independently_expanded_manoeuvre(
         target=np.asarray(target[actuator], dtype=float),
         target_rate=np.asarray(rate[actuator], dtype=float),
     )
-    explicit = replace(base, steering=steering)
-    explicit_case, explicit_blob = vehicle_case_document(model, case, explicit)
-    explicit_case = explicit_case | {
-        "time": document["time"],
-        "solver": document["solver"],
-    }
-    reference = run_contract(
-        model_doc,
-        explicit_case,
-        model_payload=model_payload,
-        case_payload=pack_container(explicit_case, explicit_blob),
-    )
+    # The explicit reference has to run on the solver block the family document
+    # declares, so it is prepared with that solver rather than the fixture
+    # case's own settings.
+    explicit = replace(base, steering=steering, solver=AxleSolverSettings())
+    reference = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="vehicle_dynamic",
+            model=model,
+            case=case,
+            context={"prepared": explicit},
+        )
+    ).raw
 
     assert produced.status == "success"
     difference = np.abs(produced.block("body_state") - reference.block("body_state"))
@@ -137,8 +142,12 @@ def test_a_closed_loop_manoeuvre_is_refused_by_name(prepared) -> None:
     document["handling"]["steering"][0]["shape"] = "iso_lane_change"
     model_doc, model_blob = vehicle_dynamic_model_document(model, base)
     with pytest.raises(Exception, match="not open-loop"):
-        run_handling_contract(
-            model_doc,
-            model_payload=pack_container(model_doc, model_blob),
-            case=document,
+        run_request(
+            SimulationRequest(
+                assembly="vehicle",
+                family="handling",
+                model=model_doc,
+                case=document,
+                context={"model_payload": pack_container(model_doc, model_blob)},
+            )
         )

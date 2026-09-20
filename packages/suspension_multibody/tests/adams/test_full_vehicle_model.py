@@ -939,7 +939,7 @@ def test_importer_uses_adams_source_files_and_builds_full_model() -> None:
     assert manifest["unit_normalization"]["status"] == "complete"
     assert manifest["native_tire_implementation"] == "exact_pac2002"
     assert "selected_combined_slip_coefficients" in manifest["native_tire_model_scope"]["implemented"]
-    assert manifest["adams_model_reduction"]["omitted_part_ids"]
+    assert manifest["adams_model_reduction"]["omitted_part_ids"] == ()
     assert "unsupported" in manifest["adams_force_law_mapping"]["spring"]
     source_inputs = manifest["source_drive_brake_input_contract"]
     assert source_inputs["source"]["drive"]["status"] == (

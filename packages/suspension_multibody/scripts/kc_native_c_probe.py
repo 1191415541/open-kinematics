@@ -105,7 +105,7 @@ def c_path_states(assembly, *, paths: tuple[str, ...]) -> list[dict[str, object]
     }
 
     records: list[dict[str, object]] = []
-    for index, entry in enumerate(run.cases()):
+    for index, entry in enumerate(run.cases):
         axis = paths[index // LEVELS]
         position_in_path = index % LEVELS
         if position_in_path == 0:

@@ -21,7 +21,6 @@ from typing import Any
 import numpy as np
 
 from ..axle_dynamics.schema import AxleSolverSettings
-from ..results.raw import RawContractResult
 from .vehicle_dynamic import _solver_block
 
 __all__ = [
@@ -29,7 +28,6 @@ __all__ = [
     "RoadComponent",
     "case_document",
     "road_signals",
-    "run_ride_random_road_contract",
 ]
 
 
@@ -129,20 +127,3 @@ def case_document(
             ],
         },
     }
-
-
-def run_ride_random_road_contract(
-    model_document: dict[str, Any], *, model_payload: bytes, case: dict[str, Any]
-) -> RawContractResult:
-    """Run one random-road case through the unified simulation runner."""
-    from ..simulation import SimulationRequest, run_request
-
-    return run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="ride_random_road",
-            model=model_document,
-            case=case,
-            context={"model_payload": model_payload},
-        )
-    ).raw

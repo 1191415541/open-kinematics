@@ -9,16 +9,17 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
     DEFAULT_SETTINGS,
     DEFAULT_TIMES,
 )
-from suspension_multibody.kernel import ContractRun, KernelContractError, run_contract
+from suspension_multibody.kernel import ContractRun, KernelContractError
 from suspension_multibody.model import build_front_axle
 from suspension_multibody.results import (
     ChannelRegistry,
     CommonResult,
+    decode_result,
 )
-from suspension_multibody.results.raw import decode_contract_run
+from suspension_multibody.simulation import SimulationRequest, run_request
 
 
-def _run() -> ContractRun:
+def _run():
     assembly = build_front_axle(benchmark_model(), "K")
     model = model_document(assembly, name="result-test", drive_wheels=True)
     case = case_document(
@@ -31,11 +32,18 @@ def _run() -> ContractRun:
         settings=DEFAULT_SETTINGS,
         drive_wheels=True,
     )
-    return run_contract(model, case)
+    return run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model,
+            case=case,
+        )
+    ).raw
 
 
 def test_neutral_result_decodes_common_contract_surface() -> None:
-    result = decode_contract_run(_run())
+    result = decode_result(_run(), assembly="axle", family="kc_quasi_static")
 
     assert isinstance(result, CommonResult)
     assert result.status == "success"
@@ -51,7 +59,7 @@ def test_neutral_result_decodes_common_contract_surface() -> None:
 
 
 def test_neutral_result_preserves_model_metadata_and_read_only_arrays() -> None:
-    result = decode_contract_run(_run())
+    result = decode_result(_run(), assembly="axle", family="kc_quasi_static")
 
     assert result.tire_names == ()
     with pytest.raises(ValueError):
@@ -89,7 +97,7 @@ def test_neutral_result_tire_metadata_and_block_access() -> None:
         model_document={"tires": [{"name": "tire_L"}]},
         times_s=np.array([0.0, 0.1]),
     )
-    result = decode_contract_run(run)
+    result = decode_result(run, assembly="axle", family="kc_quasi_static")
 
     assert result.tire_names == ("tire_L",)
     assert result.tire_state("tire_L").shape == (2, 41)

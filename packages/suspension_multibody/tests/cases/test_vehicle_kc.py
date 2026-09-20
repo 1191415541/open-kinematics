@@ -48,12 +48,12 @@ import pytest
 
 from suspension_multibody.axle_dynamics.schema import AxleSolverSettings
 from suspension_multibody.cases import (
-    run_vehicle_kc_contract,
     vehicle_kc_case_document,
     vehicle_kc_model_document,
 )
 from suspension_multibody.core.spatial import quaternion_to_matrix
 from suspension_multibody.schema import Bushing6x6, Pose, Vec3
+from suspension_multibody.simulation import SimulationRequest, run_request
 from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "vehicle" / "test_native_vehicle.py"
@@ -138,9 +138,19 @@ def _run(prepared, *, wheels, mode):
         left_right_mode=mode,
     )
     document = vehicle_kc_model_document(model, base)
-    run = run_vehicle_kc_contract(
-        document, case=sweep, wheels=(), assembly=base.assembly
-    )
+    run = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="vehicle_kc",
+            model=document,
+            case=sweep,
+            context={
+                "model_document_pair": document,
+                "wheels": (),
+                "vehicle_assembly": base.assembly,
+            },
+        )
+    ).raw
     return run, base
 
 
@@ -225,6 +235,16 @@ def test_an_unknown_mode_is_refused(prepared) -> None:
     sweep["k"]["left_right_mode"] = "diagonal"
     document = vehicle_kc_model_document(model, base)
     with pytest.raises(Exception, match="left_right_mode"):
-        run_vehicle_kc_contract(
-            document, case=sweep, wheels=(), assembly=base.assembly
+        run_request(
+            SimulationRequest(
+                assembly="vehicle",
+                family="vehicle_kc",
+                model=document,
+                case=sweep,
+                context={
+                    "model_document_pair": document,
+                    "wheels": (),
+                    "vehicle_assembly": base.assembly,
+                },
+            )
         )

@@ -33,9 +33,14 @@
 - 不修改 C++ native、ABI、contract version、物理方程、通道顺序和 manifest hash。
 
 ## 验收
+
 - 旧实现已删除或明确列为历史读取兼容，不再产生新格式。
-- 全局验收命令和专项门禁全部通过。
+- 专项 pytest 仅覆盖 `suspension_multibody` 包及其测试目录，避免把全仓无关测试纳入任务 8 的时间预算。
 - Epic 真源与实际代码状态一致，可从冷启动恢复。
 
-## 验证
-`uv run --all-packages pytest && uv run --all-packages ruff check packages/suspension_multibody/src packages/suspension_multibody/tests && uv run --all-packages ty check . && git diff --check`
+## 验证证据
+
+- 专项 pytest：`566 passed, 47 skipped, 1 xfailed`。
+- architecture/CLI：`49 passed`；strict allowlist：`0 entries / 0 findings`。
+- `ruff`、`compileall`、`ty check .`、`git diff --check` 全部通过。
+- 历史 `DynamicResultBundle` 读取边界保留，新生产路径不创建旧 bundle。

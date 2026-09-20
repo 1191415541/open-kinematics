@@ -21,13 +21,9 @@ from suspension_multibody.cases import (
     RoadComponent,
     ride_random_road_case_document,
     ride_random_road_signals,
-    run_ride_random_road_contract,
     vehicle_dynamic_model_document,
 )
-from suspension_multibody.cases.vehicle_dynamic import (
-    case_document as vehicle_case_document,
-)
-from suspension_multibody.kernel import run_contract
+from suspension_multibody.simulation import SimulationRequest, run_request
 from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "vehicle" / "test_native_vehicle.py"
@@ -87,23 +83,35 @@ def test_the_family_matches_an_independently_expanded_road(prepared) -> None:
     )
     model_doc, model_blob = vehicle_dynamic_model_document(model, base)
     model_payload = pack_container(model_doc, model_blob)
-    produced = run_ride_random_road_contract(
-        model_doc, model_payload=model_payload, case=document
-    )
+    produced = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="ride_random_road",
+            model=model_doc,
+            case=document,
+            context={"model_payload": model_payload},
+        )
+    ).raw
 
     height, velocity = ride_random_road_signals(wheels, 20.0, times)
-    explicit = replace(base, road_height=height, road_velocity=velocity)
-    explicit_case, explicit_blob = vehicle_case_document(model, case, explicit)
-    explicit_case = explicit_case | {
-        "time": document["time"],
-        "solver": document["solver"],
-    }
-    reference = run_contract(
-        model_doc,
-        explicit_case,
-        model_payload=model_payload,
-        case_payload=pack_container(explicit_case, explicit_blob),
+    # The explicit reference has to run on the solver block the family document
+    # declares, so it is prepared with that solver rather than the fixture
+    # case's own settings.
+    explicit = replace(
+        base,
+        road_height=height,
+        road_velocity=velocity,
+        solver=AxleSolverSettings(),
     )
+    reference = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="vehicle_dynamic",
+            model=model,
+            case=case,
+            context={"prepared": explicit},
+        )
+    ).raw
 
     difference = np.abs(produced.block("body_state") - reference.block("body_state"))
     assert float(difference.max()) < 1e-12, f"max difference {difference.max():.3e}"
@@ -119,10 +127,14 @@ def test_a_component_without_a_wavelength_is_refused(prepared) -> None:
     )
     model_doc, model_blob = vehicle_dynamic_model_document(model, base)
     with pytest.raises(Exception, match="positive wavelength|wavelength"):
-        run_ride_random_road_contract(
-            model_doc,
-            model_payload=pack_container(model_doc, model_blob),
-            case=document,
+        run_request(
+            SimulationRequest(
+                assembly="vehicle",
+                family="ride_random_road",
+                model=model_doc,
+                case=document,
+                context={"model_payload": pack_container(model_doc, model_blob)},
+            )
         )
 
 
@@ -136,8 +148,12 @@ def test_an_unknown_wheel_is_refused(prepared) -> None:
     )
     model_doc, model_blob = vehicle_dynamic_model_document(model, base)
     with pytest.raises(Exception, match="unknown tire"):
-        run_ride_random_road_contract(
-            model_doc,
-            model_payload=pack_container(model_doc, model_blob),
-            case=document,
+        run_request(
+            SimulationRequest(
+                assembly="vehicle",
+                family="ride_random_road",
+                model=model_doc,
+                case=document,
+                context={"model_payload": pack_container(model_doc, model_blob)},
+            )
         )

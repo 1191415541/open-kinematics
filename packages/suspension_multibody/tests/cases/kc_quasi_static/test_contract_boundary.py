@@ -16,6 +16,7 @@ assembly are gone.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 
 import numpy as np
 import pytest
@@ -30,10 +31,42 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
     DEFAULT_SETTINGS,
     DEFAULT_TIMES,
 )
-from suspension_multibody.kernel import contract_version, run_contract
+from suspension_multibody.kernel import contract_version
 from suspension_multibody.model import build_front_axle
+from suspension_multibody.simulation import (
+    CompilerRegistry,
+    DocumentPairCompiler,
+    SimulationRequest,
+    run_request,
+)
 
 from .kc_fixtures import _c_tolerance, _compliant_model, _k_tolerance, _snapshot
+
+
+def _run(model: dict, case: dict):
+    """Run one K+C document pair through the unified simulation runner."""
+    return run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model,
+            case=case,
+        )
+    ).raw
+
+
+def _plain_document(value):
+    """
+    Return the JSON value tree behind a read-only result document.
+
+    ``RawContractResult`` freezes what the kernel wrote, so the schema and JSON
+    checks unwind the mapping proxies before reading the document.
+    """
+    if isinstance(value, Mapping):
+        return {key: _plain_document(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain_document(item) for item in value]
+    return value
 
 
 def test_contract_entry_point_reports_its_version() -> None:
@@ -102,14 +135,14 @@ def test_result_document_satisfies_the_result_schema() -> None:
         settings=DEFAULT_SETTINGS,
         drive_wheels=True,
     )
-    run = run_contract(model, case)
-    validate_result(run.document)
+    run = _run(model, case)
+    validate_result(_plain_document(run.document))
     identity = run.document["case_identity"]
     assert len(identity["model_sha256"]) == 64
     assert len(identity["case_sha256"]) == 64
     # The expanded case list is the kernel's answer, not the document's: one
     # document asked for a one-point grid and got exactly that.
-    assert [entry["name"] for entry in run.cases()] == ["k-w+0-r+0"]
+    assert [entry["name"] for entry in run.cases] == ["k-w+0-r+0"]
 
 
 def test_an_unimplemented_family_fails_closed() -> None:
@@ -130,8 +163,22 @@ def test_an_unimplemented_family_fails_closed() -> None:
     # is the stable choice: it is a comparison gate rather than a solver family,
     # so it is never going to be implemented here.
     case["family"] = "comparison"
+    # The family is declared in the contract but has no compiler behind it, and
+    # the kernel is the layer that has to refuse it by name.  Carrying the pair
+    # through a document-pair compiler is what reaches that refusal; the runner
+    # itself would stop one step earlier, at "no compiler registered".
+    registry = CompilerRegistry()
+    registry.register(DocumentPairCompiler("axle", "comparison"))
     with pytest.raises(Exception, match="not implemented"):
-        run_contract(model, case)
+        run_request(
+            SimulationRequest(
+                assembly="axle",
+                family="comparison",
+                model=model,
+                case=case,
+            ),
+            registry=registry,
+        )
 
 
 def test_the_case_layer_expands_the_grid_and_the_load_paths() -> None:
@@ -147,9 +194,9 @@ def test_the_case_layer_expands_the_grid_and_the_load_paths() -> None:
         settings=DEFAULT_SETTINGS,
         drive_wheels=True,
     )
-    run = run_contract(model, case)
-    names = [entry["name"] for entry in run.cases()]
+    run = _run(model, case)
+    names = [entry["name"] for entry in run.cases]
     assert names == ["k-w-10-r-5", "k-w-10-r+5", "k-w+10-r-5", "k-w+10-r+5"]
     bodies = run.document["manifest"]["bodies"]
     assert run.block("body_state").shape == (4 * len(DEFAULT_TIMES), len(bodies), 19)
-    assert json.dumps(run.document, sort_keys=True)
+    assert json.dumps(_plain_document(run.document), sort_keys=True)

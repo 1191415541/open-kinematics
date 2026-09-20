@@ -22,13 +22,9 @@ from suspension_multibody.cases import (
     FourPostCorner,
     ride_four_post_case_document,
     ride_four_post_corner_signals,
-    run_ride_four_post_contract,
     vehicle_dynamic_model_document,
 )
-from suspension_multibody.cases.vehicle_dynamic import (
-    case_document as vehicle_case_document,
-)
-from suspension_multibody.kernel import run_contract
+from suspension_multibody.simulation import SimulationRequest, run_request
 from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "vehicle" / "test_native_vehicle.py"
@@ -68,27 +64,37 @@ def test_the_family_matches_an_independently_sampled_excitation(prepared) -> Non
         name="four-post", corners=_CORNERS, times_s=times, settings=settings
     )
     model_doc, model_blob = vehicle_dynamic_model_document(model, base)
-    produced = run_ride_four_post_contract(
-        model_doc,
-        model_payload=pack_container(model_doc, model_blob),
-        case=document,
-    )
+    produced = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="ride_four_post",
+            model=model_doc,
+            case=document,
+            context={"model_payload": pack_container(model_doc, model_blob)},
+        )
+    ).raw
 
     # The same excitation, computed here rather than by the kernel, handed to
     # the vehicle family as explicit per-tire tables.
     height, velocity = ride_four_post_corner_signals(_CORNERS, times)
-    explicit = replace(base, road_height=height, road_velocity=velocity)
-    explicit_case, explicit_blob = vehicle_case_document(model, case, explicit)
-    explicit_case = explicit_case | {
-        "time": document["time"],
-        "solver": document["solver"],
-    }
-    reference = run_contract(
-        model_doc,
-        explicit_case,
-        model_payload=pack_container(model_doc, model_blob),
-        case_payload=pack_container(explicit_case, explicit_blob),
+    # The explicit reference has to run on the solver block the family document
+    # declares, so it is prepared with that solver rather than the fixture
+    # case's own settings.
+    explicit = replace(
+        base,
+        road_height=height,
+        road_velocity=velocity,
+        solver=AxleSolverSettings(),
     )
+    reference = run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="vehicle_dynamic",
+            model=model,
+            case=case,
+            context={"prepared": explicit},
+        )
+    ).raw
 
     assert produced.status == "success"
     assert reference.status == "success"
@@ -110,8 +116,12 @@ def test_a_corner_without_a_shape_is_rejected(prepared) -> None:
     document["four_post"]["corners"][0]["tire"] = "not_a_wheel"
     model_doc, model_blob = vehicle_dynamic_model_document(model, base)
     with pytest.raises(Exception, match="unknown tire"):
-        run_ride_four_post_contract(
-            model_doc,
-            model_payload=pack_container(model_doc, model_blob),
-            case=document,
+        run_request(
+            SimulationRequest(
+                assembly="vehicle",
+                family="ride_four_post",
+                model=model_doc,
+                case=document,
+                context={"model_payload": pack_container(model_doc, model_blob)},
+            )
         )

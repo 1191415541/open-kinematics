@@ -95,8 +95,25 @@ def _is_history_compat_owner(path: Path) -> bool:
         or path_text.endswith("/adams/time_domain.py")
     )
 
+_TEST_RULES = frozenset(
+    {
+        # The native facade and the direct contract/decoder bypasses are scanned
+        # in test sources too: a test that reaches a retired boundary keeps the
+        # boundary alive, so it is held to the same rule as production code.
+        # The artifact writers and the historical result bundle stay out of test
+        # scope, where tests may still name them as legacy read fixtures.
+        "axle_native_facade_import",
+        "direct_case_contract_call",
+        "direct_case_contract_import",
+        "direct_kernel_run_contract",
+        "direct_raw_decoder",
+    }
+)
 
-def _scan_file(path: Path, *, test_native_only: bool = False) -> list[BoundaryFinding]:
+
+def _scan_file(
+    path: Path, *, rules: frozenset[str] | None = None
+) -> list[BoundaryFinding]:
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source)
     scope = _scope_for_path(path)
@@ -105,6 +122,8 @@ def _scan_file(path: Path, *, test_native_only: bool = False) -> list[BoundaryFi
     stack: list[str] = []
 
     def add(rule: str, symbol: str, node: ast.AST) -> None:
+        if rules is not None and rule not in rules:
+            return
         findings.append(
             BoundaryFinding(
                 path=relative,
@@ -127,12 +146,7 @@ def _scan_file(path: Path, *, test_native_only: bool = False) -> list[BoundaryFi
                 imported_name = alias.name
                 bound_name = alias.asname or imported_name.split(".")[-1]
                 if _is_native_facade_import(module, imported_name):
-                    if test_native_only and scope == "test":
-                        add("axle_native_facade_import", imported_name, node)
-                    elif not test_native_only:
-                        add("axle_native_facade_import", imported_name, node)
-                if test_native_only:
-                    continue
+                    add("axle_native_facade_import", imported_name, node)
                 if bound_name == "run_contract" and module and module.endswith(".kernel"):
                     if not _is_backend_owner(path, scope, function_scope):
                         add("direct_kernel_run_contract", bound_name, node)
@@ -154,14 +168,13 @@ def _scan_file(path: Path, *, test_native_only: bool = False) -> list[BoundaryFi
                     add("dynamic_bundle_reference", bound_name, node)
 
         elif isinstance(node, ast.Import):
-            if not test_native_only:
-                for alias in node.names:
-                    imported_name = alias.name.split(".")[-1]
-                    if imported_name == "run_contract" and alias.name.endswith(
-                        ".kernel.run_contract"
-                    ):
-                        if not _is_backend_owner(path, scope, function_scope):
-                            add("direct_kernel_run_contract", imported_name, node)
+            for alias in node.names:
+                imported_name = alias.name.split(".")[-1]
+                if imported_name == "run_contract" and alias.name.endswith(
+                    ".kernel.run_contract"
+                ):
+                    if not _is_backend_owner(path, scope, function_scope):
+                        add("direct_kernel_run_contract", imported_name, node)
 
         elif isinstance(node, ast.Call):
             function = node.func
@@ -172,25 +185,24 @@ def _scan_file(path: Path, *, test_native_only: bool = False) -> list[BoundaryFi
                 if isinstance(function, ast.Attribute)
                 else ""
             )
-            if not test_native_only:
-                if called_name == "run_contract":
-                    if not _is_backend_owner(path, scope, function_scope):
-                        add("direct_kernel_run_contract", called_name, node)
-                if _is_case_contract_name(called_name) and not relative.startswith(
-                    "packages/suspension_multibody/src/suspension_multibody/cases/"
-                ):
-                    add("direct_case_contract_call", called_name, node)
-                if called_name == "decode_contract_run" and not _is_result_decoder_owner(path):
-                    add("direct_raw_decoder", called_name, node)
-                if called_name in {
-                    "write_bundle",
-                    "write_dynamic_bundle",
-                    "write_axle_dynamics_artifact",
-                    "write_vehicle_dynamics_artifact",
-                }:
-                    add("legacy_artifact_writer", called_name, node)
-                if called_name == "DynamicResultBundle" and not _is_history_compat_owner(path):
-                    add("dynamic_bundle_creation", called_name, node)
+            if called_name == "run_contract":
+                if not _is_backend_owner(path, scope, function_scope):
+                    add("direct_kernel_run_contract", called_name, node)
+            if _is_case_contract_name(called_name) and not relative.startswith(
+                "packages/suspension_multibody/src/suspension_multibody/cases/"
+            ):
+                add("direct_case_contract_call", called_name, node)
+            if called_name == "decode_contract_run" and not _is_result_decoder_owner(path):
+                add("direct_raw_decoder", called_name, node)
+            if called_name in {
+                "write_bundle",
+                "write_dynamic_bundle",
+                "write_axle_dynamics_artifact",
+                "write_vehicle_dynamics_artifact",
+            }:
+                add("legacy_artifact_writer", called_name, node)
+            if called_name == "DynamicResultBundle" and not _is_history_compat_owner(path):
+                add("dynamic_bundle_creation", called_name, node)
 
         for child in ast.iter_child_nodes(node):
             visit(child)
@@ -207,7 +219,7 @@ def _scan_repository() -> list[BoundaryFinding]:
         for path in sorted(root.rglob("*.py")):
             findings.extend(_scan_file(path))
     for path in sorted(TEST_ROOT.rglob("*.py")):
-        findings.extend(_scan_file(path, test_native_only=True))
+        findings.extend(_scan_file(path, rules=_TEST_RULES))
     return findings
 
 
@@ -282,6 +294,22 @@ def test_boundary_gate_rejects_new_direct_native_bypass() -> None:
         )
         findings = _scan_file(fixture)
     assert any(finding.rule == "direct_kernel_run_contract" for finding in findings)
+
+
+def test_boundary_gate_scans_test_sources_for_the_same_bypasses() -> None:
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        fixture = Path(temporary_directory) / "tests" / "fixture.py"
+        fixture.parent.mkdir()
+        fixture.write_text(
+            "from suspension_multibody.kernel import run_contract\n"
+            "\n"
+            "def bypass(model, case):\n"
+            "    return run_contract(model, case)\n",
+            encoding="utf-8",
+        )
+        findings = _scan_file(fixture, rules=_TEST_RULES)
+    assert all(finding.scope == "test" for finding in findings)
+    assert {finding.rule for finding in findings} == {"direct_kernel_run_contract"}
 
 
 def test_backend_is_the_only_direct_kernel_submission_owner() -> None:

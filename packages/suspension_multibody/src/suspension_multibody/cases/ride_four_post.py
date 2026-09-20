@@ -20,10 +20,9 @@ from typing import Any
 import numpy as np
 
 from ..axle_dynamics.schema import AxleSolverSettings
-from ..results.raw import RawContractResult
 from .vehicle_dynamic import _solver_block
 
-__all__ = ["FourPostCorner", "case_document", "run_ride_four_post_contract"]
+__all__ = ["FourPostCorner", "case_document"]
 
 
 @dataclass(frozen=True)
@@ -102,23 +101,3 @@ def corner_signals(
         height[corner.tire] = float(corner.offset_m) + float(corner.amplitude_m) * np.sin(angle)
         velocity[corner.tire] = float(corner.amplitude_m) * angular * np.cos(angle)
     return height, velocity
-
-
-def run_ride_four_post_contract(
-    model_document: dict[str, Any],
-    *,
-    model_payload: bytes,
-    case: dict[str, Any],
-) -> RawContractResult:
-    """Run one four-post case through the unified simulation runner."""
-    from ..simulation import SimulationRequest, run_request
-
-    return run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="ride_four_post",
-            model=model_document,
-            case=case,
-            context={"model_payload": model_payload},
-        )
-    ).raw

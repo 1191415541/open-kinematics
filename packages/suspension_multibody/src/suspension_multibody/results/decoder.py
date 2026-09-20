@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ..kernel import ContractRun
-from .raw import RawContractResult, decode_contract_run
+from .raw import RawContractResult, _decode_contract_run
 
 Decoder = Callable[..., Any]
 
@@ -56,7 +56,7 @@ def decode_result(
 
     if isinstance(run, RawContractResult):
         return run
-    return decode_contract_run(run)
+    return _decode_contract_run(run)
 
 
 def decoder_for(assembly: str, family: str) -> Decoder:

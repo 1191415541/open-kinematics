@@ -1,7 +1,7 @@
 id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
-1,执行全仓旧入口与旁路扫描,TODO,确认 native/decoder/writer 只剩允许位置且 allowlist 可清零,uv run --all-packages python -m compileall -q packages/suspension_multibody/src packages/suspension_multibody/tests scripts,,0,
-2,删除无调用方兼容 facade 和重复实现,TODO,删除前置条件全部满足且引用清零,git diff --check,,0,
-3,清理导出/测试/脚本/文档残留,TODO,无失效导入和命令；兼容 facade 测试已改为 strict 断言,uv run --all-packages pytest packages/suspension_multibody/tests/architecture packages/suspension_multibody/tests/cli -q,,0,
-4,运行专项回归与结果/artifact 重读,TODO,成功/partial/failed/diagnostics/performance/TimeSeriesResult 全部通过,uv run --all-packages pytest packages/suspension_multibody/tests -q,,0,
-5,运行静态类型/语法/格式门禁,TODO,ruff、compileall、ty check、diff check 全通过,uv run --all-packages ruff check packages/suspension_multibody/src packages/suspension_multibody/tests && uv run --all-packages python -m compileall -q packages/suspension_multibody/src packages/suspension_multibody/tests scripts && uv run --all-packages ty check . && git diff --check,,0,
-6,切换 strict gate 并更新 Epic 真源,TODO,8 个子任务 DONE 且 Epic 可标记 DONE,git diff --check,,0,
+1,执行全仓旧入口与旁路扫描,DONE,确认 native/decoder/writer 只剩允许位置且 allowlist 可清零,uv run --package suspension-multibody pytest packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py -q,2026-09-20,0,"strict allowlist=0；生产 kernel.run_contract 仅剩 NativeContractBackend；旧 facade/decoder/writer/直接 native 调用清零"
+2,删除无调用方兼容 facade 和重复实现,DONE,删除前置条件全部满足且引用清零,git diff --check,2026-09-20,0,"删除六个 cases run_*_contract facade、axle_dynamics.native 旧入口及重复 writer 残留"
+3,清理导出/测试/脚本/文档残留,DONE,无失效导入和命令；兼容 facade 测试已改为 strict 断言,uv run --package suspension-multibody pytest packages/suspension_multibody/tests/architecture packages/suspension_multibody/tests/cli -q,2026-09-20,0,"49 passed；K&C 测试、Adams、probe、parity 脚本统一使用 cases 属性和 run_request"
+4,运行专项回归与结果/artifact 重读,DONE,成功/partial/failed/diagnostics/performance/TimeSeriesResult 全部通过,uv run --package suspension-multibody pytest packages/suspension_multibody/tests -q,2026-09-20,0,"566 passed, 47 skipped, 1 xfailed"
+5,运行静态类型/语法/格式门禁,DONE,ruff、compileall、ty check、diff check 全通过,uv run --all-packages ruff check packages/suspension_multibody/src packages/suspension_multibody/tests && uv run --all-packages python -m compileall -q packages/suspension_multibody/src packages/suspension_multibody/tests packages/suspension_multibody/scripts && uv run --all-packages ty check . && git diff --check,2026-09-20,0,"全部通过；compileall 使用仓库实际存在的 packages/suspension_multibody/scripts 路径"
+6,切换 strict gate 并更新 Epic 真源,DONE,8 个子任务 DONE 且 Epic 可标记 DONE,git diff --check,2026-09-20,0,"任务 8 完成；父级 SUBTASKS/PROGRESS 与 EPIC 已同步为 DONE"

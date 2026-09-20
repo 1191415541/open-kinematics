@@ -19,8 +19,8 @@ from suspension_contracts import validate_case
 
 from suspension_multibody.analysis.benchmarks import benchmark_model
 from suspension_multibody.cases.kc_quasi_static import model_document
-from suspension_multibody.kernel import run_contract
 from suspension_multibody.model import build_front_axle
+from suspension_multibody.simulation import SimulationRequest, run_request
 
 _TIMES = {"start_s": 0.0, "end_s": 1e-3, "step_s": 1e-3}
 
@@ -43,14 +43,26 @@ def _case(*, body_wrench: list[dict] | None = None) -> dict:
     }
 
 
+def _run(model: dict, case: dict):
+    """Run one K document pair through the unified simulation runner."""
+    return run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model,
+            case=case,
+        )
+    ).raw
+
+
 def test_a_body_wrench_moves_the_reactions_and_not_the_kinematics() -> None:
     assembly = build_front_axle(benchmark_model(), "K")
     model = model_document(assembly, name="k-body-wrench", drive_wheels=True)
     loaded_case = _case(body_wrench=[{"body": "upright_L", "wrench": [100.0, 0.0, 0.0, 0.0, 5000.0, 0.0]}])
     validate_case(loaded_case)
 
-    unloaded = run_contract(model, _case())
-    loaded = run_contract(model, loaded_case)
+    unloaded = _run(model, _case())
+    loaded = _run(model, loaded_case)
 
     # The pose, not the whole row: the unused rate columns carry NaNs on both
     # sides, and the force changes the Newton path by round-off even though the
@@ -71,4 +83,4 @@ def test_an_unknown_body_in_a_body_wrench_is_refused() -> None:
     model = model_document(assembly, name="k-body-wrench", drive_wheels=True)
     case = _case(body_wrench=[{"body": "no_such_body", "wrench": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]}])
     with pytest.raises(Exception, match="no_such_body"):
-        run_contract(model, case)
+        _run(model, case)

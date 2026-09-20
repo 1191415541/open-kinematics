@@ -24,12 +24,10 @@ import numpy as np
 
 from ..axle_dynamics.schema import AxleDynamicsCase, AxleDynamicsModel
 from ..kernel.solver import solver_settings_document
-from ..results.raw import RawContractResult
 
 __all__ = [
     "case_document",
     "model_document",
-    "run_axle_dynamic_contract",
 ]
 
 #: The document is written in the units the objects already use, so every
@@ -529,19 +527,3 @@ def case_document(
         "blobs": tables,
     }
     return document, bytes(blob)
-
-
-def run_axle_dynamic_contract(
-    model: AxleDynamicsModel, case: AxleDynamicsCase
-) -> RawContractResult:
-    """Run one time history through the unified simulation runner."""
-    from ..simulation import SimulationRequest, run_request
-
-    return run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="axle_dynamic",
-            model=model,
-            case=case,
-        )
-    ).raw

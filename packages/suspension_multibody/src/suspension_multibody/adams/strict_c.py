@@ -248,7 +248,7 @@ def _c_path_records(assembly, load_path: LoadPath) -> list[dict[str, object]]:
     }
     axis_index = tuple(load.name for load in LOAD_PATHS).index(load_path.name)
     records: list[dict[str, object]] = []
-    for index, entry in enumerate(run.cases()):
+    for index, entry in enumerate(run.cases):
         position_in_path = index % load_path.levels
         if position_in_path == 0:
             level = -load_path.maximum

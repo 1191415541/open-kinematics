@@ -19,10 +19,9 @@ from typing import Any, Literal
 import numpy as np
 
 from ..axle_dynamics.schema import AxleSolverSettings
-from ..results.raw import RawContractResult
 from .vehicle_dynamic import _solver_block
 
-__all__ = ["SteeringShape", "case_document", "run_handling_contract", "steering_signals"]
+__all__ = ["SteeringShape", "case_document", "steering_signals"]
 
 ShapeKind = Literal["constant", "ramp", "step", "sine"]
 
@@ -125,20 +124,3 @@ def case_document(
             ]
         },
     }
-
-
-def run_handling_contract(
-    model_document: dict[str, Any], *, model_payload: bytes, case: dict[str, Any]
-) -> RawContractResult:
-    """Run one handling manoeuvre through the unified simulation runner."""
-    from ..simulation import SimulationRequest, run_request
-
-    return run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="handling",
-            model=model_document,
-            case=case,
-            context={"model_payload": model_payload},
-        )
-    ).raw

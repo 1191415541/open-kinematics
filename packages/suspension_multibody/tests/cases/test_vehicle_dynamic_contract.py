@@ -15,8 +15,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from suspension_multibody.cases.vehicle_dynamic import run_vehicle_dynamics_contract
 from suspension_multibody.schema import RoadSurfaceSpec, TimeSignal, Vec3
+from suspension_multibody.simulation import SimulationRequest, run_request
+from suspension_multibody.vehicle_dynamics import prepare_vehicle_run
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "vehicle" / "test_native_vehicle.py"
 
@@ -34,6 +35,19 @@ def fixture():
     return _fixture()
 
 
+def _run(model, case):
+    """Run one case through the unified runner on the default preparation."""
+    return run_request(
+        SimulationRequest(
+            assembly="vehicle",
+            family="vehicle_dynamic",
+            model=model,
+            case=case,
+            context={"prepared": prepare_vehicle_run(model, case)},
+        )
+    ).raw
+
+
 @pytest.mark.parametrize("kind", ["native_brush", "pac2002", "fiala"])
 def test_contract_path_runs_every_tire_model(fixture, kind: str) -> None:
     base = fixture._positioned_vehicle(fixture._vehicle())
@@ -48,22 +62,22 @@ def test_contract_path_runs_every_tire_model(fixture, kind: str) -> None:
         }
     )
     case = fixture._case(model)
-    produced = run_vehicle_dynamics_contract(model, case)
+    produced = _run(model, case)
     assert produced.status == "success"
-    assert [entry["name"] for entry in produced.cases()] == [case.name]
+    assert [entry["name"] for entry in produced.cases] == [case.name]
     assert produced.block("body_state").shape[1] == len(produced.document["manifest"]["bodies"])
 
 
 def test_nondefault_road_and_initial_state_are_case_inputs(fixture) -> None:
     model = fixture._positioned_vehicle(fixture._vehicle())
-    default = run_vehicle_dynamics_contract(model, fixture._case(model))
+    default = _run(model, fixture._case(model))
     case = fixture._case(model).model_copy(
         update={
             "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
             "initial_states": fixture._uniform_velocity_initial_states(model),
         }
     )
-    changed = run_vehicle_dynamics_contract(model, case)
+    changed = _run(model, case)
     assert changed.status == "success"
     assert not np.array_equal(
         changed.block("body_state"), default.block("body_state")
@@ -92,7 +106,7 @@ def test_a_measured_vertical_table_reaches_the_contract(fixture) -> None:
             )
         }
     )
-    produced = run_vehicle_dynamics_contract(model, fixture._case(model))
+    produced = _run(model, fixture._case(model))
     assert produced.status == "success"
     assert produced.block("tire_output").shape == (2, 4, 41)
 

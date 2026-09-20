@@ -25,7 +25,7 @@ import numpy as np
 import pytest
 
 from suspension_multibody.axle_dynamics import run_axle_dynamics
-from suspension_multibody.cases import run_axle_dynamic_contract
+from suspension_multibody.simulation import SimulationRequest, run_request
 
 _SCRIPT = (
     Path(__file__).resolve().parents[2] / "scripts" / "run_axle_dynamics_acceptance.py"
@@ -97,7 +97,11 @@ def test_a_driven_coordinate_survives_the_contract_path() -> None:
         rate=tuple(2.0 for _ in range(101)),
     )
     reference = run_axle_dynamics(model, case)
-    produced = run_axle_dynamic_contract(model, case)
+    produced = run_request(
+        SimulationRequest(
+            assembly="axle", family="axle_dynamic", model=model, case=case
+        )
+    ).raw
 
     assert produced.block("constraint_wrench").shape == reference.constraint_wrench.shape, (
         "the contract path dropped a constraint row"
@@ -136,10 +140,14 @@ def test_contract_path_reproduces_the_ctypes_path(acceptance, case_name: str) ->
     model = acceptance.build_axle_model()
     case = acceptance.build_case(case_name)
     reference = run_axle_dynamics(model, case)
-    produced = run_axle_dynamic_contract(model, case)
+    produced = run_request(
+        SimulationRequest(
+            assembly="axle", family="axle_dynamic", model=model, case=case
+        )
+    ).raw
 
     assert produced.status == "success"
-    assert [entry["name"] for entry in produced.cases()] == [case_name]
+    assert [entry["name"] for entry in produced.cases] == [case_name]
     assert np.array_equal(produced.block("body_state"), reference.states)
     for block, ledger in (
         ("constraint_wrench", reference.constraint_wrench),
@@ -194,21 +202,36 @@ def test_the_case_document_describes_its_sample_tables(acceptance) -> None:
 
 
 def test_an_unknown_blob_role_is_rejected(acceptance) -> None:
+    from suspension_contracts import pack_container
+
+    from suspension_multibody.cases import axle_dynamic_model_document
     from suspension_multibody.cases.axle_dynamic import case_document
-    from suspension_multibody.kernel import KernelContractError, run_contract
+    from suspension_multibody.kernel import KernelContractError
+    from suspension_multibody.simulation import (
+        CompilerRegistry,
+        DocumentPairCompiler,
+        SimulationRequest,
+        run_request,
+    )
 
     model = acceptance.build_axle_model()
     # `static_equilibrium` carries no sample tables at all, so this needs a
     # case that does before there is a role to corrupt.
     document, blob = case_document(model, acceptance.build_case("road_pulse"))
     document["blobs"][0]["role"] = "road_curvature"
-    from suspension_contracts import pack_container
-
-    from suspension_multibody.cases import axle_dynamic_model_document
-
+    # The pair is authored here rather than by a family compiler, so the
+    # document-pair compiler is what carries it; the kernel is still the layer
+    # that has to refuse the role instead of running a case it cannot read.
+    registry = CompilerRegistry()
+    registry.register(DocumentPairCompiler("axle", "axle_dynamic"))
     with pytest.raises(KernelContractError, match="unknown blob role"):
-        run_contract(
-            axle_dynamic_model_document(model)[0],
-            document,
-            case_payload=pack_container(document, blob),
+        run_request(
+            SimulationRequest(
+                assembly="axle",
+                family="axle_dynamic",
+                model=axle_dynamic_model_document(model)[0],
+                case=document,
+                context={"case_payload": pack_container(document, blob)},
+            ),
+            registry=registry,
         )

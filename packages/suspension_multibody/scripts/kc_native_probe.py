@@ -67,7 +67,7 @@ def k_grid_states(assembly) -> list[dict[str, object]]:
     left_states = run.body_state("upright_L")
     right_states = run.body_state("upright_R")
     records: list[dict[str, object]] = []
-    for index, entry in enumerate(run.cases()):
+    for index, entry in enumerate(run.cases):
         wheel = WHEEL_VALUES_MM[index // len(RACK_VALUES_MM)]
         rack = RACK_VALUES_MM[index % len(RACK_VALUES_MM)]
         case_id = f"k-w{wheel:+.0f}-r{rack:+.0f}"

@@ -19,8 +19,8 @@ import numpy as np
 import pytest
 
 from suspension_multibody.cases.kc_quasi_static import case_document, model_document
-from suspension_multibody.kernel import run_contract
 from suspension_multibody.model import build_front_axle
+from suspension_multibody.simulation import SimulationRequest, run_request
 
 from .kc_fixtures import _compliant_model
 
@@ -46,6 +46,18 @@ def _c_case(loads, *, side_mode: str = "single", mirror: bool = True) -> dict:
     }
 
 
+def _run(model: dict, case: dict):
+    """Run one C document pair through the unified simulation runner."""
+    return run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=model,
+            case=case,
+        )
+    ).raw
+
+
 def _upright_names() -> tuple[str, str]:
     return "upright_L", "upright_R"
 
@@ -55,7 +67,7 @@ def test_a_mirror_is_required_when_both_sides_are_loaded() -> None:
     model = model_document(assembly, name="c-loads", drive_wheels=False)
     case = _c_case([{"fz": 100.0}], side_mode="symmetric", mirror=False)
     with pytest.raises(Exception, match="mirror_marker"):
-        run_contract(model, case)
+        _run(model, case)
 
 
 def test_an_explicit_load_list_is_the_sweep_it_replaces() -> None:
@@ -76,9 +88,9 @@ def test_an_explicit_load_list_is_the_sweep_it_replaces() -> None:
         times_s=_TIMES_S,
         drive_wheels=False,
     )
-    produced = run_contract(model, explicit)
-    reference = run_contract(model, sweep)
-    assert len(produced.cases()) == 3
+    produced = _run(model, explicit)
+    reference = _run(model, sweep)
+    assert len(produced.cases) == 3
     assert np.array_equal(
         produced.block("body_state"), reference.block("body_state")
     ), "the explicit load list and the sweep disagreed on the same loads"
@@ -90,10 +102,10 @@ def test_the_side_modes_load_the_mirror_in_phase_and_in_anti_phase() -> None:
     load = [{"fz": 100.0}]
     states = {}
     for mode in ("single", "symmetric", "opposite"):
-        run = run_contract(model, _c_case(load, side_mode=mode))
+        run = _run(model, _c_case(load, side_mode=mode))
         bodies = list(run.document["manifest"]["bodies"])
         block = run.block("body_state")
-        last = int(run.cases()[0]["sample_offset"]) + int(run.cases()[0]["sample_count"]) - 1
+        last = int(run.cases[0]["sample_offset"]) + int(run.cases[0]["sample_count"]) - 1
         left, right = _upright_names()
         states[mode] = (
             block[last, bodies.index(left), :3],
