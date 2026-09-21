@@ -14,7 +14,7 @@
 
 #include "case_common.hpp"
 
-#include "mb_base/constants.hpp"
+#include "mb_config/constants.hpp"
 
 #include <cmath>
 #include <string>

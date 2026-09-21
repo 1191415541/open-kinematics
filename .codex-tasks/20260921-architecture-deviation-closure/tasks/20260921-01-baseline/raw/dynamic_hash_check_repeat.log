@@ -1,0 +1,50 @@
+solver self-convergence: FAILED
+adams accuracy: BLOCKED
+BLOCKED: no real Adams evidence supplied: the 5 percent channel gates and the wall-time ratio gate cannot be evaluated
+BLOCKED: the frozen median-of-N timing protocol was not run: pass --performance to collect it
+  static_equilibrium: PASSED
+  road_step_finite_rise: FAILED
+  road_pulse: FAILED
+  road_sine: FAILED
+  single_wheel_road: FAILED
+  in_phase_road: FAILED
+  opposite_phase_road: FAILED
+  braking: PASSED
+  driving: PASSED
+  lateral_or_steering: PASSED
+  combined_load: FAILED
+  tire_liftoff_and_recontact: FAILED
+  large_amplitude_high_frequency: FAILED
+C:\тс╪Ч\open-kinematics\artifacts\axle-dynamics-acceptance\acceptance_report.json
+artifacts hashed : 26
+combined sha256  : 2be20f4ea906f476f9dd197bea5f1dca5a5bddee512052b57bd2e19173dd9f0c
+acceptance exit  : 1
+failed cases     : ['combined_load', 'in_phase_road', 'large_amplitude_high_frequency', 'opposite_phase_road', 'road_pulse', 'road_sine', 'road_step_finite_rise', 'single_wheel_road', 'tire_liftoff_and_recontact']
+
+FAIL: dynamic output drifted
+  drifted : braking/native/native_refined_result
+  drifted : braking/native/native_result
+  drifted : combined_load/native/native_refined_result
+  drifted : combined_load/native/native_result
+  drifted : driving/native/native_refined_result
+  drifted : driving/native/native_result
+  drifted : in_phase_road/native/native_refined_result
+  drifted : in_phase_road/native/native_result
+  drifted : large_amplitude_high_frequency/native/native_refined_result
+  drifted : large_amplitude_high_frequency/native/native_result
+  drifted : lateral_or_steering/native/native_refined_result
+  drifted : lateral_or_steering/native/native_result
+  drifted : opposite_phase_road/native/native_refined_result
+  drifted : opposite_phase_road/native/native_result
+  drifted : road_pulse/native/native_refined_result
+  drifted : road_pulse/native/native_result
+  drifted : road_sine/native/native_refined_result
+  drifted : road_sine/native/native_result
+  drifted : road_step_finite_rise/native/native_refined_result
+  drifted : road_step_finite_rise/native/native_result
+  drifted : single_wheel_road/native/native_refined_result
+  drifted : single_wheel_road/native/native_result
+  drifted : static_equilibrium/native/native_refined_result
+  drifted : static_equilibrium/native/native_result
+  drifted : tire_liftoff_and_recontact/native/native_refined_result
+  drifted : tire_liftoff_and_recontact/native/native_result

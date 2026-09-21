@@ -18,7 +18,7 @@ struct JointEntry {
   int rows;
 };
 
-// Row counts mirror `mb_constraint/types.hpp`; the self-test asserts they agree
+// Row counts mirror `mb_joint/types.hpp`; the self-test asserts they agree
 // with the constraint registry.
 const JointEntry kJoints[] = {
     {"spherical", 3},      {"revolute", 5},          {"fixed", 6},

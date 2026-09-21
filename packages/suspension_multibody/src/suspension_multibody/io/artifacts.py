@@ -426,20 +426,29 @@ def _write_native_result(
         "bushing_names": np.asarray(axle.bushing_names),
         "anti_roll_bar_names": np.asarray(axle.anti_roll_bar_names),
         "tire_names": np.asarray(axle.tire_names),
-        "states": axle.states,
-        "constraint_wrench": axle.constraint_wrench,
-        "spring_output": axle.spring_output,
-        "bushing_output": axle.bushing_output,
-        "anti_roll_output": axle.anti_roll_output,
-        "tire_output": axle.tire_output,
-        "energy": axle.energy,
-        "diagnostics": _diagnostics_array(diagnostics),
-        "contact_event_time_s": np.asarray([event.time_s for event in axle.contact_events], dtype=np.float64),
-        "contact_event_tire": np.asarray([event.tire for event in axle.contact_events]),
-        "contact_event_transition": np.asarray([event.transition for event in axle.contact_events]),
     }
     if hasattr(result, "steering_output"):
         arrays["steering_names"] = np.asarray(getattr(result, "steering_names", ()))
+    arrays.update(
+        {
+            "states": axle.states,
+            "constraint_wrench": axle.constraint_wrench,
+            "spring_output": axle.spring_output,
+            "bushing_output": axle.bushing_output,
+            "anti_roll_output": axle.anti_roll_output,
+            "diagnostics": _diagnostics_array(diagnostics),
+            "tire_output": axle.tire_output,
+            "energy": axle.energy,
+            "contact_event_time_s": np.asarray(
+                [event.time_s for event in axle.contact_events], dtype=np.float64
+            ),
+            "contact_event_tire": np.asarray([event.tire for event in axle.contact_events]),
+            "contact_event_transition": np.asarray(
+                [event.transition for event in axle.contact_events]
+            ),
+        }
+    )
+    if hasattr(result, "steering_output"):
         arrays["steering_output"] = (
             result.steering_output
             if result.steering_output is not None

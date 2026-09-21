@@ -1,0 +1,24 @@
+solver self-convergence: FAILED
+adams accuracy: BLOCKED
+BLOCKED: no real Adams evidence supplied: the 5 percent channel gates and the wall-time ratio gate cannot be evaluated
+BLOCKED: the frozen median-of-N timing protocol was not run: pass --performance to collect it
+  static_equilibrium: PASSED
+  road_step_finite_rise: FAILED
+  road_pulse: FAILED
+  road_sine: FAILED
+  single_wheel_road: FAILED
+  in_phase_road: FAILED
+  opposite_phase_road: FAILED
+  braking: PASSED
+  driving: PASSED
+  lateral_or_steering: PASSED
+  combined_load: FAILED
+  tire_liftoff_and_recontact: FAILED
+  large_amplitude_high_frequency: FAILED
+C:\тс╪Ч\open-kinematics\artifacts\axle-dynamics-acceptance\acceptance_report.json
+artifacts hashed : 26
+combined sha256  : e7407656731ed556efc28fb89d8fc69881725b3bfb2f39066eb898986389d48e
+acceptance exit  : 1
+failed cases     : ['combined_load', 'in_phase_road', 'large_amplitude_high_frequency', 'opposite_phase_road', 'road_pulse', 'road_sine', 'road_step_finite_rise', 'single_wheel_road', 'tire_liftoff_and_recontact']
+
+OK: dynamic output matches the frozen baseline byte-for-byte

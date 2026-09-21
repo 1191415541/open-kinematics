@@ -17,15 +17,15 @@
 
 #include "axle_kernel.hpp"
 
-#include "mb_base/version.hpp"
+#include "mb_config/version.hpp"
 #include "mb_cases/functions.hpp"
 #include "mb_contract/functions.hpp"
 #include "mb_model/enums.hpp"
 #include "mb_tire/pac2002/functions.hpp"
 #include "mb_model/functions.hpp"
 #include "mb_output/functions.hpp"
-#include "mb_static/functions.hpp"
-#include "mb_vehicle/functions.hpp"
+#include "mb_solve_static/functions.hpp"
+#include "mb_assembly/functions.hpp"
 
 #include <cstring>
 #include <string>

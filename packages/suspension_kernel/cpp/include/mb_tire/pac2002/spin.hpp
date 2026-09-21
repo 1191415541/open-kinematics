@@ -9,7 +9,7 @@
 /// a `DirectionalScalar` it is the derivative-carrying sine.
 
 #include "mb_model/types.hpp"
-#include "mb_base/dual.hpp"
+#include "mb_dual/dual.hpp"
 #include "mb_tire/pac2002/parameters.hpp"
 #include "mb_tire/pac2002/turn_slip.hpp"
 #include <cmath>

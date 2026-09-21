@@ -26,23 +26,25 @@ uv run python packages/suspension_kernel/scripts/check_module_layering.py --stri
 
 | Module | Owns | Depends on |
 |---|---|---|
-| `mb_base` | vectors, quaternions, rotations, small utilities, dual numbers, the version constants.  The floor: it depends on nothing. | — |
+| `mb_config` | the runtime floor: the standard-library prelude, the version constants, the env switches, the tolerance/width constants, the profiling counters.  It depends on nothing. | — |
+| `mb_numeric` | vectors, matrices, quaternions, rotations, plain and monotone-cubic curve helpers, small whole-vector utilities. | `mb_config` |
+| `mb_dual` | the dual-number algebra and the dual geometry (`DVec3`/`DMat3`/`DQuat`) the directional pass is written in. | `mb_config`, `mb_numeric` |
 | `mb_energy` | the energy ledger types (rates and storage).  Values only, no dynamics. | — |
-| `mb_model` | the assembled model: bodies, states, constraints, the element descriptors, `SampleInput`. | `mb_base` |
+| `mb_model` | the assembled model: bodies, states, constraints, the element descriptors, `SampleInput`. | `mb_config`, `mb_dual`, `mb_numeric` |
 | `mb_input` | the kernel's internal input/output payload types and the element layout blocks.  No longer a cross-boundary layout: the contract reader fills them. | `mb_model` |
-| `mb_linalg` | factorisation and linear solves. | `mb_base` |
-| `mb_tire_common` | tire kinematics shared by the tire laws. | `mb_base`, `mb_model` |
-| `mb_tire_state` | the per-tire carried states (relaxation, contact mass, turn slip). | `mb_base`, `mb_model` |
-| `mb_tire_fiala`, `mb_tire_pac2002`, `mb_tire_brush` | one tire force law each, including its parameter layout and mode table. | `mb_base`, `mb_model`, `mb_tire_common`, `mb_tire_state` |
-| `mb_suspension` | the suspension force elements: springs, dampers, bushings, anti-roll bars, stops. | `mb_base`, `mb_energy`, `mb_model` |
+| `mb_linear` | factorisation and linear solves. | `mb_config`, `mb_numeric` |
+| `mb_tire_common` | tire kinematics shared by the tire laws. | `mb_config`, `mb_dual`, `mb_numeric`, `mb_model` |
+| `mb_tire_state` | the per-tire carried states (relaxation, contact mass, turn slip). | `mb_config`, `mb_dual`, `mb_numeric`, `mb_model` |
+| `mb_tire_fiala`, `mb_tire_pac2002`, `mb_tire_brush` | one tire force law each, including its parameter layout and mode table. | `mb_config`, `mb_dual`, `mb_numeric`, `mb_model`, `mb_tire_common`, `mb_tire_state` |
+| `mb_suspension` | the suspension force elements: springs, dampers, bushings, anti-roll bars, stops. | `mb_config`, `mb_dual`, `mb_numeric`, `mb_energy`, `mb_model` |
 | `mb_tire` | the tire force assembly and the dispatcher that calls the laws above. | the tire modules, `mb_model`, `mb_energy` |
-| `mb_constraint` | constraint rows and their analytic Jacobians, plus the joint-type registry. | `mb_base`, `mb_linalg`, `mb_model` |
-| `mb_vehicle` | the vehicle-level assembly: layout, external loads, gravity, aerodynamics, steering, drive/brake. | `mb_model`, `mb_tire`, `mb_constraint`, `mb_energy`, `mb_input` |
-| `mb_integrator` | the dynamic solve: the residual, the Newton step, the step controller, events. | `mb_model`, `mb_constraint`, `mb_tire`, `mb_linalg`, `mb_energy`, `mb_input` |
-| `mb_static` | the static solve: `static_trim`, the projection and least-squares helpers, contact pretinning. | `mb_model`, `mb_constraint`, `mb_integrator`, `mb_linalg`, `mb_tire_common`, `mb_tire_state`, `mb_input` |
-| `mb_output` | the measurement and result writers. | `mb_model`, `mb_constraint`, `mb_integrator`, `mb_energy`, `mb_input`, `mb_tire_state` |
-| `mb_contract` | the contract layer: canonical JSON, containers, SHA-256, and the four registries. | `mb_base` |
-| `mb_cases` | the case families: how a declarative case document expands into concrete runs. | `mb_base`, `mb_contract`, `mb_input` |
+| `mb_joint` | constraint rows and their analytic Jacobians, plus the joint-type registry (subtask 03: `constraint_rows` moved here from the model accessors, removing the model<->joint cycle). | `mb_config`, `mb_dual`, `mb_numeric`, `mb_linear`, `mb_model` |
+| `mb_vehicle` | the vehicle-level assembly: layout, external loads, gravity, aerodynamics, steering, drive/brake. | `mb_model`, `mb_tire`, `mb_joint`, `mb_energy`, `mb_input` |
+| `mb_solve_dynamic` | the dynamic solve: the residual, the Newton step, the step controller, events. | `mb_model`, `mb_joint`, `mb_tire`, `mb_linear`, `mb_energy`, `mb_input` |
+| `mb_solve_static` | the static solve: `static_trim`, the projection and least-squares helpers, contact pretinning. | `mb_model`, `mb_joint`, `mb_linear`, `mb_tire_common`, `mb_tire_state`, `mb_input` (subtask 03: no implementation dependency on `mb_solve_dynamic`; the shared input sampling lives in `mb_input`). |
+| `mb_output` | the measurement and result writers. | `mb_model`, `mb_joint`, `mb_solve_dynamic`, `mb_energy`, `mb_input`, `mb_tire_state` |
+| `mb_contract` | the contract layer: canonical JSON, containers, SHA-256, and the four registries. | `mb_config` |
+| `mb_cases` | the case families: how a declarative case document expands into concrete runs. | `mb_config`, `mb_numeric`, `mb_contract`, `mb_input` |
 | `abi` | the entry points.  `suspension_kernel_run` parses two documents, builds the model, expands the cases and drives the solver. | everything above |
 
 `mb_cases` is deliberately not allowed to reach the solver: it produces the

@@ -2,6 +2,7 @@
 //
 // Module `tire`: source lines 2924-5876.
 
+#include "mb_element/functions.hpp"
 #include "mb_tire/functions.hpp"
 
 #include "mb_tire/force_context.hpp"
@@ -9,7 +10,9 @@
 // Direct dependencies of this translation unit.  The module headers no
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
-#include "mb_base/functions.hpp"
+#include "mb_config/functions.hpp"
+#include "mb_numeric/functions.hpp"
+#include "mb_force/functions.hpp"
 #include "mb_model/functions.hpp"
 #include "mb_tire/fiala/functions.hpp"
 #include "mb_tire/pac2002/functions.hpp"

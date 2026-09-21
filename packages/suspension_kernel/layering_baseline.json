@@ -1,7 +1,1042 @@
 {
   "aggregate_includes": [],
-  "cycles": [],
+  "cycles": [
+    [
+      "mb_solve_dynamic",
+      "mb_solve_static",
+      "mb_tire",
+      "mb_tire_brush",
+      "mb_tire_fiala",
+      "mb_tire_pac2002",
+      "mb_tire_state",
+      "mb_vehicle"
+    ]
+  ],
   "edges": [
+    [
+      "abi",
+      "mb_cases"
+    ],
+    [
+      "abi",
+      "mb_config"
+    ],
+    [
+      "abi",
+      "mb_contract"
+    ],
+    [
+      "abi",
+      "mb_dual"
+    ],
+    [
+      "abi",
+      "mb_energy"
+    ],
+    [
+      "abi",
+      "mb_input"
+    ],
+    [
+      "abi",
+      "mb_joint"
+    ],
+    [
+      "abi",
+      "mb_linear"
+    ],
+    [
+      "abi",
+      "mb_model"
+    ],
+    [
+      "abi",
+      "mb_numeric"
+    ],
+    [
+      "abi",
+      "mb_output"
+    ],
+    [
+      "abi",
+      "mb_solve_dynamic"
+    ],
+    [
+      "abi",
+      "mb_solve_static"
+    ],
+    [
+      "abi",
+      "mb_tire"
+    ],
+    [
+      "abi",
+      "mb_tire_common"
+    ],
+    [
+      "abi",
+      "mb_tire_fiala"
+    ],
+    [
+      "abi",
+      "mb_tire_pac2002"
+    ],
+    [
+      "abi",
+      "mb_tire_state"
+    ],
+    [
+      "abi",
+      "mb_vehicle"
+    ],
+    [
+      "mb_cases",
+      "mb_config"
+    ],
+    [
+      "mb_cases",
+      "mb_contract"
+    ],
+    [
+      "mb_cases",
+      "mb_input"
+    ],
+    [
+      "mb_cases",
+      "mb_model"
+    ],
+    [
+      "mb_cases",
+      "mb_numeric"
+    ],
+    [
+      "mb_contract",
+      "mb_config"
+    ],
+    [
+      "mb_dual",
+      "mb_config"
+    ],
+    [
+      "mb_dual",
+      "mb_numeric"
+    ],
+    [
+      "mb_input",
+      "mb_config"
+    ],
+    [
+      "mb_input",
+      "mb_model"
+    ],
+    [
+      "mb_joint",
+      "mb_config"
+    ],
+    [
+      "mb_joint",
+      "mb_dual"
+    ],
+    [
+      "mb_joint",
+      "mb_linear"
+    ],
+    [
+      "mb_joint",
+      "mb_model"
+    ],
+    [
+      "mb_joint",
+      "mb_numeric"
+    ],
+    [
+      "mb_linear",
+      "mb_config"
+    ],
+    [
+      "mb_linear",
+      "mb_dual"
+    ],
+    [
+      "mb_linear",
+      "mb_numeric"
+    ],
+    [
+      "mb_model",
+      "mb_config"
+    ],
+    [
+      "mb_model",
+      "mb_dual"
+    ],
+    [
+      "mb_model",
+      "mb_numeric"
+    ],
+    [
+      "mb_numeric",
+      "mb_config"
+    ],
+    [
+      "mb_output",
+      "mb_config"
+    ],
+    [
+      "mb_output",
+      "mb_dual"
+    ],
+    [
+      "mb_output",
+      "mb_energy"
+    ],
+    [
+      "mb_output",
+      "mb_input"
+    ],
+    [
+      "mb_output",
+      "mb_joint"
+    ],
+    [
+      "mb_output",
+      "mb_model"
+    ],
+    [
+      "mb_output",
+      "mb_numeric"
+    ],
+    [
+      "mb_output",
+      "mb_solve_dynamic"
+    ],
+    [
+      "mb_output",
+      "mb_tire_state"
+    ],
+    [
+      "mb_output",
+      "mb_vehicle"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_config"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_dual"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_energy"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_input"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_joint"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_linear"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_model"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_numeric"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_brush"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_common"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_state"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_vehicle"
+    ],
+    [
+      "mb_solve_static",
+      "mb_config"
+    ],
+    [
+      "mb_solve_static",
+      "mb_dual"
+    ],
+    [
+      "mb_solve_static",
+      "mb_energy"
+    ],
+    [
+      "mb_solve_static",
+      "mb_input"
+    ],
+    [
+      "mb_solve_static",
+      "mb_joint"
+    ],
+    [
+      "mb_solve_static",
+      "mb_linear"
+    ],
+    [
+      "mb_solve_static",
+      "mb_model"
+    ],
+    [
+      "mb_solve_static",
+      "mb_numeric"
+    ],
+    [
+      "mb_solve_static",
+      "mb_solve_dynamic"
+    ],
+    [
+      "mb_solve_static",
+      "mb_tire_common"
+    ],
+    [
+      "mb_solve_static",
+      "mb_tire_state"
+    ],
+    [
+      "mb_solve_static",
+      "mb_vehicle"
+    ],
+    [
+      "mb_suspension",
+      "mb_config"
+    ],
+    [
+      "mb_suspension",
+      "mb_dual"
+    ],
+    [
+      "mb_suspension",
+      "mb_energy"
+    ],
+    [
+      "mb_suspension",
+      "mb_model"
+    ],
+    [
+      "mb_suspension",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire",
+      "mb_config"
+    ],
+    [
+      "mb_tire",
+      "mb_dual"
+    ],
+    [
+      "mb_tire",
+      "mb_energy"
+    ],
+    [
+      "mb_tire",
+      "mb_model"
+    ],
+    [
+      "mb_tire",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_brush"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_common"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_config"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_model"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_tire_common"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_common",
+      "mb_config"
+    ],
+    [
+      "mb_tire_common",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_common",
+      "mb_model"
+    ],
+    [
+      "mb_tire_common",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_config"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_model"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_tire_common"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_config"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_model"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_tire_common"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_state",
+      "mb_config"
+    ],
+    [
+      "mb_tire_state",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_state",
+      "mb_model"
+    ],
+    [
+      "mb_tire_state",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_state",
+      "mb_solve_dynamic"
+    ],
+    [
+      "mb_vehicle",
+      "mb_config"
+    ],
+    [
+      "mb_vehicle",
+      "mb_dual"
+    ],
+    [
+      "mb_vehicle",
+      "mb_energy"
+    ],
+    [
+      "mb_vehicle",
+      "mb_input"
+    ],
+    [
+      "mb_vehicle",
+      "mb_joint"
+    ],
+    [
+      "mb_vehicle",
+      "mb_model"
+    ],
+    [
+      "mb_vehicle",
+      "mb_numeric"
+    ],
+    [
+      "mb_vehicle",
+      "mb_solve_static"
+    ],
+    [
+      "mb_vehicle",
+      "mb_suspension"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_common"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_state"
+    ]
+  ],
+  "header_edges": [
+    [
+      "abi",
+      "mb_config"
+    ],
+    [
+      "abi",
+      "mb_dual"
+    ],
+    [
+      "abi",
+      "mb_energy"
+    ],
+    [
+      "abi",
+      "mb_input"
+    ],
+    [
+      "abi",
+      "mb_joint"
+    ],
+    [
+      "abi",
+      "mb_linear"
+    ],
+    [
+      "abi",
+      "mb_model"
+    ],
+    [
+      "abi",
+      "mb_numeric"
+    ],
+    [
+      "abi",
+      "mb_output"
+    ],
+    [
+      "abi",
+      "mb_solve_dynamic"
+    ],
+    [
+      "abi",
+      "mb_tire"
+    ],
+    [
+      "abi",
+      "mb_tire_common"
+    ],
+    [
+      "abi",
+      "mb_tire_fiala"
+    ],
+    [
+      "abi",
+      "mb_tire_pac2002"
+    ],
+    [
+      "abi",
+      "mb_tire_state"
+    ],
+    [
+      "mb_cases",
+      "mb_config"
+    ],
+    [
+      "mb_cases",
+      "mb_contract"
+    ],
+    [
+      "mb_cases",
+      "mb_input"
+    ],
+    [
+      "mb_cases",
+      "mb_numeric"
+    ],
+    [
+      "mb_contract",
+      "mb_config"
+    ],
+    [
+      "mb_dual",
+      "mb_config"
+    ],
+    [
+      "mb_dual",
+      "mb_numeric"
+    ],
+    [
+      "mb_input",
+      "mb_config"
+    ],
+    [
+      "mb_input",
+      "mb_model"
+    ],
+    [
+      "mb_joint",
+      "mb_config"
+    ],
+    [
+      "mb_joint",
+      "mb_dual"
+    ],
+    [
+      "mb_joint",
+      "mb_linear"
+    ],
+    [
+      "mb_joint",
+      "mb_model"
+    ],
+    [
+      "mb_joint",
+      "mb_numeric"
+    ],
+    [
+      "mb_linear",
+      "mb_config"
+    ],
+    [
+      "mb_linear",
+      "mb_dual"
+    ],
+    [
+      "mb_linear",
+      "mb_numeric"
+    ],
+    [
+      "mb_model",
+      "mb_config"
+    ],
+    [
+      "mb_model",
+      "mb_dual"
+    ],
+    [
+      "mb_model",
+      "mb_numeric"
+    ],
+    [
+      "mb_numeric",
+      "mb_config"
+    ],
+    [
+      "mb_output",
+      "mb_config"
+    ],
+    [
+      "mb_output",
+      "mb_dual"
+    ],
+    [
+      "mb_output",
+      "mb_energy"
+    ],
+    [
+      "mb_output",
+      "mb_input"
+    ],
+    [
+      "mb_output",
+      "mb_joint"
+    ],
+    [
+      "mb_output",
+      "mb_model"
+    ],
+    [
+      "mb_output",
+      "mb_numeric"
+    ],
+    [
+      "mb_output",
+      "mb_solve_dynamic"
+    ],
+    [
+      "mb_output",
+      "mb_tire_state"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_config"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_dual"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_energy"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_input"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_joint"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_linear"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_model"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_numeric"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_common"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_state"
+    ],
+    [
+      "mb_solve_static",
+      "mb_config"
+    ],
+    [
+      "mb_solve_static",
+      "mb_dual"
+    ],
+    [
+      "mb_solve_static",
+      "mb_energy"
+    ],
+    [
+      "mb_solve_static",
+      "mb_input"
+    ],
+    [
+      "mb_solve_static",
+      "mb_joint"
+    ],
+    [
+      "mb_solve_static",
+      "mb_linear"
+    ],
+    [
+      "mb_solve_static",
+      "mb_model"
+    ],
+    [
+      "mb_solve_static",
+      "mb_numeric"
+    ],
+    [
+      "mb_solve_static",
+      "mb_solve_dynamic"
+    ],
+    [
+      "mb_solve_static",
+      "mb_tire_common"
+    ],
+    [
+      "mb_solve_static",
+      "mb_tire_state"
+    ],
+    [
+      "mb_suspension",
+      "mb_config"
+    ],
+    [
+      "mb_suspension",
+      "mb_dual"
+    ],
+    [
+      "mb_suspension",
+      "mb_energy"
+    ],
+    [
+      "mb_suspension",
+      "mb_model"
+    ],
+    [
+      "mb_suspension",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire",
+      "mb_config"
+    ],
+    [
+      "mb_tire",
+      "mb_dual"
+    ],
+    [
+      "mb_tire",
+      "mb_energy"
+    ],
+    [
+      "mb_tire",
+      "mb_model"
+    ],
+    [
+      "mb_tire",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_common"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_config"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_model"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_tire_common"
+    ],
+    [
+      "mb_tire_brush",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_common",
+      "mb_config"
+    ],
+    [
+      "mb_tire_common",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_common",
+      "mb_model"
+    ],
+    [
+      "mb_tire_common",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_config"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_model"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_tire_common"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_config"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_model"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_tire_common"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_state",
+      "mb_config"
+    ],
+    [
+      "mb_tire_state",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_state",
+      "mb_model"
+    ],
+    [
+      "mb_tire_state",
+      "mb_numeric"
+    ],
+    [
+      "mb_vehicle",
+      "mb_config"
+    ],
+    [
+      "mb_vehicle",
+      "mb_dual"
+    ],
+    [
+      "mb_vehicle",
+      "mb_energy"
+    ],
+    [
+      "mb_vehicle",
+      "mb_input"
+    ],
+    [
+      "mb_vehicle",
+      "mb_joint"
+    ],
+    [
+      "mb_vehicle",
+      "mb_model"
+    ],
+    [
+      "mb_vehicle",
+      "mb_numeric"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_common"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_state"
+    ]
+  ],
+  "header_only_edges": [
     [
       "abi",
       "mb_base"
@@ -347,5 +1382,4052 @@
       "mb_tire_state"
     ]
   ],
-  "self_includes": []
+  "kept_modules": [
+    "abi",
+    "mb_cases",
+    "mb_contract",
+    "mb_energy",
+    "mb_model",
+    "mb_output",
+    "mb_tire",
+    "mb_tire_brush",
+    "mb_tire_common",
+    "mb_tire_fiala",
+    "mb_tire_pac2002",
+    "mb_tire_state"
+  ],
+  "legacy_modules": [
+    "mb_suspension",
+    "mb_vehicle"
+  ],
+  "migration_map": {
+    "mb_base": {
+      "reason": "vectors/quaternions/rotations/curves -> mb_numeric, the dual algebra -> mb_dual, env/version/runtime diagnostics -> mb_config",
+      "successors": [
+        "mb_numeric",
+        "mb_dual",
+        "mb_config"
+      ]
+    },
+    "mb_constraint": {
+      "reason": "constraint rows and analytic Jacobians -> mb_joint",
+      "successors": [
+        "mb_joint"
+      ]
+    },
+    "mb_integrator": {
+      "reason": "residual, Newton step, step control and events -> mb_solve_dynamic",
+      "successors": [
+        "mb_solve_dynamic"
+      ]
+    },
+    "mb_linalg": {
+      "reason": "factorisation and linear solves -> mb_linear",
+      "successors": [
+        "mb_linear"
+      ]
+    },
+    "mb_static": {
+      "reason": "static trim, projection and least-squares helpers -> mb_solve_static",
+      "successors": [
+        "mb_solve_static"
+      ]
+    },
+    "mb_suspension": {
+      "reason": "spring/damper/bushing/anti-roll elements -> mb_element",
+      "successors": [
+        "mb_element"
+      ]
+    },
+    "mb_vehicle": {
+      "reason": "steering and drive/brake -> mb_element, the external force bus -> mb_force, vehicle registration and build_model -> mb_assembly",
+      "successors": [
+        "mb_element",
+        "mb_force",
+        "mb_assembly"
+      ]
+    }
+  },
+  "mutual_edges": [
+    [
+      "mb_solve_dynamic",
+      "mb_tire_state"
+    ],
+    [
+      "mb_solve_static",
+      "mb_vehicle"
+    ]
+  ],
+  "notes": "Reviewed 2026-09-21 for subtask 03 step 6: mb_integrator renamed to mb_solve_dynamic, mb_static to mb_solve_static, and the shared input sampling (interpolate_input, next_prescribed_input_breakpoint) moved to the new mb_input module, so neither solver layer owns input preparation.  Remaining legacy: mb_suspension/mb_vehicle (subtask 04); the remaining cycle runs through the solve layers and the tire/vehicle stack.",
+  "reviewed_new_edges": [
+    {
+      "edge": [
+        "abi",
+        "mb_cases"
+      ],
+      "includes": [
+        "mb_cases/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/abi/kernel_contract_run.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_contract"
+      ],
+      "includes": [
+        "mb_contract/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/abi/kernel_contract_run.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "contract_build_container",
+        "contract_parse_container",
+        "contract_sha256_hex",
+        "contract_write_canonical"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_static"
+      ],
+      "includes": [
+        "mb_static/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [
+        "mb_static"
+      ],
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp",
+        "cpp/src/abi/kernel_model_build.cpp"
+      ],
+      "successors": {
+        "mb_static": [
+          "mb_solve_static"
+        ]
+      },
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_vehicle"
+      ],
+      "includes": [
+        "mb_vehicle/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [
+        "mb_vehicle"
+      ],
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp"
+      ],
+      "successors": {
+        "mb_vehicle": [
+          "mb_element",
+          "mb_force",
+          "mb_assembly"
+        ]
+      },
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "mb_cases",
+        "mb_model"
+      ],
+      "includes": [
+        "mb_model/enums.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/cases/contract_model.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_tire_brush"
+      ],
+      "includes": [
+        "mb_tire/brush/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [
+        "mb_integrator"
+      ],
+      "sources": [
+        "cpp/src/integrator/kernel_integrator.cpp"
+      ],
+      "successors": {
+        "mb_integrator": [
+          "mb_solve_dynamic"
+        ]
+      },
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_vehicle"
+      ],
+      "includes": [
+        "mb_vehicle/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [
+        "mb_integrator",
+        "mb_vehicle"
+      ],
+      "sources": [
+        "cpp/src/integrator/kernel_integrator.cpp",
+        "cpp/src/integrator/kernel_integrator_newton.cpp",
+        "cpp/src/integrator/kernel_integrator_residual.cpp"
+      ],
+      "successors": {
+        "mb_integrator": [
+          "mb_solve_dynamic"
+        ],
+        "mb_vehicle": [
+          "mb_element",
+          "mb_force",
+          "mb_assembly"
+        ]
+      },
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "mb_model",
+        "mb_constraint"
+      ],
+      "includes": [
+        "mb_constraint/types.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [
+        "mb_constraint"
+      ],
+      "sources": [
+        "cpp/src/model/kernel_model_accessors.cpp"
+      ],
+      "successors": {
+        "mb_constraint": [
+          "mb_joint"
+        ]
+      },
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_vehicle"
+      ],
+      "includes": [
+        "mb_vehicle/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [
+        "mb_vehicle"
+      ],
+      "sources": [
+        "cpp/src/output/kernel_output.cpp"
+      ],
+      "successors": {
+        "mb_vehicle": [
+          "mb_element",
+          "mb_force",
+          "mb_assembly"
+        ]
+      },
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_vehicle"
+      ],
+      "includes": [
+        "mb_vehicle/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [
+        "mb_static",
+        "mb_vehicle"
+      ],
+      "sources": [
+        "cpp/src/static/kernel_static_trim.cpp"
+      ],
+      "successors": {
+        "mb_static": [
+          "mb_solve_static"
+        ],
+        "mb_vehicle": [
+          "mb_element",
+          "mb_force",
+          "mb_assembly"
+        ]
+      },
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "mb_tire",
+        "mb_tire_brush"
+      ],
+      "includes": [
+        "mb_tire/brush/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/tire/kernel_tire_assembly.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "mb_tire_state",
+        "mb_integrator"
+      ],
+      "includes": [
+        "mb_integrator/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [
+        "mb_integrator"
+      ],
+      "sources": [
+        "cpp/src/tire_state/kernel_tire_state.cpp"
+      ],
+      "successors": {
+        "mb_integrator": [
+          "mb_solve_dynamic"
+        ]
+      },
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_static"
+      ],
+      "includes": [
+        "mb_static/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [
+        "mb_vehicle",
+        "mb_static"
+      ],
+      "sources": [
+        "cpp/src/vehicle/kernel_registration.cpp"
+      ],
+      "successors": {
+        "mb_static": [
+          "mb_solve_static"
+        ],
+        "mb_vehicle": [
+          "mb_element",
+          "mb_force",
+          "mb_assembly"
+        ]
+      },
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_suspension"
+      ],
+      "includes": [
+        "mb_suspension/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [
+        "mb_vehicle",
+        "mb_suspension"
+      ],
+      "sources": [
+        "cpp/src/vehicle/force_assembly.cpp"
+      ],
+      "successors": {
+        "mb_suspension": [
+          "mb_element"
+        ],
+        "mb_vehicle": [
+          "mb_element",
+          "mb_force",
+          "mb_assembly"
+        ]
+      },
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the translation unit"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old abi -> mb_base include"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old abi -> mb_base include"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old abi -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_cases",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_cases -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_cases",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_cases -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_constraint",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_constraint -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_constraint",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_constraint -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_constraint",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_constraint -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_contract",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_contract -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_dual",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_dual -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_dual",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_dual -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_integrator -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_integrator -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_integrator -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_linalg",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_linalg -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_linalg",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_linalg -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_linalg",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_linalg -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_model",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_model -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_model",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_model -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_model",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_model -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_numeric",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_numeric -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_output -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_output -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_output -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_static -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_static -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_static -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_suspension",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_suspension -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_suspension",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_suspension -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_suspension",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_suspension -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_brush",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_brush -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_brush",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_brush -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_brush",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_brush -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_common",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_common -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_common",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_common -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_common",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_common -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_fiala",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_fiala -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_fiala",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_fiala -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_fiala",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_fiala -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_pac2002",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_pac2002 -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_pac2002",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_pac2002 -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_pac2002",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_pac2002 -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_state",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_state -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_state",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_state -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_state",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_state -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_vehicle -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_vehicle -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_vehicle -> mb_base include"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old abi -> mb_base include"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old abi -> mb_base include"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old abi -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_cases",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_cases -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_cases",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_cases -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_constraint",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_constraint -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_constraint",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_constraint -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_constraint",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_constraint -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_dual",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_dual -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_dual",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_dual -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_integrator -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_integrator -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_integrator -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_linalg",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_linalg -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_linalg",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_linalg -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_model",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_model -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_model",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_model -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_model",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_model -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_output -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_output -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_static -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_static -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_static -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_suspension",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_suspension -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_suspension",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_suspension -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_suspension",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_suspension -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_common",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_common -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_common",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_common -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_fiala",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_fiala -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_fiala",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_fiala -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_fiala",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_fiala -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_pac2002",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_pac2002 -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_pac2002",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_pac2002 -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_tire_pac2002",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_tire_pac2002 -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_vehicle -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_vehicle -> mb_base include"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03: split of the former mb_base aggregate; this edge is the mechanical rewrite of the old mb_vehicle -> mb_base include"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_linear"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_linear"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_joint",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_joint",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_joint",
+        "mb_linear"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_joint",
+        "mb_model"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_joint",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_linear",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_linear",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_linear",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_linear"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_integrator",
+        "mb_linear"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_joint",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_joint",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_joint",
+        "mb_model"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_joint",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_linear",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_linear",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_model",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_static",
+        "mb_linear"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 5: mechanical rename of mb_linalg -> mb_linear / mb_constraint -> mb_joint; same dependency, new module name"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_solve_dynamic"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_input",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_solve_dynamic"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_energy"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_input"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_linear"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_model"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_tire"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_tire_common"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_tire_fiala"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_tire_pac2002"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_tire_state"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_energy"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_input"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_linear"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_model"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_solve_dynamic"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_tire_common"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_tire_state"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_solve_dynamic"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_solve_static"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_solve_dynamic"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_input"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_linear"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_model"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_tire_brush"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_tire_common"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_tire_fiala"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_tire_pac2002"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_tire_state"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_vehicle"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_config"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_dual"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_input"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_joint"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_linear"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_model"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_numeric"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_solve_dynamic"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_tire_common"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_tire_state"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_vehicle"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_tire_state",
+        "mb_solve_dynamic"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_vehicle",
+        "mb_solve_static"
+      ],
+      "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    }
+  ],
+  "self_includes": [],
+  "source_edge_evidence": [
+    {
+      "includes": [
+        "mb_cases/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_contract_run.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_cases"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp",
+        "mb_config/version.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/element_reader.cpp",
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp",
+        "cpp/src/abi/kernel_core.cpp",
+        "cpp/src/abi/kernel_model_build.cpp"
+      ],
+      "symbols": [
+        "profiling_enabled"
+      ],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_contract/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_contract_run.cpp"
+      ],
+      "symbols": [
+        "contract_build_container",
+        "contract_parse_container",
+        "contract_sha256_hex",
+        "contract_write_canonical"
+      ],
+      "target": "mb_contract"
+    },
+    {
+      "includes": [],
+      "kinds": [
+        "symbol_reference"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_contract_run.cpp"
+      ],
+      "symbols": [
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_input/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp"
+      ],
+      "symbols": [
+        "interpolate_input",
+        "next_prescribed_input_breakpoint"
+      ],
+      "target": "mb_input"
+    },
+    {
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_core.cpp",
+        "cpp/src/abi/kernel_model_build.cpp"
+      ],
+      "symbols": [
+        "constraint_rows"
+      ],
+      "target": "mb_joint"
+    },
+    {
+      "includes": [
+        "mb_model/enums.hpp",
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp",
+        "cpp/src/abi/kernel_core.cpp",
+        "cpp/src/abi/kernel_model_build.cpp"
+      ],
+      "symbols": [
+        "set_error",
+        "tire_frame_body"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/element_reader.cpp",
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_core.cpp",
+        "cpp/src/abi/kernel_model_build.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "dot",
+        "finite_symmetric",
+        "norm",
+        "normalized",
+        "qconj",
+        "qmat",
+        "qmul",
+        "qnormalize",
+        "rotate",
+        "symmetric_positive_definite",
+        "transpose",
+        "unit_quaternion"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_output/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp"
+      ],
+      "symbols": [
+        "accumulate_energy_step",
+        "copy_state",
+        "write_constraint_wrenches",
+        "write_performance_metrics",
+        "write_physics_output",
+        "write_vehicle_steering_output"
+      ],
+      "target": "mb_output"
+    },
+    {
+      "includes": [
+        "mb_solve_dynamic/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp"
+      ],
+      "symbols": [
+        "append_contact_events",
+        "contact_transition",
+        "exceeds_tire_compression_limit",
+        "initialize_acceleration",
+        "initialize_internal_derivatives",
+        "localize_contact_event",
+        "next_prescribed_input_breakpoint",
+        "normalized_state_error",
+        "solve_one_step",
+        "validate_initial_velocity",
+        "write_contact_events"
+      ],
+      "target": "mb_solve_dynamic"
+    },
+    {
+      "includes": [
+        "mb_solve_static/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp",
+        "cpp/src/abi/kernel_model_build.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_solve_static"
+    },
+    {
+      "includes": [
+        "mb_tire/pac2002/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/element_reader.cpp",
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp"
+      ],
+      "symbols": [
+        "pac2002_mode_state_width",
+        "pac2002_mode_supported_by_native",
+        "pac2002_mode_uses_contact_mass",
+        "pac2002_parameter",
+        "pac2002_refused_families",
+        "pac2002_refused_feature_flags",
+        "pac2002_refused_parameters",
+        "pac2002_supported_use_modes",
+        "pac2002_use_mode",
+        "tire_state_width"
+      ],
+      "target": "mb_tire_pac2002"
+    },
+    {
+      "includes": [
+        "mb_tire_state/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp"
+      ],
+      "symbols": [
+        "resize_tire_states",
+        "tire_block_width",
+        "tire_state_width"
+      ],
+      "target": "mb_tire_state"
+    },
+    {
+      "includes": [
+        "mb_vehicle/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_vehicle"
+    },
+    {
+      "includes": [
+        "mb_config/constants.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_cases",
+      "sources": [
+        "cpp/src/cases/handling.cpp",
+        "cpp/src/cases/kc_quasi_static.cpp",
+        "cpp/src/cases/ride_four_post.cpp",
+        "cpp/src/cases/ride_random_road.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_model/enums.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_cases",
+      "sources": [
+        "cpp/src/cases/contract_model.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_model"
+    },
+    {
+      "includes": [],
+      "kinds": [
+        "symbol_reference"
+      ],
+      "module": "mb_cases",
+      "sources": [
+        "cpp/src/cases/contract_model.cpp"
+      ],
+      "symbols": [
+        "norm"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_dual",
+      "sources": [
+        "cpp/src/dual/dual_geometry.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_dual",
+      "sources": [
+        "cpp/src/dual/curves.cpp",
+        "cpp/src/dual/dual_geometry.cpp"
+      ],
+      "symbols": [
+        "identity3",
+        "interpolate_akima_curve",
+        "interpolate_curve",
+        "log_left_jacobian_inverse",
+        "norm",
+        "normalized",
+        "qlog",
+        "qmat",
+        "qmul",
+        "rotate",
+        "skew"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_joint",
+      "sources": [
+        "cpp/src/joint/kernel_model_constraint.cpp",
+        "cpp/src/joint/registry.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_joint",
+      "sources": [
+        "cpp/src/joint/kernel_directional_constraint.cpp",
+        "cpp/src/joint/registry.cpp"
+      ],
+      "symbols": [
+        "d_body_quaternion",
+        "d_cross",
+        "d_dot",
+        "d_identity3",
+        "d_log_left_jacobian_inverse",
+        "d_norm",
+        "d_normalized",
+        "d_outer",
+        "d_qconj",
+        "d_qlog",
+        "d_qmat",
+        "d_qmul",
+        "d_rotate",
+        "d_row_times",
+        "d_skew",
+        "d_transpose"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_joint",
+      "sources": [
+        "cpp/src/joint/kernel_directional_constraint.cpp",
+        "cpp/src/joint/kernel_model_constraint.cpp"
+      ],
+      "symbols": [
+        "d_state_point",
+        "directional_body_active",
+        "directional_orientation_active",
+        "state_point"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_joint",
+      "sources": [
+        "cpp/src/joint/kernel_directional_constraint.cpp",
+        "cpp/src/joint/kernel_model_constraint.cpp",
+        "cpp/src/joint/registry.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "dot",
+        "identity3",
+        "inverse3",
+        "log_left_jacobian_inverse",
+        "norm",
+        "normalized",
+        "normalized_continuous",
+        "outer",
+        "qconj",
+        "qexp",
+        "qlog",
+        "qmat",
+        "qmul",
+        "rotate",
+        "row_times",
+        "skew",
+        "transpose"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [],
+      "kinds": [
+        "symbol_reference"
+      ],
+      "module": "mb_linear",
+      "sources": [
+        "cpp/src/linear/kernel_linear.cpp"
+      ],
+      "symbols": [
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [],
+      "kinds": [
+        "symbol_reference"
+      ],
+      "module": "mb_linear",
+      "sources": [
+        "cpp/src/linear/kernel_linear.cpp"
+      ],
+      "symbols": [
+        "max_abs"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_model",
+      "sources": [
+        "cpp/src/model/kernel_model.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_model",
+      "sources": [
+        "cpp/src/model/directional.cpp",
+        "cpp/src/model/road.cpp"
+      ],
+      "symbols": [
+        "d_cos",
+        "d_cross",
+        "d_rotate",
+        "d_sin",
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_model",
+      "sources": [
+        "cpp/src/model/directional.cpp",
+        "cpp/src/model/kernel_model.cpp",
+        "cpp/src/model/kernel_model_accessors.cpp"
+      ],
+      "symbols": [
+        "cardan_xyz_from_rotation",
+        "cardan_xyz_rate",
+        "cross",
+        "qconj",
+        "qlog",
+        "qmat",
+        "qmul",
+        "rotate",
+        "transpose"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_output",
+      "sources": [
+        "cpp/src/output/kernel_output.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_input/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_output",
+      "sources": [
+        "cpp/src/output/kernel_output.cpp"
+      ],
+      "symbols": [
+        "interpolate_input"
+      ],
+      "target": "mb_input"
+    },
+    {
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_output",
+      "sources": [
+        "cpp/src/output/kernel_output.cpp"
+      ],
+      "symbols": [
+        "constraint_jacobian",
+        "constraint_rows",
+        "steering_axis_reference"
+      ],
+      "target": "mb_joint"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_output",
+      "sources": [
+        "cpp/src/output/kernel_output.cpp"
+      ],
+      "symbols": [
+        "state_point",
+        "state_point_velocity"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_output",
+      "sources": [
+        "cpp/src/output/kernel_output.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "dot",
+        "normalized",
+        "normalized_continuous",
+        "qconj",
+        "qexp",
+        "qlog",
+        "qmat",
+        "qmul",
+        "rotate",
+        "transpose"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_solve_dynamic/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_output",
+      "sources": [
+        "cpp/src/output/kernel_output.cpp"
+      ],
+      "symbols": [
+        "residual"
+      ],
+      "target": "mb_solve_dynamic"
+    },
+    {
+      "includes": [
+        "mb_vehicle/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_output",
+      "sources": [
+        "cpp/src/output/kernel_output.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_vehicle"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_step.cpp"
+      ],
+      "symbols": [
+        "acceleration_predictor_enabled",
+        "exact_fiala_relaxation_enabled",
+        "light_fiala_relaxation_enabled",
+        "linearization_reuse_limit",
+        "newton_jacobian_refresh_period",
+        "runtime_jacobian_validation_enabled"
+      ],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp"
+      ],
+      "symbols": [
+        "d_body_quaternion",
+        "d_qmat",
+        "d_transpose",
+        "so3_left_jacobian",
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_input/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_events.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_step.cpp"
+      ],
+      "symbols": [
+        "interpolate_input"
+      ],
+      "target": "mb_input"
+    },
+    {
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_step.cpp"
+      ],
+      "symbols": [
+        "apply_acceleration",
+        "constraint_jacobian",
+        "constraint_jacobian_directional",
+        "constraint_residual",
+        "constraint_rows",
+        "driven_row_target_rate",
+        "mass_inverse_jt_mu_directional",
+        "mass_inverse_of_jt_mu",
+        "perturb_pose"
+      ],
+      "target": "mb_joint"
+    },
+    {
+      "includes": [
+        "mb_linear/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_state.cpp"
+      ],
+      "symbols": [
+        "matches",
+        "solve_linear",
+        "update_key"
+      ],
+      "target": "mb_linear"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp"
+      ],
+      "symbols": [
+        "directional_body_active",
+        "ensure_directional_state",
+        "reset_directional_state"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_state.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_step.cpp"
+      ],
+      "symbols": [
+        "finite_vec",
+        "inverse3",
+        "max_abs",
+        "norm",
+        "normalized_continuous",
+        "qconj",
+        "qexp",
+        "qlog",
+        "qmat",
+        "qmul",
+        "transpose",
+        "unit_quaternion"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_tire/brush/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_tire_brush"
+    },
+    {
+      "includes": [
+        "mb_tire/common/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_events.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_step.cpp"
+      ],
+      "symbols": [
+        "tire_contact_kinematics"
+      ],
+      "target": "mb_tire_common"
+    },
+    {
+      "includes": [
+        "mb_tire/fiala/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp"
+      ],
+      "symbols": [
+        "fiala_relaxation_target"
+      ],
+      "target": "mb_tire_fiala"
+    },
+    {
+      "includes": [
+        "mb_tire/pac2002/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp"
+      ],
+      "symbols": [
+        "pac2002_maxwell_end_displacement",
+        "tire_state_width"
+      ],
+      "target": "mb_tire_pac2002"
+    },
+    {
+      "includes": [
+        "mb_tire_state/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_state.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_step.cpp"
+      ],
+      "symbols": [
+        "read_tire_states",
+        "resize_tire_states",
+        "tire_block_width",
+        "tire_state_value",
+        "tire_state_width"
+      ],
+      "target": "mb_tire_state"
+    },
+    {
+      "includes": [
+        "mb_vehicle/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_vehicle"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_contact.cpp",
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "symbols": [
+        "static_debug_enabled"
+      ],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_contact.cpp",
+        "cpp/src/solve_static/kernel_static_projection.cpp",
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "symbols": [
+        "so3_left_jacobian",
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_input/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_contact.cpp"
+      ],
+      "symbols": [
+        "interpolate_input"
+      ],
+      "target": "mb_input"
+    },
+    {
+      "includes": [
+        "mb_joint/functions.hpp",
+        "mb_joint/types.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_contact.cpp",
+        "cpp/src/solve_static/kernel_static_projection.cpp",
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "symbols": [
+        "analytic_constraint_jacobian_matches_reference",
+        "constraint_jacobian",
+        "constraint_jacobian_central_difference",
+        "constraint_jacobian_directional",
+        "constraint_residual",
+        "constraint_rows",
+        "joint_coordinate_value"
+      ],
+      "target": "mb_joint"
+    },
+    {
+      "includes": [
+        "mb_linear/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_contact.cpp",
+        "cpp/src/solve_static/kernel_static_projection.cpp"
+      ],
+      "symbols": [
+        "matrix_rank",
+        "solve_linear"
+      ],
+      "target": "mb_linear"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_contact.cpp",
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "symbols": [
+        "ensure_directional_state",
+        "reset_directional_state",
+        "state_point",
+        "tire_center_body",
+        "tire_center_local"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_contact.cpp",
+        "cpp/src/solve_static/kernel_static_projection.cpp",
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "determinant",
+        "dot",
+        "finite_vec",
+        "max_abs",
+        "normalized",
+        "normalized_continuous",
+        "qexp",
+        "qmul",
+        "rotate"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_solve_dynamic/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_contact.cpp",
+        "cpp/src/solve_static/kernel_static_projection.cpp",
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "symbols": [
+        "pose_candidate",
+        "residual"
+      ],
+      "target": "mb_solve_dynamic"
+    },
+    {
+      "includes": [
+        "mb_tire/common/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_contact.cpp",
+        "cpp/src/solve_static/kernel_static_projection.cpp",
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "symbols": [
+        "tire_contact_compression_directional",
+        "tire_contact_kinematics"
+      ],
+      "target": "mb_tire_common"
+    },
+    {
+      "includes": [
+        "mb_tire_state/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_contact.cpp"
+      ],
+      "symbols": [
+        "resize_tire_states"
+      ],
+      "target": "mb_tire_state"
+    },
+    {
+      "includes": [
+        "mb_vehicle/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_vehicle"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_suspension",
+      "sources": [
+        "cpp/src/suspension/anti_roll.cpp",
+        "cpp/src/suspension/bushing.cpp",
+        "cpp/src/suspension/spring.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_suspension",
+      "sources": [
+        "cpp/src/suspension/curves.cpp"
+      ],
+      "symbols": [
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_suspension",
+      "sources": [
+        "cpp/src/suspension/anti_roll.cpp",
+        "cpp/src/suspension/bushing.cpp",
+        "cpp/src/suspension/spring.cpp"
+      ],
+      "symbols": [
+        "add_force_on_body",
+        "add_torque_on_body",
+        "bushing_deformation",
+        "mat6_mul",
+        "state_point",
+        "state_point_velocity"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_suspension",
+      "sources": [
+        "cpp/src/suspension/anti_roll.cpp",
+        "cpp/src/suspension/bushing.cpp",
+        "cpp/src/suspension/curves.cpp",
+        "cpp/src/suspension/spring.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "dot",
+        "integrate_akima_curve_from_zero",
+        "integrate_curve_from_zero",
+        "interpolate_akima_curve",
+        "interpolate_curve",
+        "norm",
+        "normalized",
+        "qconj",
+        "qlog",
+        "qmat",
+        "qmul",
+        "rotate"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_tire",
+      "sources": [
+        "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/kernel_tire_assembly.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire",
+      "sources": [
+        "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/kernel_tire_assembly.cpp"
+      ],
+      "symbols": [
+        "add_force_on_body",
+        "add_torque_on_body",
+        "road_profile_height",
+        "road_profile_slope",
+        "state_point",
+        "state_point_velocity",
+        "tire_center_body",
+        "tire_center_local",
+        "tire_frame_body",
+        "tire_relative_spin_omega"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire",
+      "sources": [
+        "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/kernel_tire_assembly.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "dot",
+        "norm",
+        "normalized",
+        "qmat",
+        "rotate",
+        "transpose"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_tire/brush/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_tire",
+      "sources": [
+        "cpp/src/tire/kernel_tire_assembly.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_tire_brush"
+    },
+    {
+      "includes": [
+        "mb_tire/fiala/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire",
+      "sources": [
+        "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/kernel_tire_assembly.cpp"
+      ],
+      "symbols": [
+        "fiala_elastic_force",
+        "fiala_forces",
+        "fiala_parameter",
+        "fiala_rolling_resistance_factor",
+        "fiala_startup_scale",
+        "fiala_transient_enabled",
+        "fiala_use_mode",
+        "fiala_vertical_force"
+      ],
+      "target": "mb_tire_fiala"
+    },
+    {
+      "includes": [
+        "mb_tire/pac2002/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire",
+      "sources": [
+        "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/kernel_tire_assembly.cpp"
+      ],
+      "symbols": [
+        "pac2002_aligning_moment",
+        "pac2002_clamp_camber",
+        "pac2002_clamp_lateral_slip",
+        "pac2002_clamp_load",
+        "pac2002_clamp_longitudinal_slip",
+        "pac2002_combined_lateral_force",
+        "pac2002_combined_longitudinal_force",
+        "pac2002_contact_stiffness",
+        "pac2002_effective_rolling_radius",
+        "pac2002_force_limit",
+        "pac2002_gyroscopic_moment",
+        "pac2002_half_contact_length",
+        "pac2002_has_combined_slip_terms",
+        "pac2002_has_vertical_force_coupling_terms",
+        "pac2002_load_difference",
+        "pac2002_low_speed_force_scale",
+        "pac2002_low_speed_threshold",
+        "pac2002_maxwell_end_displacement",
+        "pac2002_mode_allows_combined",
+        "pac2002_mode_allows_lateral",
+        "pac2002_mode_allows_longitudinal",
+        "pac2002_mode_is_vertical_only",
+        "pac2002_mode_uses_contact_mass",
+        "pac2002_mode_uses_transient_state",
+        "pac2002_mode_uses_turn_slip",
+        "pac2002_overturning_moment",
+        "pac2002_parameter",
+        "pac2002_pure_force",
+        "pac2002_relaxation_length",
+        "pac2002_rolling_resistance_moment",
+        "pac2002_slip_reference_speed",
+        "pac2002_slip_stiffness",
+        "pac2002_state_turn_slip",
+        "pac2002_turn_slip_contact_relaxation",
+        "pac2002_turn_slip_switch",
+        "pac2002_use_mode",
+        "pac2002_vertical_force",
+        "write_pac2002_contact_mass_derivatives",
+        "write_pac2002_contact_yaw_derivatives",
+        "write_pac2002_turn_slip_derivatives"
+      ],
+      "target": "mb_tire_pac2002"
+    },
+    {
+      "includes": [
+        "mb_tire_state/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire",
+      "sources": [
+        "cpp/src/tire/kernel_tire_assembly.cpp"
+      ],
+      "symbols": [
+        "tire_state_value"
+      ],
+      "target": "mb_tire_state"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire_common",
+      "sources": [
+        "cpp/src/tire/common/kinematics.cpp"
+      ],
+      "symbols": [
+        "d_dot",
+        "d_normalized",
+        "d_rotate",
+        "d_sqrt"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire_common",
+      "sources": [
+        "cpp/src/tire/common/kinematics.cpp"
+      ],
+      "symbols": [
+        "d_state_point",
+        "road_profile_directional",
+        "road_profile_height",
+        "road_profile_slope",
+        "state_point",
+        "state_point_velocity",
+        "tire_center_body",
+        "tire_center_local",
+        "tire_frame_body"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire_common",
+      "sources": [
+        "cpp/src/tire/common/kinematics.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "dot",
+        "normalized",
+        "rotate"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_tire_fiala",
+      "sources": [
+        "cpp/src/tire/fiala/relaxation.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire_fiala",
+      "sources": [
+        "cpp/src/tire/fiala/directional.cpp",
+        "cpp/src/tire/fiala/forces.cpp",
+        "cpp/src/tire/fiala/model.cpp",
+        "cpp/src/tire/fiala/modes.cpp"
+      ],
+      "symbols": [
+        "d_abs",
+        "d_atan2",
+        "d_sign",
+        "d_sqrt",
+        "d_tan",
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire_fiala",
+      "sources": [
+        "cpp/src/tire/fiala/relaxation.cpp"
+      ],
+      "symbols": [
+        "road_profile_height",
+        "road_profile_slope",
+        "state_point",
+        "state_point_velocity",
+        "tire_center_body",
+        "tire_center_local",
+        "tire_frame_body",
+        "tire_relative_spin_omega"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire_fiala",
+      "sources": [
+        "cpp/src/tire/fiala/directional.cpp",
+        "cpp/src/tire/fiala/forces.cpp",
+        "cpp/src/tire/fiala/relaxation.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "dot",
+        "monotone_cubic",
+        "norm",
+        "normalized",
+        "rotate"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_tire_pac2002",
+      "sources": [
+        "cpp/src/tire/pac2002/directional.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire_pac2002",
+      "sources": [
+        "cpp/src/tire/pac2002/directional.cpp",
+        "cpp/src/tire/pac2002/law.cpp",
+        "cpp/src/tire/pac2002/model.cpp",
+        "cpp/src/tire/pac2002/spin.cpp",
+        "cpp/src/tire/pac2002/vertical.cpp"
+      ],
+      "symbols": [
+        "d_abs",
+        "d_atan2",
+        "d_clamp",
+        "d_cos",
+        "d_exp",
+        "d_pow_positive",
+        "d_sign",
+        "d_sin",
+        "d_sqrt",
+        "d_tan",
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire_pac2002",
+      "sources": [
+        "cpp/src/tire/pac2002/directional.cpp",
+        "cpp/src/tire/pac2002/vertical.cpp"
+      ],
+      "symbols": [
+        "monotone_cubic"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_tire_state/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_tire_pac2002",
+      "sources": [
+        "cpp/src/tire/pac2002/contact_mass.cpp",
+        "cpp/src/tire/pac2002/law.cpp",
+        "cpp/src/tire/pac2002/turn_slip.cpp"
+      ],
+      "symbols": [
+        "tire_state_value"
+      ],
+      "target": "mb_tire_state"
+    },
+    {
+      "includes": [
+        "mb_solve_dynamic/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_tire_state",
+      "sources": [
+        "cpp/src/tire_state/kernel_tire_state.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_solve_dynamic"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/drive_brake.cpp",
+        "cpp/src/vehicle/kernel_directional.cpp",
+        "cpp/src/vehicle/kernel_registration.cpp",
+        "cpp/src/vehicle/layout.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/kernel_directional.cpp",
+        "cpp/src/vehicle/kernel_registration.cpp"
+      ],
+      "symbols": [
+        "d_abs",
+        "d_atan2",
+        "d_body_quaternion",
+        "d_cardan_xyz_from_rotation",
+        "d_cardan_xyz_rate",
+        "d_clamp",
+        "d_cross",
+        "d_dot",
+        "d_norm",
+        "d_normalized",
+        "d_qconj",
+        "d_qlog",
+        "d_qmat",
+        "d_qmul",
+        "d_rotate",
+        "d_sin",
+        "d_sqrt",
+        "d_transpose",
+        "interpolated_curve_directional",
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/kernel_directional.cpp",
+        "cpp/src/vehicle/kernel_registration.cpp",
+        "cpp/src/vehicle/steering.cpp"
+      ],
+      "symbols": [
+        "prescribed_steering"
+      ],
+      "target": "mb_joint"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/drive_brake.cpp",
+        "cpp/src/vehicle/kernel_directional.cpp",
+        "cpp/src/vehicle/kernel_registration.cpp",
+        "cpp/src/vehicle/layout.cpp",
+        "cpp/src/vehicle/steering.cpp"
+      ],
+      "symbols": [
+        "add_directional_force_at_arm",
+        "add_directional_torque",
+        "add_force_on_body",
+        "add_torque_on_body",
+        "d_state_point",
+        "d_state_point_velocity",
+        "directional_body_active",
+        "directional_inertial_active",
+        "directional_orientation_active",
+        "road_profile_directional",
+        "state_point",
+        "state_point_velocity",
+        "tire_center_body",
+        "tire_center_local",
+        "tire_frame_body",
+        "tire_relative_spin_omega"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/drive_brake.cpp",
+        "cpp/src/vehicle/kernel_directional.cpp",
+        "cpp/src/vehicle/kernel_registration.cpp",
+        "cpp/src/vehicle/layout.cpp",
+        "cpp/src/vehicle/steering.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "dot",
+        "interpolate_curve",
+        "norm",
+        "normalized",
+        "qconj",
+        "qlog",
+        "qmat",
+        "qmul",
+        "qnormalize",
+        "rotate",
+        "transpose",
+        "unit_quaternion"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_solve_static/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/kernel_registration.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_solve_static"
+    },
+    {
+      "includes": [
+        "mb_suspension/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/force_assembly.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_suspension"
+    },
+    {
+      "includes": [
+        "mb_tire/force_context.hpp",
+        "mb_tire/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/force_assembly.cpp"
+      ],
+      "symbols": [
+        "assemble_tire_forces"
+      ],
+      "target": "mb_tire"
+    },
+    {
+      "includes": [
+        "mb_tire/fiala/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/kernel_directional.cpp"
+      ],
+      "symbols": [
+        "fiala_forces_directional",
+        "fiala_parameter",
+        "fiala_rolling_resistance_factor",
+        "fiala_startup_scale",
+        "fiala_transient_enabled",
+        "fiala_use_mode",
+        "fiala_vertical_force_directional"
+      ],
+      "target": "mb_tire_fiala"
+    },
+    {
+      "includes": [
+        "mb_tire/pac2002/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/kernel_directional.cpp",
+        "cpp/src/vehicle/kernel_registration.cpp"
+      ],
+      "symbols": [
+        "pac2002_aligning_moment_directional",
+        "pac2002_combined_lateral_force_directional",
+        "pac2002_combined_longitudinal_force_directional",
+        "pac2002_effective_rolling_radius_directional",
+        "pac2002_force_limit_directional",
+        "pac2002_gyroscopic_moment_directional",
+        "pac2002_has_combined_slip_terms",
+        "pac2002_has_vertical_force_coupling_terms",
+        "pac2002_low_speed_threshold",
+        "pac2002_maxwell_decay",
+        "pac2002_maxwell_end_displacement",
+        "pac2002_mode_allows_combined",
+        "pac2002_mode_allows_lateral",
+        "pac2002_mode_allows_longitudinal",
+        "pac2002_mode_is_vertical_only",
+        "pac2002_mode_state_width",
+        "pac2002_mode_supported_by_native",
+        "pac2002_mode_uses_contact_mass",
+        "pac2002_mode_uses_transient_state",
+        "pac2002_mode_uses_turn_slip",
+        "pac2002_overturning_moment_directional",
+        "pac2002_parameter",
+        "pac2002_pure_force_directional",
+        "pac2002_reference_load",
+        "pac2002_relaxation_length_directional",
+        "pac2002_rolling_resistance_moment_directional",
+        "pac2002_slip_reference_speed",
+        "pac2002_turn_slip_switch",
+        "pac2002_use_mode",
+        "pac2002_vertical_force_directional"
+      ],
+      "target": "mb_tire_pac2002"
+    },
+    {
+      "includes": [
+        "mb_tire_state/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_vehicle",
+      "sources": [
+        "cpp/src/vehicle/kernel_directional.cpp",
+        "cpp/src/vehicle/layout.cpp"
+      ],
+      "symbols": [
+        "tire_block_width",
+        "tire_state_value"
+      ],
+      "target": "mb_tire_state"
+    }
+  ],
+  "source_edges": [
+    [
+      "abi",
+      "mb_cases"
+    ],
+    [
+      "abi",
+      "mb_config"
+    ],
+    [
+      "abi",
+      "mb_contract"
+    ],
+    [
+      "abi",
+      "mb_dual"
+    ],
+    [
+      "abi",
+      "mb_input"
+    ],
+    [
+      "abi",
+      "mb_joint"
+    ],
+    [
+      "abi",
+      "mb_model"
+    ],
+    [
+      "abi",
+      "mb_numeric"
+    ],
+    [
+      "abi",
+      "mb_output"
+    ],
+    [
+      "abi",
+      "mb_solve_dynamic"
+    ],
+    [
+      "abi",
+      "mb_solve_static"
+    ],
+    [
+      "abi",
+      "mb_tire_pac2002"
+    ],
+    [
+      "abi",
+      "mb_tire_state"
+    ],
+    [
+      "abi",
+      "mb_vehicle"
+    ],
+    [
+      "mb_cases",
+      "mb_config"
+    ],
+    [
+      "mb_cases",
+      "mb_model"
+    ],
+    [
+      "mb_cases",
+      "mb_numeric"
+    ],
+    [
+      "mb_dual",
+      "mb_config"
+    ],
+    [
+      "mb_dual",
+      "mb_numeric"
+    ],
+    [
+      "mb_joint",
+      "mb_config"
+    ],
+    [
+      "mb_joint",
+      "mb_dual"
+    ],
+    [
+      "mb_joint",
+      "mb_model"
+    ],
+    [
+      "mb_joint",
+      "mb_numeric"
+    ],
+    [
+      "mb_linear",
+      "mb_dual"
+    ],
+    [
+      "mb_linear",
+      "mb_numeric"
+    ],
+    [
+      "mb_model",
+      "mb_config"
+    ],
+    [
+      "mb_model",
+      "mb_dual"
+    ],
+    [
+      "mb_model",
+      "mb_numeric"
+    ],
+    [
+      "mb_output",
+      "mb_config"
+    ],
+    [
+      "mb_output",
+      "mb_input"
+    ],
+    [
+      "mb_output",
+      "mb_joint"
+    ],
+    [
+      "mb_output",
+      "mb_model"
+    ],
+    [
+      "mb_output",
+      "mb_numeric"
+    ],
+    [
+      "mb_output",
+      "mb_solve_dynamic"
+    ],
+    [
+      "mb_output",
+      "mb_vehicle"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_config"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_dual"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_input"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_joint"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_linear"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_model"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_numeric"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_brush"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_common"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_state"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_vehicle"
+    ],
+    [
+      "mb_solve_static",
+      "mb_config"
+    ],
+    [
+      "mb_solve_static",
+      "mb_dual"
+    ],
+    [
+      "mb_solve_static",
+      "mb_input"
+    ],
+    [
+      "mb_solve_static",
+      "mb_joint"
+    ],
+    [
+      "mb_solve_static",
+      "mb_linear"
+    ],
+    [
+      "mb_solve_static",
+      "mb_model"
+    ],
+    [
+      "mb_solve_static",
+      "mb_numeric"
+    ],
+    [
+      "mb_solve_static",
+      "mb_solve_dynamic"
+    ],
+    [
+      "mb_solve_static",
+      "mb_tire_common"
+    ],
+    [
+      "mb_solve_static",
+      "mb_tire_state"
+    ],
+    [
+      "mb_solve_static",
+      "mb_vehicle"
+    ],
+    [
+      "mb_suspension",
+      "mb_config"
+    ],
+    [
+      "mb_suspension",
+      "mb_dual"
+    ],
+    [
+      "mb_suspension",
+      "mb_model"
+    ],
+    [
+      "mb_suspension",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire",
+      "mb_config"
+    ],
+    [
+      "mb_tire",
+      "mb_model"
+    ],
+    [
+      "mb_tire",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_brush"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_common",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_common",
+      "mb_model"
+    ],
+    [
+      "mb_tire_common",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_config"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_model"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_config"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_state",
+      "mb_solve_dynamic"
+    ],
+    [
+      "mb_vehicle",
+      "mb_config"
+    ],
+    [
+      "mb_vehicle",
+      "mb_dual"
+    ],
+    [
+      "mb_vehicle",
+      "mb_joint"
+    ],
+    [
+      "mb_vehicle",
+      "mb_model"
+    ],
+    [
+      "mb_vehicle",
+      "mb_numeric"
+    ],
+    [
+      "mb_vehicle",
+      "mb_solve_static"
+    ],
+    [
+      "mb_vehicle",
+      "mb_suspension"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_vehicle",
+      "mb_tire_state"
+    ]
+  ],
+  "target_modules": [
+    "mb_assembly",
+    "mb_config",
+    "mb_dual",
+    "mb_element",
+    "mb_force",
+    "mb_input",
+    "mb_joint",
+    "mb_linear",
+    "mb_numeric",
+    "mb_solve_dynamic",
+    "mb_solve_static"
+  ],
+  "version": 2
 }

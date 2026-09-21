@@ -9,17 +9,17 @@
 /// module that calls them, so the layering the project checks with
 /// `check_module_layering.py` is also the layering of these headers.
 
-#include "mb_base/prelude.hpp"
-#include "mb_base/vector.hpp"
+#include "mb_config/prelude.hpp"
+#include "mb_numeric/vector.hpp"
 #include "mb_model/types.hpp"
-#include "mb_base/monotone_cubic.hpp"
-#include "mb_base/constants.hpp"
-#include "mb_base/diagnostics.hpp"
-#include "mb_base/env.hpp"
-#include "mb_base/util.hpp"
-#include "mb_base/dual.hpp"
-#include "mb_base/dual_geometry.hpp"
-#include "mb_base/prelude.hpp"
+#include "mb_numeric/monotone_cubic.hpp"
+#include "mb_config/constants.hpp"
+#include "mb_config/diagnostics.hpp"
+#include "mb_config/env.hpp"
+#include "mb_numeric/util.hpp"
+#include "mb_dual/dual.hpp"
+#include "mb_dual/dual_geometry.hpp"
+#include "mb_config/prelude.hpp"
 #include "mb_model/enums.hpp"
 
 namespace axle_kernel {
@@ -29,7 +29,6 @@ double road_profile_slope( const Model& model, const State& state, std::size_t t
 
 void set_error(char* buffer, std::size_t capacity, const std::string& text);
 
-int constraint_rows(int type);
 
 Vec3 state_point(const State& state, int body, const Vec3& local);
 
@@ -44,14 +43,6 @@ int tire_center_body(const Tire& tire);
 Vec3 tire_center_local(const Tire& tire);
 
 Vec3 tire_relative_spin_omega(const State& state, const Tire& tire);
-
-Vec3 add_force_on_body( std::vector<Vec3>& force, std::vector<Vec3>& torque, const Model& model, const State& state, int body, const Vec3& point_local, const Vec3& f_world);
-
-void add_torque_on_body( std::vector<Vec3>& torque, const Model& model, int body, const Vec3& tau_world );
-
-std::array<double, 6> mat6_mul( const std::array<double, 36>& matrix, const std::array<double, 6>& vector );
-
-std::array<double, 6> bushing_deformation( const Bushing& bushing, const Model& model, const State& state, std::array<double, 6>& rate );
 
 DVec3 d_state_point( const State& state, const std::vector<Vec3>& dr, const std::vector<Vec3>& dtheta, int body, const Vec3& local );
 

@@ -9,25 +9,16 @@
 
 #include "mb_model/functions.hpp"
 
-#include "mb_constraint/types.hpp"
 
 // Direct dependencies of this translation unit.  The module headers no
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
-#include "mb_base/functions.hpp"
+#include "mb_numeric/functions.hpp"
 
 namespace axle_kernel {
 void set_error(char* buffer, std::size_t capacity, const std::string& text) {
     if (!buffer || capacity == 0) return;
     std::snprintf(buffer, capacity, "%s", text.c_str());
-}
-
-int constraint_rows(int type) {
-    // The one table in `mb_constraint/types.hpp`, which also carries each type's
-    // residual classification and is read by the registry: a joint type's row
-    // count is written down once.  An unregistered type gets the table's
-    // sentinel, whose row count is -1 -- the value `build_model` rejects.
-    return joint_type_info(type).rows;
 }
 
 Vec3 state_point(const State& state, int body, const Vec3& local) {

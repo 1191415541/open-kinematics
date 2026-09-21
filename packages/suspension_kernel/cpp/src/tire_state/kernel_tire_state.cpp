@@ -2,7 +2,7 @@
 // Direct dependencies of this translation unit.  The module headers no
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
-#include "mb_integrator/functions.hpp"
+#include "mb_solve_dynamic/functions.hpp"
 // K5 (epic MODULES.md section 2.3): the tire-state layer.
 //
 // One tire contributes a fixed-width run of slots to the unknown vector, and every

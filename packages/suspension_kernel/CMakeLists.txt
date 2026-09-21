@@ -24,10 +24,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(KERNEL_SOURCES
-    cpp/src/abi/element_reader.cpp
     cpp/src/abi/kernel_abi.cpp
     cpp/src/abi/kernel_core.cpp
-    cpp/src/abi/kernel_model_build.cpp
 )
 
 #: One library per module (K6).  The tire models have their own targets above; the
@@ -35,18 +33,21 @@ set(KERNEL_SOURCES
 #: library: the ABI layer *is* the aggregate, so putting it in an archive would only
 #: add a link-order dependency on everything below it.
 
-set(MB_INTEGRATOR_SOURCES
-    cpp/src/integrator/kernel_events.cpp
-    cpp/src/integrator/kernel_integrator.cpp
-    cpp/src/integrator/kernel_integrator_input.cpp
-    cpp/src/integrator/kernel_integrator_newton.cpp
-    cpp/src/integrator/kernel_integrator_residual.cpp
-    cpp/src/integrator/kernel_integrator_step.cpp
+set(MB_SOLVE_DYNAMIC_SOURCES
+    cpp/src/solve_dynamic/kernel_events.cpp
+    cpp/src/solve_dynamic/kernel_integrator.cpp
+    cpp/src/solve_dynamic/kernel_integrator_newton.cpp
+    cpp/src/solve_dynamic/kernel_integrator_residual.cpp
+    cpp/src/solve_dynamic/kernel_integrator_step.cpp
+    cpp/src/solve_dynamic/kernel_integrator_state.cpp
 )
-set(MB_STATIC_SOURCES
-    cpp/src/static/kernel_static_contact.cpp
-    cpp/src/static/kernel_static_projection.cpp
-    cpp/src/static/kernel_static_trim.cpp
+set(MB_INPUT_SOURCES
+    cpp/src/input/kernel_input.cpp
+)
+set(MB_SOLVE_STATIC_SOURCES
+    cpp/src/solve_static/kernel_static_contact.cpp
+    cpp/src/solve_static/kernel_static_projection.cpp
+    cpp/src/solve_static/kernel_static_trim.cpp
 )
 set(MB_CONTRACT_SOURCES
     cpp/src/contract/contract_container.cpp
@@ -71,28 +72,34 @@ set(MB_CASES_SOURCES
 set(MB_OUTPUT_SOURCES
     cpp/src/output/kernel_output.cpp
 )
-set(MB_VEHICLE_SOURCES
-    cpp/src/vehicle/drive_brake.cpp
-    cpp/src/vehicle/force_assembly.cpp
-    cpp/src/vehicle/kernel_directional.cpp
-    cpp/src/vehicle/kernel_registration.cpp
-    cpp/src/vehicle/layout.cpp
-    cpp/src/vehicle/steering.cpp
+set(MB_ASSEMBLY_SOURCES
+    cpp/src/assembly/build_model.cpp
+    cpp/src/assembly/element_reader.cpp
+    cpp/src/assembly/registration.cpp
 )
-set(MB_SUSPENSION_SOURCES
-    cpp/src/suspension/anti_roll.cpp
-    cpp/src/suspension/bushing.cpp
-    cpp/src/suspension/curves.cpp
-    cpp/src/suspension/spring.cpp
+set(MB_FORCE_SOURCES
+    cpp/src/force/directional.cpp
+    cpp/src/force/external_vector.cpp
+    cpp/src/force/layout.cpp
+)
+set(MB_ELEMENT_SOURCES
+    cpp/src/element/anti_roll.cpp
+    cpp/src/element/bushing.cpp
+    cpp/src/element/curves.cpp
+    cpp/src/element/directional.cpp
+    cpp/src/element/drive_brake.cpp
+    cpp/src/element/spring.cpp
+    cpp/src/element/steering.cpp
 )
 set(MB_TIRE_SOURCES
     cpp/src/tire/assemble.cpp
+    cpp/src/tire/directional.cpp
     cpp/src/tire/kernel_tire_assembly.cpp
 )
-set(MB_CONSTRAINT_SOURCES
-    cpp/src/constraint/kernel_directional_constraint.cpp
-    cpp/src/constraint/kernel_model_constraint.cpp
-    cpp/src/constraint/registry.cpp
+set(MB_JOINT_SOURCES
+    cpp/src/joint/kernel_directional_constraint.cpp
+    cpp/src/joint/kernel_model_constraint.cpp
+    cpp/src/joint/registry.cpp
 )
 set(MB_MODEL_SOURCES
     cpp/src/model/directional.cpp
@@ -127,23 +134,26 @@ set(MB_TIRE_COMMON_SOURCES
 set(MB_TIRE_STATE_SOURCES
     cpp/src/tire_state/kernel_tire_state.cpp
 )
-set(MB_LINALG_SOURCES
-    cpp/src/linalg/kernel_linalg.cpp
+set(MB_LINEAR_SOURCES
+    cpp/src/linear/kernel_linear.cpp
 )
-set(MB_BASE_SOURCES
-    cpp/src/base/angles.cpp
-    cpp/src/base/curves.cpp
-    cpp/src/base/dual_geometry.cpp
-    cpp/src/base/kernel_base.cpp
-    cpp/src/base/kernel_dual_algebra.cpp
+set(MB_NUMERIC_SOURCES
+    cpp/src/numeric/angles.cpp
+    cpp/src/numeric/kernel_numeric.cpp
+)
+set(MB_DUAL_SOURCES
+    cpp/src/dual/curves.cpp
+    cpp/src/dual/dual_geometry.cpp
+    cpp/src/dual/kernel_dual_algebra.cpp
+)
+set(MB_CONFIG_SOURCES
+    cpp/src/config/kernel_config.cpp
 )
 
 set(MB_ABI_SOURCES
-    cpp/src/abi/element_reader.cpp
     cpp/src/abi/kernel_abi.cpp
     cpp/src/abi/kernel_contract_run.cpp
     cpp/src/abi/kernel_core.cpp
-    cpp/src/abi/kernel_model_build.cpp
 )
 
 #: A shared set of compile options applied to every kernel target.  Defined once
@@ -159,33 +169,40 @@ set(KERNEL_COMPILE_OPTIONS
     -fopenmp
 )
 
-#: `mb_base` and `mb_linalg` are the two libraries the epic requires to be free
-#: of any `Model`/`ResidualContext` dependency.  Both source files were verified
+#: `mb_numeric`/`mb_dual`/`mb_config` (the split of `mb_base`, subtask 03) and
+#: `mb_linear` (the rename of `mb_linalg`) are the libraries the epic requires to be free of any
+#: `Model`/`ResidualContext` dependency.  Both source files were verified
 #: to reference neither, so the boundary can be drawn by target membership alone
 #: -- no code has to move for this step.  They are STATIC so the aggregate still
 #: produces one self-contained shared library, and POSITION_INDEPENDENT_CODE is
 #: required because they end up inside one.
-add_library(mb_base STATIC ${MB_BASE_SOURCES})
-add_library(mb_linalg STATIC ${MB_LINALG_SOURCES})
+add_library(mb_numeric STATIC ${MB_NUMERIC_SOURCES})
+add_library(mb_dual STATIC ${MB_DUAL_SOURCES})
+add_library(mb_config STATIC ${MB_CONFIG_SOURCES})
+add_library(mb_linear STATIC ${MB_LINEAR_SOURCES})
 set_target_properties(
-    mb_base mb_linalg
+    mb_numeric mb_dual mb_config mb_linear
     PROPERTIES POSITION_INDEPENDENT_CODE ON
 )
-target_compile_options(mb_base PRIVATE ${KERNEL_COMPILE_OPTIONS})
-target_compile_options(mb_linalg PRIVATE ${KERNEL_COMPILE_OPTIONS})
-target_link_options(mb_linalg PRIVATE -fopenmp)
+target_compile_options(mb_numeric PRIVATE ${KERNEL_COMPILE_OPTIONS})
+target_compile_options(mb_dual PRIVATE ${KERNEL_COMPILE_OPTIONS})
+target_compile_options(mb_config PRIVATE ${KERNEL_COMPILE_OPTIONS})
+target_compile_options(mb_linear PRIVATE ${KERNEL_COMPILE_OPTIONS})
+target_link_options(mb_linear PRIVATE -fopenmp)
 
 
 add_library(mb_tire_pac2002 STATIC ${MB_TIRE_PAC2002_SOURCES})
-add_library(mb_integrator STATIC ${MB_INTEGRATOR_SOURCES})
+add_library(mb_solve_dynamic STATIC ${MB_SOLVE_DYNAMIC_SOURCES})
+add_library(mb_input STATIC ${MB_INPUT_SOURCES})
 add_library(mb_contract STATIC ${MB_CONTRACT_SOURCES})
 add_library(mb_cases STATIC ${MB_CASES_SOURCES})
-add_library(mb_static STATIC ${MB_STATIC_SOURCES})
+add_library(mb_solve_static STATIC ${MB_SOLVE_STATIC_SOURCES})
 add_library(mb_output STATIC ${MB_OUTPUT_SOURCES})
-add_library(mb_vehicle STATIC ${MB_VEHICLE_SOURCES})
-add_library(mb_suspension STATIC ${MB_SUSPENSION_SOURCES})
+add_library(mb_assembly STATIC ${MB_ASSEMBLY_SOURCES})
+add_library(mb_force STATIC ${MB_FORCE_SOURCES})
+add_library(mb_element STATIC ${MB_ELEMENT_SOURCES})
 add_library(mb_tire STATIC ${MB_TIRE_SOURCES})
-add_library(mb_constraint STATIC ${MB_CONSTRAINT_SOURCES})
+add_library(mb_joint STATIC ${MB_JOINT_SOURCES})
 add_library(mb_model STATIC ${MB_MODEL_SOURCES})
 add_library(mb_tire_common STATIC ${MB_TIRE_COMMON_SOURCES})
 add_library(mb_tire_state STATIC ${MB_TIRE_STATE_SOURCES})
@@ -206,7 +223,7 @@ foreach(_tire_target mb_tire_pac2002 mb_tire_fiala mb_tire_brush)
     target_link_options(${_tire_target} PRIVATE -fopenmp)
 endforeach()
 
-foreach(_module_target mb_contract mb_cases mb_integrator mb_static mb_output mb_vehicle mb_suspension mb_tire mb_constraint mb_model mb_tire_pac2002 mb_tire_fiala mb_tire_brush mb_tire_common mb_tire_state mb_linalg mb_base)
+foreach(_module_target mb_contract mb_cases mb_solve_dynamic mb_solve_static mb_input mb_output mb_assembly mb_force mb_element mb_tire mb_joint mb_model mb_tire_pac2002 mb_tire_fiala mb_tire_brush mb_tire_common mb_tire_state mb_linear mb_numeric mb_dual mb_config)
     set_target_properties(
         ${_module_target} PROPERTIES POSITION_INDEPENDENT_CODE ON
     )
@@ -238,21 +255,25 @@ target_link_libraries(
     "-Wl,--start-group"
     mb_contract
     mb_cases
-    mb_integrator
-    mb_static
+    mb_solve_dynamic
+    mb_solve_static
+    mb_input
     mb_output
-    mb_vehicle
-    mb_suspension
+    mb_assembly
+    mb_force
+    mb_element
     mb_tire
-    mb_constraint
+    mb_joint
     mb_model
     mb_tire_pac2002
     mb_tire_fiala
     mb_tire_brush
     mb_tire_common
     mb_tire_state
-    mb_linalg
-    mb_base
+    mb_linear
+    mb_numeric
+    mb_dual
+    mb_config
     "-Wl,--end-group"
 )
 
@@ -305,7 +326,7 @@ set_property(
     PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
 )
 set_property(
-    TARGET mb_contract mb_cases mb_integrator mb_static mb_output mb_vehicle mb_suspension mb_tire mb_constraint mb_model mb_tire_pac2002 mb_tire_fiala mb_tire_brush mb_tire_common mb_tire_state mb_linalg mb_base
+    TARGET mb_contract mb_cases mb_solve_dynamic mb_solve_static mb_output mb_assembly mb_force mb_element mb_tire mb_joint mb_model mb_tire_pac2002 mb_tire_fiala mb_tire_brush mb_tire_common mb_tire_state mb_linear mb_numeric mb_dual mb_config
     PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
 )
 

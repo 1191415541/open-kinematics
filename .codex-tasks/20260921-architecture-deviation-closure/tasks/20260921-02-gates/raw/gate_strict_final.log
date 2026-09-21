@@ -1,0 +1,61 @@
+kernel root                : C:\тс╪Ч\open-kinematics\packages\suspension_kernel
+mode                       : final
+headers                    : 51
+cpp translation units      : 70
+modules present            : 20
+header edges               : 86
+source edges               : 65
+source edge evidence       : 150 records (tu_include 132, symbol_reference 130, both 112; kind mentions 262)
+target modules missing     : 10
+legacy modules present     : 7
+legacy modules unregistered: 0 []
+mutual (reverse) edges     : 3
+self-including headers     : 0
+cross-aggregate includes   : 0
+module cycles (SCC size>1) : 2
+  mutual: mb_constraint <-> mb_model
+  mutual: mb_integrator <-> mb_tire_state
+  mutual: mb_static <-> mb_vehicle
+  cycle: mb_constraint <-> mb_model
+  cycle: mb_integrator <-> mb_static <-> mb_tire <-> mb_tire_brush <-> mb_tire_fiala <-> mb_tire_pac2002 <-> mb_tire_state <-> mb_vehicle
+legacy edges traced to successors : 102
+  tolerated [legacy_cycle] cycle mb_constraint <-> mb_model is traced to mb_constraint and must disappear with the migration
+  tolerated [legacy_cycle] cycle mb_integrator <-> mb_static <-> mb_tire <-> mb_tire_brush <-> mb_tire_fiala <-> mb_tire_pac2002 <-> mb_tire_state <-> mb_vehicle is traced to mb_integrator, mb_static, mb_vehicle and must disappear with the migration
+
+FAIL
+  - [cycle] the final mode forbids the module cycle mb_constraint <-> mb_model
+  - [cycle] the final mode forbids the module cycle mb_integrator <-> mb_static <-> mb_tire <-> mb_tire_brush <-> mb_tire_fiala <-> mb_tire_pac2002 <-> mb_tire_state <-> mb_vehicle
+  - [reverse_edge] mb_constraint and mb_model depend on each other
+  - [reverse_edge] mb_integrator and mb_tire_state depend on each other
+  - [reverse_edge] mb_static and mb_vehicle depend on each other
+  - [legacy_module_present] the final mode forbids the legacy module mb_base
+  - [legacy_module_present] the final mode forbids the legacy module mb_vehicle
+  - [legacy_module_present] the final mode forbids the legacy module mb_suspension
+  - [legacy_module_present] the final mode forbids the legacy module mb_integrator
+  - [legacy_module_present] the final mode forbids the legacy module mb_static
+  - [legacy_module_present] the final mode forbids the legacy module mb_linalg
+  - [legacy_module_present] the final mode forbids the legacy module mb_constraint
+  - [legacy_path_present] the final mode forbids the legacy path cpp/include/mb_base
+  - [legacy_path_present] the final mode forbids the legacy path cpp/include/mb_constraint
+  - [legacy_path_present] the final mode forbids the legacy path cpp/include/mb_integrator
+  - [legacy_path_present] the final mode forbids the legacy path cpp/include/mb_linalg
+  - [legacy_path_present] the final mode forbids the legacy path cpp/include/mb_static
+  - [legacy_path_present] the final mode forbids the legacy path cpp/include/mb_suspension
+  - [legacy_path_present] the final mode forbids the legacy path cpp/include/mb_vehicle
+  - [legacy_path_present] the final mode forbids the legacy path cpp/src/base
+  - [legacy_path_present] the final mode forbids the legacy path cpp/src/constraint
+  - [legacy_path_present] the final mode forbids the legacy path cpp/src/integrator
+  - [legacy_path_present] the final mode forbids the legacy path cpp/src/linalg
+  - [legacy_path_present] the final mode forbids the legacy path cpp/src/static
+  - [legacy_path_present] the final mode forbids the legacy path cpp/src/suspension
+  - [legacy_path_present] the final mode forbids the legacy path cpp/src/vehicle
+  - [missing_target_module] the final mode requires the target module mb_numeric
+  - [missing_target_module] the final mode requires the target module mb_dual
+  - [missing_target_module] the final mode requires the target module mb_config
+  - [missing_target_module] the final mode requires the target module mb_linear
+  - [missing_target_module] the final mode requires the target module mb_joint
+  - [missing_target_module] the final mode requires the target module mb_solve_static
+  - [missing_target_module] the final mode requires the target module mb_solve_dynamic
+  - [missing_target_module] the final mode requires the target module mb_element
+  - [missing_target_module] the final mode requires the target module mb_assembly
+  - [missing_target_module] the final mode requires the target module mb_force

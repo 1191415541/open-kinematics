@@ -22,7 +22,7 @@ ROOT = Path(__file__).parents[4]
 #: `cpp/src/<module>/`, so these tests locate a unit by name rather than by path:
 #: a test that hard-codes the directory breaks on every move and teaches nothing.
 KERNEL_CPP = ROOT / "packages" / "suspension_kernel" / "cpp"
-VERSION_HEADER = KERNEL_CPP / "include" / "mb_base" / "version.hpp"
+VERSION_HEADER = KERNEL_CPP / "include" / "mb_config" / "version.hpp"
 
 
 def _kernel_source(name: str) -> Path:
@@ -58,8 +58,8 @@ def test_hoisted_symbols_are_defined_in_their_target_layer() -> None:
     """
     #: symbol -> (translation unit, the layer that unit implements)
     hoisted = {
-        "finite_vec": ("kernel_base.cpp", "mb_base"),
-        "max_abs": ("kernel_base.cpp", "mb_base"),
+        "finite_vec": ("kernel_numeric.cpp", "mb_numeric"),
+        "max_abs": ("kernel_numeric.cpp", "mb_numeric"),
         # D9/K5: the tire state block has its own layer, so the width, the storage
         # and the two accessors live in the tire-state unit rather than with the
         # model or with the PAC2002 law.  The total width used to be defined in
@@ -98,7 +98,7 @@ def test_the_integrator_does_not_dispatch_on_the_tire_model_kind() -> None:
         "kernel_integrator_residual.cpp",
         "kernel_integrator_newton.cpp",
         "kernel_integrator_step.cpp",
-        "kernel_integrator_input.cpp",
+        "kernel_integrator_state.cpp",
     )
     offenders: list[str] = []
     for unit in integrator_units:

@@ -7,7 +7,7 @@
 /// compile-time registries that let the solver talk to element / joint / tire
 /// / case implementations without knowing them.
 
-#include "mb_base/prelude.hpp"
+#include "mb_config/prelude.hpp"
 #include "mb_contract/types.hpp"
 
 namespace axle_kernel {

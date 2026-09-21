@@ -1,0 +1,22 @@
+usage: kc_perf_gate.py [-h] [--record | --check] [--baseline BASELINE]
+                       [--repeats REPEATS]
+
+Performance gate for the native K/C workloads. ``--record-native`` freezes the
+current implementation's wall clock together with the machine identity;
+``--check-native`` re-measures and fails when the new measurement exceeds the
+recorded budget. Two workloads, both through the contract boundary: *
+``k-100`` -- the 10x10 wheel-travel x rack grid the benchmark geometry
+defines, 100 states. This is the same amount of work the retired Python
+benchmark measured, so the two numbers are comparable; * ``c-66`` -- the six
+physical C load paths x 11 levels on the compliant fixture, 66 states. The
+Python side's ``c-6600`` was a deliberately *nonphysical* proxy solver used to
+exercise table generation and cache behaviour; a proxy has no native analogue,
+so the native C workload is the real one and keeps a budget of its own rather
+than being scored against a number measured for a different amount of work.
+
+options:
+  -h, --help            show this help message and exit
+  --record, --record-native
+  --check, --check-native
+  --baseline BASELINE
+  --repeats REPEATS

@@ -186,6 +186,8 @@ GEMINI.md
 !/.codex-tasks/20260919-public-api-simulation-cutover/**
 !/.codex-tasks/20260920-unified-preparation-cutover/
 !/.codex-tasks/20260920-unified-preparation-cutover/**
+!/.codex-tasks/20260921-architecture-deviation-closure/
+!/.codex-tasks/20260921-architecture-deviation-closure/**
 /artifacts/
 /packages/*/artifacts/
 /packages/*/.codex-tasks/

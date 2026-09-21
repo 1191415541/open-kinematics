@@ -1,0 +1,24 @@
+usage: kc_parity_check.py [-h] [--check] [--baseline BASELINE]
+                          [--actual-dir ACTUAL_DIR]
+
+K/C parity gate: the frozen reference states vs a candidate implementation.
+The snapshot under ``tests/data/kc_baseline`` was produced by the Python
+quasi-static solver and is **frozen**. It is the oracle the native kernel is
+judged against, and the order matters: the Python output was captured *before*
+the Python implementation was retired, so the reference outlives the thing it
+was captured from. ``--record`` is gone with that solver -- regenerating the
+snapshot would mean re-deriving the oracle from the implementation under test.
+* K -- a 3x3 wheel-travel x rack grid (9 states); * C -- the six standard load
+paths x 11 levels at the neutral K point (66 states), single-side mode.
+``--check --actual-dir DIR`` compares a candidate implementation's JSON files
+against the snapshot using the tolerances the strict Adams gates already use,
+so the same numbers govern both comparisons. ``scripts/kc_native_probe.py``
+and ``scripts/kc_native_c_probe.py`` write those candidates.
+
+options:
+  -h, --help            show this help message and exit
+  --check
+  --baseline BASELINE
+  --actual-dir ACTUAL_DIR
+                        directory holding the candidate
+                        k_states.json/c_states.json

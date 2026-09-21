@@ -1,0 +1,22 @@
+usage: dynamic_hash_sentinel.py [-h] (--record | --check) [--output OUTPUT]
+                                [--baseline BASELINE] [--skip-run]
+
+Dynamic-path output hash sentinel (gate B, byte-level tier). Runs the frozen
+axle-dynamics acceptance matrix and hashes every produced result artifact: *
+``arrays.npz`` bytes per case and variant (``native_result`` /
+``native_refined_result``); * a canonical view of each ``manifest.json`` with
+machine/timing dependent keys (``performance``, ``native_build``) removed. A
+combined digest over the sorted per-artifact entries is compared against the
+recorded baseline. A non-zero acceptance exit code is *expected*: three road
+cases are documented to fail the ``time_convergence`` gate on
+``fixture.force_z`` alone (``docs/axle_dynamics_results.md``), and the project
+records that honestly rather than loosening the cases. The sentinel therefore
+records the exit code and the failing case list, and fails only on drift.
+
+options:
+  -h, --help           show this help message and exit
+  --record
+  --check
+  --output OUTPUT
+  --baseline BASELINE
+  --skip-run           reuse an existing output dir

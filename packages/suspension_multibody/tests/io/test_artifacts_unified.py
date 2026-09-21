@@ -1,5 +1,6 @@
 """Regression tests for the unified artifact owner."""
 
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -80,6 +81,27 @@ def test_write_read_native_axle_artifact(tmp_path: Path) -> None:
     assert loaded["manifest"]["metrics"]["peak_force_n"] == 12.0
     assert loaded["arrays"]["states"].shape == (2, 1, 19)
     assert loaded["arrays"]["tire_output"].shape == (2, 1, 40)
+    with zipfile.ZipFile(tmp_path / "axle" / "arrays.npz") as archive:
+        assert archive.namelist() == [
+            "times_s.npy",
+            "body_names.npy",
+            "constraint_names.npy",
+            "spring_names.npy",
+            "bushing_names.npy",
+            "anti_roll_bar_names.npy",
+            "tire_names.npy",
+            "states.npy",
+            "constraint_wrench.npy",
+            "spring_output.npy",
+            "bushing_output.npy",
+            "anti_roll_output.npy",
+            "diagnostics.npy",
+            "tire_output.npy",
+            "energy.npy",
+            "contact_event_time_s.npy",
+            "contact_event_tire.npy",
+            "contact_event_transition.npy",
+        ]
 
 
 def test_write_read_native_vehicle_artifact(tmp_path: Path) -> None:

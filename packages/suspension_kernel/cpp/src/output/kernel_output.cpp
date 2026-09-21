@@ -6,16 +6,18 @@
 // the model and the solved state and writes the caller's buffers; it decides
 // nothing about the dynamics, which is what makes it separable.
 
+#include "mb_input/functions.hpp"
 #include "mb_output/functions.hpp"
 
 // Direct dependencies of this translation unit.  The module headers no
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
-#include "mb_base/functions.hpp"
-#include "mb_constraint/functions.hpp"
-#include "mb_integrator/functions.hpp"
+#include "mb_config/functions.hpp"
+#include "mb_numeric/functions.hpp"
+#include "mb_joint/functions.hpp"
+#include "mb_solve_dynamic/functions.hpp"
 #include "mb_model/functions.hpp"
-#include "mb_vehicle/functions.hpp"
+#include "mb_force/functions.hpp"
 
 namespace axle_kernel {
 

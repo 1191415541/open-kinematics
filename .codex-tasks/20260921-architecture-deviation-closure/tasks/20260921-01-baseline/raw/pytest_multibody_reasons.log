@@ -1,0 +1,49 @@
+........................................................................ [ 10%]
+....s............ssssss.ssssssss......ssssssssssssssss.ssssssssssssss... [ 20%]
+............ss.......................................................... [ 30%]
+........................................................................ [ 40%]
+........................................................................ [ 50%]
+........................................................................ [ 60%]
+........................................................................ [ 70%]
+........................................................................ [ 80%]
+........................................................................ [ 90%]
+...................................x................................     [100%]
+=========================== short test summary info ===========================
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:342: Adams reference tires unavailable at G:\MSC.Software\Adams\2025_1_1\acar\shared_car_database.cdb\tires.tbl: ['pac2002_235_60R16.tir', 'pac2002_205_55R16_belt_dynamics.tir', 'pac2002_205_55R16_parking.tir', 'pac2002_235_60R16_min.tir']
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:540: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:598: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:612: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:658: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:708: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:740: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:959: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:993: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1053: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1134: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1163: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1178: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1241: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1405: strict Adams source artifacts are unavailable
+SKIPPED [12] packages\suspension_multibody\tests\adams\test_native_fiala_correlation_gate.py:137: Adams Fiala source case unavailable: artifacts\adams-full-source-fiala\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_native_fiala_correlation_gate.py:162: Adams Fiala source case unavailable: artifacts\adams-full-source-fiala\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_native_fiala_correlation_gate.py:182: Adams Fiala source case unavailable: artifacts\adams-full-source-fiala\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_native_fiala_correlation_gate.py:223: Adams Fiala source case unavailable: artifacts\adams-full-source-fiala\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_native_fiala_correlation_gate.py:245: Adams Fiala source case unavailable: artifacts\adams-full-source-fiala\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:100: Adams source case unavailable: artifacts\adams-full-source-2025_1_1\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:126: Adams source case unavailable: artifacts\adams-full-source-2025_1_1\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:156: Adams source case unavailable: artifacts\adams-full-source-2025_1_1\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:195: Adams source case unavailable: artifacts\adams-full-source-2025_1_1\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:278: advanced-transient reference unavailable for USE_MODE 23: artifacts\adams-mode-ref\um23-native / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um23-native.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:278: advanced-transient reference unavailable for USE_MODE 24: artifacts\adams-mode-ref\um24-native / artifacts\adams-mode-ref\clones\pac2002_um24_native_scope.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:380: advanced-transient reference tire unavailable: artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um23-native.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:380: advanced-transient reference tire unavailable: artifacts\adams-mode-ref\clones\pac2002_um24_native_scope.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:492: parking reference unavailable: artifacts\adams-mode-ref\um24-parking_steer-native / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um24-parking_steer-native.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:685: mode-25 parking reference unavailable: artifacts\adams-mode-ref\um25-parking_steer / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um25-parking_steer.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:783: mode-25 parking reference unavailable: artifacts\adams-mode-ref\um25-parking_steer / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um25-parking_steer.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:899: reference unavailable for USE_MODE 3: artifacts\adams-mode-ref\um3
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:899: reference unavailable for USE_MODE 4: artifacts\adams-mode-ref\um4
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:899: reference unavailable for USE_MODE 13: artifacts\adams-mode-ref\um13
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_parking_torque_structure.py:135: mode-25 parking reference unavailable: artifacts\adams-mode-ref\um25-parking_steer / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um25-parking_steer.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_parking_torque_structure.py:155: mode-25 parking reference unavailable: artifacts\adams-mode-ref\um25-parking_steer / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um25-parking_steer.tir
+XFAIL packages\suspension_multibody\tests\vehicle\test_native_vehicle.py::test_native_brake_opposes_the_instantaneous_wheel_spin - this fixture is degenerate: ideal joints only (no springs, no bushings), gravity=0, the wheel centre sits exactly one unloaded radius above the road so the tire carries no load, and the solver gets a single 1 ms step with min_internal_step_size == internal_step_size, so a rejected step has nowhere to go.  The kernel now applies the caliper couple's reaction on the knuckle (required for the braking load transfer), and this fixture cannot satisfy it: the line search finds no descent, and where it does converge the blocker is the raw-max increment criterion (axle_kernel.cpp:14298) against increment_tolerance = constraint_tolerance * scale.  The residual floor scales as 1/gas_stiffness of the suspension, i.e. it is the zero-stiffness mechanism that cannot react the couple.  Giving the fixture a gas spring does not rescue it either: it then trips 'contact event localization failed' on the negative-spin half, because the single non-subdividable step cannot resolve the contact switching.  So this needs a fixture redesign (loaded tire and/or substeppable solver), not a tweak.  Reproduce with the raw/brake_fixture_* probes under .codex-tasks/20260912-native-fiala-parity/tasks/08-adams-braking-case/
+668 passed, 47 skipped, 1 xfailed in 345.92s (0:05:45)

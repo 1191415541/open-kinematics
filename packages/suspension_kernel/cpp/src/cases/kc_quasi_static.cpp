@@ -12,7 +12,7 @@
 
 #include "case_common.hpp"
 
-#include "mb_base/constants.hpp"
+#include "mb_config/constants.hpp"
 
 namespace axle_kernel {
 namespace case_detail {

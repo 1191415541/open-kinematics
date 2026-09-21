@@ -1,0 +1,220 @@
+........................................................................ [ 10%]
+....s............ssssss.ssssssss......ssssssssssssssss.ssssssssssssss... [ 20%]
+............ss.......................................................... [ 30%]
+........................................................................ [ 40%]
+........................................................................ [ 50%]
+........................................................................ [ 60%]
+........................................................................ [ 70%]
+........................................................................ [ 80%]
+........................................................................ [ 90%]
+...................................x................................     [100%]
+668 passed, 47 skipped, 1 xfailed in 342.44s (0:05:42)
+All checks passed!
+WARN ty is pre-release software and not ready for production use. Expect to encounter bugs, missing features, and fatal errors.
+error[invalid-argument-type]: Argument to bound method `get` is incorrect
+  --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:79:53
+   |
+77 |     completed_sample_count = manifest.get("completed_sample_count")
+78 |     if completed_sample_count is None:
+79 |         completed_sample_count = time_grid_data.get("count")
+   |                                                     ^^^^^^^ Expected `Never`, found `Literal["count"]`
+80 |     case_name = manifest.get("case_name")
+81 |     if case_name is None:
+   |
+info: Matching overload defined here
+    --> stdlib\builtins.pyi:2984:9
+     |
+2982 |     # Positional-only in dict, but not in MutableMapping
+2983 |     @overload  # type: ignore[override]
+2984 |     def get(self, key: _KT, default: None = None, /) -> _VT | None:
+     |         ^^^       -------- Parameter declared here
+2985 |         """Return the value for key if key is in the dictionary, else default."""
+     |
+info: Non-matching overloads for bound method `get`:
+info:   (self, key: _KT@dict, default: _VT@dict, /) -> _VT@dict
+info:   (self, key: _KT@dict, default: _T@get, /) -> _VT@dict | _T@get
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `get` is incorrect
+  --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:82:35
+   |
+80 |     case_name = manifest.get("case_name")
+81 |     if case_name is None:
+82 |         case_name = case_data.get("name")
+   |                                   ^^^^^^ Expected `Never`, found `Literal["name"]`
+83 |     model_name = manifest.get("model_name")
+84 |     if model_name is None:
+   |
+info: Matching overload defined here
+    --> stdlib\builtins.pyi:2984:9
+     |
+2982 |     # Positional-only in dict, but not in MutableMapping
+2983 |     @overload  # type: ignore[override]
+2984 |     def get(self, key: _KT, default: None = None, /) -> _VT | None:
+     |         ^^^       -------- Parameter declared here
+2985 |         """Return the value for key if key is in the dictionary, else default."""
+     |
+info: Non-matching overloads for bound method `get`:
+info:   (self, key: _KT@dict, default: _VT@dict, /) -> _VT@dict
+info:   (self, key: _KT@dict, default: _T@get, /) -> _VT@dict | _T@get
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `get` is incorrect
+  --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:85:37
+   |
+83 |     model_name = manifest.get("model_name")
+84 |     if model_name is None:
+85 |         model_name = model_data.get("name")
+   |                                     ^^^^^^ Expected `Never`, found `Literal["name"]`
+86 |
+87 |     def fallback_value(name: str, *sources: dict[str, object]) -> object:
+   |
+info: Matching overload defined here
+    --> stdlib\builtins.pyi:2984:9
+     |
+2982 |     # Positional-only in dict, but not in MutableMapping
+2983 |     @overload  # type: ignore[override]
+2984 |     def get(self, key: _KT, default: None = None, /) -> _VT | None:
+     |         ^^^       -------- Parameter declared here
+2985 |         """Return the value for key if key is in the dictionary, else default."""
+     |
+info: Non-matching overloads for bound method `get`:
+info:   (self, key: _KT@dict, default: _VT@dict, /) -> _VT@dict
+info:   (self, key: _KT@dict, default: _T@get, /) -> _VT@dict | _T@get
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to bound method `get` is incorrect
+  --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:97:34
+   |
+95 |     error = manifest.get("error")
+96 |     if error is None:
+97 |         error = failure_data.get("message")
+   |                                  ^^^^^^^^^ Expected `Never`, found `Literal["message"]`
+98 |     return {
+99 |         key: value
+   |
+info: Matching overload defined here
+    --> stdlib\builtins.pyi:2984:9
+     |
+2982 |     # Positional-only in dict, but not in MutableMapping
+2983 |     @overload  # type: ignore[override]
+2984 |     def get(self, key: _KT, default: None = None, /) -> _VT | None:
+     |         ^^^       -------- Parameter declared here
+2985 |         """Return the value for key if key is in the dictionary, else default."""
+     |
+info: Non-matching overloads for bound method `get`:
+info:   (self, key: _KT@dict, default: _VT@dict, /) -> _VT@dict
+info:   (self, key: _KT@dict, default: _T@get, /) -> _VT@dict | _T@get
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to function `fallback_value` is incorrect
+   --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:109:40
+    |
+107 |             "error": error,
+108 |             "failed_sample_index": fallback_value(
+109 |                 "failed_sample_index", failure_data, partial_data
+    |                                        ^^^^^^^^^^^^ Expected `dict[str, object]`, found `Top[dict[Unknown, Unknown]]`
+110 |             ),
+111 |             "failed_time_s": fallback_value("failed_time_s", failure_data),
+    |
+info: Function defined here
+  --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:87:9
+   |
+85 |         model_name = model_data.get("name")
+86 |
+87 |     def fallback_value(name: str, *sources: dict[str, object]) -> object:
+   |         ^^^^^^^^^^^^^^            --------------------------- Parameter declared here
+88 |         if name in manifest:
+89 |             return manifest[name]
+   |
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to function `fallback_value` is incorrect
+   --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:109:54
+    |
+107 |             "error": error,
+108 |             "failed_sample_index": fallback_value(
+109 |                 "failed_sample_index", failure_data, partial_data
+    |                                                      ^^^^^^^^^^^^ Expected `dict[str, object]`, found `Top[dict[Unknown, Unknown]]`
+110 |             ),
+111 |             "failed_time_s": fallback_value("failed_time_s", failure_data),
+    |
+info: Function defined here
+  --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:87:9
+   |
+85 |         model_name = model_data.get("name")
+86 |
+87 |     def fallback_value(name: str, *sources: dict[str, object]) -> object:
+   |         ^^^^^^^^^^^^^^            --------------------------- Parameter declared here
+88 |         if name in manifest:
+89 |             return manifest[name]
+   |
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to function `fallback_value` is incorrect
+   --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:111:62
+    |
+109 |                 "failed_sample_index", failure_data, partial_data
+110 |             ),
+111 |             "failed_time_s": fallback_value("failed_time_s", failure_data),
+    |                                                              ^^^^^^^^^^^^ Expected `dict[str, object]`, found `Top[dict[Unknown, Unknown]]`
+112 |             "failure_diagnostics": fallback_value(
+113 |                 "failure_diagnostics", failure_data
+    |
+info: Function defined here
+  --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:87:9
+   |
+85 |         model_name = model_data.get("name")
+86 |
+87 |     def fallback_value(name: str, *sources: dict[str, object]) -> object:
+   |         ^^^^^^^^^^^^^^            --------------------------- Parameter declared here
+88 |         if name in manifest:
+89 |             return manifest[name]
+   |
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to function `fallback_value` is incorrect
+   --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:113:40
+    |
+111 |             "failed_time_s": fallback_value("failed_time_s", failure_data),
+112 |             "failure_diagnostics": fallback_value(
+113 |                 "failure_diagnostics", failure_data
+    |                                        ^^^^^^^^^^^^ Expected `dict[str, object]`, found `Top[dict[Unknown, Unknown]]`
+114 |             ),
+115 |             "layouts": manifest.get("layouts"),
+    |
+info: Function defined here
+  --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:87:9
+   |
+85 |         model_name = model_data.get("name")
+86 |
+87 |     def fallback_value(name: str, *sources: dict[str, object]) -> object:
+   |         ^^^^^^^^^^^^^^            --------------------------- Parameter declared here
+88 |         if name in manifest:
+89 |             return manifest[name]
+   |
+info: rule `invalid-argument-type` is enabled by default
+
+error[invalid-argument-type]: Argument to function `fallback_value` is incorrect
+   --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:120:62
+    |
+118 |             "model_sha256": manifest.get("model_sha256"),
+119 |             "native_build": manifest.get("native_build"),
+120 |             "native_status": fallback_value("native_status", failure_data) or 0,
+    |                                                              ^^^^^^^^^^^^ Expected `dict[str, object]`, found `Top[dict[Unknown, Unknown]]`
+121 |             "package_version": manifest.get("package_version"),
+122 |             "performance": manifest.get("performance"),
+    |
+info: Function defined here
+  --> packages\suspension_multibody\scripts\dynamic_hash_sentinel.py:87:9
+   |
+85 |         model_name = model_data.get("name")
+86 |
+87 |     def fallback_value(name: str, *sources: dict[str, object]) -> object:
+   |         ^^^^^^^^^^^^^^            --------------------------- Parameter declared here
+88 |         if name in manifest:
+89 |             return manifest[name]
+   |
+info: rule `invalid-argument-type` is enabled by default
+
+Found 9 diagnostics

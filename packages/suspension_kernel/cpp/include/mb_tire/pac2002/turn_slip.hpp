@@ -5,7 +5,7 @@
 /// It carries the turn-slip force and moment and the travel sign, in both the
 /// scalar and the derivative-carrying form.
 
-#include "mb_base/dual.hpp"
+#include "mb_dual/dual.hpp"
 
 namespace axle_kernel {
 

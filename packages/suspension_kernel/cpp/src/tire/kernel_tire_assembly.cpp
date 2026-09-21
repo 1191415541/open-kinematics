@@ -11,6 +11,7 @@
 // translation units needs no include-order reasoning, which is why this cut is
 // verifiable where the earlier in-body extraction was not.
 
+#include "mb_element/functions.hpp"
 #include "mb_tire/functions.hpp"
 
 #include "mb_tire/force_context.hpp"
@@ -18,7 +19,9 @@
 // Direct dependencies of this translation unit.  The module headers no
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
-#include "mb_base/functions.hpp"
+#include "mb_config/functions.hpp"
+#include "mb_numeric/functions.hpp"
+#include "mb_force/functions.hpp"
 #include "mb_model/functions.hpp"
 #include "mb_tire/brush/functions.hpp"
 #include "mb_tire/fiala/functions.hpp"

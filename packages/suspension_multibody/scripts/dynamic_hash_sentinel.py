@@ -26,6 +26,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parents[1]
@@ -33,16 +34,110 @@ ACCEPTANCE = PACKAGE_ROOT / "scripts" / "run_axle_dynamics_acceptance.py"
 DEFAULT_OUTPUT = REPO_ROOT / "artifacts" / "axle-dynamics-acceptance"
 DEFAULT_BASELINE = PACKAGE_ROOT / "tests" / "data" / "dynamic_hash_baseline.json"
 VOLATILE_MANIFEST_KEYS = ("performance", "native_build")
+LEGACY_MANIFEST_KEYS = (
+    "arrays_file",
+    "artifact_type",
+    "case",
+    "case_name",
+    "case_sha256",
+    "completed_sample_count",
+    "error",
+    "failed_sample_index",
+    "failed_time_s",
+    "failure_diagnostics",
+    "layouts",
+    "model",
+    "model_name",
+    "model_sha256",
+    "native_build",
+    "native_status",
+    "package_version",
+    "performance",
+    "schema_version",
+    "status",
+)
 
 
 def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _legacy_manifest_view(manifest: dict[str, object]) -> dict[str, object]:
+    """Project unified artifacts onto the frozen dynamic manifest contract."""
+    case = manifest.get("case")
+    model = manifest.get("model")
+    time_grid = manifest.get("time_grid")
+    failure = manifest.get("failure_evidence")
+    partial = manifest.get("partial_evidence")
+    case_data = cast(dict[str, object], case) if isinstance(case, dict) else {}
+    model_data = cast(dict[str, object], model) if isinstance(model, dict) else {}
+    failure_data = (
+        cast(dict[str, object], failure) if isinstance(failure, dict) else {}
+    )
+    partial_data = (
+        cast(dict[str, object], partial) if isinstance(partial, dict) else {}
+    )
+    time_grid_data = (
+        cast(dict[str, object], time_grid) if isinstance(time_grid, dict) else {}
+    )
+
+    completed_sample_count = manifest.get("completed_sample_count")
+    if completed_sample_count is None:
+        completed_sample_count = time_grid_data.get("count")
+    case_name = manifest.get("case_name")
+    if case_name is None:
+        case_name = case_data.get("name")
+    model_name = manifest.get("model_name")
+    if model_name is None:
+        model_name = model_data.get("name")
+
+    def fallback_value(name: str, *sources: dict[str, object]) -> object:
+        if name in manifest:
+            return manifest[name]
+        for source in sources:
+            if name in source:
+                return source[name]
+        return None
+
+    error = manifest.get("error")
+    if error is None:
+        error = failure_data.get("message")
+    return {
+        key: value
+        for key, value in {
+            "arrays_file": manifest.get("arrays_file"),
+            "artifact_type": manifest.get("artifact_type"),
+            "case": case,
+            "case_name": case_name,
+            "case_sha256": manifest.get("case_sha256"),
+            "completed_sample_count": completed_sample_count,
+            "error": error,
+            "failed_sample_index": fallback_value(
+                "failed_sample_index", failure_data, partial_data
+            ),
+            "failed_time_s": fallback_value("failed_time_s", failure_data),
+            "failure_diagnostics": fallback_value(
+                "failure_diagnostics", failure_data
+            ),
+            "layouts": manifest.get("layouts"),
+            "model": model,
+            "model_name": model_name,
+            "model_sha256": manifest.get("model_sha256"),
+            "native_build": manifest.get("native_build"),
+            "native_status": fallback_value("native_status", failure_data) or 0,
+            "package_version": manifest.get("package_version"),
+            "performance": manifest.get("performance"),
+            "schema_version": manifest.get("schema_version"),
+            "status": manifest.get("status"),
+        }.items()
+        if key in LEGACY_MANIFEST_KEYS
+    }
+
+
 def _canonical_manifest(manifest: dict[str, object]) -> bytes:
     trimmed = {
         key: value
-        for key, value in manifest.items()
+        for key, value in _legacy_manifest_view(manifest).items()
         if key not in VOLATILE_MANIFEST_KEYS
     }
     return json.dumps(

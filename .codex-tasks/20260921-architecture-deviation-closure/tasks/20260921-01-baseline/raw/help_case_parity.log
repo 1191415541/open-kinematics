@@ -1,0 +1,26 @@
+usage: case_parity_check.py [-h]
+                            [--family {kc_quasi_static,axle_dynamic,vehicle_kc,vehicle_dynamic,handling,ride_four_post,ride_random_road,comparison}]
+                            [--allow-partial]
+
+Gate script: every case family, judged on its own. The acceptance for the case
+layer is per family, not in aggregate: a run that covers seven of the eight
+families has not covered the eighth, and a green aggregate would hide exactly
+that. Each family below states how it is judged and against what reference; a
+family with no implementation is reported as missing and fails the gate,
+because "not supported yet" is a status a reader needs to see rather than a
+silence they have to discover. Two references are in use and they mean
+different things: * `kc_quasi_static` and `axle_dynamic` are judged against
+the *frozen Python snapshot* and the *ctypes entry point* respectively. The
+first is a tolerance comparison, because the snapshot is a different solver;
+the second is exact, because the ctypes entry point is the same kernel reached
+a different way. * A family that is declared in the contract but has no case-
+layer expansion is reported missing. Run with `--allow-partial` while the
+migration is in flight: the report is the same, but an unimplemented family is
+a warning instead of a failure.
+
+options:
+  -h, --help            show this help message and exit
+  --family {kc_quasi_static,axle_dynamic,vehicle_kc,vehicle_dynamic,handling,ride_four_post,ride_random_road,comparison}
+                        judge only these families; defaults to all of them
+  --allow-partial       an unimplemented family is a warning rather than a
+                        failure

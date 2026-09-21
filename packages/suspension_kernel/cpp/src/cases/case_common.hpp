@@ -11,7 +11,7 @@
 /// not part of the module's public interface, and keeping it here means the
 /// module layering gate does not have to treat these includes as new edges.
 
-#include "mb_base/prelude.hpp"
+#include "mb_config/prelude.hpp"
 #include "mb_cases/functions.hpp"
 #include "mb_contract/types.hpp"
 #include "mb_input/types.hpp"

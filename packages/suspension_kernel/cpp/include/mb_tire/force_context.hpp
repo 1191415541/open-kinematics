@@ -30,7 +30,7 @@
 
 #include <vector>
 
-#include "mb_base/vector.hpp"
+#include "mb_numeric/vector.hpp"
 #include "mb_model/types.hpp"
 #include "mb_energy/types.hpp"
 

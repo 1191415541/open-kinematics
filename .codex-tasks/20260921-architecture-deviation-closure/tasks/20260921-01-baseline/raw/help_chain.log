@@ -1,0 +1,20 @@
+usage: check_module_layering.py [-h]
+                                [--record-baseline | --check | --strict | --report]
+
+Module-layering gate for the suspension kernel C++ sources. The kernel is
+built as one static library per module. This gate reads the project's own
+header include graph and enforces four rules: 1. no module-level dependency
+cycle (the module graph must stay a DAG); 2. no module header pulls in another
+module's ``functions.hpp`` aggregate; 3. no header includes itself; 4. no
+dependency edge appears that is not in the recorded baseline. The baseline
+exists because the current tree is *not* clean: it was recorded from the tree
+as it stands so that later refactoring can only remove edges. ``--strict``
+additionally requires zero rule-1/2/3 violations and is the gate the
+modularisation phase must reach.
+
+options:
+  -h, --help         show this help message and exit
+  --record-baseline
+  --check
+  --strict
+  --report

@@ -203,7 +203,7 @@ def test_build_write_metadata_records_added_keys() -> None:
     # The order convention is "the base layer first, the public ABI headers last";
     # the first assertion is on the layer rather than on a frozen string, because
     # which base unit comes first is not part of the contract.
-    assert sources[0].startswith("packages/suspension_kernel/cpp/src/base/")
+    assert sources[0].startswith("packages/suspension_kernel/cpp/src/config/")
     assert sources[-1] == (
         "packages/suspension_kernel/cpp/axle_dynamics/core_abi.hpp"
     )

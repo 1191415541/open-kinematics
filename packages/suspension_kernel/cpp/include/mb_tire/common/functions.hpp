@@ -9,18 +9,18 @@
 /// module that calls them, so the layering the project checks with
 /// `check_module_layering.py` is also the layering of these headers.
 
-#include "mb_base/prelude.hpp"
-#include "mb_base/vector.hpp"
+#include "mb_config/prelude.hpp"
+#include "mb_numeric/vector.hpp"
 #include "mb_model/types.hpp"
-#include "mb_base/monotone_cubic.hpp"
-#include "mb_base/constants.hpp"
-#include "mb_base/diagnostics.hpp"
-#include "mb_base/env.hpp"
-#include "mb_base/util.hpp"
-#include "mb_base/dual.hpp"
-#include "mb_base/dual_geometry.hpp"
+#include "mb_numeric/monotone_cubic.hpp"
+#include "mb_config/constants.hpp"
+#include "mb_config/diagnostics.hpp"
+#include "mb_config/env.hpp"
+#include "mb_numeric/util.hpp"
+#include "mb_dual/dual.hpp"
+#include "mb_dual/dual_geometry.hpp"
 #include "mb_tire/common/kinematics.hpp"
-#include "mb_base/prelude.hpp"
+#include "mb_config/prelude.hpp"
 #include "mb_model/enums.hpp"
 
 namespace axle_kernel {

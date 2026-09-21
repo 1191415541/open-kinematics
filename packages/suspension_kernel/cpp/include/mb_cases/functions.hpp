@@ -18,8 +18,8 @@
 /// what makes a new case family a new file here plus one row in the dispatch,
 /// with no change to the solver or to the ABI.
 
-#include "mb_base/prelude.hpp"
-#include "mb_base/vector.hpp"
+#include "mb_config/prelude.hpp"
+#include "mb_numeric/vector.hpp"
 #include "mb_contract/types.hpp"
 #include "mb_input/types.hpp"
 

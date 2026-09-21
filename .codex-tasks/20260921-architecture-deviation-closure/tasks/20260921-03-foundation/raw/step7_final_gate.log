@@ -1,0 +1,34 @@
+kernel root                : C:\тс╪Ч\open-kinematics\packages\suspension_kernel
+mode                       : final
+headers                    : 54
+cpp translation units      : 72
+modules present            : 22
+header edges               : 121
+source edges               : 93
+source edge evidence       : 200 records (tu_include 183, symbol_reference 154, both 137; kind mentions 337)
+target modules missing     : 3
+legacy modules present     : 2
+legacy modules unregistered: 0 []
+mutual (reverse) edges     : 2
+self-including headers     : 0
+cross-aggregate includes   : 0
+module cycles (SCC size>1) : 1
+  mutual: mb_solve_dynamic <-> mb_tire_state
+  mutual: mb_solve_static <-> mb_vehicle
+  cycle: mb_solve_dynamic <-> mb_solve_static <-> mb_tire <-> mb_tire_brush <-> mb_tire_fiala <-> mb_tire_pac2002 <-> mb_tire_state <-> mb_vehicle
+legacy edges traced to successors : 36
+  tolerated [legacy_cycle] cycle mb_solve_dynamic <-> mb_solve_static <-> mb_tire <-> mb_tire_brush <-> mb_tire_fiala <-> mb_tire_pac2002 <-> mb_tire_state <-> mb_vehicle is traced to mb_vehicle and must disappear with the migration
+
+FAIL
+  - [cycle] the final mode forbids the module cycle mb_solve_dynamic <-> mb_solve_static <-> mb_tire <-> mb_tire_brush <-> mb_tire_fiala <-> mb_tire_pac2002 <-> mb_tire_state <-> mb_vehicle
+  - [reverse_edge] mb_solve_dynamic and mb_tire_state depend on each other
+  - [reverse_edge] mb_solve_static and mb_vehicle depend on each other
+  - [legacy_module_present] the final mode forbids the legacy module mb_vehicle
+  - [legacy_module_present] the final mode forbids the legacy module mb_suspension
+  - [legacy_path_present] the final mode forbids the legacy path cpp/include/mb_suspension
+  - [legacy_path_present] the final mode forbids the legacy path cpp/include/mb_vehicle
+  - [legacy_path_present] the final mode forbids the legacy path cpp/src/suspension
+  - [legacy_path_present] the final mode forbids the legacy path cpp/src/vehicle
+  - [missing_target_module] the final mode requires the target module mb_element
+  - [missing_target_module] the final mode requires the target module mb_assembly
+  - [missing_target_module] the final mode requires the target module mb_force

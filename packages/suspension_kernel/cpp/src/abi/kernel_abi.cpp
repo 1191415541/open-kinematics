@@ -2,18 +2,20 @@
 //
 // Module `abi`: source lines 19081-20162.
 
+#include "mb_input/functions.hpp"
 #include "abi/functions.hpp"
 
 // Direct dependencies of this translation unit.  The module headers no
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
-#include "mb_base/functions.hpp"
-#include "mb_integrator/functions.hpp"
+#include "mb_config/functions.hpp"
+#include "mb_numeric/functions.hpp"
+#include "mb_solve_dynamic/functions.hpp"
 #include "mb_model/functions.hpp"
 #include "mb_output/functions.hpp"
-#include "mb_static/functions.hpp"
+#include "mb_solve_static/functions.hpp"
 #include "mb_tire_state/functions.hpp"
-#include "mb_vehicle/functions.hpp"
+#include "mb_assembly/functions.hpp"
 
 namespace axle_kernel {
 

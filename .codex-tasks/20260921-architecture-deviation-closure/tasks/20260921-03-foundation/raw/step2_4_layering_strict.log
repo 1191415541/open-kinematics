@@ -1,0 +1,25 @@
+kernel root                : C:\тс╪Ч\open-kinematics\packages\suspension_kernel
+mode                       : migration
+headers                    : 53
+cpp translation units      : 71
+modules present            : 22
+header edges               : 120
+source edges               : 89
+source edge evidence       : 195 records (tu_include 177, symbol_reference 149, both 131; kind mentions 326)
+target modules missing     : 7
+legacy modules present     : 6
+legacy modules unregistered: 0 []
+mutual (reverse) edges     : 3
+self-including headers     : 0
+cross-aggregate includes   : 0
+module cycles (SCC size>1) : 2
+  mutual: mb_constraint <-> mb_model
+  mutual: mb_integrator <-> mb_tire_state
+  mutual: mb_static <-> mb_vehicle
+  cycle: mb_constraint <-> mb_model
+  cycle: mb_integrator <-> mb_static <-> mb_tire <-> mb_tire_brush <-> mb_tire_fiala <-> mb_tire_pac2002 <-> mb_tire_state <-> mb_vehicle
+legacy edges traced to successors : 105
+  tolerated [legacy_cycle] cycle mb_constraint <-> mb_model is traced to mb_constraint and must disappear with the migration
+  tolerated [legacy_cycle] cycle mb_integrator <-> mb_static <-> mb_tire <-> mb_tire_brush <-> mb_tire_fiala <-> mb_tire_pac2002 <-> mb_tire_state <-> mb_vehicle is traced to mb_integrator, mb_static, mb_vehicle and must disappear with the migration
+
+OK: layering matches the recorded baseline

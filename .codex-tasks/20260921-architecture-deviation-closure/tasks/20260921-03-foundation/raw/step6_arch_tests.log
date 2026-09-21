@@ -1,0 +1,43 @@
+......................F................................................. [ 83%]
+..............                                                           [100%]
+================================== FAILURES ===================================
+________ test_the_integrator_does_not_dispatch_on_the_tire_model_kind _________
+
+    def test_the_integrator_does_not_dispatch_on_the_tire_model_kind() -> None:
+        """
+        K5's contract: a new tire model must not require an integrator change.
+    
+        The integrator used to compare `model_kind` in twenty-five places to decide
+        whether a slot needed the exact-exponential relaxation row, the brush return
+        mapping or the PAC2002 reuse window.  It now reads `Tire`'s state-semantics
+        flags, and this test is what keeps a later edit from reaching for the kind
+        again: `model_kind` is the tire model's own business, not the integrator's.
+        """
+        integrator_units = (
+            "kernel_integrator.cpp",
+            "kernel_integrator_residual.cpp",
+            "kernel_integrator_newton.cpp",
+            "kernel_integrator_step.cpp",
+            "kernel_integrator_input.cpp",
+        )
+        offenders: list[str] = []
+        for unit in integrator_units:
+>           text = _kernel_source(unit).read_text(encoding="utf-8")
+
+packages\suspension_multibody\tests\architecture\test_kernel_abi_version_single_source.py:105: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+name = 'kernel_integrator_input.cpp'
+
+    def _kernel_source(name: str) -> Path:
+        """Return the one kernel source called `name`, wherever the module tree put it."""
+        matches = sorted(path for path in KERNEL_CPP.rglob(name) if path.is_file())
+>       assert len(matches) == 1, (name, matches)
+E       AssertionError: ('kernel_integrator_input.cpp', [])
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+packages\suspension_multibody\tests\architecture\test_kernel_abi_version_single_source.py:31: AssertionError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\architecture\test_kernel_abi_version_single_source.py::test_the_integrator_does_not_dispatch_on_the_tire_model_kind
+1 failed, 85 passed in 22.98s

@@ -1,0 +1,3 @@
+checked 9 K states, worst error / tolerance ratio 1.65548e-05
+worst component: ('k-w-10-r-5', 'right_wheel_center_x_mm')
+wrote candidate K states -> artifacts\kc-native-probe\k_states.json

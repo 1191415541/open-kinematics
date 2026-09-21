@@ -8,7 +8,7 @@
 /// force takes a `const Tire&`; putting it in the tire layer would make
 /// `mb_model` and `mb_tire` each depend on the other.
 
-#include "mb_base/vector.hpp"
+#include "mb_numeric/vector.hpp"
 #include "mb_model/enums.hpp"
 #include <array>
 #include <vector>

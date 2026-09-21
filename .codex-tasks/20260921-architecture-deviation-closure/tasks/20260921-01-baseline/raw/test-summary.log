@@ -1,0 +1,38 @@
+
+### pytest_kernel
+COMMAND: uv run --package suspension-kernel pytest packages/suspension_kernel/tests -q
+EXIT_CODE=0
+...............                                                          [100%]
+15 passed in 0.41s
+
+### pytest_contracts
+COMMAND: uv run --package suspension-contracts pytest packages/suspension_contracts/tests -q
+EXIT_CODE=0
+......................                                                   [100%]
+22 passed in 0.13s
+
+### pytest_multibody
+COMMAND: uv run --package suspension-multibody pytest packages/suspension_multibody/tests -q
+EXIT_CODE=0
+........................................................................ [ 10%]
+....s............ssssss.ssssssss......ssssssssssssssss.ssssssssssssss... [ 20%]
+............ss.......................................................... [ 30%]
+........................................................................ [ 40%]
+........................................................................ [ 50%]
+........................................................................ [ 60%]
+........................................................................ [ 70%]
+........................................................................ [ 80%]
+........................................................................ [ 90%]
+...................................x................................     [100%]
+668 passed, 47 skipped, 1 xfailed in 354.63s (0:05:54)
+
+### ruff_all
+COMMAND: uv run --all-packages ruff check .
+EXIT_CODE=0
+All checks passed!
+
+### ty_all
+COMMAND: uv run --all-packages ty check .
+EXIT_CODE=0
+WARN ty is pre-release software and not ready for production use. Expect to encounter bugs, missing features, and fatal errors.
+All checks passed!
