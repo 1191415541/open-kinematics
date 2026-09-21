@@ -8,7 +8,7 @@
 2. `mb_suspension` + steering/drive_brake/aerodynamic 的力元 → `mb_element`：标量与方向导数实现一起迁移，不得拆散。
 3. `external_force_vector` / `external_force_directional` 两条总线、外力重力与广义力汇总 → `mb_force`：本构留 `mb_element`/`mb_tire`，标量与对偶总线保持次序。
 4. `cpp/src/vehicle/kernel_directional.cpp` 的轮胎语义 → `mb_tire`：与轮胎接触/内部状态共同维护，总线不得残留轮胎力律。
-5. `mb_model` 中性数据化、`build_model` 末尾 `audit_constraint_system` 归 joint 审计或 ABI 装配后校验；登记05需要迁入 `mb_assembly` 的凝聚计算与 body ID 映射要求，本任务不实施凝聚算法迁移。
+5. `mb_model` 中性数据化、`build_model` 末尾 `audit_constraint_system` 归 joint 审计或 ABI 装配后校验；登记05所需的凝聚来源与 body ID 映射要求，本任务不实施凝聚算法迁移。（**A1 后注**：05 最终口径为「凝聚保留 Python 作者层 + native fixed 关节等价性登记」，不再迁入 `mb_assembly`；本行仅为 04 当时的交接记录。）
 
 现有事实：`build_model` 在 `packages/suspension_kernel/cpp/src/abi/kernel_model_build.cpp:23`；车辆注册在 `cpp/src/vehicle/kernel_registration.cpp`；力装配与对偶实现在 `cpp/src/vehicle/{force_assembly,kernel_directional}.cpp`；`MODULES.md` 记录 `mb_vehicle` 依赖 `mb_model`、`mb_tire`、`mb_constraint`、`mb_energy`、`mb_input`。
 
@@ -36,7 +36,7 @@
 ## 依赖
 
 - 前置：01（`VALIDATION.md`）、02（门禁）、03（基础层模块与共享构建文件已冻结，必须串行）。
-- 后续：05依赖本任务明确的 mb_assembly 归属与现有输出接口，负责凝聚迁移和身份映射实现；06依赖本任务后 mb_element/mb_tire 本构边界稳定。
+- 后续：05依赖本任务明确的 mb_assembly 归属与现有输出接口，负责**凝聚等价性登记**与身份映射登记（A1 后口径：凝聚保留 Python 作者层，不迁入 native）；06依赖本任务后 mb_element/mb_tire 本构边界稳定。
 
 ## 验收标准
 

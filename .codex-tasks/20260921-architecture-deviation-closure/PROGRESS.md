@@ -4,10 +4,10 @@
 
 任务：消除 C++ 模块职责与 Python report/旧模块两处偏差。
 形态：epic。
-进度：实施 3/9 子任务完成；子任务 01 DONE（8/8）、02 DONE（7/7）、03 DONE（7/7）；父级叶子完成 22/66。
-当前：C++ 基础层迁移完成。mb_base/mb_linalg/mb_constraint/mb_integrator/mb_static 全部消失，mb_config/mb_numeric/mb_dual/mb_linear/mb_joint/mb_input/mb_solve_dynamic/mb_solve_static 落地；constraint_rows 职责修正消除 joint<->model 环。终局缺口 35->12，全部归 04（mb_vehicle/mb_suspension 拆解 + mb_element/mb_assembly/mb_force 落地）。Python 侧缺口不变。
-文件：.codex-tasks/20260921-architecture-deviation-closure/EPIC.md、SUBTASKS.csv、VALIDATION.md；下一子任务目录为 tasks/20260921-03-foundation/。
-下一步：启动子任务 04，拆解 mb_vehicle（注册/build_model 归 mb_assembly，本构归 mb_element/mb_tire，力总线归 mb_force）并清零 mb_suspension；每步保持迁移模式 --strict 退出 0 并执行冻结数值门。
+进度：4/9 子任务 DONE（01 8/8、02 7/7、03 7/7、04 7/7）；05-09 TODO。
+当前：C++ 侧已完成——01 冻结基线与工具链；02 建立分层与删除门禁；03 拆分基础层（mb_config/mb_numeric/mb_dual/mb_linear/mb_joint/mb_input/mb_solve_dynamic/mb_solve_static）；04 拆解 mb_vehicle（mb_assembly/mb_element/mb_force/mb_tire 落地，模块环与 mutual 边清零，`--strict --final` 全绿）。Python 侧未动——`report`/`preparation` 归位、元件事实通道、旧模块删除、终局验收均待 05-09。
+文件：本目录 EPIC.md、SUBTASKS.csv、VALIDATION.md；当前子任务目录 tasks/20260921-05-native-facts/（步骤 1 对照表已交付于其 raw/）。
+下一步：执行子任务 05 —— 步骤 2 凝聚等价性登记、步骤 3 按缺口补默认关闭的可选 native 输出通道、步骤 4 静轮荷迁 native、步骤 5 decoder 接线；每步跑 SPEC 验证协议全集与字节级数值门，且不得重录基线（A1 修订口径见 EPIC 修订记录）。
 
 ## 证据
 
@@ -73,3 +73,25 @@
 - 同步四清单：CMake 20 目标不变（assembly/element/force 已在内）、MODULES.md 重写为 23 模块、layering_baseline 重录并登记 35 条新边 reviewed 台账（189→224）、架构测试两处"迁移期阻断"预期改为终局绿。
 - 验证：构建 0 错误；--strict 与 --strict --final 均退出 0；动态哈希 26/26 逐位一致；K/C 与 8 family parity 通过；kernel 15 passed；arch 86 passed；ABI 七符号 15/30/1/1；ruff/ty 通过。证据在 tasks/20260921-04-ownership/raw/。
 - 凝聚算法与身份映射按 SPEC 只登记交接（raw/step1_symbol_ownership.md），实现归 05；05 可启动。
+
+## 2026-09-21 计划修订（用户裁决 A1，第 3 级修改）
+
+- **改了什么**：EPIC Goal G2/G3 收窄、Done-When 增「数值门为独立项」、凝聚条款改写、Python 迁移矩阵凝聚行改写；05 SPEC 目标 1 与验收 2/3/5/6/7、05 TODO 第 2/7 行、06 SPEC 约束与验收 5、08 SPEC 目标 1/约束/验收 3、09 TODO 第 3/4 行。
+- **为什么**：05 实施前侦查证明原 G2/G3 两项要求在「不得重录数值基线」下不可同时成立。证据：native 无按 body 的力元力旋量通道，`ComponentLoad.global_load/local_load/endpoint` 全由 Python 本构（`api.py:742`）产生；把凝聚迁入 native 会改变 native 收到的 body 集合（实测 `SUSPENSION_MULTIBODY_CONDENSE_WELDS=0` 下 body 22→23），而整车门为字节级 sha256（`case_parity_check.py:398-410`）。详见 `tasks/20260921-05-native-facts/raw/step1_channel_mapping.md` §5-§8。
+- **影响子任务**：05（目标与验收 2/3/5/6/7；TODO 2/7）、06（约束、验收 5）、08（目标、约束、验收 3）、09（TODO 3/4）。01-04 不受影响（01-04 已 DONE，且其验收与字节门一致）。
+- **未修改**：G1、G4、「不得重录数值基线」、01 冻结的 VALIDATION.md 及其容差。
+- **改动级别**：第 3 级（改 Goal/Non-Goals/Done-When），按 taskmaster 规则须重新独立审核，通过前不得把新行置为 IN_PROGRESS。
+- **本轮只改规划文件**，未运行生产构建或数值测试，未把任何实施行标记为完成。05 步骤 1 的对照表作为只读交付已产出（`raw/step1_channel_mapping.md`）。
+- **已知未闭合项（须显式登记，不判达成）**：用户第二问所选「Python 不再凝聚、weld 送 native 作 fixed 约束」的**手段**，与第一问所选 A1 的「不重录基线、字节门保持绿」冲突（不凝聚使 native body 集合 22→23，整车门字节 sha256 失败）。本次以 A1 为约束上限，只采纳该选项的目标（native fixed 关节作契约等价实现 + 等价性测试），生产路径暂留 Python 作者层。解除条件：单独裁决数值门策略（是否允许重录车辆基线）。
+
+## 2026-09-21 计划修订的两轮独立审核与修订补全
+
+- 首审 `ee519507`：5 项阻断，均为「改了子任务 SPEC 但兄弟真源文件未同步」的同源问题——09 SPEC、SUBTASKS 06 行、06 TODO 第 6 行、08 TODO 第 3 行、EPIC 迁移矩阵 elements 行。已逐条修复。
+- 复审 `5a2a503c`：5 项原阻断全部清零；新发现 1 项同源遗漏（三处未限定的「旧目录缺席」：09 TODO 第 6 行、09 SPEC:12、EPIC:136）＋2 项建议（Done-When 补凝聚等价性、矩阵闭合补第三态）＋2 处笔误（09 SPEC 验收编号、EPIC:104 状态）。均已修复。
+- 终审 `5851fee5`：确认上述修复。
+- **本轮额外修复的两处真源结构损坏**（由我早先的编辑事故造成，已修）：
+  - `SUBTASKS.csv`：一次编辑误删 07 行并产生重复 08 行，已重写 06-10 行恢复为 9 行 11 字段、依赖链 01→09 完整。
+  - `tasks/20260921-04-ownership/TODO.csv`：第 1-7 行缺 retry_count 字段（导致 notes 被解析为空、列错位），已补 `0` 并修正含逗号 notes 的引号。
+- 现状（已实测校验）：SUBTASKS.csv 9 行/11 字段；各子任务 TODO.csv 7-8 行/8 字段，无空字段；9 个子任务目录均含 SPEC.md、TODO.md 三件套（05-09 的 `raw/` 待实施时创建）。
+- **两处未采纳的审核建议（低危，登记不阻断）**：05 SPEC 与 06 SPEC 的「待删除登记载体」未点名具体文件（实施时归 06/08 的 PROGRESS）；09 TODO 第 1 行的终局命令用单条 `&&` 链而非逐条记录（notes 已要求逐条留退出码，实施时按 notes 执行）。
+- 本轮仍未运行生产构建或数值测试，未把任何实施行标记为完成。计划修订已闭环，05 可启动实施。

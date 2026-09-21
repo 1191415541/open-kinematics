@@ -3,11 +3,11 @@
 - 任务编号：20260921-architecture-deviation-closure
 - 创建日期：2026-09-21
 - 形态：epic
-- 状态：IN_PROGRESS（基线子任务 01 已完成，子任务 02 实施中，完成 1/9）
+- 状态：IN_PROGRESS（子任务 01-04 DONE，完成 4/9；05-09 待实施，计划已按用户裁决 A1 修订并登记）
 - 真源：本目录 SUBTASKS.csv；子任务相对路径均相对此 Epic 目录解析。
 
 ## 状态与原始需求
-状态：基线子任务 01 已完成并通过动态兼容门；结构迁移未开始，子任务 02 正在建立终局分层与删除门禁。
+状态（2026-09-21 更新）：子任务 01-04 DONE——01 冻结基线与工具链；02 建立终局分层与删除门禁；03 拆分 C++ 基础层；04 拆解 mb_vehicle 并清零终局缺口（C++ 侧 DAG 与 `--strict --final` 全绿）。05-09 待实施（Python 侧：元件事实通道、作者层归位、report、删除、终局验收）；计划已按用户裁决 A1 修订（见下方修订记录与 PROGRESS.md）。
 
 用户原话：“针对上述存在的两处偏差，制定全新计划，消除这两处偏差”；后续：“继续”。
 
@@ -18,9 +18,27 @@
 ## Goal
 
 G1. C++ 按职责形成 numeric/dual/config、model/contract/input、joint/element/tire/energy、assembly/force、linear/solve_static/solve_dynamic、cases/output/abi；对应模块使用 mb_ 前缀（abi 除外）。删除 mb_base、mb_vehicle 等被替代模块与旧 include 路径。不能靠重命名掩盖职责混合。
-G2. Python 建立 report，报告和派生指标从 analysis/metrics 收敛于此；core/elements/model/analysis 的现役职责各有明确新归属，最终删除旧目录，不保留转发壳。
-G3. Python 不再保留关节残差/Jacobian、力元本构或反力求解实现；原有元件载荷报告从 native 结果读取，保持用户可见字段、单位、方向、参考点和失败证据。
+G2. Python 建立 report，报告和派生指标从 analysis/metrics 收敛于此；core/elements/model/analysis 的现役职责各有明确新归属，并删除其中**已无生产调用者**的旧模块；仍有现役生产调用的模块按 G3 的修订保留，不设「必须删完」的强制项，不保留转发壳。
+G3. Python 不再保留关节残差/Jacobian 与反力求解实现；力元本构按「05 通道证据 → 06 切换」推进，但允许在 native 力旋量通道尚未启用期间继续存在，其删除以 05 的可选通道证据为前提。原有元件载荷报告保持用户可见字段、单位、方向、参考点和失败证据。
 G4. 保留最新统一 preparation、simulation、results、service 和 artifact 生命周期，不退回历史“仅七个目录”的草案；保持现有 API、CLI、七个 family、Adams 输入输出和历史 artifact 读取功能。
+
+### 修订记录（2026-09-21，用户裁决 A1）
+
+修订原因：05 实施前的侦查证明，原 G2/G3 的两项要求在「不得重录数值基线」约束下不可同时成立，证据见 `tasks/20260921-05-native-facts/raw/step1_channel_mapping.md` §7-§8：
+
+- native 尚无按 body 的力元力旋量输出通道；`ComponentLoad.global_load/local_load/endpoint` 现全部由 Python 本构（`api.py:742`）产生。
+- 把凝聚迁入 native 会改变 native 收到的 body 集合（实测 `SUSPENSION_MULTIBODY_CONDENSE_WELDS=0` 下 body 数 22→23），而 `case_parity_check.py:398-410` 的整车门是字节级 sha256。
+
+本次修订为第 3 级计划修改（改 Goal/Non-Goals/Done-When），修订内容：
+
+1. G2 收窄：旧目录删除只覆盖**已无生产调用者**的部分；保留仍有现役生产调用的模块，不设「必须删完」的强制项。
+2. G3 收窄：力元本构的删除以 05 的可选 native 通道证据为前提，通道未启用期间允许保留；关节残差/Jacobian 与反力求解的删除保持不变。
+3. 凝聚：保留在 Python 作者层；native 的 `kind="fixed"` 关节作为**契约等价实现**，须有等价性测试。不再要求「把计算性凝聚迁入 mb_assembly」。
+   - **与用户第二问答复的关系（须明确）**：用户对第二问选的选项 A 字面为「Python 不再凝聚，把 weld 作为 fixed 约束送 native，验证与现凝聚结果等价」。该选项的**目标**是「由 native 的 fixed 契约承接焊接语义」，本次修订**采纳该目标**（第 3 条：native fixed 关节作契约等价实现 + 等价性测试）；但其**手段（Python 不再凝聚）**与用户对第一问选择的 A1（元件通道默认关、不重录基线、字节门保持绿）直接冲突——Python 不再凝聚会改变 native 收到的 body 集合，使整车门字节 sha256 失败。
+   - **处置**：以 A1（用户对第一问的选择，且明确含「不重录基线」）为约束上限，凝聚的**生产路径**暂保留在 Python 作者层；native fixed 关节的等价性作为契约测试交付。待后续单独裁决数值门策略后，再决定是否把生产路径切到「不凝聚 + native fixed」。此项作为本 Epic 的**已知未闭合项**登记，不判为达成。
+4. 元件报告新通道：按向后兼容可选扩展实现，**默认关闭**，默认路径的 artifact 字节不变，两个字节级门保持绿。
+
+未修订：G1（C++ 模块职责与 DAG）、G4（API/CLI/family/Adams/历史读取）保持原文；「不得重录数值基线」保持原文。
 
 ## 事实与修正
 
@@ -56,7 +74,7 @@ G4. 保留最新统一 preparation、simulation、results、service 和 artifact
 | mb_model / mb_input / mb_energy | 中性数据与输入采样 | 保持纯数据边界；质量矩阵装配与线性分解分属 assembly/linear |
 | mb_cases / mb_output / abi | 工况展开/输出/入口编排 | cases 不承担求解实现；入口调用装配和求解 |
 
-装配范围须核对 Python build_vehicle 的焊接体凝聚：将计算性凝聚迁入 mb_assembly；保留原 body ID 到凝聚体 ID 的映射，供 native 输出和 Adams 渲染使用。不能因为当前 C++ 没有同名函数就判为无需迁移。
+装配范围须核对 Python build_vehicle 的焊接体凝聚。**2026-09-21 用户裁决 A1 修订**：凝聚保留在 Python 作者层（`model/vehicle.py:243` `_condense_welded_bodies`），不再要求迁入 mb_assembly；native 侧已有的 `kind="fixed"` 关节（`contract_registry.cpp:24`，6 行）作为契约等价实现，须有等价性测试与体 ID 映射登记。原文「不能因为当前 C++ 没有同名函数就判为无需迁移」对凝聚一项不再适用，理由与证据见本文件修订记录及 `tasks/20260921-05-native-facts/raw/step1_channel_mapping.md` §8。
 
 ## Python 迁移矩阵
 
@@ -64,9 +82,10 @@ G4. 保留最新统一 preparation、simulation、results、service 和 artifact
 |---|---|
 | model/front_axle、model/vehicle 的硬点镜像、命名、schema→声明转换 | preparation/assembly/ 下的 front_axle、vehicle；只作者侧转换 |
 | core 的关节/刚体/元素数据字段 | preparation/assembly/types.py；不携带 residual/jacobian/evaluate |
-| DOF、约束系统、质量矩阵、反力求解、凝聚 | C++ assembly/joint/solve；Python 旧实现删除，物理测试转成 native 契约测试 |
+| DOF、约束系统、质量矩阵、反力求解 | C++ assembly/joint/solve；Python 旧实现删除，物理测试转成 native 契约测试 |
+| 焊接体凝聚 | **修订（A1）**：保留在 Python 作者层 `model/vehicle.py:243`；native 的 `kind="fixed"` 关节作契约等价实现，须有等价性测试。不再迁入 mb_assembly。 |
 | core/spatial 的现役输入坐标转换 | preparation/geometry.py；结果侧坐标转换置 results/geometry.py，复核调用方向，避免 report→preparation |
-| elements/elastic、assembly 的本构和力汇总 | 删除；先完成 native 事实通道与 results 解码，再切换 api 元件报告 |
+| elements/elastic、assembly 的本构和力汇总 | **修订（A1）**：删除以 05 的可选 native 力旋量通道**实际启用**为前提（先完成通道与 results 解码，再切换 api 元件报告，再删除）。通道未启用期间保留，但须有 file:line 待删除登记（阻断原因 + 启用条件）；不得为删除而启用可选通道，不得在 report 侧复算本构。 |
 | metrics、analysis 的轮几何/柔度/统计 | report/metrics/、report/geometry.py、report/compliance.py；只消费结果及只读说明数据 |
 | analysis/time_signals | preparation/signals.py；属于输入信号采样，不是报告 |
 | VehicleKCTimeDomainSolver 规定运动 replay | simulation/replay.py 编排 + results/timeseries.py 结果聚合；保留“无积分”的原语义 |
@@ -82,7 +101,7 @@ pac2002_scope 删除来源：`.codex-tasks/20260917-native-multibody-takeover/AR
 
 ## 执行顺序与共享文件
 
-子任务见 SUBTASKS.csv，全部 TODO。采用串行主线：冻结基线→门禁→C++ 基础→C++ 职责→native 输出接管→Python 作者层→report/replay→删除→终局验收。
+子任务见 SUBTASKS.csv（01-04 DONE，05-09 TODO）。采用串行主线：冻结基线→门禁→C++ 基础→C++ 职责→native 输出接管→Python 作者层→report/replay→删除→终局验收。
 
 CMakeLists.txt、layering_baseline.json、api.py、包 __init__.py、compiler/runner/decoder、schema 和共享测试门禁均顺序修改，不并行写。每个任务有独立 task_dir，不能据此假设代码写范围互斥。
 
@@ -96,7 +115,7 @@ CMakeLists.txt、layering_baseline.json、api.py、包 __init__.py、compiler/ru
 
 03/04/05 每步构建并同步 DLL，运行动态字节门、K/C/family parity、ABI 七符号与版本门。03/04 同步运行 cpp+header 分层与 architecture 门禁。05 涉及新增输出或契约字段时额外执行 kernel/contracts 测试与版本兼容门；现有输入和输出通道顺序/单位不变。
 
-05 冻结 Python 元件报告的 name/ID、两端、坐标系、作用点、符号、单位、能量、active 状态与 native 输出逐项对照。覆盖弹簧、阻尼、衬套、防倾杆、限位、垂向轮胎及 K/C 两模式；单独测静轮荷辅助求解。缺字段先补 C++ 输出，不能缺字段填零。身份映射覆盖凝聚后的实体。
+05 冻结 Python 元件报告的 name/ID、两端、坐标系、作用点、符号、单位、能量、active 状态与 native 输出逐项对照。覆盖弹簧、阻尼、衬套、防倾杆、限位、垂向轮胎及 K/C 两模式；单独测静轮荷辅助求解。**2026-09-21 修订（A1）**：缺口按「向后兼容可选扩展、默认关闭」补 C++ 输出，默认路径 artifact 字节不得变化；不得缺字段填零；不得为让可选通道生效而重录数值基线。凝聚按修订记录第 3 条处理（保留 Python 作者层 + native fixed 关节等价性测试）。
 
 06/07 保留 API、CLI、Adams source rendering、七 family preparation/document bypass、结果异常/partial、历史读取；report 的计算以冻结结果验证，replay 时间与聚合协议不变。
 
@@ -114,11 +133,11 @@ CMakeLists.txt、layering_baseline.json、api.py、包 __init__.py、compiler/ru
 - uv build --package suspension-multibody
 - git diff --check
 
-动态哈希脚本、K/C parity、family parity、性能门及 C++ selftest 的具体参数/产物路径在 01 通过 --help 和现有构建配置核实后冻结到 VALIDATION.md；未冻结或不能执行不得开始结构迁移。构建 wheel 后须在隔离环境检查 import/CLI、七符号、native 执行与旧目录缺席，不能只看构建退出码。
+动态哈希脚本、K/C parity、family parity、性能门及 C++ selftest 的具体参数/产物路径在 01 通过 --help 和现有构建配置核实后冻结到 VALIDATION.md；未冻结或不能执行不得开始结构迁移。构建 wheel 后须在隔离环境检查 import/CLI、七符号、native 执行与**已无生产调用者**的旧模块缺席（按 A1 保留的部分不要求缺席），不能只看构建退出码。
 
 ## Done-When
 
-独立逐条确认 G1–G4：目标模块职责和 cpp+header DAG 实测通过；旧目录/旧导入/wheel 残留为零；Python 无本构/残差/反力求解且 native 输出有逐通道证据；公开 API/CLI、七 family、Adams 渲染、历史读取与 success/partial/failed artifact 端到端通过。每行 DONE 不代替这些条件。
+独立逐条确认 G1–G4：目标模块职责和 cpp+header DAG 实测通过；**已无生产调用者**的旧模块与旧导入、wheel 残留为零（仍有现役生产调用的模块按 G3 修订保留，须逐项列明其保留理由）；Python 无关节残差/Jacobian 与反力求解实现，且 native 输出有逐通道证据（力元本构的删除以 05 可选通道证据为前提）；**凝聚等价性有实测证据**：native `kind="fixed"` 关节与 Python 凝聚的等价性测试通过，body ID→凝聚体 ID 映射有登记；公开 API/CLI、七 family、Adams 渲染、历史读取与 success/partial/failed artifact 端到端通过。**数值门为独立项**：`dynamic_hash_sentinel` 与 `case_parity_check` 的字节级门必须保持绿，且未重录任何基线；若某 Goal 与字节门冲突，以字节门为准并将该 Goal 退回修订，不得改基线使其通过。每行 DONE 不代替这些条件。
 
 ## 风险与回退
 

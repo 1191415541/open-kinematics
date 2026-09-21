@@ -2,7 +2,7 @@
 
 ## 目标
 
-完成 Python 作者侧职责归位，并把元件报告切换到 05 冻结的 native 事实，使生产代码不再保留关节残差/Jacobian、本构或力汇总实现：
+完成 Python 作者侧职责归位，并把元件报告切换到 05 冻结的 native 事实：关节残差/Jacobian 的删除无条件执行；力元本构与力汇总的删除按 05 可选通道的实际启用状态处置（**A1 修订**，见下方约束与验收 5）。
 
 1. `model/front_axle.py`、`model/vehicle.py` 的硬点镜像、命名与 schema→声明转换 → `preparation/assembly/{front_axle,vehicle}.py`：只作者侧转换。
 2. `core/` 的关节/刚体/元素数据字段 → `preparation/assembly/types.py`：数据对象不携带 `residual`/`jacobian`/`evaluate`。
@@ -20,7 +20,7 @@
 
 ## 约束
 
-- 删除 `elements/elastic.py` 的 `evaluate` 与 `elements/assembly.py` 的力汇总之前，必须先有 05 的通道级证据；05 未完成不得开工本任务。
+- 删除 `elements/elastic.py` 的 `evaluate` 与 `elements/assembly.py` 的力汇总之前，必须先有 05 的通道级证据。**（2026-09-21 用户裁决 A1 修订）**：05 交付的是「默认关闭的可选 native 力旋量通道」。在可选通道未启用期间，本构的删除**不构成本任务的完成条件**；本任务须先完成 1-5 项（作者层归位、geometry/signals 拆分、pac2002_scope 迁移）与第 7 项回归，第 6 项按可选通道的实际状态执行：通道已启用则删除，未启用则登记为「待通道启用后删除」并明示理由。不得为删除本构而启用可选通道（那会改变默认 artifact 字节）。
 - `preparation` 只做作者侧数据与单位/信号转换，不求解、不调用 native、不解码结果。
 - 若发现 05 未覆盖的力律差异，登记并阻断切换，不得在 Python 侧保留第二套力律或"仅供报告"的近似。
 - `api.py`、包 `__init__.py`、`schema` 是共享写面：本任务串行修改，不得与 07/08 并行写同一文件。
@@ -42,7 +42,7 @@
 2. `preparation/assembly/types.py` 的数据对象不携带 `residual`/`jacobian`/`evaluate`；`core/constraints.py` 的残差/Jacobian 不再被 production 调用。
 3. `preparation/geometry.py` 与 `results/geometry.py` 分工明确，无 `report`→`preparation` 反向调用。
 4. `analysis/time_signals.py` 的能力在 `preparation/signals.py`；`pac2002_scope` 的能力读取在 `kernel/capabilities.py` 且为惰性，旧顶层模块已无生产调用方。
-5. `api.py` 的元件报告来自 native 事实；`elements/elastic.py` 的 `evaluate` 与 `elements/assembly.py` 的力汇总已删除，且不存在其它本构实现。
+5. **（A1 修订）** `api.py` 的元件报告在**可选通道启用时**来自 native 事实。`elements/elastic.py` 的 `evaluate` 与 `elements/assembly.py` 的力汇总：可选通道已启用则必须删除且无其它本构实现；未启用则保留但须有显式的「待删除」登记（file:line + 阻断原因 + 启用条件），并不得在 report 侧复算本构。
 6. 公开 API 与 CLI、Adams source rendering、七 family preparation/document bypass、结果异常与 partial、历史 artifact 读取全部回归通过。
 7. `tests/simulation`、`tests/api`、`tests/adams`、`tests/cases` 全绿；无新增失败。
 8. 未提前删除任何目录或 `pac2002_scope.py` 文件本体（删除属 08）。
