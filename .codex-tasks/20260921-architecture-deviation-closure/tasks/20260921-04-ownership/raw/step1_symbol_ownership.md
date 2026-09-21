@@ -19,7 +19,7 @@
 
 ### build_model 与 element reader（abi/kernel_model_build.cpp → src/assembly/）
 - `build_model` (:25)：整个 TU 的核心；调用 11 个注册函数。
-- `audit_constraint_system` 调用点 (:378)：审计函数本体已在 `mb_solve_static`（kernel_static_contact.cpp:638）——它读取 Model 并验证约束系统，失败时机与诊断保持不变。SPEC 允许"joint 审计或 ABI 装配后校验"；**维持现状（调用点在 build_model 内，本体在 solve_static）不动**：搬迁本体到 mb_joint 会引入 assembly→solve_static 反向边风险，而 SPEC 禁止该边。审计本体位置随 04 收尾的环消除需要再评估（见下）。
+- `audit_constraint_system` 调用点 (:378)：审计函数本体已在 `mb_solve_static`（kernel_static_contact.cpp:638）——它读取 Model 并验证约束系统，失败时机与诊断保持不变。SPEC 允许"joint 审计或 ABI 装配后校验"；**维持现状（调用点在 build_model 内，本体在 solve_static）不动**：搬迁本体到 mb_joint 会引入 assembly→solve_static 反向边风险，而 SPEC 禁止该边。审计本体位置随 04 收尾的环消除需要再评估（见下）。**执行裁定（04 收口时）**：`mb_assembly→mb_solve_static` 是 SPEC 明令禁止的反向边，audit 本体已迁 `mb_joint`（kernel_model_constraint.cpp），声明移至 mb_joint/functions.hpp；调用点不变（build_model 末尾与 ABI 装配后校验各一次），失败时机与诊断文本逐字保留。
 
 ### element reader
 - `read_element_blocks`：kernel_model.cpp 的注释指明它在 `kernel_model.cpp`（model 目录）；ABI `element_reader.cpp` 是另一层读取。**mb_model 纯数据化**（验收 4）要求它迁出 model：`read_element_blocks` 归 `mb_assembly`。
@@ -81,7 +81,7 @@
 03 收尾后的环：`mb_solve_dynamic <-> mb_solve_static <-> mb_tire* <-> mb_vehicle`。
 拆解 mb_vehicle 后该环的边全部重定向到 assembly/force/element/tire。
 - `mb_solve_static <-> mb_vehicle` mutual 边：static 调 vehicle 的力装配（→ mb_force）与 build_model（→ mb_assembly）；vehicle 调 static 的 audit_constraint_system 与 pose 相关。拆解后 `solve_static -> {force, assembly}` 正向、`assembly -> joint/model` 正向——环应消除。
-- `mb_solve_dynamic <-> mb_tire_state` mutual 边：属 03 遗留，dynamic 调 tire_state 的状态读写、tire_state 调 dynamic 的 tire_block_width/read_tire_states。**本任务范围外**（mb_tire_state 是 kept 模块）；若终局仍剩此 mutual 边，登记为 08 前的收尾项。
+- `mb_solve_dynamic <-> mb_tire_state` mutual 边：属 03 遗留，dynamic 调 tire_state 的状态读写、tire_state 调 dynamic 的 tire_block_width/read_tire_states。**04 收口时已消除**：该 mutual 边是 `tire_state/kernel_tire_state.cpp` 对 `mb_solve_dynamic/functions.hpp` 的无效 include（唯一符号 `state_from_unknown`/`apply_brush_return_mapping` 仅出现在注释里），删除后 mutual 边清零。
 
 ## 凝聚交接（05 的输入，本任务只登记）
 

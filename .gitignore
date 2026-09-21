@@ -227,3 +227,4 @@ GEMINI.md
 /static_kkt_debug.bin
 /docs/visuals/
 /data/
+__pycache__/

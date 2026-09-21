@@ -3,9 +3,11 @@
 //
 // This unit owns the statics: given a model and a starting pose it projects onto
 // the constraint manifold, relaxes the contact set, solves the least-squares
-// problem and audits the result.  The audit (`audit_constraint_system`) and the
-// residual maxima (`constraint_residual_maxima`, which the ABI entry point also
-// calls) live here because they describe the same problem the trim solves.
+// problem and audits the result.  The residual maxima
+// (`constraint_residual_maxima`, which the ABI entry point also calls) live here
+// because they describe the same problem the trim solves.  The audit
+// (`audit_constraint_system`) moved to `mb_joint` at subtask 04: it is a
+// property of the assembled constraint rows, not of the static solver.
 
 #include "mb_solve_static/functions.hpp"
 
@@ -292,14 +294,6 @@ std::vector<int> static_gauge_coordinates(const Model& model) {
     return coordinates;
 }
 
-const StaticRotationGauge* static_rotation_gauge_for_pivot(
-    const Model& model, int coordinate
-) {
-    for (const auto& gauge : model.static_rotation_gauges) {
-        if (gauge.pivot == coordinate) return &gauge;
-    }
-    return nullptr;
-}
 
 double static_rotation_gauge_value(
     const Model& model, const StaticRotationGauge& gauge,

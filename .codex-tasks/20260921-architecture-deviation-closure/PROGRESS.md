@@ -65,3 +65,11 @@
 - 每步完整门通过：构建 0 错误、--strict 退出 0、动态哈希 26/26 逐位一致、K/C parity、8 family parity、kernel 15 passed、arch 86 passed、ABI 七符号 15/30/1/1 ctypes 实测。
 - 四份清单同步（CMake 20 目标、MODULES.md 重写、layering_baseline 175 条审核台账、build.py 与 3 个测试硬编码）；未改 Python 生产代码、未改容差、未重录数值基线。
 - 证据在 tasks/20260921-03-foundation/raw/（step1-7 全套日志，真实退出码）。
+
+## 2026-09-21 子任务 04 完成
+
+- 上一会话已把 mb_vehicle/mb_suspension 拆解入库（随 HEAD 7ef77a0，提交信息误标 01-03），但收口未完成：assembly_primitives.cpp 未登记 CMake 导致链接失败、三组模块环未消除、baseline/MODULES.md 停在 03 冻结态（门禁 135 条 findings）。本会话完成收口。
+- 修复与修正：assembly_primitives.cpp 补进 CMake（MB_ELEMENT_SOURCES）；删 8 处注释提及的无效 include 断开 mb_element↔mb_force↔mb_tire 与 mb_solve_dynamic↔mb_tire_state 环（mutual 3→0、SCC 1→0）；audit_constraint_system 迁 mb_joint、static_rotation_gauge_for_pivot 迁 mb_model，消除 SPEC 禁止的 assembly→solve_static 反向边（诊断文本与失败时机不变）。
+- 同步四清单：CMake 20 目标不变（assembly/element/force 已在内）、MODULES.md 重写为 23 模块、layering_baseline 重录并登记 35 条新边 reviewed 台账（189→224）、架构测试两处"迁移期阻断"预期改为终局绿。
+- 验证：构建 0 错误；--strict 与 --strict --final 均退出 0；动态哈希 26/26 逐位一致；K/C 与 8 family parity 通过；kernel 15 passed；arch 86 passed；ABI 七符号 15/30/1/1；ruff/ty 通过。证据在 tasks/20260921-04-ownership/raw/。
+- 凝聚算法与身份映射按 SPEC 只登记交接（raw/step1_symbol_ownership.md），实现归 05；05 可启动。

@@ -65,4 +65,10 @@ void ensure_directional_state( const Model& model, DirectionalState& direction )
 void add_directional_force_at_arm( std::vector<Vec3>& force, std::vector<Vec3>& torque, const Model& model, int body, const DVec3& arm, const DVec3& f );
 
 void add_directional_torque( std::vector<Vec3>& torque, const Model& model, int body, const DVec3& value );
+
+// A pure Model accessor moved here from `mb_solve_static` at subtask 04:
+// `static_rotation_gauge_for_pivot` reads the assembled gauge list; the
+// solver-side `static_rotation_gauge_value` stays with the static solve.
+const StaticRotationGauge* static_rotation_gauge_for_pivot( const Model& model, int coordinate );
+
 } // namespace axle_kernel

@@ -1,0 +1,20 @@
+recorded baseline -> E:\тс╪Ч\open-kinematics\packages\suspension_kernel\layering_baseline.json
+  header_edges the recording adds : []
+  header_edges the recording drops: []
+  source_edges the recording adds : [('mb_joint', 'mb_linear'), ('mb_joint', 'mb_tire_state')]
+  source_edges the recording drops: [('mb_assembly', 'mb_solve_static')]
+kernel root                : E:\тс╪Ч\open-kinematics\packages\suspension_kernel
+mode                       : migration
+headers                    : 55
+cpp translation units      : 75
+modules present            : 23
+header edges               : 118
+source edges               : 107
+source edge evidence       : 227 records (tu_include 211, symbol_reference 163, both 147; kind mentions 374)
+target modules missing     : 0
+legacy modules present     : 0
+legacy modules unregistered: 0 []
+mutual (reverse) edges     : 0
+self-including headers     : 0
+cross-aggregate includes   : 0
+module cycles (SCC size>1) : 0

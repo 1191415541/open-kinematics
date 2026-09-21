@@ -16,7 +16,6 @@
 #include "mb_config/functions.hpp"
 #include "mb_numeric/functions.hpp"
 #include "mb_model/functions.hpp"
-#include "mb_solve_static/functions.hpp"
 
 namespace axle_kernel {
 

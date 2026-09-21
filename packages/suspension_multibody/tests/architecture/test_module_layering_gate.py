@@ -247,15 +247,17 @@ def test_strict_gate_passes_on_the_current_tree() -> None:
     assert "cpp translation units" in completed.stdout
 
 
-def test_strict_final_gate_reports_the_expected_current_blockers() -> None:
+def test_strict_final_gate_passes_on_the_current_tree() -> None:
     # Subtask 04 removed the last legacy modules (`mb_vehicle`, `mb_suspension`)
-    # from the tree, so the final mode no longer has a legacy module, legacy
-    # path or missing target module to report; the module cycle is the blocker
-    # that is still real.
+    # and broke the last module cycle, so the final gate is green: no legacy
+    # module, no legacy path, no missing target module, no cycle, no mutual
+    # edge.  The remaining blockers of the epic live in the Python layers
+    # (05-08), not in the kernel layering.
     completed = _run_gate("--strict", "--final")
-    assert completed.returncode == 1
-    for expected in ("cycle",):
-        assert expected in completed.stdout, completed.stdout
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "legacy modules present     : 0" in completed.stdout
+    assert "module cycles (SCC size>1) : 0" in completed.stdout
+    assert "mutual (reverse) edges     : 0" in completed.stdout
 
 
 def test_mode_cannot_be_switched_through_the_environment() -> None:
@@ -272,8 +274,11 @@ def test_mode_cannot_be_switched_through_the_environment() -> None:
     assert "getenv" not in source
     tolerated = _run_gate("--strict", env=hostile)
     assert tolerated.returncode == 0, tolerated.stdout
+    # Since subtask 04 the final gate is green on the current tree, so the
+    # hostile environment cannot be told from the flag only by the exit code;
+    # it must not flip the mode either way.
     refused = _run_gate("--strict", "--final", env=hostile)
-    assert refused.returncode == 1, refused.stdout
+    assert refused.returncode == 0, refused.stdout + refused.stderr
 
 
 # --------------------------------------------------------------------------- #

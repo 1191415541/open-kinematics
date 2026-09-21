@@ -1,0 +1,123 @@
+[1/99] Building CXX object CMakeFiles/mb_linear.dir/cpp/src/linear/kernel_linear.cpp.obj
+[2/99] Building CXX object CMakeFiles/mb_tire_pac2002.dir/cpp/src/tire/pac2002/vertical.cpp.obj
+[3/99] Building CXX object CMakeFiles/mb_cases.dir/cpp/src/cases/axle_dynamic.cpp.obj
+[4/99] Building CXX object CMakeFiles/mb_numeric.dir/cpp/src/numeric/angles.cpp.obj
+[5/99] Building CXX object CMakeFiles/mb_numeric.dir/cpp/src/numeric/kernel_numeric.cpp.obj
+[6/99] Building CXX object CMakeFiles/mb_dual.dir/cpp/src/dual/curves.cpp.obj
+[7/99] Building CXX object CMakeFiles/mb_dual.dir/cpp/src/dual/kernel_dual_algebra.cpp.obj
+[8/99] Building CXX object CMakeFiles/mb_dual.dir/cpp/src/dual/dual_geometry.cpp.obj
+[9/99] Building CXX object CMakeFiles/mb_config.dir/cpp/src/config/kernel_config.cpp.obj
+[10/99] Building CXX object CMakeFiles/mb_tire_pac2002.dir/cpp/src/tire/pac2002/contact_mass.cpp.obj
+[11/99] Building CXX object CMakeFiles/mb_tire_pac2002.dir/cpp/src/tire/pac2002/turn_slip.cpp.obj
+[12/99] Building CXX object CMakeFiles/mb_tire_pac2002.dir/cpp/src/tire/pac2002/parameters.cpp.obj
+[13/99] Building CXX object CMakeFiles/mb_tire_pac2002.dir/cpp/src/tire/pac2002/model.cpp.obj
+[14/99] Building CXX object CMakeFiles/mb_tire_pac2002.dir/cpp/src/tire/pac2002/spin.cpp.obj
+[15/99] Building CXX object CMakeFiles/mb_tire_pac2002.dir/cpp/src/tire/pac2002/directional.cpp.obj
+[16/99] Building CXX object CMakeFiles/mb_tire_pac2002.dir/cpp/src/tire/pac2002/scope.cpp.obj
+[17/99] Building CXX object CMakeFiles/mb_tire_pac2002.dir/cpp/src/tire/pac2002/law.cpp.obj
+[18/99] Building CXX object CMakeFiles/mb_contract.dir/cpp/src/contract/contract_registry.cpp.obj
+[19/99] Building CXX object CMakeFiles/mb_cases.dir/cpp/src/cases/case_dispatch.cpp.obj
+[20/99] Building CXX object CMakeFiles/mb_contract.dir/cpp/src/contract/contract_container.cpp.obj
+[21/99] Building CXX object CMakeFiles/mb_solve_dynamic.dir/cpp/src/solve_dynamic/kernel_events.cpp.obj
+[22/99] Building CXX object CMakeFiles/mb_contract.dir/cpp/src/contract/contract_sha256.cpp.obj
+[23/99] Building CXX object CMakeFiles/mb_contract.dir/cpp/src/contract/contract_json.cpp.obj
+[24/99] Building CXX object CMakeFiles/mb_cases.dir/cpp/src/cases/ride_random_road.cpp.obj
+[25/99] Building CXX object CMakeFiles/mb_solve_dynamic.dir/cpp/src/solve_dynamic/kernel_integrator_step.cpp.obj
+[26/99] Building CXX object CMakeFiles/mb_solve_dynamic.dir/cpp/src/solve_dynamic/kernel_integrator_state.cpp.obj
+[27/99] Building CXX object CMakeFiles/mb_input.dir/cpp/src/input/kernel_input.cpp.obj
+[28/99] Building CXX object CMakeFiles/mb_solve_dynamic.dir/cpp/src/solve_dynamic/kernel_integrator_residual.cpp.obj
+[29/99] Building CXX object CMakeFiles/mb_cases.dir/cpp/src/cases/handling.cpp.obj
+[30/99] Building CXX object CMakeFiles/mb_cases.dir/cpp/src/cases/kc_quasi_static.cpp.obj
+[31/99] Building CXX object CMakeFiles/mb_cases.dir/cpp/src/cases/ride_four_post.cpp.obj
+[32/99] Building CXX object CMakeFiles/mb_cases.dir/cpp/src/cases/vehicle_kc.cpp.obj
+[33/99] Building CXX object CMakeFiles/mb_solve_dynamic.dir/cpp/src/solve_dynamic/kernel_integrator.cpp.obj
+[34/99] Building CXX object CMakeFiles/mb_cases.dir/cpp/src/cases/vehicle_dynamic.cpp.obj
+[35/99] Building CXX object CMakeFiles/mb_cases.dir/cpp/src/cases/contract_model.cpp.obj
+[36/99] Building CXX object CMakeFiles/mb_solve_dynamic.dir/cpp/src/solve_dynamic/kernel_integrator_newton.cpp.obj
+[37/99] Building CXX object CMakeFiles/mb_solve_static.dir/cpp/src/solve_static/kernel_static_contact.cpp.obj
+[38/99] Building CXX object CMakeFiles/mb_solve_static.dir/cpp/src/solve_static/kernel_static_projection.cpp.obj
+[39/99] Building CXX object CMakeFiles/mb_solve_static.dir/cpp/src/solve_static/kernel_static_trim.cpp.obj
+[40/99] Building CXX object CMakeFiles/mb_output.dir/cpp/src/output/kernel_output.cpp.obj
+[41/99] Building CXX object CMakeFiles/mb_assembly.dir/cpp/src/assembly/element_reader.cpp.obj
+[42/99] Building CXX object CMakeFiles/mb_assembly.dir/cpp/src/assembly/registration.cpp.obj
+[43/99] Building CXX object CMakeFiles/mb_assembly.dir/cpp/src/assembly/build_model.cpp.obj
+[44/99] Building CXX object CMakeFiles/mb_force.dir/cpp/src/force/directional.cpp.obj
+[45/99] Building CXX object CMakeFiles/mb_force.dir/cpp/src/force/external_vector.cpp.obj
+[46/99] Linking CXX static library libmb_numeric.a
+[47/99] Building CXX object CMakeFiles/mb_force.dir/cpp/src/force/layout.cpp.obj
+[48/99] Building CXX object CMakeFiles/mb_element.dir/cpp/src/element/anti_roll.cpp.obj
+[49/99] Linking CXX static library libmb_dual.a
+[50/99] Building CXX object CMakeFiles/mb_element.dir/cpp/src/element/bushing.cpp.obj
+[51/99] Building CXX object CMakeFiles/mb_element.dir/cpp/src/element/curves.cpp.obj
+[52/99] Building CXX object CMakeFiles/mb_element.dir/cpp/src/element/assembly_primitives.cpp.obj
+[53/99] Linking CXX static library libmb_config.a
+[54/99] Building CXX object CMakeFiles/mb_element.dir/cpp/src/element/drive_brake.cpp.obj
+[55/99] Linking CXX static library libmb_linear.a
+[56/99] Linking CXX static library libmb_tire_pac2002.a
+[57/99] Building CXX object CMakeFiles/mb_element.dir/cpp/src/element/directional.cpp.obj
+[58/99] Building CXX object CMakeFiles/mb_element.dir/cpp/src/element/spring.cpp.obj
+[59/99] Building CXX object CMakeFiles/mb_tire.dir/cpp/src/tire/assemble.cpp.obj
+[60/99] Linking CXX static library libmb_input.a
+[61/99] Linking CXX static library libmb_solve_dynamic.a
+[62/99] Building CXX object CMakeFiles/mb_element.dir/cpp/src/element/steering.cpp.obj
+[63/99] Linking CXX static library libmb_contract.a
+[64/99] Building CXX object CMakeFiles/mb_tire.dir/cpp/src/tire/kernel_tire_assembly.cpp.obj
+[65/99] Building CXX object CMakeFiles/mb_model.dir/cpp/src/model/kernel_model_accessors.cpp.obj
+[66/99] Building CXX object CMakeFiles/mb_model.dir/cpp/src/model/directional.cpp.obj
+[67/99] Building CXX object CMakeFiles/mb_model.dir/cpp/src/model/kernel_model.cpp.obj
+[68/99] Building CXX object CMakeFiles/mb_model.dir/cpp/src/model/road.cpp.obj
+[69/99] Linking CXX static library libmb_cases.a
+[70/99] Building CXX object CMakeFiles/mb_tire_common.dir/cpp/src/tire/common/kinematics.cpp.obj
+[71/99] Building CXX object CMakeFiles/mb_tire.dir/cpp/src/tire/directional.cpp.obj
+[72/99] Building CXX object CMakeFiles/mb_tire_state.dir/cpp/src/tire_state/kernel_tire_state.cpp.obj
+[73/99] Building CXX object CMakeFiles/mb_tire_fiala.dir/cpp/src/tire/fiala/relaxation.cpp.obj
+[74/99] Building CXX object CMakeFiles/mb_tire_fiala.dir/cpp/src/tire/fiala/forces.cpp.obj
+[75/99] Building CXX object CMakeFiles/mb_tire_fiala.dir/cpp/src/tire/fiala/directional.cpp.obj
+[76/99] Linking CXX static library libmb_solve_static.a
+[77/99] Building CXX object CMakeFiles/mb_tire_fiala.dir/cpp/src/tire/fiala/model.cpp.obj
+[78/99] Building CXX object CMakeFiles/mb_tire_fiala.dir/cpp/src/tire/fiala/modes.cpp.obj
+[79/99] Building CXX object CMakeFiles/mb_joint.dir/cpp/src/joint/registry.cpp.obj
+[80/99] Building CXX object CMakeFiles/mb_joint.dir/cpp/src/joint/kernel_directional_constraint.cpp.obj
+[81/99] Building CXX object CMakeFiles/mb_joint.dir/cpp/src/joint/kernel_model_constraint.cpp.obj
+[82/99] Linking CXX static library libmb_output.a
+[83/99] Linking CXX static library libmb_force.a
+[84/99] Linking CXX static library libmb_assembly.a
+[85/99] Building CXX object CMakeFiles/mb_tire_brush.dir/cpp/src/tire/brush/model.cpp.obj
+[86/99] Linking CXX static library libmb_element.a
+[87/99] Linking CXX static library libmb_tire.a
+[88/99] Linking CXX static library libmb_tire_state.a
+[89/99] Linking CXX static library libmb_model.a
+[90/99] Linking CXX static library libmb_tire_common.a
+[91/99] Linking CXX static library libmb_tire_fiala.a
+[92/99] Linking CXX static library libmb_joint.a
+[93/99] Linking CXX static library libmb_tire_brush.a
+[94/99] Building CXX object CMakeFiles/mb_contract_selftest.dir/cpp/tests/contract_selftest.cpp.obj
+[95/99] Building CXX object CMakeFiles/suspension_kernel.dir/cpp/src/abi/kernel_abi.cpp.obj
+FAILED: [code=1] CMakeFiles/suspension_kernel.dir/cpp/src/abi/kernel_abi.cpp.obj 
+C:\Users\zzy11\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\x86_64-w64-mingw32-g++.EXE -Dsuspension_kernel_EXPORTS -IE:/ï¿½Ó¼ï¿½/open-kinematics/packages/suspension_kernel/cpp/axle_dynamics -IE:/ï¿½Ó¼ï¿½/open-kinematics/packages/suspension_kernel/cpp/include -O3 -DNDEBUG -std=c++17 -flto=auto -fno-fat-lto-objects -Wall -Wextra -Werror -fno-fast-math -fopenmp -MD -MT CMakeFiles/suspension_kernel.dir/cpp/src/abi/kernel_abi.cpp.obj -MF CMakeFiles\suspension_kernel.dir\cpp\src\abi\kernel_abi.cpp.obj.d -o CMakeFiles/suspension_kernel.dir/cpp/src/abi/kernel_abi.cpp.obj -c E:/ï¿½Ó¼ï¿½/open-kinematics/packages/suspension_kernel/cpp/src/abi/kernel_abi.cpp
+E:/æ‚ä»¶/open-kinematics/packages/suspension_kernel/cpp/src/abi/kernel_abi.cpp: In function 'int run_vehicle_flat_legacy(const VehicleInput*, VehicleOutput*, char*, std::size_t)':
+E:/æ‚ä»¶/open-kinematics/packages/suspension_kernel/cpp/src/abi/kernel_abi.cpp:1044:28: error: 'audit_constraint_system' was not declared in this scope
+ 1044 |     if (model.rows > 0 && !audit_constraint_system(model, error)) {
+      |                            ^~~~~~~~~~~~~~~~~~~~~~~
+[96/99] Building CXX object CMakeFiles/suspension_kernel.dir/cpp/src/abi/kernel_core.cpp.obj
+[97/99] Building CXX object CMakeFiles/suspension_kernel.dir/cpp/src/abi/kernel_contract_run.cpp.obj
+FAILED: [code=1] CMakeFiles/suspension_kernel.dir/cpp/src/abi/kernel_contract_run.cpp.obj 
+C:\Users\zzy11\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\x86_64-w64-mingw32-g++.EXE -Dsuspension_kernel_EXPORTS -IE:/ï¿½Ó¼ï¿½/open-kinematics/packages/suspension_kernel/cpp/axle_dynamics -IE:/ï¿½Ó¼ï¿½/open-kinematics/packages/suspension_kernel/cpp/include -O3 -DNDEBUG -std=c++17 -flto=auto -fno-fat-lto-objects -Wall -Wextra -Werror -fno-fast-math -fopenmp -MD -MT CMakeFiles/suspension_kernel.dir/cpp/src/abi/kernel_contract_run.cpp.obj -MF CMakeFiles\suspension_kernel.dir\cpp\src\abi\kernel_contract_run.cpp.obj.d -o CMakeFiles/suspension_kernel.dir/cpp/src/abi/kernel_contract_run.cpp.obj -c E:/ï¿½Ó¼ï¿½/open-kinematics/packages/suspension_kernel/cpp/src/abi/kernel_contract_run.cpp
+E:/æ‚ä»¶/open-kinematics/packages/suspension_kernel/cpp/src/abi/kernel_contract_run.cpp: In function 'int32_t suspension_kernel_run(const uint8_t*, std::size_t, const uint8_t*, std::size_t, uint8_t*, std::size_t*, char*, std::size_t)':
+E:/æ‚ä»¶/open-kinematics/packages/suspension_kernel/cpp/src/abi/kernel_contract_run.cpp:466:28: error: 'audit_constraint_system' was not declared in this scope
+  466 |     if (built.rows > 0 && !audit_constraint_system(built, error)) {
+      |                            ^~~~~~~~~~~~~~~~~~~~~~~
+[98/99] Linking CXX executable mb_contract_selftest.exe
+ninja: build stopped: subcommand failed.
+Traceback (most recent call last):
+  File "E:\ÔÓ¼þ\open-kinematics\packages\suspension_multibody\scripts\build_axle_native.py", line 65, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "E:\ÔÓ¼þ\open-kinematics\packages\suspension_multibody\scripts\build_axle_native.py", line 45, in main
+    produced = build(args.configuration)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\ÔÓ¼þ\open-kinematics\packages\suspension_kernel\src\suspension_kernel\binding\build.py", line 357, in build
+    _run([cmake, "--build", str(build_dir)], cwd=REPOSITORY_ROOT)
+  File "E:\ÔÓ¼þ\open-kinematics\packages\suspension_kernel\src\suspension_kernel\binding\build.py", line 245, in _run
+    raise RuntimeError(
+RuntimeError: command failed with exit code 1: C:\Users\zzy11\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin\cmake.EXE --build E:\ÔÓ¼þ\open-kinematics\packages\suspension_kernel\build\Release

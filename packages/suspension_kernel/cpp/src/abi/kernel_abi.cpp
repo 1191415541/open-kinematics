@@ -14,6 +14,7 @@
 #include "mb_model/functions.hpp"
 #include "mb_output/functions.hpp"
 #include "mb_solve_static/functions.hpp"
+#include "mb_joint/functions.hpp"
 #include "mb_tire_state/functions.hpp"
 #include "mb_assembly/functions.hpp"
 

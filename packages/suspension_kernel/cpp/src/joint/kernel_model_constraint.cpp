@@ -20,6 +20,8 @@
 #include "mb_config/functions.hpp"
 #include "mb_numeric/functions.hpp"
 #include "mb_model/functions.hpp"
+#include "mb_linear/functions.hpp"
+#include "mb_tire_state/tire_state.hpp"
 
 namespace axle_kernel {
 double joint_coordinate_value(
@@ -552,5 +554,57 @@ bool analytic_constraint_jacobian_matches_reference(
     error = worst;
     return worst <= 1e-6*scale;
 }
+
+// The constraint-system audit (subtask 04): it validates the assembled
+// constraint rows -- the analytic Jacobian against central differences, then
+// the rank -- so it belongs with the constraint math, not with the static
+// solver that also calls it.  The failure messages are the original text.
+bool audit_constraint_system(const Model& m, std::string& error) {
+    if (m.rows <= 0) return true;
+    State audit_state;
+    audit_state.r.resize(m.bodies.size());
+    audit_state.q.resize(m.bodies.size());
+    audit_state.v.resize(m.bodies.size());
+    audit_state.omega.resize(m.bodies.size());
+    audit_state.a.resize(m.bodies.size());
+    audit_state.alpha.resize(m.bodies.size());
+    audit_state.tire_sx.assign(m.tires.size(), 0.0);
+    audit_state.tire_sy.assign(m.tires.size(), 0.0);
+    audit_state.tire_sx_dot.assign(m.tires.size(), 0.0);
+    audit_state.tire_sy_dot.assign(m.tires.size(), 0.0);
+    resize_tire_states(m, audit_state);
+    for (std::size_t i = 0; i < m.bodies.size(); ++i) {
+        audit_state.r[i] = m.bodies[i].r;
+        audit_state.q[i] = m.bodies[i].q;
+        audit_state.v[i] = m.bodies[i].v;
+        audit_state.omega[i] = m.bodies[i].omega;
+    }
+    // The Jacobian the solver will use has to be the Jacobian of the residual
+    // before anything can be said about its rank: a verdict on a wrong Jacobian
+    // is a verdict about the wrong system.  The correctness check therefore runs
+    // first, and it reports by how much the two disagree.
+    double jacobian_error = 0.0;
+    if (!analytic_constraint_jacobian_matches_reference(
+            m, audit_state, jacobian_error
+        )) {
+        error = "analytic constraint Jacobian disagrees with central "
+            "differences by " + std::to_string(jacobian_error);
+        return false;
+    }
+    const auto jacobian = constraint_jacobian(m, audit_state);
+    const int rank = matrix_rank(jacobian, m.rows, m.ndof);
+    if (rank < m.rows) {
+        const int reference_rank = matrix_rank(
+            constraint_jacobian_central_difference(m, audit_state), m.rows, m.ndof
+        );
+        error = "constraint Jacobian is rank deficient at the initial pose: rank " +
+            std::to_string(rank) + " of " + std::to_string(m.rows) + " rows over " +
+            std::to_string(m.ndof) + " columns (central differences give rank " +
+            std::to_string(reference_rank) + ")";
+        return false;
+    }
+    return true;
+}
+
 
 } // namespace axle_kernel

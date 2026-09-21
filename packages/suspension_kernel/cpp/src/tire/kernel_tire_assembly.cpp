@@ -21,7 +21,6 @@
 // modules whose functions it actually calls.
 #include "mb_config/functions.hpp"
 #include "mb_numeric/functions.hpp"
-#include "mb_force/functions.hpp"
 #include "mb_model/functions.hpp"
 #include "mb_tire/brush/functions.hpp"
 #include "mb_tire/fiala/functions.hpp"

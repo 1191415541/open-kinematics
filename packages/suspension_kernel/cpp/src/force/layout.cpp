@@ -11,8 +11,8 @@
 // moving a contiguous run of top-level functions between translation units
 // needs no include-order reasoning.
 
-#include "mb_element/functions.hpp"
 #include "mb_force/functions.hpp"
+#include "mb_element/functions.hpp"
 
 // Direct dependencies of this translation unit.  The module headers no
 // longer aggregate each other's declarations, so each unit includes the

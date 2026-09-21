@@ -1,18 +1,11 @@
 {
   "aggregate_includes": [],
-  "cycles": [
-    [
-      "mb_solve_dynamic",
-      "mb_solve_static",
-      "mb_tire",
-      "mb_tire_brush",
-      "mb_tire_fiala",
-      "mb_tire_pac2002",
-      "mb_tire_state",
-      "mb_vehicle"
-    ]
-  ],
+  "cycles": [],
   "edges": [
+    [
+      "abi",
+      "mb_assembly"
+    ],
     [
       "abi",
       "mb_cases"
@@ -86,8 +79,36 @@
       "mb_tire_state"
     ],
     [
-      "abi",
-      "mb_vehicle"
+      "mb_assembly",
+      "mb_config"
+    ],
+    [
+      "mb_assembly",
+      "mb_dual"
+    ],
+    [
+      "mb_assembly",
+      "mb_input"
+    ],
+    [
+      "mb_assembly",
+      "mb_joint"
+    ],
+    [
+      "mb_assembly",
+      "mb_model"
+    ],
+    [
+      "mb_assembly",
+      "mb_numeric"
+    ],
+    [
+      "mb_assembly",
+      "mb_tire"
+    ],
+    [
+      "mb_assembly",
+      "mb_tire_pac2002"
     ],
     [
       "mb_cases",
@@ -122,6 +143,86 @@
       "mb_numeric"
     ],
     [
+      "mb_element",
+      "mb_config"
+    ],
+    [
+      "mb_element",
+      "mb_dual"
+    ],
+    [
+      "mb_element",
+      "mb_energy"
+    ],
+    [
+      "mb_element",
+      "mb_joint"
+    ],
+    [
+      "mb_element",
+      "mb_model"
+    ],
+    [
+      "mb_element",
+      "mb_numeric"
+    ],
+    [
+      "mb_element",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_element",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_element",
+      "mb_tire_state"
+    ],
+    [
+      "mb_force",
+      "mb_config"
+    ],
+    [
+      "mb_force",
+      "mb_dual"
+    ],
+    [
+      "mb_force",
+      "mb_element"
+    ],
+    [
+      "mb_force",
+      "mb_energy"
+    ],
+    [
+      "mb_force",
+      "mb_joint"
+    ],
+    [
+      "mb_force",
+      "mb_model"
+    ],
+    [
+      "mb_force",
+      "mb_numeric"
+    ],
+    [
+      "mb_force",
+      "mb_tire"
+    ],
+    [
+      "mb_force",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_force",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_force",
+      "mb_tire_state"
+    ],
+    [
       "mb_input",
       "mb_config"
     ],
@@ -148,6 +249,10 @@
     [
       "mb_joint",
       "mb_numeric"
+    ],
+    [
+      "mb_joint",
+      "mb_tire_state"
     ],
     [
       "mb_linear",
@@ -191,6 +296,10 @@
     ],
     [
       "mb_output",
+      "mb_force"
+    ],
+    [
+      "mb_output",
       "mb_input"
     ],
     [
@@ -214,10 +323,6 @@
       "mb_tire_state"
     ],
     [
-      "mb_output",
-      "mb_vehicle"
-    ],
-    [
       "mb_solve_dynamic",
       "mb_config"
     ],
@@ -228,6 +333,10 @@
     [
       "mb_solve_dynamic",
       "mb_energy"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_force"
     ],
     [
       "mb_solve_dynamic",
@@ -274,10 +383,6 @@
       "mb_tire_state"
     ],
     [
-      "mb_solve_dynamic",
-      "mb_vehicle"
-    ],
-    [
       "mb_solve_static",
       "mb_config"
     ],
@@ -288,6 +393,10 @@
     [
       "mb_solve_static",
       "mb_energy"
+    ],
+    [
+      "mb_solve_static",
+      "mb_force"
     ],
     [
       "mb_solve_static",
@@ -322,30 +431,6 @@
       "mb_tire_state"
     ],
     [
-      "mb_solve_static",
-      "mb_vehicle"
-    ],
-    [
-      "mb_suspension",
-      "mb_config"
-    ],
-    [
-      "mb_suspension",
-      "mb_dual"
-    ],
-    [
-      "mb_suspension",
-      "mb_energy"
-    ],
-    [
-      "mb_suspension",
-      "mb_model"
-    ],
-    [
-      "mb_suspension",
-      "mb_numeric"
-    ],
-    [
       "mb_tire",
       "mb_config"
     ],
@@ -355,7 +440,15 @@
     ],
     [
       "mb_tire",
+      "mb_element"
+    ],
+    [
+      "mb_tire",
       "mb_energy"
+    ],
+    [
+      "mb_tire",
+      "mb_joint"
     ],
     [
       "mb_tire",
@@ -488,66 +581,6 @@
     [
       "mb_tire_state",
       "mb_numeric"
-    ],
-    [
-      "mb_tire_state",
-      "mb_solve_dynamic"
-    ],
-    [
-      "mb_vehicle",
-      "mb_config"
-    ],
-    [
-      "mb_vehicle",
-      "mb_dual"
-    ],
-    [
-      "mb_vehicle",
-      "mb_energy"
-    ],
-    [
-      "mb_vehicle",
-      "mb_input"
-    ],
-    [
-      "mb_vehicle",
-      "mb_joint"
-    ],
-    [
-      "mb_vehicle",
-      "mb_model"
-    ],
-    [
-      "mb_vehicle",
-      "mb_numeric"
-    ],
-    [
-      "mb_vehicle",
-      "mb_solve_static"
-    ],
-    [
-      "mb_vehicle",
-      "mb_suspension"
-    ],
-    [
-      "mb_vehicle",
-      "mb_tire"
-    ],
-    [
-      "mb_vehicle",
-      "mb_tire_common"
-    ],
-    [
-      "mb_vehicle",
-      "mb_tire_fiala"
-    ],
-    [
-      "mb_vehicle",
-      "mb_tire_pac2002"
-    ],
-    [
-      "mb_vehicle",
-      "mb_tire_state"
     ]
   ],
   "header_edges": [
@@ -612,6 +645,22 @@
       "mb_tire_state"
     ],
     [
+      "mb_assembly",
+      "mb_config"
+    ],
+    [
+      "mb_assembly",
+      "mb_input"
+    ],
+    [
+      "mb_assembly",
+      "mb_model"
+    ],
+    [
+      "mb_assembly",
+      "mb_numeric"
+    ],
+    [
       "mb_cases",
       "mb_config"
     ],
@@ -637,6 +686,46 @@
     ],
     [
       "mb_dual",
+      "mb_numeric"
+    ],
+    [
+      "mb_element",
+      "mb_config"
+    ],
+    [
+      "mb_element",
+      "mb_dual"
+    ],
+    [
+      "mb_element",
+      "mb_energy"
+    ],
+    [
+      "mb_element",
+      "mb_model"
+    ],
+    [
+      "mb_element",
+      "mb_numeric"
+    ],
+    [
+      "mb_force",
+      "mb_config"
+    ],
+    [
+      "mb_force",
+      "mb_dual"
+    ],
+    [
+      "mb_force",
+      "mb_energy"
+    ],
+    [
+      "mb_force",
+      "mb_model"
+    ],
+    [
+      "mb_force",
       "mb_numeric"
     ],
     [
@@ -828,26 +917,6 @@
       "mb_tire_state"
     ],
     [
-      "mb_suspension",
-      "mb_config"
-    ],
-    [
-      "mb_suspension",
-      "mb_dual"
-    ],
-    [
-      "mb_suspension",
-      "mb_energy"
-    ],
-    [
-      "mb_suspension",
-      "mb_model"
-    ],
-    [
-      "mb_suspension",
-      "mb_numeric"
-    ],
-    [
       "mb_tire",
       "mb_config"
     ],
@@ -986,54 +1055,6 @@
     [
       "mb_tire_state",
       "mb_numeric"
-    ],
-    [
-      "mb_vehicle",
-      "mb_config"
-    ],
-    [
-      "mb_vehicle",
-      "mb_dual"
-    ],
-    [
-      "mb_vehicle",
-      "mb_energy"
-    ],
-    [
-      "mb_vehicle",
-      "mb_input"
-    ],
-    [
-      "mb_vehicle",
-      "mb_joint"
-    ],
-    [
-      "mb_vehicle",
-      "mb_model"
-    ],
-    [
-      "mb_vehicle",
-      "mb_numeric"
-    ],
-    [
-      "mb_vehicle",
-      "mb_tire"
-    ],
-    [
-      "mb_vehicle",
-      "mb_tire_common"
-    ],
-    [
-      "mb_vehicle",
-      "mb_tire_fiala"
-    ],
-    [
-      "mb_vehicle",
-      "mb_tire_pac2002"
-    ],
-    [
-      "mb_vehicle",
-      "mb_tire_state"
     ]
   ],
   "header_only_edges": [
@@ -1448,17 +1469,8 @@
       ]
     }
   },
-  "mutual_edges": [
-    [
-      "mb_solve_dynamic",
-      "mb_tire_state"
-    ],
-    [
-      "mb_solve_static",
-      "mb_vehicle"
-    ]
-  ],
-  "notes": "Reviewed 2026-09-21 for subtask 03 step 6: mb_integrator renamed to mb_solve_dynamic, mb_static to mb_solve_static, and the shared input sampling (interpolate_input, next_prescribed_input_breakpoint) moved to the new mb_input module, so neither solver layer owns input preparation.  Remaining legacy: mb_suspension/mb_vehicle (subtask 04); the remaining cycle runs through the solve layers and the tire/vehicle stack.",
+  "mutual_edges": [],
+  "notes": "Recorded from the scan of the tree as it stands.  The migration map, the legacy module registration and the per-edge explanations are human-curated and must be reviewed by hand; --record-baseline never writes them.",
   "reviewed_new_edges": [
     {
       "edge": [
@@ -3049,10 +3061,841 @@
         "mb_solve_static"
       ],
       "verdict": "reviewed 03 step 6: rename of mb_integrator/mb_static to mb_solve_dynamic/mb_solve_static, or the new mb_input module reading mb_config constants; same dependency semantics"
+    },
+    {
+      "edge": [
+        "mb_assembly",
+        "mb_config"
+      ],
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/assembly/build_model.cpp",
+        "cpp/src/assembly/element_reader.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_assembly",
+        "mb_input"
+      ],
+      "includes": [],
+      "kinds": [],
+      "legacy_endpoints": [],
+      "sources": [],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_assembly",
+        "mb_model"
+      ],
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/assembly/build_model.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "static_rotation_gauge_for_pivot",
+        "tire_frame_body"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_assembly",
+        "mb_numeric"
+      ],
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/assembly/build_model.cpp",
+        "cpp/src/assembly/element_reader.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "cross",
+        "dot",
+        "finite_symmetric",
+        "norm",
+        "normalized",
+        "qconj",
+        "qmul",
+        "qnormalize",
+        "rotate",
+        "symmetric_positive_definite",
+        "unit_quaternion"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_element",
+        "mb_config"
+      ],
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/element/anti_roll.cpp",
+        "cpp/src/element/bushing.cpp",
+        "cpp/src/element/directional.cpp",
+        "cpp/src/element/drive_brake.cpp",
+        "cpp/src/element/spring.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_element",
+        "mb_dual"
+      ],
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/element/curves.cpp",
+        "cpp/src/element/directional.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "d_body_quaternion",
+        "d_cardan_xyz_from_rotation",
+        "d_cardan_xyz_rate",
+        "d_cross",
+        "d_dot",
+        "d_norm",
+        "d_normalized",
+        "d_qconj",
+        "d_qlog",
+        "d_qmat",
+        "d_qmul",
+        "d_rotate",
+        "d_transpose",
+        "interpolated_curve_directional",
+        "value"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_element",
+        "mb_energy"
+      ],
+      "includes": [],
+      "kinds": [],
+      "legacy_endpoints": [],
+      "sources": [],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_element",
+        "mb_model"
+      ],
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/element/anti_roll.cpp",
+        "cpp/src/element/assembly_primitives.cpp",
+        "cpp/src/element/bushing.cpp",
+        "cpp/src/element/directional.cpp",
+        "cpp/src/element/drive_brake.cpp",
+        "cpp/src/element/spring.cpp",
+        "cpp/src/element/steering.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "add_directional_force_at_arm",
+        "add_directional_torque",
+        "d_state_point",
+        "d_state_point_velocity",
+        "directional_body_active",
+        "directional_orientation_active",
+        "state_point",
+        "state_point_velocity",
+        "tire_frame_body",
+        "tire_relative_spin_omega"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_element",
+        "mb_numeric"
+      ],
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/element/anti_roll.cpp",
+        "cpp/src/element/assembly_primitives.cpp",
+        "cpp/src/element/bushing.cpp",
+        "cpp/src/element/curves.cpp",
+        "cpp/src/element/directional.cpp",
+        "cpp/src/element/drive_brake.cpp",
+        "cpp/src/element/spring.cpp",
+        "cpp/src/element/steering.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "cardan_xyz_from_rotation",
+        "cardan_xyz_rate",
+        "cross",
+        "dot",
+        "integrate_akima_curve_from_zero",
+        "integrate_curve_from_zero",
+        "interpolate_akima_curve",
+        "interpolate_curve",
+        "norm",
+        "normalized",
+        "qconj",
+        "qlog",
+        "qmat",
+        "qmul",
+        "rotate",
+        "transpose"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_config"
+      ],
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/layout.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_dual"
+      ],
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/force/directional.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "d_abs",
+        "d_body_quaternion",
+        "d_cross",
+        "d_dot",
+        "d_qmat",
+        "d_transpose"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_energy"
+      ],
+      "includes": [],
+      "kinds": [],
+      "legacy_endpoints": [],
+      "sources": [],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_model"
+      ],
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/layout.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "d_state_point",
+        "directional_body_active",
+        "directional_inertial_active",
+        "state_point_velocity",
+        "tire_center_body",
+        "tire_center_local",
+        "tire_frame_body"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_numeric"
+      ],
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/layout.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "cross",
+        "dot",
+        "normalized",
+        "qmat",
+        "rotate",
+        "transpose"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "abi",
+        "mb_assembly"
+      ],
+      "includes": [
+        "mb_assembly/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp",
+        "cpp/src/abi/kernel_core.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_assembly",
+        "mb_dual"
+      ],
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "value"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_assembly",
+        "mb_joint"
+      ],
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/assembly/build_model.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "audit_constraint_system",
+        "constraint_rows",
+        "prescribed_steering"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_assembly",
+        "mb_tire"
+      ],
+      "includes": [
+        "mb_tire/model.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/assembly/element_reader.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_assembly",
+        "mb_tire_pac2002"
+      ],
+      "includes": [
+        "mb_tire/pac2002/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/assembly/element_reader.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "pac2002_mode_state_width",
+        "pac2002_mode_supported_by_native",
+        "pac2002_mode_uses_contact_mass",
+        "pac2002_parameter",
+        "pac2002_use_mode"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_element",
+        "mb_joint"
+      ],
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/element/directional.cpp",
+        "cpp/src/element/steering.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "prescribed_steering"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_element",
+        "mb_tire_fiala"
+      ],
+      "includes": [
+        "mb_tire/fiala/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/element/directional.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_element",
+        "mb_tire_pac2002"
+      ],
+      "includes": [
+        "mb_tire/pac2002/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/element/directional.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_element",
+        "mb_tire_state"
+      ],
+      "includes": [
+        "mb_tire_state/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/element/directional.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_element"
+      ],
+      "includes": [
+        "mb_element/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/external_vector.cpp",
+        "cpp/src/force/layout.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_joint"
+      ],
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/force/directional.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_tire"
+      ],
+      "includes": [
+        "mb_tire/force_context.hpp",
+        "mb_tire/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/external_vector.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "apply_directional_brush_force",
+        "apply_directional_fiala_force",
+        "apply_static_contact_directional",
+        "assemble_directional_fiala_slips",
+        "assemble_directional_pac2002_force",
+        "assemble_tire_forces",
+        "directional_tire_frame"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_tire_fiala"
+      ],
+      "includes": [
+        "mb_tire/fiala/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/force/directional.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "fiala_vertical_force_directional"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_tire_pac2002"
+      ],
+      "includes": [
+        "mb_tire/pac2002/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/force/directional.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "pac2002_has_vertical_force_coupling_terms",
+        "pac2002_maxwell_decay",
+        "pac2002_maxwell_end_displacement",
+        "pac2002_vertical_force_directional"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_force",
+        "mb_tire_state"
+      ],
+      "includes": [
+        "mb_tire_state/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/layout.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "tire_block_width"
+      ],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_joint",
+        "mb_tire_state"
+      ],
+      "includes": [
+        "mb_tire_state/tire_state.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/joint/kernel_model_constraint.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_output",
+        "mb_force"
+      ],
+      "includes": [
+        "mb_force/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/output/kernel_output.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_solve_dynamic",
+        "mb_force"
+      ],
+      "includes": [
+        "mb_force/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_force"
+      ],
+      "includes": [
+        "mb_force/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_tire",
+        "mb_element"
+      ],
+      "includes": [
+        "mb_element/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/kernel_tire_assembly.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_tire",
+        "mb_joint"
+      ],
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/tire/directional.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
     }
   ],
   "self_includes": [],
   "source_edge_evidence": [
+    {
+      "includes": [
+        "mb_assembly/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "abi",
+      "sources": [
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp",
+        "cpp/src/abi/kernel_core.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_assembly"
+    },
     {
       "includes": [
         "mb_cases/functions.hpp"
@@ -3078,11 +3921,9 @@
       ],
       "module": "abi",
       "sources": [
-        "cpp/src/abi/element_reader.cpp",
         "cpp/src/abi/kernel_abi.cpp",
         "cpp/src/abi/kernel_contract_run.cpp",
-        "cpp/src/abi/kernel_core.cpp",
-        "cpp/src/abi/kernel_model_build.cpp"
+        "cpp/src/abi/kernel_core.cpp"
       ],
       "symbols": [
         "profiling_enabled"
@@ -3151,10 +3992,12 @@
       ],
       "module": "abi",
       "sources": [
-        "cpp/src/abi/kernel_core.cpp",
-        "cpp/src/abi/kernel_model_build.cpp"
+        "cpp/src/abi/kernel_abi.cpp",
+        "cpp/src/abi/kernel_contract_run.cpp",
+        "cpp/src/abi/kernel_core.cpp"
       ],
       "symbols": [
+        "audit_constraint_system",
         "constraint_rows"
       ],
       "target": "mb_joint"
@@ -3172,8 +4015,7 @@
       "sources": [
         "cpp/src/abi/kernel_abi.cpp",
         "cpp/src/abi/kernel_contract_run.cpp",
-        "cpp/src/abi/kernel_core.cpp",
-        "cpp/src/abi/kernel_model_build.cpp"
+        "cpp/src/abi/kernel_core.cpp"
       ],
       "symbols": [
         "set_error",
@@ -3191,25 +4033,15 @@
       ],
       "module": "abi",
       "sources": [
-        "cpp/src/abi/element_reader.cpp",
         "cpp/src/abi/kernel_abi.cpp",
-        "cpp/src/abi/kernel_core.cpp",
-        "cpp/src/abi/kernel_model_build.cpp"
+        "cpp/src/abi/kernel_core.cpp"
       ],
       "symbols": [
-        "cross",
-        "dot",
         "finite_symmetric",
         "norm",
-        "normalized",
-        "qconj",
         "qmat",
-        "qmul",
         "qnormalize",
-        "rotate",
-        "symmetric_positive_definite",
-        "transpose",
-        "unit_quaternion"
+        "transpose"
       ],
       "target": "mb_numeric"
     },
@@ -3273,8 +4105,7 @@
       "module": "abi",
       "sources": [
         "cpp/src/abi/kernel_abi.cpp",
-        "cpp/src/abi/kernel_contract_run.cpp",
-        "cpp/src/abi/kernel_model_build.cpp"
+        "cpp/src/abi/kernel_contract_run.cpp"
       ],
       "symbols": [],
       "target": "mb_solve_static"
@@ -3289,20 +4120,14 @@
       ],
       "module": "abi",
       "sources": [
-        "cpp/src/abi/element_reader.cpp",
         "cpp/src/abi/kernel_abi.cpp",
         "cpp/src/abi/kernel_contract_run.cpp"
       ],
       "symbols": [
-        "pac2002_mode_state_width",
-        "pac2002_mode_supported_by_native",
-        "pac2002_mode_uses_contact_mass",
-        "pac2002_parameter",
         "pac2002_refused_families",
         "pac2002_refused_feature_flags",
         "pac2002_refused_parameters",
         "pac2002_supported_use_modes",
-        "pac2002_use_mode",
         "tire_state_width"
       ],
       "target": "mb_tire_pac2002"
@@ -3328,18 +4153,141 @@
     },
     {
       "includes": [
-        "mb_vehicle/functions.hpp"
+        "mb_config/functions.hpp"
       ],
       "kinds": [
         "tu_include"
       ],
-      "module": "abi",
+      "module": "mb_assembly",
       "sources": [
-        "cpp/src/abi/kernel_abi.cpp",
-        "cpp/src/abi/kernel_contract_run.cpp"
+        "cpp/src/assembly/build_model.cpp",
+        "cpp/src/assembly/element_reader.cpp",
+        "cpp/src/assembly/registration.cpp"
       ],
       "symbols": [],
-      "target": "mb_vehicle"
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_assembly",
+      "sources": [
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "symbols": [
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_assembly",
+      "sources": [
+        "cpp/src/assembly/build_model.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "symbols": [
+        "audit_constraint_system",
+        "constraint_rows",
+        "prescribed_steering"
+      ],
+      "target": "mb_joint"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_assembly",
+      "sources": [
+        "cpp/src/assembly/build_model.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "symbols": [
+        "static_rotation_gauge_for_pivot",
+        "tire_frame_body"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_assembly",
+      "sources": [
+        "cpp/src/assembly/build_model.cpp",
+        "cpp/src/assembly/element_reader.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "dot",
+        "finite_symmetric",
+        "norm",
+        "normalized",
+        "qconj",
+        "qmul",
+        "qnormalize",
+        "rotate",
+        "symmetric_positive_definite",
+        "unit_quaternion"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_tire/model.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_assembly",
+      "sources": [
+        "cpp/src/assembly/element_reader.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_tire"
+    },
+    {
+      "includes": [
+        "mb_tire/pac2002/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_assembly",
+      "sources": [
+        "cpp/src/assembly/element_reader.cpp",
+        "cpp/src/assembly/registration.cpp"
+      ],
+      "symbols": [
+        "pac2002_mode_state_width",
+        "pac2002_mode_supported_by_native",
+        "pac2002_mode_uses_contact_mass",
+        "pac2002_parameter",
+        "pac2002_use_mode"
+      ],
+      "target": "mb_tire_pac2002"
     },
     {
       "includes": [
@@ -3435,6 +4383,381 @@
       "kinds": [
         "tu_include"
       ],
+      "module": "mb_element",
+      "sources": [
+        "cpp/src/element/anti_roll.cpp",
+        "cpp/src/element/bushing.cpp",
+        "cpp/src/element/directional.cpp",
+        "cpp/src/element/drive_brake.cpp",
+        "cpp/src/element/spring.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_element",
+      "sources": [
+        "cpp/src/element/curves.cpp",
+        "cpp/src/element/directional.cpp"
+      ],
+      "symbols": [
+        "d_body_quaternion",
+        "d_cardan_xyz_from_rotation",
+        "d_cardan_xyz_rate",
+        "d_cross",
+        "d_dot",
+        "d_norm",
+        "d_normalized",
+        "d_qconj",
+        "d_qlog",
+        "d_qmat",
+        "d_qmul",
+        "d_rotate",
+        "d_transpose",
+        "interpolated_curve_directional",
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_element",
+      "sources": [
+        "cpp/src/element/directional.cpp",
+        "cpp/src/element/steering.cpp"
+      ],
+      "symbols": [
+        "prescribed_steering"
+      ],
+      "target": "mb_joint"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_element",
+      "sources": [
+        "cpp/src/element/anti_roll.cpp",
+        "cpp/src/element/assembly_primitives.cpp",
+        "cpp/src/element/bushing.cpp",
+        "cpp/src/element/directional.cpp",
+        "cpp/src/element/drive_brake.cpp",
+        "cpp/src/element/spring.cpp",
+        "cpp/src/element/steering.cpp"
+      ],
+      "symbols": [
+        "add_directional_force_at_arm",
+        "add_directional_torque",
+        "d_state_point",
+        "d_state_point_velocity",
+        "directional_body_active",
+        "directional_orientation_active",
+        "state_point",
+        "state_point_velocity",
+        "tire_frame_body",
+        "tire_relative_spin_omega"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_element",
+      "sources": [
+        "cpp/src/element/anti_roll.cpp",
+        "cpp/src/element/assembly_primitives.cpp",
+        "cpp/src/element/bushing.cpp",
+        "cpp/src/element/curves.cpp",
+        "cpp/src/element/directional.cpp",
+        "cpp/src/element/drive_brake.cpp",
+        "cpp/src/element/spring.cpp",
+        "cpp/src/element/steering.cpp"
+      ],
+      "symbols": [
+        "cardan_xyz_from_rotation",
+        "cardan_xyz_rate",
+        "cross",
+        "dot",
+        "integrate_akima_curve_from_zero",
+        "integrate_curve_from_zero",
+        "interpolate_akima_curve",
+        "interpolate_curve",
+        "norm",
+        "normalized",
+        "qconj",
+        "qlog",
+        "qmat",
+        "qmul",
+        "rotate",
+        "transpose"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_tire/fiala/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_element",
+      "sources": [
+        "cpp/src/element/directional.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_tire_fiala"
+    },
+    {
+      "includes": [
+        "mb_tire/pac2002/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_element",
+      "sources": [
+        "cpp/src/element/directional.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_tire_pac2002"
+    },
+    {
+      "includes": [
+        "mb_tire_state/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_element",
+      "sources": [
+        "cpp/src/element/directional.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_tire_state"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_force",
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/layout.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_force",
+      "sources": [
+        "cpp/src/force/directional.cpp"
+      ],
+      "symbols": [
+        "d_abs",
+        "d_body_quaternion",
+        "d_cross",
+        "d_dot",
+        "d_qmat",
+        "d_transpose"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_element/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_force",
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/external_vector.cpp",
+        "cpp/src/force/layout.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_element"
+    },
+    {
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_force",
+      "sources": [
+        "cpp/src/force/directional.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_joint"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_force",
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/layout.cpp"
+      ],
+      "symbols": [
+        "d_state_point",
+        "directional_body_active",
+        "directional_inertial_active",
+        "state_point_velocity",
+        "tire_center_body",
+        "tire_center_local",
+        "tire_frame_body"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_force",
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/layout.cpp"
+      ],
+      "symbols": [
+        "cross",
+        "dot",
+        "normalized",
+        "qmat",
+        "rotate",
+        "transpose"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_tire/force_context.hpp",
+        "mb_tire/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_force",
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/external_vector.cpp"
+      ],
+      "symbols": [
+        "apply_directional_brush_force",
+        "apply_directional_fiala_force",
+        "apply_static_contact_directional",
+        "assemble_directional_fiala_slips",
+        "assemble_directional_pac2002_force",
+        "assemble_tire_forces",
+        "directional_tire_frame"
+      ],
+      "target": "mb_tire"
+    },
+    {
+      "includes": [
+        "mb_tire/fiala/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_force",
+      "sources": [
+        "cpp/src/force/directional.cpp"
+      ],
+      "symbols": [
+        "fiala_vertical_force_directional"
+      ],
+      "target": "mb_tire_fiala"
+    },
+    {
+      "includes": [
+        "mb_tire/pac2002/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_force",
+      "sources": [
+        "cpp/src/force/directional.cpp"
+      ],
+      "symbols": [
+        "pac2002_has_vertical_force_coupling_terms",
+        "pac2002_maxwell_decay",
+        "pac2002_maxwell_end_displacement",
+        "pac2002_vertical_force_directional"
+      ],
+      "target": "mb_tire_pac2002"
+    },
+    {
+      "includes": [
+        "mb_tire_state/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_force",
+      "sources": [
+        "cpp/src/force/directional.cpp",
+        "cpp/src/force/layout.cpp"
+      ],
+      "symbols": [
+        "tire_block_width"
+      ],
+      "target": "mb_tire_state"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
       "module": "mb_joint",
       "sources": [
         "cpp/src/joint/kernel_model_constraint.cpp",
@@ -3475,6 +4798,23 @@
         "d_transpose"
       ],
       "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_linear/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_joint",
+      "sources": [
+        "cpp/src/joint/kernel_model_constraint.cpp"
+      ],
+      "symbols": [
+        "matrix_rank"
+      ],
+      "target": "mb_linear"
     },
     {
       "includes": [
@@ -3532,6 +4872,20 @@
         "transpose"
       ],
       "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_tire_state/tire_state.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_joint",
+      "sources": [
+        "cpp/src/joint/kernel_model_constraint.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_tire_state"
     },
     {
       "includes": [],
@@ -3612,15 +4966,8 @@
         "cpp/src/model/kernel_model_accessors.cpp"
       ],
       "symbols": [
-        "cardan_xyz_from_rotation",
-        "cardan_xyz_rate",
         "cross",
-        "qconj",
-        "qlog",
-        "qmat",
-        "qmul",
-        "rotate",
-        "transpose"
+        "rotate"
       ],
       "target": "mb_numeric"
     },
@@ -3637,6 +4984,20 @@
       ],
       "symbols": [],
       "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_force/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_output",
+      "sources": [
+        "cpp/src/output/kernel_output.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_force"
     },
     {
       "includes": [
@@ -3738,20 +5099,6 @@
     },
     {
       "includes": [
-        "mb_vehicle/functions.hpp"
-      ],
-      "kinds": [
-        "tu_include"
-      ],
-      "module": "mb_output",
-      "sources": [
-        "cpp/src/output/kernel_output.cpp"
-      ],
-      "symbols": [],
-      "target": "mb_vehicle"
-    },
-    {
-      "includes": [
         "mb_config/functions.hpp"
       ],
       "kinds": [
@@ -3797,6 +5144,22 @@
         "value"
       ],
       "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_force/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_solve_dynamic",
+      "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
+        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_force"
     },
     {
       "includes": [
@@ -4013,22 +5376,6 @@
     },
     {
       "includes": [
-        "mb_vehicle/functions.hpp"
-      ],
-      "kinds": [
-        "tu_include"
-      ],
-      "module": "mb_solve_dynamic",
-      "sources": [
-        "cpp/src/solve_dynamic/kernel_integrator.cpp",
-        "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
-        "cpp/src/solve_dynamic/kernel_integrator_residual.cpp"
-      ],
-      "symbols": [],
-      "target": "mb_vehicle"
-    },
-    {
-      "includes": [
         "mb_config/functions.hpp"
       ],
       "kinds": [
@@ -4067,6 +5414,20 @@
     },
     {
       "includes": [
+        "mb_force/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_force"
+    },
+    {
+      "includes": [
         "mb_input/functions.hpp"
       ],
       "kinds": [
@@ -4098,9 +5459,7 @@
         "cpp/src/solve_static/kernel_static_trim.cpp"
       ],
       "symbols": [
-        "analytic_constraint_jacobian_matches_reference",
         "constraint_jacobian",
-        "constraint_jacobian_central_difference",
         "constraint_jacobian_directional",
         "constraint_residual",
         "constraint_rows",
@@ -4122,7 +5481,6 @@
         "cpp/src/solve_static/kernel_static_projection.cpp"
       ],
       "symbols": [
-        "matrix_rank",
         "solve_linear"
       ],
       "target": "mb_linear"
@@ -4144,6 +5502,7 @@
         "ensure_directional_state",
         "reset_directional_state",
         "state_point",
+        "static_rotation_gauge_for_pivot",
         "tire_center_body",
         "tire_center_local"
       ],
@@ -4222,31 +5581,14 @@
         "mb_tire_state/functions.hpp"
       ],
       "kinds": [
-        "symbol_reference",
         "tu_include"
       ],
       "module": "mb_solve_static",
       "sources": [
         "cpp/src/solve_static/kernel_static_contact.cpp"
       ],
-      "symbols": [
-        "resize_tire_states"
-      ],
-      "target": "mb_tire_state"
-    },
-    {
-      "includes": [
-        "mb_vehicle/functions.hpp"
-      ],
-      "kinds": [
-        "tu_include"
-      ],
-      "module": "mb_solve_static",
-      "sources": [
-        "cpp/src/solve_static/kernel_static_trim.cpp"
-      ],
       "symbols": [],
-      "target": "mb_vehicle"
+      "target": "mb_tire_state"
     },
     {
       "includes": [
@@ -4255,11 +5597,11 @@
       "kinds": [
         "tu_include"
       ],
-      "module": "mb_suspension",
+      "module": "mb_tire",
       "sources": [
-        "cpp/src/suspension/anti_roll.cpp",
-        "cpp/src/suspension/bushing.cpp",
-        "cpp/src/suspension/spring.cpp"
+        "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/directional.cpp",
+        "cpp/src/tire/kernel_tire_assembly.cpp"
       ],
       "symbols": [],
       "target": "mb_config"
@@ -4272,74 +5614,25 @@
         "symbol_reference",
         "tu_include"
       ],
-      "module": "mb_suspension",
+      "module": "mb_tire",
       "sources": [
-        "cpp/src/suspension/curves.cpp"
+        "cpp/src/tire/directional.cpp"
       ],
       "symbols": [
-        "value"
+        "d_atan2",
+        "d_clamp",
+        "d_cross",
+        "d_dot",
+        "d_normalized",
+        "d_rotate",
+        "d_sin",
+        "d_sqrt"
       ],
       "target": "mb_dual"
     },
     {
       "includes": [
-        "mb_model/functions.hpp"
-      ],
-      "kinds": [
-        "symbol_reference",
-        "tu_include"
-      ],
-      "module": "mb_suspension",
-      "sources": [
-        "cpp/src/suspension/anti_roll.cpp",
-        "cpp/src/suspension/bushing.cpp",
-        "cpp/src/suspension/spring.cpp"
-      ],
-      "symbols": [
-        "add_force_on_body",
-        "add_torque_on_body",
-        "bushing_deformation",
-        "mat6_mul",
-        "state_point",
-        "state_point_velocity"
-      ],
-      "target": "mb_model"
-    },
-    {
-      "includes": [
-        "mb_numeric/functions.hpp"
-      ],
-      "kinds": [
-        "symbol_reference",
-        "tu_include"
-      ],
-      "module": "mb_suspension",
-      "sources": [
-        "cpp/src/suspension/anti_roll.cpp",
-        "cpp/src/suspension/bushing.cpp",
-        "cpp/src/suspension/curves.cpp",
-        "cpp/src/suspension/spring.cpp"
-      ],
-      "symbols": [
-        "cross",
-        "dot",
-        "integrate_akima_curve_from_zero",
-        "integrate_curve_from_zero",
-        "interpolate_akima_curve",
-        "interpolate_curve",
-        "norm",
-        "normalized",
-        "qconj",
-        "qlog",
-        "qmat",
-        "qmul",
-        "rotate"
-      ],
-      "target": "mb_numeric"
-    },
-    {
-      "includes": [
-        "mb_config/functions.hpp"
+        "mb_element/functions.hpp"
       ],
       "kinds": [
         "tu_include"
@@ -4350,7 +5643,21 @@
         "cpp/src/tire/kernel_tire_assembly.cpp"
       ],
       "symbols": [],
-      "target": "mb_config"
+      "target": "mb_element"
+    },
+    {
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_tire",
+      "sources": [
+        "cpp/src/tire/directional.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_joint"
     },
     {
       "includes": [
@@ -4363,11 +5670,15 @@
       "module": "mb_tire",
       "sources": [
         "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/directional.cpp",
         "cpp/src/tire/kernel_tire_assembly.cpp"
       ],
       "symbols": [
-        "add_force_on_body",
-        "add_torque_on_body",
+        "add_directional_force_at_arm",
+        "add_directional_torque",
+        "d_state_point",
+        "d_state_point_velocity",
+        "road_profile_directional",
         "road_profile_height",
         "road_profile_slope",
         "state_point",
@@ -4390,6 +5701,7 @@
       "module": "mb_tire",
       "sources": [
         "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/directional.cpp",
         "cpp/src/tire/kernel_tire_assembly.cpp"
       ],
       "symbols": [
@@ -4428,11 +5740,13 @@
       "module": "mb_tire",
       "sources": [
         "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/directional.cpp",
         "cpp/src/tire/kernel_tire_assembly.cpp"
       ],
       "symbols": [
         "fiala_elastic_force",
         "fiala_forces",
+        "fiala_forces_directional",
         "fiala_parameter",
         "fiala_rolling_resistance_factor",
         "fiala_startup_scale",
@@ -4453,20 +5767,27 @@
       "module": "mb_tire",
       "sources": [
         "cpp/src/tire/assemble.cpp",
+        "cpp/src/tire/directional.cpp",
         "cpp/src/tire/kernel_tire_assembly.cpp"
       ],
       "symbols": [
         "pac2002_aligning_moment",
+        "pac2002_aligning_moment_directional",
         "pac2002_clamp_camber",
         "pac2002_clamp_lateral_slip",
         "pac2002_clamp_load",
         "pac2002_clamp_longitudinal_slip",
         "pac2002_combined_lateral_force",
+        "pac2002_combined_lateral_force_directional",
         "pac2002_combined_longitudinal_force",
+        "pac2002_combined_longitudinal_force_directional",
         "pac2002_contact_stiffness",
         "pac2002_effective_rolling_radius",
+        "pac2002_effective_rolling_radius_directional",
         "pac2002_force_limit",
+        "pac2002_force_limit_directional",
         "pac2002_gyroscopic_moment",
+        "pac2002_gyroscopic_moment_directional",
         "pac2002_half_contact_length",
         "pac2002_has_combined_slip_terms",
         "pac2002_has_vertical_force_coupling_terms",
@@ -4482,10 +5803,15 @@
         "pac2002_mode_uses_transient_state",
         "pac2002_mode_uses_turn_slip",
         "pac2002_overturning_moment",
+        "pac2002_overturning_moment_directional",
         "pac2002_parameter",
         "pac2002_pure_force",
+        "pac2002_pure_force_directional",
+        "pac2002_reference_load",
         "pac2002_relaxation_length",
+        "pac2002_relaxation_length_directional",
         "pac2002_rolling_resistance_moment",
+        "pac2002_rolling_resistance_moment_directional",
         "pac2002_slip_reference_speed",
         "pac2002_slip_stiffness",
         "pac2002_state_turn_slip",
@@ -4493,6 +5819,7 @@
         "pac2002_turn_slip_switch",
         "pac2002_use_mode",
         "pac2002_vertical_force",
+        "pac2002_vertical_force_directional",
         "write_pac2002_contact_mass_derivatives",
         "write_pac2002_contact_yaw_derivatives",
         "write_pac2002_turn_slip_derivatives"
@@ -4509,6 +5836,7 @@
       ],
       "module": "mb_tire",
       "sources": [
+        "cpp/src/tire/directional.cpp",
         "cpp/src/tire/kernel_tire_assembly.cpp"
       ],
       "symbols": [
@@ -4749,300 +6077,13 @@
         "tire_state_value"
       ],
       "target": "mb_tire_state"
-    },
-    {
-      "includes": [
-        "mb_solve_dynamic/functions.hpp"
-      ],
-      "kinds": [
-        "tu_include"
-      ],
-      "module": "mb_tire_state",
-      "sources": [
-        "cpp/src/tire_state/kernel_tire_state.cpp"
-      ],
-      "symbols": [],
-      "target": "mb_solve_dynamic"
-    },
-    {
-      "includes": [
-        "mb_config/functions.hpp"
-      ],
-      "kinds": [
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/drive_brake.cpp",
-        "cpp/src/vehicle/kernel_directional.cpp",
-        "cpp/src/vehicle/kernel_registration.cpp",
-        "cpp/src/vehicle/layout.cpp"
-      ],
-      "symbols": [],
-      "target": "mb_config"
-    },
-    {
-      "includes": [
-        "mb_dual/functions.hpp"
-      ],
-      "kinds": [
-        "symbol_reference",
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/kernel_directional.cpp",
-        "cpp/src/vehicle/kernel_registration.cpp"
-      ],
-      "symbols": [
-        "d_abs",
-        "d_atan2",
-        "d_body_quaternion",
-        "d_cardan_xyz_from_rotation",
-        "d_cardan_xyz_rate",
-        "d_clamp",
-        "d_cross",
-        "d_dot",
-        "d_norm",
-        "d_normalized",
-        "d_qconj",
-        "d_qlog",
-        "d_qmat",
-        "d_qmul",
-        "d_rotate",
-        "d_sin",
-        "d_sqrt",
-        "d_transpose",
-        "interpolated_curve_directional",
-        "value"
-      ],
-      "target": "mb_dual"
-    },
-    {
-      "includes": [
-        "mb_joint/functions.hpp"
-      ],
-      "kinds": [
-        "symbol_reference",
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/kernel_directional.cpp",
-        "cpp/src/vehicle/kernel_registration.cpp",
-        "cpp/src/vehicle/steering.cpp"
-      ],
-      "symbols": [
-        "prescribed_steering"
-      ],
-      "target": "mb_joint"
-    },
-    {
-      "includes": [
-        "mb_model/functions.hpp"
-      ],
-      "kinds": [
-        "symbol_reference",
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/drive_brake.cpp",
-        "cpp/src/vehicle/kernel_directional.cpp",
-        "cpp/src/vehicle/kernel_registration.cpp",
-        "cpp/src/vehicle/layout.cpp",
-        "cpp/src/vehicle/steering.cpp"
-      ],
-      "symbols": [
-        "add_directional_force_at_arm",
-        "add_directional_torque",
-        "add_force_on_body",
-        "add_torque_on_body",
-        "d_state_point",
-        "d_state_point_velocity",
-        "directional_body_active",
-        "directional_inertial_active",
-        "directional_orientation_active",
-        "road_profile_directional",
-        "state_point",
-        "state_point_velocity",
-        "tire_center_body",
-        "tire_center_local",
-        "tire_frame_body",
-        "tire_relative_spin_omega"
-      ],
-      "target": "mb_model"
-    },
-    {
-      "includes": [
-        "mb_numeric/functions.hpp"
-      ],
-      "kinds": [
-        "symbol_reference",
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/drive_brake.cpp",
-        "cpp/src/vehicle/kernel_directional.cpp",
-        "cpp/src/vehicle/kernel_registration.cpp",
-        "cpp/src/vehicle/layout.cpp",
-        "cpp/src/vehicle/steering.cpp"
-      ],
-      "symbols": [
-        "cross",
-        "dot",
-        "interpolate_curve",
-        "norm",
-        "normalized",
-        "qconj",
-        "qlog",
-        "qmat",
-        "qmul",
-        "qnormalize",
-        "rotate",
-        "transpose",
-        "unit_quaternion"
-      ],
-      "target": "mb_numeric"
-    },
-    {
-      "includes": [
-        "mb_solve_static/functions.hpp"
-      ],
-      "kinds": [
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/kernel_registration.cpp"
-      ],
-      "symbols": [],
-      "target": "mb_solve_static"
-    },
-    {
-      "includes": [
-        "mb_suspension/functions.hpp"
-      ],
-      "kinds": [
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/force_assembly.cpp"
-      ],
-      "symbols": [],
-      "target": "mb_suspension"
-    },
-    {
-      "includes": [
-        "mb_tire/force_context.hpp",
-        "mb_tire/functions.hpp"
-      ],
-      "kinds": [
-        "symbol_reference",
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/force_assembly.cpp"
-      ],
-      "symbols": [
-        "assemble_tire_forces"
-      ],
-      "target": "mb_tire"
-    },
-    {
-      "includes": [
-        "mb_tire/fiala/functions.hpp"
-      ],
-      "kinds": [
-        "symbol_reference",
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/kernel_directional.cpp"
-      ],
-      "symbols": [
-        "fiala_forces_directional",
-        "fiala_parameter",
-        "fiala_rolling_resistance_factor",
-        "fiala_startup_scale",
-        "fiala_transient_enabled",
-        "fiala_use_mode",
-        "fiala_vertical_force_directional"
-      ],
-      "target": "mb_tire_fiala"
-    },
-    {
-      "includes": [
-        "mb_tire/pac2002/functions.hpp"
-      ],
-      "kinds": [
-        "symbol_reference",
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/kernel_directional.cpp",
-        "cpp/src/vehicle/kernel_registration.cpp"
-      ],
-      "symbols": [
-        "pac2002_aligning_moment_directional",
-        "pac2002_combined_lateral_force_directional",
-        "pac2002_combined_longitudinal_force_directional",
-        "pac2002_effective_rolling_radius_directional",
-        "pac2002_force_limit_directional",
-        "pac2002_gyroscopic_moment_directional",
-        "pac2002_has_combined_slip_terms",
-        "pac2002_has_vertical_force_coupling_terms",
-        "pac2002_low_speed_threshold",
-        "pac2002_maxwell_decay",
-        "pac2002_maxwell_end_displacement",
-        "pac2002_mode_allows_combined",
-        "pac2002_mode_allows_lateral",
-        "pac2002_mode_allows_longitudinal",
-        "pac2002_mode_is_vertical_only",
-        "pac2002_mode_state_width",
-        "pac2002_mode_supported_by_native",
-        "pac2002_mode_uses_contact_mass",
-        "pac2002_mode_uses_transient_state",
-        "pac2002_mode_uses_turn_slip",
-        "pac2002_overturning_moment_directional",
-        "pac2002_parameter",
-        "pac2002_pure_force_directional",
-        "pac2002_reference_load",
-        "pac2002_relaxation_length_directional",
-        "pac2002_rolling_resistance_moment_directional",
-        "pac2002_slip_reference_speed",
-        "pac2002_turn_slip_switch",
-        "pac2002_use_mode",
-        "pac2002_vertical_force_directional"
-      ],
-      "target": "mb_tire_pac2002"
-    },
-    {
-      "includes": [
-        "mb_tire_state/functions.hpp"
-      ],
-      "kinds": [
-        "symbol_reference",
-        "tu_include"
-      ],
-      "module": "mb_vehicle",
-      "sources": [
-        "cpp/src/vehicle/kernel_directional.cpp",
-        "cpp/src/vehicle/layout.cpp"
-      ],
-      "symbols": [
-        "tire_block_width",
-        "tire_state_value"
-      ],
-      "target": "mb_tire_state"
     }
   ],
   "source_edges": [
+    [
+      "abi",
+      "mb_assembly"
+    ],
     [
       "abi",
       "mb_cases"
@@ -5096,323 +6137,375 @@
       "mb_tire_state"
     ],
     [
-      "abi",
-      "mb_vehicle"
-    ],
-    [
-      "mb_cases",
+      "mb_assembly",
       "mb_config"
     ],
     [
-      "mb_cases",
-      "mb_model"
-    ],
-    [
-      "mb_cases",
-      "mb_numeric"
-    ],
-    [
-      "mb_dual",
-      "mb_config"
-    ],
-    [
-      "mb_dual",
-      "mb_numeric"
-    ],
-    [
-      "mb_joint",
-      "mb_config"
-    ],
-    [
-      "mb_joint",
+      "mb_assembly",
       "mb_dual"
     ],
     [
-      "mb_joint",
-      "mb_model"
-    ],
-    [
-      "mb_joint",
-      "mb_numeric"
-    ],
-    [
-      "mb_linear",
-      "mb_dual"
-    ],
-    [
-      "mb_linear",
-      "mb_numeric"
-    ],
-    [
-      "mb_model",
-      "mb_config"
-    ],
-    [
-      "mb_model",
-      "mb_dual"
-    ],
-    [
-      "mb_model",
-      "mb_numeric"
-    ],
-    [
-      "mb_output",
-      "mb_config"
-    ],
-    [
-      "mb_output",
-      "mb_input"
-    ],
-    [
-      "mb_output",
+      "mb_assembly",
       "mb_joint"
     ],
     [
-      "mb_output",
+      "mb_assembly",
       "mb_model"
     ],
     [
-      "mb_output",
+      "mb_assembly",
       "mb_numeric"
     ],
     [
-      "mb_output",
-      "mb_solve_dynamic"
-    ],
-    [
-      "mb_output",
-      "mb_vehicle"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_config"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_dual"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_input"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_joint"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_linear"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_model"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_numeric"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_tire_brush"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_tire_common"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_tire_fiala"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_tire_pac2002"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_tire_state"
-    ],
-    [
-      "mb_solve_dynamic",
-      "mb_vehicle"
-    ],
-    [
-      "mb_solve_static",
-      "mb_config"
-    ],
-    [
-      "mb_solve_static",
-      "mb_dual"
-    ],
-    [
-      "mb_solve_static",
-      "mb_input"
-    ],
-    [
-      "mb_solve_static",
-      "mb_joint"
-    ],
-    [
-      "mb_solve_static",
-      "mb_linear"
-    ],
-    [
-      "mb_solve_static",
-      "mb_model"
-    ],
-    [
-      "mb_solve_static",
-      "mb_numeric"
-    ],
-    [
-      "mb_solve_static",
-      "mb_solve_dynamic"
-    ],
-    [
-      "mb_solve_static",
-      "mb_tire_common"
-    ],
-    [
-      "mb_solve_static",
-      "mb_tire_state"
-    ],
-    [
-      "mb_solve_static",
-      "mb_vehicle"
-    ],
-    [
-      "mb_suspension",
-      "mb_config"
-    ],
-    [
-      "mb_suspension",
-      "mb_dual"
-    ],
-    [
-      "mb_suspension",
-      "mb_model"
-    ],
-    [
-      "mb_suspension",
-      "mb_numeric"
-    ],
-    [
-      "mb_tire",
-      "mb_config"
-    ],
-    [
-      "mb_tire",
-      "mb_model"
-    ],
-    [
-      "mb_tire",
-      "mb_numeric"
-    ],
-    [
-      "mb_tire",
-      "mb_tire_brush"
-    ],
-    [
-      "mb_tire",
-      "mb_tire_fiala"
-    ],
-    [
-      "mb_tire",
-      "mb_tire_pac2002"
-    ],
-    [
-      "mb_tire",
-      "mb_tire_state"
-    ],
-    [
-      "mb_tire_common",
-      "mb_dual"
-    ],
-    [
-      "mb_tire_common",
-      "mb_model"
-    ],
-    [
-      "mb_tire_common",
-      "mb_numeric"
-    ],
-    [
-      "mb_tire_fiala",
-      "mb_config"
-    ],
-    [
-      "mb_tire_fiala",
-      "mb_dual"
-    ],
-    [
-      "mb_tire_fiala",
-      "mb_model"
-    ],
-    [
-      "mb_tire_fiala",
-      "mb_numeric"
-    ],
-    [
-      "mb_tire_pac2002",
-      "mb_config"
-    ],
-    [
-      "mb_tire_pac2002",
-      "mb_dual"
-    ],
-    [
-      "mb_tire_pac2002",
-      "mb_numeric"
-    ],
-    [
-      "mb_tire_pac2002",
-      "mb_tire_state"
-    ],
-    [
-      "mb_tire_state",
-      "mb_solve_dynamic"
-    ],
-    [
-      "mb_vehicle",
-      "mb_config"
-    ],
-    [
-      "mb_vehicle",
-      "mb_dual"
-    ],
-    [
-      "mb_vehicle",
-      "mb_joint"
-    ],
-    [
-      "mb_vehicle",
-      "mb_model"
-    ],
-    [
-      "mb_vehicle",
-      "mb_numeric"
-    ],
-    [
-      "mb_vehicle",
-      "mb_solve_static"
-    ],
-    [
-      "mb_vehicle",
-      "mb_suspension"
-    ],
-    [
-      "mb_vehicle",
+      "mb_assembly",
       "mb_tire"
     ],
     [
-      "mb_vehicle",
-      "mb_tire_fiala"
-    ],
-    [
-      "mb_vehicle",
+      "mb_assembly",
       "mb_tire_pac2002"
     ],
     [
-      "mb_vehicle",
+      "mb_cases",
+      "mb_config"
+    ],
+    [
+      "mb_cases",
+      "mb_model"
+    ],
+    [
+      "mb_cases",
+      "mb_numeric"
+    ],
+    [
+      "mb_dual",
+      "mb_config"
+    ],
+    [
+      "mb_dual",
+      "mb_numeric"
+    ],
+    [
+      "mb_element",
+      "mb_config"
+    ],
+    [
+      "mb_element",
+      "mb_dual"
+    ],
+    [
+      "mb_element",
+      "mb_joint"
+    ],
+    [
+      "mb_element",
+      "mb_model"
+    ],
+    [
+      "mb_element",
+      "mb_numeric"
+    ],
+    [
+      "mb_element",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_element",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_element",
+      "mb_tire_state"
+    ],
+    [
+      "mb_force",
+      "mb_config"
+    ],
+    [
+      "mb_force",
+      "mb_dual"
+    ],
+    [
+      "mb_force",
+      "mb_element"
+    ],
+    [
+      "mb_force",
+      "mb_joint"
+    ],
+    [
+      "mb_force",
+      "mb_model"
+    ],
+    [
+      "mb_force",
+      "mb_numeric"
+    ],
+    [
+      "mb_force",
+      "mb_tire"
+    ],
+    [
+      "mb_force",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_force",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_force",
+      "mb_tire_state"
+    ],
+    [
+      "mb_joint",
+      "mb_config"
+    ],
+    [
+      "mb_joint",
+      "mb_dual"
+    ],
+    [
+      "mb_joint",
+      "mb_linear"
+    ],
+    [
+      "mb_joint",
+      "mb_model"
+    ],
+    [
+      "mb_joint",
+      "mb_numeric"
+    ],
+    [
+      "mb_joint",
+      "mb_tire_state"
+    ],
+    [
+      "mb_linear",
+      "mb_dual"
+    ],
+    [
+      "mb_linear",
+      "mb_numeric"
+    ],
+    [
+      "mb_model",
+      "mb_config"
+    ],
+    [
+      "mb_model",
+      "mb_dual"
+    ],
+    [
+      "mb_model",
+      "mb_numeric"
+    ],
+    [
+      "mb_output",
+      "mb_config"
+    ],
+    [
+      "mb_output",
+      "mb_force"
+    ],
+    [
+      "mb_output",
+      "mb_input"
+    ],
+    [
+      "mb_output",
+      "mb_joint"
+    ],
+    [
+      "mb_output",
+      "mb_model"
+    ],
+    [
+      "mb_output",
+      "mb_numeric"
+    ],
+    [
+      "mb_output",
+      "mb_solve_dynamic"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_config"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_dual"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_force"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_input"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_joint"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_linear"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_model"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_numeric"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_brush"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_common"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_solve_dynamic",
+      "mb_tire_state"
+    ],
+    [
+      "mb_solve_static",
+      "mb_config"
+    ],
+    [
+      "mb_solve_static",
+      "mb_dual"
+    ],
+    [
+      "mb_solve_static",
+      "mb_force"
+    ],
+    [
+      "mb_solve_static",
+      "mb_input"
+    ],
+    [
+      "mb_solve_static",
+      "mb_joint"
+    ],
+    [
+      "mb_solve_static",
+      "mb_linear"
+    ],
+    [
+      "mb_solve_static",
+      "mb_model"
+    ],
+    [
+      "mb_solve_static",
+      "mb_numeric"
+    ],
+    [
+      "mb_solve_static",
+      "mb_solve_dynamic"
+    ],
+    [
+      "mb_solve_static",
+      "mb_tire_common"
+    ],
+    [
+      "mb_solve_static",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire",
+      "mb_config"
+    ],
+    [
+      "mb_tire",
+      "mb_dual"
+    ],
+    [
+      "mb_tire",
+      "mb_element"
+    ],
+    [
+      "mb_tire",
+      "mb_joint"
+    ],
+    [
+      "mb_tire",
+      "mb_model"
+    ],
+    [
+      "mb_tire",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_brush"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_fiala"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_pac2002"
+    ],
+    [
+      "mb_tire",
+      "mb_tire_state"
+    ],
+    [
+      "mb_tire_common",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_common",
+      "mb_model"
+    ],
+    [
+      "mb_tire_common",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_config"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_model"
+    ],
+    [
+      "mb_tire_fiala",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_config"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_dual"
+    ],
+    [
+      "mb_tire_pac2002",
+      "mb_numeric"
+    ],
+    [
+      "mb_tire_pac2002",
       "mb_tire_state"
     ]
   ],

@@ -16,8 +16,8 @@
 #include "mb_config/functions.hpp"
 #include "mb_dual/functions.hpp"
 #include "mb_numeric/functions.hpp"
+#include "mb_model/functions.hpp"
 #include "mb_joint/functions.hpp"
-#include "mb_solve_static/functions.hpp"
 #include "mb_tire/model.hpp"
 #include "mb_tire/pac2002/functions.hpp"
 

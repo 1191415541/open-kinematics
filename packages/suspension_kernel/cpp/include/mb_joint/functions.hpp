@@ -59,4 +59,10 @@ void apply_acceleration(State& state, const Model& model, const std::vector<doub
 bool mass_inverse_of_jt_mu( const Model& model, const State& state, const std::vector<double>& J, const std::vector<double>& mu, int n, int m, std::vector<double>& out );
 
 bool mass_inverse_jt_mu_directional( const Model& model, const State& state, const DirectionalState& direction, const std::vector<double>& dJ, const std::vector<double>& mu, const std::vector<double>& base_mass_inverse, int n, std::vector<double>& derivative );
+
+// The constraint-system audit moved here from `mb_solve_static` at subtask 04:
+// it is a property of the assembled constraint rows (analytic Jacobian vs
+// central differences, then rank), not of the static solver that calls it.
+bool audit_constraint_system(const Model& m, std::string& error);
+
 } // namespace axle_kernel

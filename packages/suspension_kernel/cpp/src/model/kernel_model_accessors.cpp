@@ -59,4 +59,15 @@ Vec3 tire_relative_spin_omega(const State& state, const Tire& tire) {
     return omega;
 }
 
+
+// A pure Model accessor moved here from `mb_solve_static` at subtask 04.
+const StaticRotationGauge* static_rotation_gauge_for_pivot(
+    const Model& model, int coordinate
+) {
+    for (const auto& gauge : model.static_rotation_gauges) {
+        if (gauge.pivot == coordinate) return &gauge;
+    }
+    return nullptr;
+}
+
 } // namespace axle_kernel

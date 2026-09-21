@@ -4,6 +4,8 @@
 // `mb_element` and both the element and tire layers may call them.
 
 #include "mb_element/functions.hpp"
+#include "mb_numeric/functions.hpp"
+#include "mb_model/functions.hpp"
 
 namespace axle_kernel {
 

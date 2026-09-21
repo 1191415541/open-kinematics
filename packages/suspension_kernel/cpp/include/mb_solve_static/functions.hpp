@@ -31,7 +31,6 @@
 #include "mb_input/types.hpp"
 
 namespace axle_kernel {
-const StaticRotationGauge* static_rotation_gauge_for_pivot( const Model& model, int coordinate );
 
 double static_rotation_gauge_value( const Model& model, const StaticRotationGauge& gauge, const std::vector<double>& pose_increment );
 
@@ -67,5 +66,4 @@ bool static_global_contact_pretrim( const Model& model, const SampleInput& sampl
 
 bool static_trim(const Model& model, const AxleInput& input, State& state, double& force_residual, double& position_residual, int& iterations, std::vector<double>& constraint_multiplier, int& pinned_directions, int& worst_force_coordinate, double& worst_force_value);
 
-bool audit_constraint_system(const Model& m, std::string& error);
 } // namespace axle_kernel

@@ -1,0 +1,14 @@
+symbols:
+suspension_kernel_run: True
+suspension_kernel_capabilities: True
+suspension_kernel_contract_version: True
+axle_kernel_abi_version: True
+vehicle_kernel_abi_version: True
+mb_core_abi_version: True
+mb_core_run: True
+versions:
+suspension_kernel_contract_version=1
+axle_kernel_abi_version=15
+vehicle_kernel_abi_version=30
+mb_core_abi_version=1
+suspension_kernel_free=False
