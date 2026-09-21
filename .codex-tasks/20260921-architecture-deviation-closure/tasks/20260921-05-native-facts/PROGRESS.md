@@ -1,9 +1,9 @@
 - 任务：接管 Python 元件报告事实、静轮荷辅助求解与凝聚等价性登记（A1 修订：原「计算性凝聚」口径已改）
 - 形态：single-full（Epic 子任务）
-- 进度：0/8 步骤，TODO
-- 当前：未执行（规划已建立，实施未开始）
+- 进度：2/8 步骤 DONE（步骤 1 对照表、步骤 2 凝聚等价性登记）
+- 当前：步骤 3（按缺口补默认关闭的可选 native 输出通道）
 - 文件：`.codex-tasks/20260921-architecture-deviation-closure/tasks/20260921-05-native-facts/`
-- 验证：未运行
+- 验证：步骤 1-2 全集通过（见 raw/step2_condensation_equivalence.md 的证据表）
 
 ## 恢复信息
 

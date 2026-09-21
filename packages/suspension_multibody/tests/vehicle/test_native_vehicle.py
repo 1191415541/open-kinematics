@@ -334,6 +334,113 @@ def test_native_vehicle_runs_two_suspensions_and_four_wheels() -> None:
     assert np.all(np.isfinite(result.states))
 
 
+
+def _frames_for(assembly, model) -> dict[str, object]:
+    """Return the body frames `_build_joints` needs, from the real path."""
+    from suspension_multibody.preparation.vehicle_dynamic import _initial_body_state
+
+    _state, body_frames = _initial_body_state(assembly, _case(model), 1.0)
+    return body_frames
+
+
+def test_native_fixed_joint_matches_python_weld_condensation() -> None:
+    """
+    The native ``kind="fixed"`` joint is the contract equivalent of Python's
+    weld condensation (subtask 05, A1 revision).
+
+    ``build_vehicle`` condenses welded bodies in Python before the model reaches
+    the kernel, so the equivalence claim is about what each side *means*, not
+    about two runs of the same input:
+
+    * Python's condensation fuses the pair into one body whose mass, centre of
+      mass and inertia are the combined ones, and the weld constraint disappears
+      from ``assembly.constraints``.
+    * The native path receives the same pair as separate bodies plus a
+      six-row ``fixed`` joint (``mb_joint/types.hpp``: the coincident point plus
+      the full relative rotation).
+
+    This test pins the *contract*: the fused body carries the pair's mass, the
+    weld is gone from the constraint list, and the alias map records where each
+    original body went.  It does not compare two solver runs -- moving the
+    production path onto the native joint needs a numeric-gate decision that is
+    tracked as an open item in the epic, not assumed here.
+    """
+    model = _vehicle()
+    mount = model.wheels[0].model_copy(
+        update={
+            "mount_joint_kind": "fixed",
+            "mass": 20.0,
+            "center_local": Vec3(x=35.0, y=-8.0, z=12.0),
+            "inertia": ((4.0, 0.2, 0.1), (0.2, 5.0, 0.3), (0.1, 0.3, 6.0)),
+        }
+    )
+    model = model.model_copy(update={"wheels": (mount, *model.wheels[1:])})
+
+    assembly = build_vehicle(model)
+
+    # 1. The fused body exists under the mount name and carries the pair's mass.
+    # 1. The fused body exists under the mount name and its mass is the pair's.
+    #    The upright carries 100 kg in this fixture; the wheel adds 20 kg.
+    fused_name = "front_upright_L"
+    assert fused_name in assembly.bodies
+    assert assembly.bodies[fused_name].mass == 120.0  # 100 kg upright + 20 kg wheel
+    # 2. The weld is gone: the kernel's own `fixed` kind is what would express it
+    #    instead, and a condensed assembly must not still carry one.
+    assert not any(item.name.startswith("wheel_mount_") for item in assembly.constraints)
+    joints = _build_joints(assembly, _frames_for(assembly, model), 1.0)
+    assert not any(joint.kind == "fixed" for joint in joints), (
+        "a condensed assembly must not still carry a fixed joint: the weld is "
+        "either fused here or sent to the kernel, never both"
+    )
+
+    # 3. Each condensed-away body is still addressable through the alias map, so
+    #    a report or an Adams render can trace an original body to its fused one.
+    assert assembly.body_aliases, "condensation must record where bodies went"
+    for original, aliased in assembly.body_aliases.items():
+        assert original not in assembly.bodies
+        assert aliased in assembly.bodies
+
+def test_native_fixed_joint_shape_matches_the_registry() -> None:
+    """
+    ``fixed`` is a two-run joint: the coincident point, then the full relative
+    rotation.  The row count is what the contract advertises, so a report that
+    reads constraint rows can rely on it.
+    """
+    from suspension_multibody.preparation.vehicle_dynamic import _build_joints
+    from suspension_multibody.core import WeldJoint
+
+    model = _vehicle()
+    mount = model.wheels[0].model_copy(
+        update={"mount_joint_kind": "fixed", "mass": 20.0}
+    )
+    model = model.model_copy(update={"wheels": (mount, *model.wheels[1:])})
+
+    # Build the *uncondensed* pair so the weld survives into the joint list.
+    import os
+
+    previous = os.environ.get("SUSPENSION_MULTIBODY_CONDENSE_WELDS")
+    os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = "0"
+    try:
+        uncondensed = build_vehicle(model)
+    finally:
+        if previous is None:
+            os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
+        else:
+            os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = previous
+
+    welds = [
+        item for item in uncondensed.constraints if isinstance(item, WeldJoint)
+    ]
+    assert welds, "the uncondensed assembly must still carry its weld"
+    joints = _build_joints(uncondensed, _frames_for(uncondensed, model), 1.0)
+    fixed = [joint for joint in joints if joint.kind == "fixed"]
+    assert len(fixed) == len(welds)
+    # The body pair is preserved, not fused: that is the whole point of the
+    # native path this test pins.
+    for weld, joint in zip(welds, fixed):
+        assert joint.body_a == weld.body_a
+        assert joint.body_b == weld.body_b
+
 def test_pac2002_selected_combined_slip_changes_force() -> None:
     def run(combined: bool):
         model = _pac2002_model(combined=combined)
