@@ -29,4 +29,9 @@ int mkl_pardiso_threads();
 int blocked_lu_block_size();
 bool acceleration_schur_probe_enabled();
 
+/// The optional element-wrench channel (05 step 3).  Default off: only a caller
+/// that sets `SUSPENSION_KERNEL_ELEMENT_WRENCH_OUTPUT` gets the extra block, so
+/// the default path's result bytes do not move.
+bool element_wrench_output_enabled();
+
 } // namespace axle_kernel

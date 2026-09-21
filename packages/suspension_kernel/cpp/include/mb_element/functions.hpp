@@ -16,6 +16,7 @@
 #include "mb_config/constants.hpp"
 #include "mb_config/diagnostics.hpp"
 #include "mb_config/env.hpp"
+#include "mb_config/element_wrench.hpp"
 #include "mb_numeric/util.hpp"
 #include "mb_dual/dual.hpp"
 #include "mb_dual/dual_geometry.hpp"
@@ -73,8 +74,12 @@ void external_force_anti_roll_directional( const Model& model, const State& stat
 void external_force_steering_directional( const Model& model, const State& state, const SampleInput& input, const DirectionalState& direction, std::vector<Vec3>& force, std::vector<Vec3>& torque, bool& smooth);
 
 void write_directional_detachment( const Tire& t, const DirectionalScalar& sx, const DirectionalScalar& sy, std::size_t i, int stride, std::vector<double>& tire_state_derivatives );
-Vec3 add_force_on_body( std::vector<Vec3>& force, std::vector<Vec3>& torque, const Model& model, const State& state, int body, const Vec3& point_local, const Vec3& f_world);
-void add_torque_on_body( std::vector<Vec3>& torque, const Model& model, int body, const Vec3& tau_world );
+// The optional `sink` records the wrench the call applies.  A caller that does
+// not pass one -- every caller on the default path -- keeps the call it always
+// made: the sink only reads values that were already computed, and it records
+// after the accumulation, so no existing expression or order changes.
+Vec3 add_force_on_body( std::vector<Vec3>& force, std::vector<Vec3>& torque, const Model& model, const State& state, int body, const Vec3& point_local, const Vec3& f_world, ElementWrenchSink* sink = nullptr);
+void add_torque_on_body( std::vector<Vec3>& torque, const Model& model, int body, const Vec3& tau_world, ElementWrenchSink* sink = nullptr );
 std::array<double, 6> mat6_mul( const std::array<double, 36>& matrix, const std::array<double, 6>& vector );
 std::array<double, 6> bushing_deformation( const Bushing& bushing, const Model& model, const State& state, std::array<double, 6>& rate );
 

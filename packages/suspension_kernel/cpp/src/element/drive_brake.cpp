@@ -19,6 +19,7 @@
 #include "mb_config/functions.hpp"
 #include "mb_numeric/functions.hpp"
 #include "mb_model/functions.hpp"
+#include "mb_config/element_wrench.hpp"
 
 namespace axle_kernel {
 
@@ -32,6 +33,7 @@ void assemble_drive_brake_torques(
     bool brush_only,
     double& external_power
 ) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
     for (std::size_t i = 0; i < model.tires.size() && !brush_only; ++i) {
         const Tire& t = model.tires[i];
         const int frame_body = tire_frame_body(t);
@@ -50,12 +52,29 @@ void assemble_drive_brake_torques(
                 state.q[drive_body], t.drive_torque_axis
             ))
             : tire_axis;
+        // Four rows per tire: the drive torque and its reaction, then the brake
+        // torque and its reaction.  A reaction on body -1 is not a body, so it
+        // keeps its row unset.
+        if (sink != nullptr) {
+            sink->open(kElementWrenchDriveBrake, i, 0, drive_body,
+                       t.drive_torque_reaction_body, drive_body,
+                       state.r[drive_body].x, state.r[drive_body].y,
+                       state.r[drive_body].z);
+        }
         add_torque_on_body(
-            torque, model, drive_body, drive_axis*drive_torque
+            torque, model, drive_body, drive_axis*drive_torque, sink
         );
+        if (sink != nullptr) {
+            const Vec3 drive_reaction_origin = t.drive_torque_reaction_body >= 0
+                ? state.r[t.drive_torque_reaction_body] : Vec3{};
+            sink->open(kElementWrenchDriveBrake, i, 1, drive_body,
+                       t.drive_torque_reaction_body, t.drive_torque_reaction_body,
+                       drive_reaction_origin.x, drive_reaction_origin.y,
+                       drive_reaction_origin.z);
+        }
         add_torque_on_body(
             torque, model, t.drive_torque_reaction_body,
-            drive_axis*(-drive_torque)
+            drive_axis*(-drive_torque), sink
         );
         const double drive_rate = mapped_drive
             ? dot(
@@ -77,8 +96,12 @@ void assemble_drive_brake_torques(
                 brake_torque = brake_magnitude;
             }
         }
+        if (sink != nullptr) {
+            sink->open(kElementWrenchDriveBrake, i, 2, t.body, frame_body, t.body,
+                       state.r[t.body].x, state.r[t.body].y, state.r[t.body].z);
+        }
         add_torque_on_body(
-            torque, model, t.body, tire_axis*brake_torque
+            torque, model, t.body, tire_axis*brake_torque, sink
         );
         // 制动钳装在不旋转的转向节（`frame_body`）上，所以制动矩的反作用属于它。
         // 缺了反作用时同一轴左右两侧的制动矩在世界系里同向相加而不抵消，整车因此
@@ -86,8 +109,13 @@ void assemble_drive_brake_torques(
         // （实测缺口 = Στ_brake / L，逐点吻合到 0.1%）。驱动矩的对应反作用已在上方
         // 施加。`frame_body == t.body` 时轮体自身就是承载件，再加反作用会把力矩清零。
         if (frame_body != t.body) {
+            if (sink != nullptr) {
+                sink->open(kElementWrenchDriveBrake, i, 3, t.body, frame_body,
+                           frame_body, state.r[frame_body].x, state.r[frame_body].y,
+                           state.r[frame_body].z);
+            }
             add_torque_on_body(
-                torque, model, frame_body, tire_axis*(-brake_torque)
+                torque, model, frame_body, tire_axis*(-brake_torque), sink
             );
         }
         if (record_energy) {

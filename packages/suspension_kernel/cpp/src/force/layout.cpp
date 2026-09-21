@@ -21,6 +21,7 @@
 #include "mb_numeric/functions.hpp"
 #include "mb_model/functions.hpp"
 #include "mb_tire_state/functions.hpp"
+#include "mb_config/element_wrench.hpp"
 
 namespace axle_kernel {
 
@@ -30,8 +31,11 @@ double assemble_aerodynamic_force(
     EnergyRates* energy_rates, bool record_energy,
     double external_load_scale
 ) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
     double applied_power = 0.0;
-    for (const AerodynamicDrag& drag : model.aerodynamic_drags) {
+    for (std::size_t drag_index = 0; drag_index < model.aerodynamic_drags.size();
+         ++drag_index) {
+        const AerodynamicDrag& drag = model.aerodynamic_drags[drag_index];
         const Vec3 axis = normalized(rotate(
             state.q[drag.body], drag.forward_axis
         ));
@@ -44,9 +48,15 @@ double assemble_aerodynamic_force(
             * std::abs(longitudinal_speed)
             * longitudinal_speed
         );
+        if (sink != nullptr) {
+            const Vec3 point = state_point(state, drag.body, drag.application_point);
+            sink->open(kElementWrenchExternal, model.bodies.size() + drag_index, 0,
+                       drag.body, -1, drag.body, point.x, point.y, point.z);
+        }
         add_force_on_body(
             force, torque, model, state, drag.body,
-            drag.application_point, drag_force
+            drag.application_point, drag_force,
+            sink
         );
         if (record_energy) {
             const double power = dot(drag_force, point_velocity);
@@ -122,6 +132,7 @@ void assemble_external_and_gravity(
     double& external_power,
     double& potential
 ) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
         for (int i = 0; i < n; ++i) {
             if (input.body_wrench.size() >= static_cast<std::size_t>(6 * n)) {
                 force[i] = {
@@ -149,6 +160,19 @@ void assemble_external_and_gravity(
                         torque[i] += cross(rotate(state.q[i], point), force[i]);
                     }
                 }
+                // The declared wrench is recorded as it stands, after the lever
+                // arm has been resolved, so the row is the load this call put on
+                // the body rather than a re-derivation of it.
+                if (sink != nullptr) {
+                    const Vec3 declared = i < static_cast<int>(
+                        model.body_wrench_point_local.size())
+                        ? model.body_wrench_point_local[static_cast<std::size_t>(i)]
+                        : Vec3{};
+                    const Vec3 point = state_point(state, i, declared);
+                    sink->open(kElementWrenchExternal, i, 0, i, -1, i,
+                               point.x, point.y, point.z);
+                    sink->add_wrench(force[i], torque[i]);
+                }
 
                 if (record_energy) {
                     const double applied_power =
@@ -170,6 +194,20 @@ void assemble_external_and_gravity(
                 force[i].x += external_load_scale * model.bodies[i].mass * gravity_x;
                 force[i].y += external_load_scale * model.bodies[i].mass * gravity_y;
                 force[i].z += external_load_scale * model.bodies[i].mass * gravity_z;
+                // Gravity lands in the same row as a declared wrench on this
+                // body: both are non-element loads the row's type code covers.
+                if (sink != nullptr) {
+                    sink->open(kElementWrenchExternal, i, 0, i, -1, i,
+                               state.r[i].x, state.r[i].y, state.r[i].z);
+                    sink->add_wrench(
+                        Vec3{
+                            external_load_scale * model.bodies[i].mass * gravity_x,
+                            external_load_scale * model.bodies[i].mass * gravity_y,
+                            external_load_scale * model.bodies[i].mass * gravity_z
+                        },
+                        Vec3{}
+                    );
+                }
                 if (record_energy) {
                     const double gravity_energy = -model.bodies[i].mass * (
                         external_load_scale * gravity_x * state.r[i].x

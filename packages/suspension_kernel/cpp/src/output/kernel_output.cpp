@@ -12,6 +12,7 @@
 // Direct dependencies of this translation unit.  The module headers no
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
+#include "mb_config/element_wrench.hpp"
 #include "mb_config/functions.hpp"
 #include "mb_numeric/functions.hpp"
 #include "mb_joint/functions.hpp"
@@ -377,12 +378,29 @@ void write_physics_output(
     double dissipation = 0.0;
     EnergyStorage storage;
     std::vector<double> force;
+    // The optional element-wrench channel records here: this is the one pass that
+    // assembles one accepted sample's element wrenches for observation, and its
+    // `sample` is the index the other ledgers are written at.  A switch that is
+    // off leaves the sink unconfigured, so none of this runs.
+    ElementWrenchSink* const element_wrench = element_wrench_sink();
+    if (element_wrench != nullptr) {
+        ElementWrenchCounts element_wrench_counts;
+        element_wrench_counts.springs = model.springs.size();
+        element_wrench_counts.bushings = model.bushings.size();
+        element_wrench_counts.anti_rolls = model.anti_roll_bars.size();
+        element_wrench_counts.steering = model.steering_actuators.size();
+        element_wrench_counts.tires = model.tires.size();
+        element_wrench_counts.bodies = model.bodies.size();
+        element_wrench_counts.drags = model.aerodynamic_drags.size();
+        element_wrench->begin_sample(sample, element_wrench_counts);
+    }
     external_force_vector(
         model, state, sample_input, input.gravity_x, input.gravity_y, input.gravity_z,
         tire_forces, tire_derivatives, tire_output, potential, power, dissipation,
         force, &spring_output, &bushing_output, &anti_roll_output,
         nullptr, nullptr, &storage
     );
+    if (element_wrench != nullptr) element_wrench->end_sample();
     const double kinetic = kinetic_energy(model, state);
     const double total = kinetic + potential;
     const double residual = first

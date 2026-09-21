@@ -18,6 +18,7 @@
 #include "axle_kernel.hpp"
 
 #include "mb_config/version.hpp"
+#include "mb_config/element_wrench.hpp"
 #include "mb_cases/functions.hpp"
 #include "mb_contract/functions.hpp"
 #include "mb_model/enums.hpp"
@@ -73,6 +74,13 @@ Json json_object(std::vector<std::pair<std::string, Json>> fields) {
   out.kind = JsonKind::Object;
   out.fields = std::move(fields);
   return out;
+}
+
+/// The contract version a document reports.  The optional element-wrench channel
+/// is the only reason it moves, and it is off unless a caller asks for it, so a
+/// result that carries no channel keeps reporting version 1.
+long long document_contract_version() {
+  return element_wrench_output_enabled() ? 2 : 1;
 }
 
 /// The block descriptor the result schema requires.
@@ -213,7 +221,7 @@ Json capability_document() {
   }
   return json_object({
       {"contract", json_string("multibody-capabilities")},
-      {"contract_version", json_integer(1)},
+      {"contract_version", json_integer(document_contract_version())},
       {"pac2002_refused_families", json_array(std::move(families))},
       {"pac2002_refused_feature_flags", json_array(std::move(flags))},
       {"pac2002_refused_parameters", json_array(std::move(parameters))},
@@ -252,6 +260,18 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
     return fail(error_buffer, error_capacity, 1,
                 "model payload, case payload and result length are required");
   }
+
+  // The element-wrench sink is process-global because the element laws reach it
+  // through the force-assembly primitives rather than through their arguments.
+  // It holds a pointer into a block owned by this call, so every return path has
+  // to hand the target back: a later entry point that does not configure it
+  // (mb_core_run) would otherwise write through a pointer into this frame's dead
+  // storage.  The guard runs on all of them, the early failures included.
+  struct ElementWrenchGuard {
+    ~ElementWrenchGuard() {
+      if (ElementWrenchSink* const sink = element_wrench_sink()) sink->clear();
+    }
+  } element_wrench_guard;
 
   ContractPayload model_payload_parsed;
   ContractPayload case_payload_parsed;
@@ -534,6 +554,28 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   std::vector<double> bushing_block(total_samples * bushing_count * kBushingOutputWidth, kNan);
   std::vector<double> anti_roll_block(total_samples * anti_roll_count * kAntiRollOutputWidth, kNan);
   std::vector<double> tire_block(total_samples * tire_count * kTireOutputWidth, kNan);
+  // The optional element-wrench channel: one row per (element, end) per sample.
+  // While the switch is off nothing is allocated, nothing is described and
+  // nothing is appended, so the default path's blocks and blob stay
+  // byte-for-byte what they were.  The rows are fed by the observer pass, which
+  // is the only place one accepted sample's element wrenches exist as a coherent
+  // set; the sink owns the row layout so the element laws do not have to.
+  ElementWrenchCounts element_wrench_counts;
+  element_wrench_counts.springs = spring_count;
+  element_wrench_counts.bushings = bushing_count;
+  element_wrench_counts.anti_rolls = anti_roll_count;
+  element_wrench_counts.steering = built.steering_actuators.size();
+  element_wrench_counts.tires = tire_count;
+  element_wrench_counts.bodies = bodies;
+  element_wrench_counts.drags = built.aerodynamic_drags.size();
+  const bool element_wrench_enabled = element_wrench_output_enabled();
+  const std::size_t element_wrench_records = element_wrench_enabled
+      ? element_wrench_record_count(element_wrench_counts) : 0;
+  std::vector<double> element_wrench_block(
+      element_wrench_records == 0
+          ? 0
+          : total_samples * element_wrench_records * kElementWrenchOutputWidth,
+      kNan);
   // A block descriptor cannot express a zero extent, so an empty ledger is an
   // absent block rather than a block of nothing.
   const auto block_slot = [](std::vector<double>& block, std::size_t stride,
@@ -619,6 +661,17 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
     }
     contract_apply_solver(plan, input.axle);
 
+    // This case's rows start at its slice of the block; the observer adds the
+    // sample offset, exactly like `body_state`.
+    if (element_wrench_enabled) {
+      ElementWrenchSink* const sink = element_wrench_sink();
+      if (sink != nullptr) {
+        sink->configure(
+            element_wrench_block.data() +
+                sample_offset * element_wrench_records * kElementWrenchOutputWidth,
+            element_wrench_records);
+      }
+    }
     AxleOutput axle_output{};
     axle_output.struct_size = sizeof(AxleOutput);
     axle_output.abi_version = static_cast<std::uint32_t>(kAxleKernelAbiVersion);
@@ -795,17 +848,19 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
                {total_samples, bushing_count, kBushingOutputWidth});
     push_block("anti_roll_output", anti_roll_block,
                {total_samples, anti_roll_count, kAntiRollOutputWidth});
+    push_block("element_wrench", element_wrench_block,
+               {total_samples, element_wrench_records, kElementWrenchOutputWidth});
 
     Json document = json_object({
         {"blocks", json_array(std::move(blocks))},
         {"case_identity",
          json_object({
              {"case_sha256", json_string(case_sha256)},
-             {"contract_version", json_integer(1)},
+             {"contract_version", json_integer(document_contract_version())},
              {"model_sha256", json_string(model_sha256)},
          })},
         {"contract", json_string("multibody-result")},
-        {"contract_version", json_integer(1)},
+        {"contract_version", json_integer(document_contract_version())},
         {"kind", json_string("result")},
         {"manifest",
          json_object({
@@ -843,6 +898,7 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   append_doubles(spring_block.data(), spring_block.size(), blob);
   append_doubles(bushing_block.data(), bushing_block.size(), blob);
   append_doubles(anti_roll_block.data(), anti_roll_block.size(), blob);
+  append_doubles(element_wrench_block.data(), element_wrench_block.size(), blob);
 
   const std::string payload = contract_build_container(canonical, blob);
   if (result_out == nullptr || *result_length_in_out < payload.size()) {

@@ -19,6 +19,7 @@
 #include "mb_numeric/functions.hpp"
 #include "mb_joint/functions.hpp"
 #include "mb_model/functions.hpp"
+#include "mb_config/element_wrench.hpp"
 
 namespace axle_kernel {
 
@@ -33,6 +34,7 @@ void assemble_steering_forces(
     bool brush_only,
     double& external_power
 ) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
     for (std::size_t steering_index = 0;
          steering_index < model.steering_actuators.size() && !brush_only;
          ++steering_index) {
@@ -72,13 +74,27 @@ void assemble_steering_forces(
             const double force_value = actuator.stiffness * (target-displacement)
                 + actuator.damping * (target_rate-rate);
             const Vec3 force_value_world = axis_world * force_value;
+            // One row per end: the actuator's own body and its reaction body.
+            // A prescribed actuator applies nothing and keeps its rows unset.
+            if (sink != nullptr) {
+                sink->open(kElementWrenchSteering, steering_index, 0,
+                           actuator.body, reaction, actuator.body,
+                           body_point.x, body_point.y, body_point.z);
+            }
             add_force_on_body(
                 force, torque, model, state, actuator.body,
-                actuator.point_local, force_value_world
+                actuator.point_local, force_value_world,
+                sink
             );
+            if (sink != nullptr) {
+                sink->open(kElementWrenchSteering, steering_index, 1,
+                           actuator.body, reaction, reaction,
+                           reaction_point.x, reaction_point.y, reaction_point.z);
+            }
             add_force_on_body(
                 force, torque, model, state, reaction,
-                actuator.reaction_point_local, force_value_world * (-1.0)
+                actuator.reaction_point_local, force_value_world * (-1.0),
+                sink
             );
             if (record_energy) {
                 const double steering_power =
@@ -109,11 +125,26 @@ void assemble_steering_forces(
             const double torque_value = actuator.stiffness * (target-angle)
                 + actuator.damping * (target_rate-rate);
             const Vec3 torque_value_world = axis_world * torque_value;
+            // A rotational actuator applies a pure couple, so both rows are
+            // opened at the body they load.
+            if (sink != nullptr) {
+                sink->open(kElementWrenchSteering, steering_index, 0,
+                           actuator.body, reaction, actuator.body,
+                           state.r[actuator.body].x, state.r[actuator.body].y,
+                           state.r[actuator.body].z);
+            }
             add_torque_on_body(
-                torque, model, actuator.body, torque_value_world
+                torque, model, actuator.body, torque_value_world, sink
             );
+            if (sink != nullptr) {
+                const Vec3 reaction_origin = reaction >= 0
+                    ? state.r[reaction] : Vec3{};
+                sink->open(kElementWrenchSteering, steering_index, 1,
+                           actuator.body, reaction, reaction,
+                           reaction_origin.x, reaction_origin.y, reaction_origin.z);
+            }
             add_torque_on_body(
-                torque, model, reaction, torque_value_world * (-1.0)
+                torque, model, reaction, torque_value_world * (-1.0), sink
             );
             if (record_energy) {
                 const double steering_power =

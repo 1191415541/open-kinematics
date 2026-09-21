@@ -17,6 +17,7 @@
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
 #include "mb_config/functions.hpp"
+#include "mb_config/element_wrench.hpp"
 #include "mb_numeric/functions.hpp"
 #include "mb_model/functions.hpp"
 
@@ -35,6 +36,7 @@ void assemble_anti_roll_forces(
     double& dissipation,
     double& potential
 ) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
     for (std::size_t bar_index = 0;
          bar_index < model.anti_roll_bars.size() && !brush_only; ++bar_index) {
         const AntiRollBar& bar = model.anti_roll_bars[bar_index];
@@ -47,8 +49,18 @@ void assemble_anti_roll_forces(
         const double tau = internal_force_scale * (
             -bar.stiffness * angle - bar.damping * rate
         );
-        add_torque_on_body(torque, model, bar.b, axis_world * tau);
-        add_torque_on_body(torque, model, bar.a, axis_world * (-tau));
+        // The bar applies a pure couple, which has no application point, so
+        // each end's row is opened at the receiving body's origin.
+        if (sink != nullptr) {
+            sink->open(kElementWrenchAntiRoll, bar_index, 0, bar.a, bar.b, bar.b,
+                       state.r[bar.b].x, state.r[bar.b].y, state.r[bar.b].z);
+        }
+        add_torque_on_body(torque, model, bar.b, axis_world * tau, sink);
+        if (sink != nullptr) {
+            sink->open(kElementWrenchAntiRoll, bar_index, 1, bar.a, bar.b, bar.a,
+                       state.r[bar.a].x, state.r[bar.a].y, state.r[bar.a].z);
+        }
+        add_torque_on_body(torque, model, bar.a, axis_world * (-tau), sink);
         if (record_energy) {
             const double anti_roll_energy =
                 0.5 * bar.stiffness * angle * angle;

@@ -30,6 +30,12 @@ inline constexpr int kAntiRollOutputWidth = 3;
 
 inline constexpr int kSteeringOutputWidth = 4;
 
+// The element-wrench channel's stride (05 step 3): world force, world moment
+// about the receiving body's origin, element type code, action point in world
+// coordinates, body a, body b, receiving body.  It is a structural constant
+// like the other widths: the block's shape and its row addressing share it.
+inline constexpr int kElementWrenchOutputWidth = 13;
+
 inline constexpr int kDiagnosticsWidth = 16;
 
 inline constexpr int kPerformanceWidth = 24;

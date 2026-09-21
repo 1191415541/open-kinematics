@@ -17,6 +17,7 @@
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
 #include "mb_config/functions.hpp"
+#include "mb_config/element_wrench.hpp"
 #include "mb_numeric/functions.hpp"
 #include "mb_model/functions.hpp"
 
@@ -36,6 +37,7 @@ void assemble_bushing_forces(
     double& dissipation,
     double& potential
 ) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
     for (std::size_t bushing_index = 0;
          bushing_index < model.bushings.size() && !brush_only; ++bushing_index) {
         const Bushing& b = model.bushings[bushing_index];
@@ -69,12 +71,23 @@ void assemble_bushing_forces(
         // marker points are generally distinct, so the reaction torque must
         // also transfer the force through the marker-to-marker arm.
         const Vec3 marker_arm = pb-pa;
-        add_force_on_body(force, torque, model, state, b.b, b.pb, f_world);
-        add_force_on_body(force, torque, model, state, b.a, b.pa, f_world * (-1.0));
-        add_torque_on_body(torque, model, b.b, t_world);
+        // One row per end.  The b end is the one FIELD reports; the a end is the
+        // reaction, whose moment already carries the marker-to-marker arm.
+        if (sink != nullptr) {
+            sink->open(kElementWrenchBushing, bushing_index, 0, b.a, b.b, b.b,
+                       pb.x, pb.y, pb.z);
+        }
+        add_force_on_body(force, torque, model, state, b.b, b.pb, f_world, sink);
+        add_torque_on_body(torque, model, b.b, t_world, sink);
+        if (sink != nullptr) {
+            sink->open(kElementWrenchBushing, bushing_index, 1, b.a, b.b, b.a,
+                       pa.x, pa.y, pa.z);
+        }
+        add_force_on_body(force, torque, model, state, b.a, b.pa, f_world * (-1.0), sink);
         add_torque_on_body(
             torque, model, b.a,
-            (t_world+cross(marker_arm, f_world))*(-1.0)
+            (t_world+cross(marker_arm, f_world))*(-1.0),
+            sink
         );
         if (record_energy) {
             double bushing_energy = 0.0;

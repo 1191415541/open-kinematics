@@ -12,19 +12,28 @@ namespace axle_kernel {
 Vec3 add_force_on_body(
     std::vector<Vec3>& force, std::vector<Vec3>& torque,
     const Model& model, const State& state, int body, const Vec3& point_local,
-    const Vec3& f_world) {
+    const Vec3& f_world, ElementWrenchSink* sink) {
     if (body < 0 || model.bodies[body].fixed) return {};
     const Vec3 arm = rotate(state.q[body], point_local);
     force[body] += f_world;
     torque[body] += cross(arm, f_world);
+    // The optional channel records this call's wrench exactly as it was applied:
+    // the lever is the one the accumulation above used, and the action point is
+    // the marker's world position.  A null sink is the default path, and costs
+    // one pointer test that changes no value.
+    if (sink != nullptr) sink->add_force(f_world, arm, state.r[body]);
     return f_world;
 }
 
 void add_torque_on_body(
-    std::vector<Vec3>& torque, const Model& model, int body, const Vec3& tau_world
+    std::vector<Vec3>& torque, const Model& model, int body,
+    const Vec3& tau_world, ElementWrenchSink* sink
 ) {
     if (body < 0 || model.bodies[body].fixed) return;
     torque[body] += tau_world;
+    // A pure moment has no application point, so the row keeps the point it was
+    // opened with.
+    if (sink != nullptr) sink->add_torque(tau_world);
 }
 
 std::array<double, 6> mat6_mul(

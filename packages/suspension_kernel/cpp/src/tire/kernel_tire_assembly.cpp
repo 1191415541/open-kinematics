@@ -21,6 +21,7 @@
 // modules whose functions it actually calls.
 #include "mb_config/functions.hpp"
 #include "mb_numeric/functions.hpp"
+#include "mb_config/element_wrench.hpp"
 #include "mb_model/functions.hpp"
 #include "mb_tire/brush/functions.hpp"
 #include "mb_tire/fiala/functions.hpp"
@@ -159,6 +160,7 @@ bool assemble_brush_tire(
     const Vec3& center,
     const Vec3& patch_arm
 ) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
     if (ctx.in.brush_only) return true;
     double projected_sx = sx;
     double projected_sy = sy;
@@ -178,9 +180,15 @@ bool assemble_brush_tire(
         contact_point - ctx.in.state.r[tire.body]
     );
     const Vec3 contact_force = forward * fx + lateral * fy + normal * fn;
+    // One row per tire: the contact wrench the tire puts on its own body.
+    if (sink != nullptr) {
+        sink->open(kElementWrenchTire, tire_index, 0, tire.body, -1, tire.body,
+                   contact_point.x, contact_point.y, contact_point.z);
+    }
     add_force_on_body(
         ctx.buffers.force, ctx.buffers.torque, ctx.in.model, ctx.in.state,
-        tire.body, contact_local, contact_force
+        tire.body, contact_local, contact_force,
+        sink
     );
     if (ctx.in.record_output) {
         ctx.buffers.tire_output[output_offset+0] = 1.0;
@@ -307,6 +315,7 @@ bool assemble_fiala_tire(
     const Vec3& center,
     const Vec3& patch_arm
 ) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
     const double slip_speed = std::max(
         rolling_speed,
         std::max(fiala_parameter(tire, FIALA_LOW_SPEED_THRESHOLD, 1e-3), 1e-3)
@@ -365,9 +374,14 @@ bool assemble_fiala_tire(
     const Vec3 contact_point = center + patch_arm;
     const Vec3 contact_local =
         transpose(body_rotation) * (contact_point-state.r[tire.body]);
+    if (sink != nullptr) {
+        sink->open(kElementWrenchTire, tire_index, 0, tire.body, -1, tire.body,
+                   contact_point.x, contact_point.y, contact_point.z);
+    }
     add_force_on_body(
         ctx.buffers.force, ctx.buffers.torque, model, state, tire.body,
-        contact_local, forward*fx+lateral*fy+normal*fn
+        contact_local, forward*fx+lateral*fy+normal*fn,
+        sink
     );
     // Adams scales the rolling-resistance moment by the same startup step
     // as Fx/Fy/Mz.  With RR = 0.02 (mm) and Fz = 3000 N the shipped rig
@@ -379,7 +393,8 @@ bool assemble_fiala_tire(
         *fiala_rolling_resistance_factor(spin_rate)*fn*startup;
     add_torque_on_body(
         ctx.buffers.torque, model, tire.body,
-        normal*aligning_moment+lateral*rolling_resistance_moment
+        normal*aligning_moment+lateral*rolling_resistance_moment,
+        sink
     );
     if (ctx.in.record_output) {
         ctx.buffers.tire_output[output_offset+0] = 1.0;
@@ -728,6 +743,7 @@ void assemble_pac2002_tire(
     double rolling_radius,
     bool static_active,
     double maxwell_displacement) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
     // Adams 高性能轮胎把 USE_MODE=14 的松弛状态保存在局部轮胎
     // 求解器内；input array 状态数为 0 只表示不通过 GSE 暴露状态。
     const int use_mode = pac2002_use_mode(t);
@@ -1210,16 +1226,24 @@ void assemble_pac2002_tire(
         contact_point - state.r[t.body]
     );
     const Vec3 contact_force = forward*fx + lateral*fy + normal*fn;
+    // One row per tire: the contact force and the three moments it makes are
+    // the same body's wrench, so they share the row.
+    if (sink != nullptr) {
+        sink->open(kElementWrenchTire, i, 0, t.body, -1, t.body,
+                   contact_point.x, contact_point.y, contact_point.z);
+    }
     add_force_on_body(
         ctx.buffers.force, ctx.buffers.torque, model, state, t.body,
         contact_local,
-        contact_force
+        contact_force,
+        sink
     );
     add_torque_on_body(
         ctx.buffers.torque, model, t.body,
         forward*overturning_moment
             +lateral*rolling_resistance_moment
-            +normal*aligning_moment
+            +normal*aligning_moment,
+        sink
     );
     write_pac2002_output_channels(
         ctx, output_offset, fn, fx, fy, utilization, overturning_moment,

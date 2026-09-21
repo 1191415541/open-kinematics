@@ -17,6 +17,7 @@
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
 #include "mb_config/functions.hpp"
+#include "mb_config/element_wrench.hpp"
 #include "mb_numeric/functions.hpp"
 #include "mb_model/functions.hpp"
 
@@ -36,6 +37,7 @@ void assemble_spring_forces(
     double& dissipation,
     double& potential
 ) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
     for (std::size_t i = 0; i < model.springs.size() && !brush_only; ++i) {
         const Spring& s = model.springs[i];
         const Vec3 pa = state_point(state, s.a, s.pa);
@@ -155,8 +157,17 @@ void assemble_spring_forces(
         }
         fscalar *= internal_force_scale;
         const Vec3 f = e*fscalar;
-        add_force_on_body(force, torque, model, state, s.b, s.pb, f);
-        add_force_on_body(force, torque, model, state, s.a, s.pa, f*(-1.0));
+        // One row per end: the wrench the spring applied to b, then the equal
+        // and opposite one it applied to a.  The rows are addressed by element
+        // index, so an element that applies nothing leaves its own rows unset.
+        if (sink != nullptr) {
+            sink->open(kElementWrenchSpring, i, 0, s.a, s.b, s.b, pb.x, pb.y, pb.z);
+        }
+        add_force_on_body(force, torque, model, state, s.b, s.pb, f, sink);
+        if (sink != nullptr) {
+            sink->open(kElementWrenchSpring, i, 1, s.a, s.b, s.a, pa.x, pa.y, pa.z);
+        }
+        add_force_on_body(force, torque, model, state, s.a, s.pa, f*(-1.0), sink);
         if (record_energy) {
             const double spring_energy = has_elastic_curve
                 ? integrate_curve_from_zero(

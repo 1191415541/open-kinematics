@@ -14,6 +14,7 @@
 #include "mb_numeric/functions.hpp"
 #include "mb_model/functions.hpp"
 #include "mb_tire/fiala/functions.hpp"
+#include "mb_config/element_wrench.hpp"
 #include "mb_tire/pac2002/functions.hpp"
 
 namespace axle_kernel {
@@ -143,6 +144,7 @@ void assemble_tire_forces(
         },
     };
     (void)ctx;
+    ElementWrenchSink* const sink = active_element_wrench_sink();
 
     for (std::size_t i = 0; i < model.tires.size(); ++i) {
         const Tire& t = model.tires[i];
@@ -333,10 +335,17 @@ void assemble_tire_forces(
             const Vec3 contact_local = transpose(body_rotation) * (
                 contact_point - state.r[t.body]
             );
+            // One row per tire: the contact wrench the tire puts on its own
+            // body.  A tire that applies nothing keeps its row unset.
+            if (sink != nullptr) {
+                sink->open(kElementWrenchTire, i, 0, t.body, -1, t.body,
+                           contact_point.x, contact_point.y, contact_point.z);
+            }
             add_force_on_body(
                 ctx.buffers.force, ctx.buffers.torque, model, state, t.body,
                 contact_local,
-                normal * fn
+                normal * fn,
+                sink
             );
             if (ctx.in.record_output) {
                 ctx.buffers.tire_output[output_offset+0] = 1.0;
