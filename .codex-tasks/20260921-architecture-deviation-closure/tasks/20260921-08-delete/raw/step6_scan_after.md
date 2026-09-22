@@ -67,13 +67,19 @@ uv run python .codex-tasks/20260921-architecture-deviation-closure/tasks/2026092
 | `src/.../vehicle/service.py:30` | A2 保留：`compute_static_wheel_loads` 的唯一生产调用者 |
 | `tests/physics/test_vehicle_physics.py:5` | A2 保留：该文件按任务书保留不动 |
 
-## 5. 唯一非保留项残留：`pac2002_scope` 文本引用（误报）
+## 5. 残留的第 31 条：README 归档说明中的 `pac2002_scope.py`（主代理裁决后保留）
 
-`packages/suspension_multibody/README.md:59 [text_reference/pac2002_scope]`。
+`packages/suspension_multibody/README.md:47 [text_reference/pac2002_scope.py]`。
 
-该处文本是 `` `schema/pac2002_scope` ``（活模块，06 之后的归属），
-扫描器 `legacy_reference_scan.py:107-109` 对裸词 `pac2002_scope` 的例外规则无法与已退役的顶层模块区分。
-详见 `raw/step3_deletion_record.md` 第 5 节；本步未改扫描器、未加豁免、未为通过而复写文档。
+**主代理裁决（2026-09-22）**：这不是误报，而是**真实且应当保留**的一条——该行是 08 新增的
+迁移说明原文（「顶层 `pac2002_scope.py`（06 迁至 `schema/pac2002_scope.py` 等）」）。
+它是对「旧归属 → 新归属」的**归档描述**，与 08 SPEC 目标 5「迁移说明」的要求一致，
+删掉反而丢文档价值，因此**不为通过扫描而复写文档**。该条计入「保留项」而非「残留违规」。
+
+**扫描器同步修正（主代理）**：初版对裸词 `pac2002_scope` 的例外规则会把活模块
+`schema/pac2002_scope` 也匹配进去，产生真正的误报；现改为只匹配**包限定形式**或
+**带 `.py` 扩展名的旧文件形态**（见 `legacy_reference_scan.py` 的 `TEXT_REFERENCE` 注释）。
+修正前后：31 → 30 条（去掉误报）。
 
 ## 6. 打包内容检查
 
@@ -95,9 +101,23 @@ uv build --package suspension-kernel && uv build --package suspension-multibody
 `analysis/{__init__,vehicle_physics}.py`（A2）、`core/{__init__,constraints,rigid_body,spatial}.py`（A1）
 与 `elements/{__init__,assembly,base,elastic}.py`（A1）。
 
-元数据（METADATA）：`suspension-kernel` 描述为 0 命中；`suspension-multibody` 的
-`Requires-Dist` 无旧包依赖，**不含任何已删模块的点分导入路径**（`core.rank`、`model.*`、`metrics.*` 均无）。
-需注意：其 `Description` 是 README 的原文，而本步新增的「Python 模块结构（08 之后）」一节在叙述里
-**按名字列出了已删除的目录**（`model/`、`metrics/`、`core/rank.py`、`core/reactions.py`、`pac2002_scope.py`）。
-这是迁移说明的叙述文本，不是模块归属；若验收口径要求元数据正文完全不出现这些词，需要把该节从 README 移出
-（属需主代理裁决的口径问题）。
+`Requires-Dist` 无旧包依赖，**不含任何已删模块的点分导入路径**（`core.rank`、`model.*`、
+`metrics.*` 均无）。其 `Description` 是 README 原文，其中迁移说明按名字列出了已删目录。
+**主代理裁决**：验收 7 的判据是「文件清单与元数据不含旧模块**归属**」，按名字列举迁移对照
+不构成旧归属；改建 README 反而丢掉 SPEC 目标 5 要求的迁移说明，故不改。
+
+## 7. 主代理对三处上报冲突的裁决（2026-09-22）
+
+1. **`--check --final` 退 1 是 A1 下的正确结果，非缺陷**。其 finding 只有两类：
+   `legacy package still present`（`analysis`/`core`/`elements`，A1/A2 保留）与 test-scope 的
+   `legacy_module_import`（`tests/{core,elements,model,physics}` 对保留包的覆盖测试）。且门禁
+   自身测试 `tests/architecture/test_legacy_surface_gate.py:114-119` **断言 final 必须在保留
+   旧包时退 1**——即「`--final` 退 0」与「architecture 全绿」在 A1 下不可兼得。08 验收 3 与
+   09 G2 的判据均为「**已无生产调用者**的部分不存在」，不是「所有旧包缺席」。故**不放宽门禁、
+   不改测试**，final 保持退 1 并在此登记。
+2. **`core/constraints.py` 的 `residual`/`jacobian` 保留是对的**。其消费者是
+   `ConstraintSystem.residual/jacobian`（同文件），只删模块级函数会立即 `NameError`（那才是
+   半删）。fixer 按「保留并说明理由」处置，主代理确认。
+3. **`ty check .` 退 1 已由主代理修复**：唯一诊断来自本 Epic 目录下 05 的证据探针按设计引用
+   已退役的 `analysis.benchmarks`。该文件是归档 provenance、非受检面，故在 `pyproject.toml`
+   的 `[tool.ty.src] exclude` 增加 `.codex-tasks/`（附理由注释）。修复后 `ty check .` 退出 0。
