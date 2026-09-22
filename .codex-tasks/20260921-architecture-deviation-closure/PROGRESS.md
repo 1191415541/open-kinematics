@@ -2,12 +2,11 @@
 
 ## 恢复信息
 
-任务：消除 C++ 模块职责与 Python report/旧模块两处偏差。
 形态：epic。
-进度：4/9 子任务 DONE（01 8/8、02 7/7、03 7/7、04 7/7）；子任务 05 实施中（3/8 步：步骤 1 通道对照表、步骤 2 凝聚等价性登记、步骤 3 默认关闭的 `element_wrench` 可选通道已 DONE 并入库 `ecbca0f`）；05 步骤 4-8 与 06-09 待实施。
-当前：C++ 侧已完成——01 冻结基线与工具链；02 建立分层与删除门禁；03 拆分基础层（mb_config/mb_numeric/mb_dual/mb_linear/mb_joint/mb_input/mb_solve_dynamic/mb_solve_static）；04 拆解 mb_vehicle（mb_assembly/mb_element/mb_force/mb_tire 落地，模块环与 mutual 边清零，`--strict --final` 全绿）。Python 侧进行中——05 已完成通道对照、凝聚等价性登记与可选 native 力旋量通道；静轮荷归属收口、decoder 接线、通道验收、差异登记待完成；`report` 建立、作者层归位、旧模块删除、终局验收待 06-09。
-文件：本目录 EPIC.md、SUBTASKS.csv、VALIDATION.md；当前子任务目录 tasks/20260921-05-native-facts/（步骤 1 对照表已交付于其 raw/）。
-下一步：执行子任务 05 剩余步骤 —— 步骤 4 静轮荷归属收口与保留登记（A2 修订：不迁 native）、步骤 5 decoder 接线、步骤 6 逐通道容差验收与凝聚实体对照、步骤 7 力律差异登记、步骤 8 汇总；每步跑 SPEC 验证协议全集与字节级数值门，且不得重录基线（A1/A2 修订口径见 EPIC 修订记录）。
+进度：5/9 子任务 DONE（01 8/8、02 7/7、03 7/7、04 7/7、05 8/8）；06-09 待实施。
+当前：C++ 侧已完成——01 冻结基线与工具链；02 建立分层与删除门禁；03 拆分基础层（mb_config/mb_numeric/mb_dual/mb_linear/mb_joint/mb_input/mb_solve_dynamic/mb_solve_static）；04 拆解 mb_vehicle（mb_assembly/mb_element/mb_force/mb_tire 落地，模块环与 mutual 边清零，`--strict --final` 全绿）。Python 侧进行中——05 已完成（通道对照、凝聚等价性登记、可选 native 力旋量通道 + 只读解码面、静轮荷保留登记、逐通道验收、力律差异阻断、汇总）；`report` 建立与作者层归位待 06-07，旧模块删除与终局验收待 08-09。
+文件：本目录 EPIC.md、SUBTASKS.csv、VALIDATION.md；当前子任务目录 tasks/20260921-06-authoring/。
+下一步：执行子任务 06 —— 作者层归位（preparation/assembly、geometry、signals、pac2002_scope 能力读取）与第 6 项按 A1 处置（保留 + 待删除登记，依据 05 步骤 7 实测阻断证据）；每步跑 SPEC 验证协议全集与字节级数值门，不得重录基线（A1/A2 口径见 EPIC 修订记录）。
 
 ## 证据
 
@@ -110,3 +109,18 @@
 - **已知未闭合项（须显式登记，不判达成）**：
   1. 用户此前第二问所选「Python 不再凝聚、weld 送 native 作 fixed 约束」的**手段**与 A1「不重录基线、字节门保持绿」冲突（不凝聚使 native body 集合 22→23，整车门字节 sha256 失败）。本次以 A1 为约束上限，只采纳目标（native fixed 关节作契约等价实现 + 等价性测试），生产路径暂留 Python 作者层。解除条件：单独裁决数值门策略（是否允许重录车辆基线）。
   2. **（A2 新增）** 静轮荷最小范数辅助求解保留在 Python：native 无静力求解 ABI 入口，且 ABI 导出面冻结，故无法迁入。归属已收口到 `results` 映射层并登记保留理由；解除条件同 A2 修订记录。
+
+## 2026-09-22 子任务 05 完成
+
+- **8/8 步骤 DONE**，提交 `81e4d57`（步骤 4）与 `81e4d57` 后续提交。步骤 1-3 为上一会话产物（步骤 3 入库 `ecbca0f`）。
+- **步骤 4（静轮荷归属收口，A2）**：按裁决保留 Python 最小范数算法本体与 service 调用语义，归属收口于 `VehicleDynamicsResult.static_wheel_loads`；登记 `raw/step4_static_wheel_loads_registration.md`。新增**真判别器**测试 `test_static_wheel_loads_are_the_minimum_norm_solution`：实测平衡矩阵秩 3、零空间维 1（方向 `[1,-1,-1,1]`，`A·v=0` 残差 0）、均匀解 2-范数 7161300 为族内最小；族内其它平衡解满足余额断言却在此失败。
+- **步骤 5（decoder 接线）**：新增 `results/element_wrench.py` 只读事实解码面（13 列契约、类型码 1-7、`ElementWrenchRecord`、`decode_element_wrench`、`element_wrench_block`、`rows_per_element`），接入 `results` 包级导出；新增 7 个测试含两条真实 native 运行。开关开：shape `(2,42,13)`、52 条记录（bushing 32 / external 20）、`contract_version=2`；开关关：无块、空 tuple、`contract_version=1`。**`api.py` 生产取值来源未改**。
+- **步骤 6（逐通道容差验收）**：按 01 冻结的 K/C 容差与两字节级门逐通道核验，五类元件**无一通过等价性验收**；登记 `raw/step6_channel_acceptance.md`。
+- **步骤 7（力律差异登记与阻断切换）**：可复现探针 `raw/step7_law_difference_probe.py` + 输出 `raw/step7_law_difference_probe.log`，实测三类**结构性**差异（非数值噪声；最小差 2.1e-15 与最大差 0.5018 N·m 相差 14 个数量级）：
+  1. **固定体端结构性缺失**：`assembly_primitives.cpp:16,33` 对固定体直接早退，native 收到 `chassis` 的 16 行**全部** all-NaN，而同一样本 Python 有 **8** 条非零 `chassis` 力旋量 → 该端在 native 通路无事实来源。
+  2. **承载端力矩差**：0.1887–0.5018 N·m（相对 0.108%–0.287%）；根因是 Python `moment = pose_a.rotation @ generalized[3:]`（`elastic.py:446-467`）与 native `arm × f`（`assembly_primitives.cpp:12-40`）的构造不同。
+  3. **K 模式无元件事实**：K 模型文档不发 `elements`（`cases/kc_quasi_static/contract.py:118-120`），通道仅 external 行且力/力矩恒为 0。
+- **结论**：**阻断切换**——不把 `api.py` 的元件报告取到 native；不删除 Python 本构与力汇总（删除条件未满足）；不保留第二套生产力律（通道默认关闭且未接线）；未改任何容差、未重录任何基线、未新增 ABI 导出。此结论直接约束 06 第 6 项（按 A1 处置为「保留 + 待删除登记」）。
+- **门禁实测**（本步全集，证据在 `tasks/20260921-05-native-facts/raw/step5_*.log`、`step4_*.log`）：构建 0；动态哈希 26/26 逐位一致（组合哈希 `e7407656…8d48e` 未变）；K/C parity 0；8 family 0；kernel 15；contracts 22；套件 263 passed / 1 xfailed；ruff 0；ty 0。
+- **顺带修复**：既有 ruff I001 违规（`tests/vehicle/test_native_vehicle.py:409` 导入乱序，由本 Epic 步骤 1-2 引入，上一会话遗留）已修；`test_vehicle_physics.py` 新增 docstring 的 D213 已修。
+- **06 可启动**：06 步骤 1 的迁移矩阵已冻结于 `tasks/20260921-06-authoring/raw/step1_migration_matrix.md`（逐符号 file:line + 生产调用者 + 新归属 + 未闭合项）。
