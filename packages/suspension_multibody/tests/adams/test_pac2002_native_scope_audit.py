@@ -18,12 +18,14 @@ from pathlib import Path
 
 import pytest
 
-from suspension_multibody.pac2002_scope import (
+from suspension_multibody.adams.pac2002_evidence import (
     PAC2002_FAMILY_DECLARED_GAP,
     PAC2002_FEATURE_FLAG_DECLARED_GAP,
     PAC2002_NATIVE_IMPLEMENTED_FEATURES,
     PAC2002_NATIVE_NOT_IMPLEMENTED_FEATURES,
     PAC2002_PARAMETER_DECLARED_GAP,
+)
+from suspension_multibody.kernel.capabilities import (
     PAC2002_SUPPORTED_NATIVE_USE_MODES,
     PAC2002_UNSUPPORTED_FEATURE_FAMILIES,
     PAC2002_UNSUPPORTED_NATIVE_FEATURE_FLAGS,
@@ -257,7 +259,7 @@ def test_every_supported_mode_is_gated_or_accounted_for() -> None:
     adding a mode to either list without the other, or claiming a mode with no gate
     and no recorded reason, fails here.
     """
-    from suspension_multibody.pac2002_scope import (
+    from suspension_multibody.adams.pac2002_evidence import (
         PAC2002_ADAMS_GATED_USE_MODES,
         PAC2002_UNGATED_USE_MODE_REASONS,
     )

@@ -1,108 +1,38 @@
-"""Rigid body states and point-level analytic Jacobians."""
+"""
+Rigid body data and the point-Jacobian kernel (the retired half of the module).
+
+``RigidBody`` and ``RigidBodyState`` moved to
+``preparation/assembly/types.py``, which is the live definition: the authoring
+layer builds them, so the retired Python solver modules re-export them from here
+instead of keeping a second copy that could drift.  ``RigidBodyState`` carries
+data and retraction only -- a point Jacobian is part of solving, not part of the
+state, so it is the function below.
+
+``point_jacobian`` and ``body_point_wrench`` stay because the residual/Jacobian
+file and the reaction recovery still call them; 08 deletes this module with the
+rest of ``core``.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 import numpy as np
 
-from .spatial import SE3, Array, _point_jacobian_numba, cross3
+from ..preparation.assembly.types import RigidBody, RigidBodyState
+from .spatial import Array, _point_jacobian_numba, cross3
+
+__all__ = [
+    "RigidBody",
+    "RigidBodyState",
+    "body_point_wrench",
+    "point_jacobian",
+]
 
 
-@dataclass(frozen=True)
-class RigidBody:
-    """Mass properties and initial pose for one rigid body."""
-
-    name: str
-    pose: SE3 = field(default_factory=SE3.identity)
-    mass: float = 0.0
-    inertia: Array = field(default_factory=lambda: np.eye(3))
-    center_of_mass: Array = field(default_factory=lambda: np.zeros(3))
-    fixed: bool = False
-
-    def __post_init__(self) -> None:
-        inertia = np.asarray(self.inertia, dtype=float)
-        center_of_mass = np.asarray(self.center_of_mass, dtype=float)
-        if inertia.shape != (3, 3) or not np.all(np.isfinite(inertia)):
-            raise ValueError("inertia must be a finite 3x3 matrix")
-        if center_of_mass.shape != (3,) or not np.all(np.isfinite(center_of_mass)):
-            raise ValueError("center_of_mass must contain three finite values")
-        if self.mass < 0 or not np.isfinite(self.mass):
-            raise ValueError("mass must be finite and non-negative")
-        object.__setattr__(self, "inertia", inertia.copy())
-        object.__setattr__(self, "center_of_mass", center_of_mass.copy())
-
-    def _with_pose_unchecked(self, pose: SE3) -> RigidBody:
-        """Reuse validated immutable body data for an integrator trial pose."""
-        updated = object.__new__(type(self))
-        object.__setattr__(updated, "name", self.name)
-        object.__setattr__(updated, "pose", pose)
-        object.__setattr__(updated, "mass", self.mass)
-        object.__setattr__(updated, "inertia", self.inertia)
-        object.__setattr__(updated, "center_of_mass", self.center_of_mass)
-        object.__setattr__(updated, "fixed", self.fixed)
-        return updated
-
-
-@dataclass(frozen=True)
-class RigidBodyState:
-    """Immutable collection of body poses with local increment retraction."""
-
-    bodies: dict[str, RigidBody]
-
-    def __post_init__(self) -> None:
-        if len(self.bodies) != len(set(self.bodies)):
-            raise ValueError("body names must be unique")
-
-    def pose(self, body: str) -> SE3:
-        """Return a body's current pose."""
-        try:
-            return self.bodies[body].pose
-        except KeyError as exc:
-            raise KeyError(f"unknown body {body!r}") from exc
-
-    def point_world(self, body: str, point_local: Array) -> Array:
-        """Return a local body point in global coordinates."""
-        return self.pose(body).transform_point(point_local)
-
-    def point_jacobian(self, body: str, point_local: Array) -> Array:
-        """Return point position derivative with respect to a local 6D increment."""
-        rotation = self.pose(body).rotation
-        point = np.asarray(point_local, dtype=float)
-        return _point_jacobian_numba(rotation, float(point[0]), float(point[1]), float(point[2]))
-
-    def retract(self, increments: dict[str, Array]) -> RigidBodyState:
-        """Apply per-body local increments and return a new state."""
-        updated: dict[str, RigidBody] = {}
-        for name, body in self.bodies.items():
-            increment = increments.get(name)
-            if increment is None or body.fixed:
-                updated[name] = body
-            else:
-                updated[name] = RigidBody(
-                    name=body.name,
-                    pose=body.pose.retract(increment),
-                    mass=body.mass,
-                    inertia=body.inertia,
-                    center_of_mass=body.center_of_mass,
-                    fixed=body.fixed,
-                )
-        return RigidBodyState(updated)
-
-    def retract_unchecked(self, increments: dict[str, Array]) -> RigidBodyState:
-        """Apply trusted trial increments without rebuilding mass metadata."""
-        if not increments:
-            return self
-        updated: dict[str, RigidBody] = {}
-        for name, body in self.bodies.items():
-            increment = increments.get(name)
-            if increment is None or body.fixed:
-                updated[name] = body
-            else:
-                updated[name] = body._with_pose_unchecked(
-                    body.pose._retract_unchecked(increment)
-                )
-        return RigidBodyState(updated)
+def point_jacobian(state: RigidBodyState, body: str, point_local: Array) -> Array:
+    """Return point position derivative with respect to a local 6D increment."""
+    rotation = state.pose(body).rotation
+    point = np.asarray(point_local, dtype=float)
+    return _point_jacobian_numba(rotation, float(point[0]), float(point[1]), float(point[2]))
 
 
 def body_point_wrench(

@@ -188,7 +188,7 @@ def _c_path_records(assembly, *, paths: tuple[str, ...]) -> list[dict[str, objec
         quaternion_multiply,
         wheel_center_world,
     )
-    from suspension_multibody.core import quaternion_to_rotation_vector
+    from suspension_multibody.preparation.geometry import quaternion_to_rotation_vector
     from suspension_multibody.simulation import SimulationRequest, run_request
 
     levels = 11
@@ -294,7 +294,7 @@ def check_kc_quasi_static() -> tuple[bool, str]:
     """Compare the contract-path K grid and C load paths with the snapshot."""
     from suspension_multibody.analysis.benchmarks import benchmark_model
     from suspension_multibody.cases.kc_quasi_static import AXIS_ORDER
-    from suspension_multibody.model import build_front_axle
+    from suspension_multibody.preparation.assembly import build_front_axle
 
     # Loaded by path rather than imported: the fixture is a test module, and a
     # module reached through `sys.path` is neither resolvable by a type checker
@@ -918,7 +918,7 @@ def check_vehicle_kc() -> tuple[bool, str]:
         vehicle_kc_case_document,
         vehicle_kc_model_document,
     )
-    from suspension_multibody.core.spatial import quaternion_to_matrix
+    from suspension_multibody.preparation.geometry import quaternion_to_matrix
     from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
     from suspension_multibody.simulation import SimulationRequest, run_request
 

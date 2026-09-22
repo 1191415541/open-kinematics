@@ -59,7 +59,7 @@ def _native_workloads() -> dict[str, Callable[[], int]]:
         DEFAULT_SETTINGS,
         DEFAULT_TIMES,
     )
-    from suspension_multibody.model import build_front_axle
+    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.simulation import SimulationRequest, run_request
     fixture = PACKAGE_ROOT / "tests/cases/kc_quasi_static/kc_fixtures.py"
     spec = importlib.util.spec_from_file_location("kc_perf_fixture", fixture)

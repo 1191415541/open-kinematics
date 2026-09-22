@@ -22,10 +22,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..axle_dynamics.schema import AxleSolverSettings
-from ..model import FrontAxleAssembly, build_front_axle
 from ..schema import FrontAxleModel
 from ..simulation.preparation import PreparedSimulation
 from ..simulation.request import SimulationRequest
+from .assembly import FrontAxleAssembly, build_front_axle
 
 ASSEMBLY = "axle"
 FAMILY = "kc_quasi_static"

@@ -34,7 +34,27 @@ from ..axle_dynamics.schema import (
     AxleSpringDamper,
     AxleTire,
 )
-from ..core import (
+from ..elements import (
+    AntiRollBarElement,
+    BumpStopElement,
+    BushingElement,
+    LinearSpringElement,
+    StaticDamperElement,
+    VerticalTireElement,
+)
+from ..schema import (
+    DynamicSolverSettings,
+    RoadSurfaceSpec,
+    SteeringSystemSpec,
+    UnitSystem,
+    VehicleDynamicCase,
+    VehicleModel,
+    WheelSpec,
+)
+from ..simulation.preparation import PreparedSimulation
+from ..simulation.request import SimulationRequest
+from .assembly import VehicleAssembly, build_vehicle
+from .assembly.types import (
     BallJoint,
     ConstantVelocityJoint,
     CoordinateDrive,
@@ -47,26 +67,6 @@ from ..core import (
     UniversalJoint,
     WeldJoint,
 )
-from ..elements import (
-    AntiRollBarElement,
-    BumpStopElement,
-    BushingElement,
-    LinearSpringElement,
-    StaticDamperElement,
-    VerticalTireElement,
-)
-from ..model import VehicleAssembly, build_vehicle
-from ..schema import (
-    DynamicSolverSettings,
-    RoadSurfaceSpec,
-    SteeringSystemSpec,
-    UnitSystem,
-    VehicleDynamicCase,
-    VehicleModel,
-    WheelSpec,
-)
-from ..simulation.preparation import PreparedSimulation
-from ..simulation.request import SimulationRequest
 
 _WHEEL_NAMES = ("front_left", "front_right", "rear_left", "rear_right")
 _ROAD_KIND = {

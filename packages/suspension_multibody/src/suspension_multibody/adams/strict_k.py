@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ..cases.kc_quasi_static.contract import case_document, model_document
-from ..model import build_front_axle
+from ..preparation.assembly import build_front_axle
 from ..schema import FrontAxleModel, MassSpec
 from ..simulation import SimulationRequest, run_request
 from .adapter import SmokeResult, Tolerance

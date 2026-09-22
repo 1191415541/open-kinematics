@@ -30,8 +30,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...core.constraints import PrismaticJoint, RevoluteJoint
 from ...kernel.solver import solver_settings_document as _solver_settings_document
+from ...preparation.assembly.types import PrismaticJoint, RevoluteJoint
 from .convert import (
     NativeKcError,
     _local_axis,

@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 from suspension_multibody.axle_dynamics.schema import PAC2002_PARAMETER_DEFAULTS
-from suspension_multibody.pac2002_scope import (
+from suspension_multibody.kernel.capabilities import (
     PAC2002_SUPPORTED_NATIVE_USE_MODES,
     pac2002_unsupported_native_reasons,
 )

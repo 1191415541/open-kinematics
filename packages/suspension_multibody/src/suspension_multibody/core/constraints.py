@@ -1,9 +1,24 @@
-"""Ideal joint and drive constraints with analytic local Jacobians."""
+"""
+Joint residuals and analytic local Jacobians.
+
+The joint declarations themselves are data and live in
+``preparation.assembly.types``: a declaration carries its bodies, its points and
+its axes, and nothing else.  What is left here is the *solving* half -- the
+residual and Jacobian kernels over those declarations -- together with
+``ConstraintSystem``, which stacks them into one residual vector and one
+matrix.
+
+This module is not on the live path: production authors a declaration and the
+native kernel assembles and solves it.  The only remaining callers are
+``core.reactions`` -- which has no production caller of its own, only
+``tests/core/test_reactions.py`` -- and ``tests/core/test_constraints.py``.
+The kernels move to the native ``mb_joint``/``mb_solve_*`` modules as part of
+the epic; this file is deleted with the rest of ``core`` in 08.
+"""
 
 from __future__ import annotations
 
 import math
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -16,7 +31,21 @@ except ImportError:  # pragma: no cover
             return func
         return _decorator
 
-from .rigid_body import RigidBodyState
+from ..preparation.assembly.types import (
+    BallJoint,
+    ConstantVelocityJoint,
+    Constraint,
+    CoordinateDrive,
+    CylindricalJoint,
+    DistanceConstraint,
+    InPlaneJoint,
+    PointCoincidence,
+    PrismaticJoint,
+    RevoluteJoint,
+    UniversalJoint,
+    WeldJoint,
+)
+from .rigid_body import RigidBodyState, point_jacobian
 from .spatial import (
     Array,
     cross3,
@@ -25,6 +54,27 @@ from .spatial import (
     quaternion_to_rotation_vector,
     skew,
 )
+
+#: The declaration classes are re-exported for the retired callers that still
+#: import them from here (``core/__init__``); the declarations themselves live
+#: in ``preparation.assembly.types``.
+__all__ = [
+    "BallJoint",
+    "ConstantVelocityJoint",
+    "Constraint",
+    "ConstraintSystem",
+    "CoordinateDrive",
+    "CylindricalJoint",
+    "DistanceConstraint",
+    "InPlaneJoint",
+    "PointCoincidence",
+    "PrismaticJoint",
+    "RevoluteJoint",
+    "UniversalJoint",
+    "WeldJoint",
+    "jacobian",
+    "residual",
+]
 
 
 @_njit(nogil=True, fastmath=True)
@@ -109,391 +159,94 @@ def _axis_frame_with_jacobian(
     return axis, np.vstack((e1, e2)), d_axis, d_e1, d_e2
 
 
-class Constraint(ABC):
-    """Residual constraint interface."""
-
-    name: str
-
-    @abstractmethod
-    def residual(self, state: RigidBodyState) -> Array:
-        """Return a residual vector."""
-
-    @abstractmethod
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        """Return body-local Jacobian blocks keyed by body name."""
+# --------------------------------------------------------------------------- #
+# residual
+# --------------------------------------------------------------------------- #
 
 
-@dataclass(frozen=True)
-class PointCoincidence(Constraint):
-    """Three position constraints between two body points."""
-
-    body_a: str
-    point_a: Array
-    body_b: str
-    point_b: Array
-    name: str = "point_coincidence"
-
-    def residual(self, state: RigidBodyState) -> Array:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
+def residual(constraint: Constraint, state: RigidBodyState) -> Array:
+    """Return the residual vector of one joint declaration."""
+    if isinstance(constraint, PointCoincidence):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
         return _point_coincidence_residual_numba(
-            pose_a.translation, pose_a.rotation, np.asarray(self.point_a, dtype=float),
-            pose_b.translation, pose_b.rotation, np.asarray(self.point_b, dtype=float),
+            pose_a.translation, pose_a.rotation, np.asarray(constraint.point_a, dtype=float),
+            pose_b.translation, pose_b.rotation, np.asarray(constraint.point_b, dtype=float),
         )
-
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        return {
-            self.body_a: state.point_jacobian(self.body_a, self.point_a),
-            self.body_b: -state.point_jacobian(self.body_b, self.point_b),
-        }
-
-
-@dataclass(frozen=True)
-class BallJoint(PointCoincidence):
-    """Ideal spherical joint."""
-
-    name: str = "ball_joint"
-
-
-@dataclass(frozen=True)
-class WeldJoint(Constraint):
-    """Six-constraint rigid connection that preserves relative pose."""
-
-    body_a: str
-    point_a: Array
-    body_b: str
-    point_b: Array
-    name: str = "weld_joint"
-
-    def residual(self, state: RigidBodyState) -> Array:
-        point = state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
+    if isinstance(constraint, WeldJoint):
+        point = state.point_world(constraint.body_a, constraint.point_a) - state.point_world(
+            constraint.body_b, constraint.point_b
         )
         relative = quaternion_multiply(
-            quaternion_conjugate(state.pose(self.body_a).quaternion),
-            state.pose(self.body_b).quaternion,
+            quaternion_conjugate(state.pose(constraint.body_a).quaternion),
+            state.pose(constraint.body_b).quaternion,
         )
         return np.concatenate((point, quaternion_to_rotation_vector(relative)))
-
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
-        relative_rotation = pose_a.rotation.T @ pose_b.rotation
-        rotation_a = np.hstack((np.zeros((3, 3)), -np.eye(3)))
-        rotation_b = np.hstack((np.zeros((3, 3)), relative_rotation))
-        return {
-            self.body_a: np.vstack((state.point_jacobian(self.body_a, self.point_a), rotation_a)),
-            self.body_b: np.vstack((-state.point_jacobian(self.body_b, self.point_b), rotation_b)),
-        }
-
-
-@dataclass(frozen=True)
-class DistanceConstraint(Constraint):
-    """One scalar fixed-distance constraint."""
-
-    body_a: str
-    point_a: Array
-    body_b: str
-    point_b: Array
-    distance: float
-    name: str = "distance"
-
-    def residual(self, state: RigidBodyState) -> Array:
-        delta = state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
+    if isinstance(constraint, DistanceConstraint):
+        delta = state.point_world(constraint.body_a, constraint.point_a) - state.point_world(
+            constraint.body_b, constraint.point_b
         )
-        return np.array([np.linalg.norm(delta) - self.distance])
-
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        delta = state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
+        return np.array([np.linalg.norm(delta) - constraint.distance])
+    if isinstance(constraint, RevoluteJoint):
+        point = state.point_world(constraint.body_a, constraint.point_a) - state.point_world(
+            constraint.body_b, constraint.point_b
         )
-        norm = float(np.linalg.norm(delta))
-        if norm < 1e-12:
-            raise ValueError("distance constraint is singular at coincident points")
-        direction = delta / norm
-        return {
-            self.body_a: direction[None, :]
-            @ state.point_jacobian(self.body_a, self.point_a),
-            self.body_b: -direction[None, :]
-            @ state.point_jacobian(self.body_b, self.point_b),
-        }
-
-
-@dataclass(frozen=True)
-class RevoluteJoint(Constraint):
-    """Five-constraint ideal revolute joint."""
-
-    body_a: str
-    point_a: Array
-    axis_a: Array
-    body_b: str
-    point_b: Array
-    axis_b: Array
-    name: str = "revolute_joint"
-
-    def residual(self, state: RigidBodyState) -> Array:
-        point = state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
-        )
-        axis_a = state.pose(self.body_a).rotation @ self.axis_a
-        axis_b = state.pose(self.body_b).rotation @ self.axis_b
+        axis_a = state.pose(constraint.body_a).rotation @ constraint.axis_a
+        axis_b = state.pose(constraint.body_b).rotation @ constraint.axis_b
         axis_a = _normalize3(axis_a)
         axis_b = _normalize3(axis_b)
         basis = _basis_perpendicular(axis_a)
         return np.concatenate((point, basis @ cross3(axis_a, axis_b)))
-
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
-        axis_a = pose_a.rotation @ self.axis_a
-        axis_b = pose_b.rotation @ self.axis_b
-        axis_a = _normalize3(axis_a)
-        axis_b = _normalize3(axis_b)
-        basis = _basis_perpendicular(axis_a)
-        point_a_jac = state.point_jacobian(self.body_a, self.point_a)
-        point_b_jac = state.point_jacobian(self.body_b, self.point_b)
-        d_axis_a = np.hstack((np.zeros((3, 3)), -pose_a.rotation @ skew(self.axis_a)))
-        d_axis_b = np.hstack((np.zeros((3, 3)), -pose_b.rotation @ skew(self.axis_b)))
-        d_cross_a = -skew(axis_b) @ d_axis_a
-        d_cross_b = skew(axis_a) @ d_axis_b
-        return {
-            self.body_a: np.vstack((point_a_jac, basis @ d_cross_a)),
-            self.body_b: np.vstack((-point_b_jac, basis @ d_cross_b)),
-        }
-
-
-@dataclass(frozen=True)
-class UniversalJoint(Constraint):
-    """Four-constraint Hooke/universal joint with coincident centers."""
-
-    body_a: str
-    point_a: Array
-    axis_a: Array
-    body_b: str
-    point_b: Array
-    axis_b: Array
-    name: str = "universal_joint"
-
-    def residual(self, state: RigidBodyState) -> Array:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
-        point = state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
+    if isinstance(constraint, UniversalJoint):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
+        point = state.point_world(constraint.body_a, constraint.point_a) - state.point_world(
+            constraint.body_b, constraint.point_b
         )
-        axis_a = _normalize3(pose_a.rotation @ self.axis_a)
-        axis_b = _normalize3(pose_b.rotation @ self.axis_b)
+        axis_a = _normalize3(pose_a.rotation @ constraint.axis_a)
+        axis_b = _normalize3(pose_b.rotation @ constraint.axis_b)
         return np.concatenate((point, [float(axis_a @ axis_b)]))
-
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
-        axis_a, _, d_axis_a, _, _ = _axis_frame_with_jacobian(
-            pose_a.rotation, self.axis_a
+    if isinstance(constraint, ConstantVelocityJoint):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
+        point = state.point_world(constraint.body_a, constraint.point_a) - state.point_world(
+            constraint.body_b, constraint.point_b
         )
-        axis_b, _, d_axis_b, _, _ = _axis_frame_with_jacobian(
-            pose_b.rotation, self.axis_b
-        )
-        return {
-            self.body_a: np.vstack(
-                (
-                    state.point_jacobian(self.body_a, self.point_a),
-                    (axis_b @ d_axis_a)[None, :],
-                )
-            ),
-            self.body_b: np.vstack(
-                (
-                    -state.point_jacobian(self.body_b, self.point_b),
-                    (axis_a @ d_axis_b)[None, :],
-                )
-            ),
-        }
-
-
-@dataclass(frozen=True)
-class ConstantVelocityJoint(Constraint):
-    """按 Adams 定义实现的四约束 CONVEL 关节."""
-
-    body_a: str
-    point_a: Array
-    axis_a: Array
-    axis_a_secondary: Array
-    body_b: str
-    point_b: Array
-    axis_b: Array
-    axis_b_secondary: Array
-    name: str = "constant_velocity_joint"
-    angle_target: float = 0.0
-
-    def residual(self, state: RigidBodyState) -> Array:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
-        point = state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
-        )
-        x_a = _normalize3(pose_a.rotation @ self.axis_a)
-        y_a = _normalize3(pose_a.rotation @ self.axis_a_secondary)
-        y_b = _normalize3(pose_b.rotation @ self.axis_b)
-        x_b = _normalize3(pose_b.rotation @ self.axis_b_secondary)
+        x_a = _normalize3(pose_a.rotation @ constraint.axis_a)
+        y_a = _normalize3(pose_a.rotation @ constraint.axis_a_secondary)
+        y_b = _normalize3(pose_b.rotation @ constraint.axis_b)
+        x_b = _normalize3(pose_b.rotation @ constraint.axis_b_secondary)
         # 相位匹配需要两组交叉轴；只保留第一项会退化成普通万向约束。
-        angle = float(x_a @ y_b + y_a @ x_b) - self.angle_target
+        angle = float(x_a @ y_b + y_a @ x_b) - constraint.angle_target
         return np.concatenate((point, [angle]))
-
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
-        x_a, _, d_x_a, _, _ = _axis_frame_with_jacobian(
-            pose_a.rotation, self.axis_a
-        )
-        y_a, _, d_y_a, _, _ = _axis_frame_with_jacobian(
-            pose_a.rotation, self.axis_a_secondary
-        )
-        y_b, _, d_y_b, _, _ = _axis_frame_with_jacobian(
-            pose_b.rotation, self.axis_b
-        )
-        x_b, _, d_x_b, _, _ = _axis_frame_with_jacobian(
-            pose_b.rotation, self.axis_b_secondary
-        )
-        scalar_a = y_b @ d_x_a + x_b @ d_y_a
-        scalar_b = x_a @ d_y_b + y_a @ d_x_b
-        return {
-            self.body_a: np.vstack(
-                (
-                    state.point_jacobian(self.body_a, self.point_a),
-                    scalar_a[None, :],
-                )
-            ),
-            self.body_b: np.vstack(
-                (
-                    -state.point_jacobian(self.body_b, self.point_b),
-                    scalar_b[None, :],
-                )
-            ),
-        }
-
-
-@dataclass(frozen=True)
-class CylindricalJoint(Constraint):
-    """Four-constraint cylindrical joint allowing axial slide and spin."""
-
-    body_a: str
-    point_a: Array
-    axis_a: Array
-    body_b: str
-    point_b: Array
-    axis_b: Array
-    name: str = "cylindrical_joint"
-
-    def residual(self, state: RigidBodyState) -> Array:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
-        point = state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
+    if isinstance(constraint, CylindricalJoint):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
+        point = state.point_world(constraint.body_a, constraint.point_a) - state.point_world(
+            constraint.body_b, constraint.point_b
         )
         axis_a, basis, _, _, _ = _axis_frame_with_jacobian(
-            pose_a.rotation, self.axis_a
+            pose_a.rotation, constraint.axis_a
         )
         del axis_a
-        axis_b = _normalize3(pose_b.rotation @ self.axis_b)
+        axis_b = _normalize3(pose_b.rotation @ constraint.axis_b)
         return np.concatenate((basis @ point, basis @ axis_b))
-
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
-        axis_a, basis, _, d_e1, d_e2 = _axis_frame_with_jacobian(
-            pose_a.rotation, self.axis_a
+    if isinstance(constraint, InPlaneJoint):
+        pose_a = state.pose(constraint.body_a)
+        point = state.point_world(constraint.body_a, constraint.point_a) - state.point_world(
+            constraint.body_b, constraint.point_b
         )
-        axis_b = _normalize3(pose_b.rotation @ self.axis_b)
-        _, _, d_axis_b, _, _ = _axis_frame_with_jacobian(
-            pose_b.rotation, self.axis_b
-        )
-        point = state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
-        )
-        point_a_jac = state.point_jacobian(self.body_a, self.point_a)
-        point_b_jac = state.point_jacobian(self.body_b, self.point_b)
-        e1, e2 = basis
-        return {
-            self.body_a: np.vstack(
-                (
-                    e1 @ point_a_jac + (point @ d_e1)[None, :],
-                    e2 @ point_a_jac + (point @ d_e2)[None, :],
-                    (axis_b @ d_e1)[None, :],
-                    (axis_b @ d_e2)[None, :],
-                )
-            ),
-            self.body_b: np.vstack(
-                (
-                    -(e1 @ point_b_jac)[None, :],
-                    -(e2 @ point_b_jac)[None, :],
-                    (e1 @ d_axis_b)[None, :],
-                    (e2 @ d_axis_b)[None, :],
-                )
-            ),
-        }
-
-
-@dataclass(frozen=True)
-class InPlaneJoint(Constraint):
-    """One-constraint joint keeping body-B's point in body-A's plane."""
-
-    body_a: str
-    point_a: Array
-    axis_a: Array
-    body_b: str
-    point_b: Array
-    name: str = "inplane_joint"
-
-    def residual(self, state: RigidBodyState) -> Array:
-        pose_a = state.pose(self.body_a)
-        point = state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
-        )
-        axis_a = _normalize3(pose_a.rotation @ self.axis_a)
+        axis_a = _normalize3(pose_a.rotation @ constraint.axis_a)
         return np.array([float(point @ axis_a)])
-
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        pose_a = state.pose(self.body_a)
-        point = state.point_world(self.body_a, self.point_a) - state.point_world(
-            self.body_b, self.point_b
-        )
-        axis_a = _normalize3(pose_a.rotation @ self.axis_a)
-        _, _, d_axis_a, _, _ = _axis_frame_with_jacobian(
-            pose_a.rotation, self.axis_a
-        )
-        point_a_jac = state.point_jacobian(self.body_a, self.point_a)
-        point_b_jac = state.point_jacobian(self.body_b, self.point_b)
-        return {
-            self.body_a: np.vstack(
-                (
-                    (axis_a @ point_a_jac + (point @ d_axis_a)[None, :]),
-                )
-            ),
-            self.body_b: -(axis_a @ point_b_jac)[None, :],
-        }
-
-
-@dataclass(frozen=True)
-class PrismaticJoint(Constraint):
-    """Five-constraint ideal prismatic joint along a body-A axis."""
-
-    body_a: str
-    point_a: Array
-    axis_a: Array
-    body_b: str
-    point_b: Array
-    axis_b: Array
-    name: str = "prismatic_joint"
-
-    def residual(self, state: RigidBodyState) -> Array:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
-        axis_a = pose_a.rotation @ self.axis_a
-        axis_b = pose_b.rotation @ self.axis_b
+    if isinstance(constraint, PrismaticJoint):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
+        axis_a = pose_a.rotation @ constraint.axis_a
+        axis_b = pose_b.rotation @ constraint.axis_b
         axis_a = _normalize3(axis_a)
         axis_b = _normalize3(axis_b)
-        displacement = state.point_world(self.body_b, self.point_b) - state.point_world(
-            self.body_a, self.point_a
+        displacement = state.point_world(constraint.body_b, constraint.point_b) - state.point_world(
+            constraint.body_a, constraint.point_a
         )
         relative_quaternion = quaternion_multiply(
             quaternion_conjugate(pose_a.quaternion), pose_b.quaternion
@@ -509,32 +262,204 @@ class PrismaticJoint(Constraint):
                 [axis_a @ relative_vector],
             )
         )
+    if isinstance(constraint, CoordinateDrive):
+        axis = _normalize3(constraint.axis)
+        return np.array(
+            [axis @ state.point_world(constraint.body, constraint.point) - constraint.target]
+        )
+    raise TypeError(f"no residual for constraint {constraint!r}")
 
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        pose_a = state.pose(self.body_a)
-        pose_b = state.pose(self.body_b)
-        axis_a = pose_a.rotation @ self.axis_a
-        axis_b = pose_b.rotation @ self.axis_b
+
+# --------------------------------------------------------------------------- #
+# Jacobian
+# --------------------------------------------------------------------------- #
+
+
+def jacobian(constraint: Constraint, state: RigidBodyState) -> dict[str, Array]:
+    """Return body-local Jacobian blocks of one joint declaration."""
+    if isinstance(constraint, PointCoincidence):
+        return {
+            constraint.body_a: point_jacobian(state, constraint.body_a, constraint.point_a),
+            constraint.body_b: -point_jacobian(state, constraint.body_b, constraint.point_b),
+        }
+    if isinstance(constraint, WeldJoint):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
+        relative_rotation = pose_a.rotation.T @ pose_b.rotation
+        rotation_a = np.hstack((np.zeros((3, 3)), -np.eye(3)))
+        rotation_b = np.hstack((np.zeros((3, 3)), relative_rotation))
+        return {
+            constraint.body_a: np.vstack(
+                (point_jacobian(state, constraint.body_a, constraint.point_a), rotation_a)
+            ),
+            constraint.body_b: np.vstack(
+                (-point_jacobian(state, constraint.body_b, constraint.point_b), rotation_b)
+            ),
+        }
+    if isinstance(constraint, DistanceConstraint):
+        delta = state.point_world(constraint.body_a, constraint.point_a) - state.point_world(
+            constraint.body_b, constraint.point_b
+        )
+        norm = float(np.linalg.norm(delta))
+        if norm < 1e-12:
+            raise ValueError("distance constraint is singular at coincident points")
+        direction = delta / norm
+        return {
+            constraint.body_a: direction[None, :]
+            @ point_jacobian(state, constraint.body_a, constraint.point_a),
+            constraint.body_b: -direction[None, :]
+            @ point_jacobian(state, constraint.body_b, constraint.point_b),
+        }
+    if isinstance(constraint, RevoluteJoint):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
+        axis_a = pose_a.rotation @ constraint.axis_a
+        axis_b = pose_b.rotation @ constraint.axis_b
         axis_a = _normalize3(axis_a)
         axis_b = _normalize3(axis_b)
         basis = _basis_perpendicular(axis_a)
-        point_a_jac = state.point_jacobian(self.body_a, self.point_a)
-        point_b_jac = state.point_jacobian(self.body_b, self.point_b)
-        d_axis_a = np.hstack((np.zeros((3, 3)), -pose_a.rotation @ skew(self.axis_a)))
-        d_axis_b = np.hstack((np.zeros((3, 3)), -pose_b.rotation @ skew(self.axis_b)))
+        point_a_jac = point_jacobian(state, constraint.body_a, constraint.point_a)
+        point_b_jac = point_jacobian(state, constraint.body_b, constraint.point_b)
+        d_axis_a = np.hstack((np.zeros((3, 3)), -pose_a.rotation @ skew(constraint.axis_a)))
+        d_axis_b = np.hstack((np.zeros((3, 3)), -pose_b.rotation @ skew(constraint.axis_b)))
+        d_cross_a = -skew(axis_b) @ d_axis_a
+        d_cross_b = skew(axis_a) @ d_axis_b
+        return {
+            constraint.body_a: np.vstack((point_a_jac, basis @ d_cross_a)),
+            constraint.body_b: np.vstack((-point_b_jac, basis @ d_cross_b)),
+        }
+    if isinstance(constraint, UniversalJoint):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
+        axis_a, _, d_axis_a, _, _ = _axis_frame_with_jacobian(
+            pose_a.rotation, constraint.axis_a
+        )
+        axis_b, _, d_axis_b, _, _ = _axis_frame_with_jacobian(
+            pose_b.rotation, constraint.axis_b
+        )
+        return {
+            constraint.body_a: np.vstack(
+                (
+                    point_jacobian(state, constraint.body_a, constraint.point_a),
+                    (axis_b @ d_axis_a)[None, :],
+                )
+            ),
+            constraint.body_b: np.vstack(
+                (
+                    -point_jacobian(state, constraint.body_b, constraint.point_b),
+                    (axis_a @ d_axis_b)[None, :],
+                )
+            ),
+        }
+    if isinstance(constraint, ConstantVelocityJoint):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
+        x_a, _, d_x_a, _, _ = _axis_frame_with_jacobian(
+            pose_a.rotation, constraint.axis_a
+        )
+        y_a, _, d_y_a, _, _ = _axis_frame_with_jacobian(
+            pose_a.rotation, constraint.axis_a_secondary
+        )
+        y_b, _, d_y_b, _, _ = _axis_frame_with_jacobian(
+            pose_b.rotation, constraint.axis_b
+        )
+        x_b, _, d_x_b, _, _ = _axis_frame_with_jacobian(
+            pose_b.rotation, constraint.axis_b_secondary
+        )
+        scalar_a = y_b @ d_x_a + x_b @ d_y_a
+        scalar_b = x_a @ d_y_b + y_a @ d_x_b
+        return {
+            constraint.body_a: np.vstack(
+                (
+                    point_jacobian(state, constraint.body_a, constraint.point_a),
+                    scalar_a[None, :],
+                )
+            ),
+            constraint.body_b: np.vstack(
+                (
+                    -point_jacobian(state, constraint.body_b, constraint.point_b),
+                    scalar_b[None, :],
+                )
+            ),
+        }
+    if isinstance(constraint, CylindricalJoint):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
+        axis_a, basis, _, d_e1, d_e2 = _axis_frame_with_jacobian(
+            pose_a.rotation, constraint.axis_a
+        )
+        axis_b = _normalize3(pose_b.rotation @ constraint.axis_b)
+        _, _, d_axis_b, _, _ = _axis_frame_with_jacobian(
+            pose_b.rotation, constraint.axis_b
+        )
+        point = state.point_world(constraint.body_a, constraint.point_a) - state.point_world(
+            constraint.body_b, constraint.point_b
+        )
+        point_a_jac = point_jacobian(state, constraint.body_a, constraint.point_a)
+        point_b_jac = point_jacobian(state, constraint.body_b, constraint.point_b)
+        e1, e2 = basis
+        return {
+            constraint.body_a: np.vstack(
+                (
+                    e1 @ point_a_jac + (point @ d_e1)[None, :],
+                    e2 @ point_a_jac + (point @ d_e2)[None, :],
+                    (axis_b @ d_e1)[None, :],
+                    (axis_b @ d_e2)[None, :],
+                )
+            ),
+            constraint.body_b: np.vstack(
+                (
+                    -(e1 @ point_b_jac)[None, :],
+                    -(e2 @ point_b_jac)[None, :],
+                    (e1 @ d_axis_b)[None, :],
+                    (e2 @ d_axis_b)[None, :],
+                )
+            ),
+        }
+    if isinstance(constraint, InPlaneJoint):
+        pose_a = state.pose(constraint.body_a)
+        point = state.point_world(constraint.body_a, constraint.point_a) - state.point_world(
+            constraint.body_b, constraint.point_b
+        )
+        axis_a = _normalize3(pose_a.rotation @ constraint.axis_a)
+        _, _, d_axis_a, _, _ = _axis_frame_with_jacobian(
+            pose_a.rotation, constraint.axis_a
+        )
+        point_a_jac = point_jacobian(state, constraint.body_a, constraint.point_a)
+        point_b_jac = point_jacobian(state, constraint.body_b, constraint.point_b)
+        return {
+            constraint.body_a: np.vstack(
+                (
+                    (axis_a @ point_a_jac + (point @ d_axis_a)[None, :]),
+                )
+            ),
+            constraint.body_b: -(axis_a @ point_b_jac)[None, :],
+        }
+    if isinstance(constraint, PrismaticJoint):
+        pose_a = state.pose(constraint.body_a)
+        pose_b = state.pose(constraint.body_b)
+        axis_a = pose_a.rotation @ constraint.axis_a
+        axis_b = pose_b.rotation @ constraint.axis_b
+        axis_a = _normalize3(axis_a)
+        axis_b = _normalize3(axis_b)
+        basis = _basis_perpendicular(axis_a)
+        point_a_jac = point_jacobian(state, constraint.body_a, constraint.point_a)
+        point_b_jac = point_jacobian(state, constraint.body_b, constraint.point_b)
+        d_axis_a = np.hstack((np.zeros((3, 3)), -pose_a.rotation @ skew(constraint.axis_a)))
+        d_axis_b = np.hstack((np.zeros((3, 3)), -pose_b.rotation @ skew(constraint.axis_b)))
         d_cross_a = -skew(axis_b) @ d_axis_a
         d_cross_b = skew(axis_a) @ d_axis_b
         rotation_a = np.hstack((np.zeros((3, 3)), -pose_a.rotation))
         rotation_b = np.hstack((np.zeros((3, 3)), pose_b.rotation))
         return {
-            self.body_a: np.vstack(
+            constraint.body_a: np.vstack(
                 (
                     -basis @ point_a_jac,
                     basis @ d_cross_a,
                     axis_a @ rotation_a,
                 )
             ),
-            self.body_b: np.vstack(
+            constraint.body_b: np.vstack(
                 (
                     basis @ point_b_jac,
                     basis @ d_cross_b,
@@ -542,25 +467,13 @@ class PrismaticJoint(Constraint):
                 )
             ),
         }
-
-
-@dataclass(frozen=True)
-class CoordinateDrive(Constraint):
-    """Scalar point-coordinate displacement drive."""
-
-    body: str
-    point: Array
-    axis: Array
-    target: float
-    name: str = "coordinate_drive"
-
-    def residual(self, state: RigidBodyState) -> Array:
-        axis = _normalize3(self.axis)
-        return np.array([axis @ state.point_world(self.body, self.point) - self.target])
-
-    def jacobian(self, state: RigidBodyState) -> dict[str, Array]:
-        axis = _normalize3(self.axis)
-        return {self.body: axis[None, :] @ state.point_jacobian(self.body, self.point)}
+    if isinstance(constraint, CoordinateDrive):
+        axis = _normalize3(constraint.axis)
+        return {
+            constraint.body: axis[None, :]
+            @ point_jacobian(state, constraint.body, constraint.point)
+        }
+    raise TypeError(f"no Jacobian for constraint {constraint!r}")
 
 
 @dataclass(frozen=True)
@@ -587,7 +500,7 @@ class ConstraintSystem:
         if not self.constraints:
             return np.zeros(0)
         return np.concatenate(
-            [constraint.residual(state) for constraint in self.constraints]
+            [residual(constraint, state) for constraint in self.constraints]
         )
 
     def jacobian(
@@ -598,7 +511,7 @@ class ConstraintSystem:
         )
         body_indices = self._get_body_indices(order)
         n_bodies = len(order)
-        local_blocks = [constraint.jacobian(state) for constraint in self.constraints]
+        local_blocks = [jacobian(constraint, state) for constraint in self.constraints]
         total_rows = 0
         for local in local_blocks:
             first_block = next(iter(local.values()), None)

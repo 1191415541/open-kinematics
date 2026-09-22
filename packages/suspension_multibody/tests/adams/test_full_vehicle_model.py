@@ -44,7 +44,7 @@ from suspension_multibody.adams.full_vehicle_model import (
     build_adams_source_vehicle_model,
     parse_tire_tables,
 )
-from suspension_multibody.pac2002_scope import (
+from suspension_multibody.kernel.capabilities import (
     pac2002_unsupported_native_reasons,
 )
 from suspension_multibody.schema import TimeSignal, TireModelSpec
@@ -148,7 +148,7 @@ def test_deflection_load_curve_alone_is_inside_the_native_scope(
     its own must still fail closed, which the same fixture asserts by adding the
     section and expecting a rejection naming the narrowed gap.
     """
-    from suspension_multibody.pac2002_scope import (
+    from suspension_multibody.kernel.capabilities import (
         pac2002_unsupported_native_reasons,
     )
 
@@ -331,7 +331,7 @@ def test_every_parsed_tire_key_has_a_consumer_or_a_fail_closed_flag(
     """
     from suspension_multibody.adams.full_vehicle_model import _parse_tire
     from suspension_multibody.axle_dynamics.schema import PAC2002_PARAMETER_NAMES
-    from suspension_multibody.pac2002_scope import (
+    from suspension_multibody.kernel.capabilities import (
         PAC2002_MUST_BE_ZERO_COEFFICIENTS,
     )
 

@@ -35,157 +35,40 @@
       "occurrences": 1
     },
     {
-      "path": "scripts/case_parity_check.py",
+      "path": "scripts/kc_native_probe.py",
       "scope": "script",
       "rule": "legacy_module_import",
-      "symbol": "core",
-      "successor": "preparation/assembly/types.py",
-      "owner": "06-authoring (data objects); the residual/Jacobian/reaction solving leaves Python for the native assembly and solve",
+      "symbol": "analysis",
+      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
+      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
+      "occurrences": 1
+    },
+    {
+      "path": "scripts/kc_perf_gate.py",
+      "scope": "script",
+      "rule": "legacy_module_import",
+      "symbol": "analysis",
+      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
+      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
+      "occurrences": 1
+    },
+    {
+      "path": "src/suspension_multibody/adams/reference.py",
+      "scope": "production",
+      "rule": "legacy_module_import",
+      "symbol": "analysis",
+      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
+      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
+      "occurrences": 1
+    },
+    {
+      "path": "src/suspension_multibody/api.py",
+      "scope": "production",
+      "rule": "legacy_module_import",
+      "symbol": "analysis",
+      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
+      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
       "occurrences": 2
-    },
-    {
-      "path": "scripts/case_parity_check.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
-      "occurrences": 1
-    },
-    {
-      "path": "scripts/diagnose_native_pac2002_contact_frame.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
-      "occurrences": 1
-    },
-    {
-      "path": "scripts/kc_native_c_probe.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "core",
-      "successor": "preparation/assembly/types.py",
-      "owner": "06-authoring (data objects); the residual/Jacobian/reaction solving leaves Python for the native assembly and solve",
-      "occurrences": 1
-    },
-    {
-      "path": "scripts/kc_native_c_probe.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
-      "occurrences": 1
-    },
-    {
-      "path": "scripts/kc_native_probe.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
-      "occurrences": 1
-    },
-    {
-      "path": "scripts/kc_native_probe.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
-      "occurrences": 1
-    },
-    {
-      "path": "scripts/kc_perf_gate.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
-      "occurrences": 1
-    },
-    {
-      "path": "scripts/kc_perf_gate.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/adams/full_vehicle_model.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/adams/reference.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/adams/reference.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/adams/strict_c.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "core",
-      "successor": "preparation/assembly/types.py",
-      "owner": "06-authoring (data objects); the residual/Jacobian/reaction solving leaves Python for the native assembly and solve",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/adams/strict_c.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/adams/strict_k.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/api.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
-      "occurrences": 3
-    },
-    {
-      "path": "src/suspension_multibody/api.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "core",
-      "successor": "preparation/assembly/types.py",
-      "owner": "06-authoring (data objects); the residual/Jacobian/reaction solving leaves Python for the native assembly and solve",
-      "occurrences": 1
     },
     {
       "path": "src/suspension_multibody/api.py",
@@ -203,15 +86,6 @@
       "symbol": "metrics",
       "successor": "report/metrics/",
       "owner": "07-report",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/api.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
       "occurrences": 1
     },
     {
@@ -224,24 +98,6 @@
       "occurrences": 1
     },
     {
-      "path": "src/suspension_multibody/cases/kc_quasi_static/contract.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "core",
-      "successor": "preparation/assembly/types.py",
-      "owner": "06-authoring (data objects); the residual/Jacobian/reaction solving leaves Python for the native assembly and solve",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/cases/kc_quasi_static/convert.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "core",
-      "successor": "preparation/assembly/types.py",
-      "owner": "06-authoring (data objects); the residual/Jacobian/reaction solving leaves Python for the native assembly and solve",
-      "occurrences": 1
-    },
-    {
       "path": "src/suspension_multibody/cases/kc_quasi_static/workflow.py",
       "scope": "production",
       "rule": "legacy_module_import",
@@ -251,21 +107,21 @@
       "occurrences": 1
     },
     {
-      "path": "src/suspension_multibody/preparation/kc_quasi_static.py",
+      "path": "src/suspension_multibody/preparation/assembly/front_axle.py",
       "scope": "production",
       "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
+      "symbol": "elements",
+      "successor": "native element facts decoded by results/, then report/; the authoring assembly still constructs the elements until the A1 channel switch",
+      "owner": "05-native-facts + 07-report (authoring-side element construction is tracked by 06 step 6)",
       "occurrences": 1
     },
     {
-      "path": "src/suspension_multibody/preparation/vehicle_dynamic.py",
+      "path": "src/suspension_multibody/preparation/assembly/vehicle.py",
       "scope": "production",
       "rule": "legacy_module_import",
-      "symbol": "core",
-      "successor": "preparation/assembly/types.py",
-      "owner": "06-authoring (data objects); the residual/Jacobian/reaction solving leaves Python for the native assembly and solve",
+      "symbol": "elements",
+      "successor": "native element facts decoded by results/, then report/; the authoring assembly still constructs the elements until the A1 channel switch",
+      "owner": "05-native-facts + 07-report (authoring-side element construction is tracked by 06 step 6)",
       "occurrences": 1
     },
     {
@@ -275,15 +131,6 @@
       "symbol": "elements",
       "successor": "native facts decoded by results/, then report/",
       "owner": "05-native-facts + 07-report",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/preparation/vehicle_dynamic.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "model",
-      "successor": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
-      "owner": "06-authoring",
       "occurrences": 1
     },
     {

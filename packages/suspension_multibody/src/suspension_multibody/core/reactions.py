@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .constraints import ConstraintSystem
+from .constraints import ConstraintSystem, jacobian, residual
 from .rigid_body import RigidBodyState
 from .spatial import wrench_local_to_global
 
@@ -30,7 +30,7 @@ def recover_reactions(
     """Recover generalized reaction wrenches from KKT multipliers."""
     values = np.asarray(multipliers, dtype=float)
     residual_size = sum(
-        len(constraint.residual(state)) for constraint in system.constraints
+        len(residual(constraint, state)) for constraint in system.constraints
     )
     if values.shape != (residual_size,):
         raise ValueError(f"expected {residual_size} multipliers, got {values.size}")
@@ -40,8 +40,8 @@ def recover_reactions(
     local_wrenches: dict[str, np.ndarray] = {}
     cursor = 0
     for constraint in system.constraints:
-        size = len(constraint.residual(state))
-        blocks = constraint.jacobian(state)
+        size = len(residual(constraint, state))
+        blocks = jacobian(constraint, state)
         for body in order:
             block = blocks.get(body)
             if block is None:

@@ -11,7 +11,7 @@ from ..analysis._geometry import _wheel_geometry
 from ..axle_dynamics import AxleSolverSettings
 from ..cases.kc_quasi_static.contract import case_document, model_document
 from ..cases.kc_quasi_static.convert import MM, NativeKcError, quaternion_to_rotation
-from ..model import build_front_axle
+from ..preparation.assembly import build_front_axle
 from ..schema import FrontAxleModel, MassSpec
 from ..simulation import SimulationRequest, run_request
 from .probe import AdamsProfile

@@ -7,7 +7,6 @@ from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from ..pac2002_scope import validate_pac2002_native_scope
 from .common import (
     CoordinateSystem,
     Pose,
@@ -18,6 +17,7 @@ from .common import (
     UnitSystem,
     Vec3,
 )
+from .pac2002_scope import validate_pac2002_native_scope
 from .result import Diagnostic
 
 

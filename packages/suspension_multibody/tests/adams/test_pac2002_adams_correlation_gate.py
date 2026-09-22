@@ -187,7 +187,7 @@ def test_reference_tire_requests_no_unimplemented_feature() -> None:
     from suspension_multibody.adams.full_vehicle_model import (
         load_adams_full_vehicle_input,
     )
-    from suspension_multibody.pac2002_scope import (
+    from suspension_multibody.kernel.capabilities import (
         pac2002_unsupported_native_reasons,
     )
 
@@ -371,7 +371,7 @@ def test_contact_mass_reference_tire_is_inside_the_native_scope(
 ) -> None:
     """The reference tire must not be accepted only because a scope check regressed."""
     from suspension_multibody.adams.full_vehicle_model import _parse_tire
-    from suspension_multibody.pac2002_scope import (
+    from suspension_multibody.kernel.capabilities import (
         pac2002_unsupported_native_reasons,
     )
 
@@ -959,7 +959,7 @@ def test_every_declared_gated_use_mode_has_a_live_reference_gate() -> None:
     steer measures the turn slip as inert (um23/um24/um25 references differ by
     0.07-0.21 % on the handling channels).
     """
-    from suspension_multibody.pac2002_scope import (
+    from suspension_multibody.adams.pac2002_evidence import (
         PAC2002_ADAMS_GATED_USE_MODES,
     )
 

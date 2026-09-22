@@ -32,23 +32,22 @@ import numpy as np
 
 from . import __version__
 from .analysis.compliance import secant_compliance
-from .analysis.time_signals import loads_at_time, motion, time_grid, wrenches_at_time
 from .analysis.vehicle_kc_time_domain import VehicleKCTimeDomainSolver
 from .axle_dynamics.schema import AxleSolverSettings
 from .cases.kc_quasi_static.contract import model_document, time_document
 from .cases.kc_quasi_static.convert import MM
-from .core import (
-    SE3,
-    RigidBody,
-    RigidBodyState,
-    quaternion_to_rotation_vector,
-    wrench_global_to_local,
-)
 from .elements import BushingElement, evaluate_generalized_forces
 from .io import CheckpointStore, canonical_hash, write_artifact
 from .kernel.solver import solver_settings_document
 from .metrics import compute_axle_metrics, compute_case_metrics, compute_common_metrics
-from .model import FrontAxleAssembly, build_front_axle
+from .preparation.assembly import FrontAxleAssembly, build_front_axle
+from .preparation.assembly.types import RigidBody, RigidBodyState
+from .preparation.geometry import (
+    SE3,
+    quaternion_to_rotation_vector,
+    wrench_global_to_local,
+)
+from .preparation.signals import loads_at_time, motion, time_grid, wrenches_at_time
 from .results import TimeSeriesResult, TimeSeriesSample
 from .schema import (
     BushingResult,

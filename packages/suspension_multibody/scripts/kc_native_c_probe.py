@@ -35,8 +35,8 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
     quaternion_multiply,
     wheel_center_world,
 )
-from suspension_multibody.core import quaternion_to_rotation_vector
-from suspension_multibody.model import build_front_axle
+from suspension_multibody.preparation.assembly import build_front_axle
+from suspension_multibody.preparation.geometry import quaternion_to_rotation_vector
 from suspension_multibody.simulation import SimulationRequest, run_request
 
 BASELINE = Path("packages/suspension_multibody/tests/data/kc_baseline")

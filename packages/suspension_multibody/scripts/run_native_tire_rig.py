@@ -46,7 +46,7 @@ from suspension_multibody.axle_dynamics import (
     run_axle_dynamics,
 )
 from suspension_multibody.axle_dynamics.result import TIRE_OUTPUT_COLUMNS
-from suspension_multibody.pac2002_scope import validate_pac2002_native_scope
+from suspension_multibody.schema.pac2002_scope import validate_pac2002_native_scope
 
 #: 前向单位向量（轴级坐标 x 指向车尾）。
 FORWARD = (-1.0, 0.0, 0.0)

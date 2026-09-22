@@ -17,6 +17,7 @@ from suspension_multibody.core import (
     RigidBodyState,
     UniversalJoint,
 )
+from suspension_multibody.core.constraints import jacobian, residual
 
 
 def _state() -> RigidBodyState:
@@ -33,25 +34,25 @@ def _state() -> RigidBodyState:
 def test_ball_joint_residual_and_jacobian() -> None:
     state = _state()
     joint = BallJoint("a", [0, 0, 0], "b", [0, 0, 0])
-    assert np.allclose(joint.residual(state), [0, 0, -1])
-    assert joint.jacobian(state)["a"].shape == (3, 6)
+    assert np.allclose(residual(joint, state), [0, 0, -1])
+    assert jacobian(joint, state)["a"].shape == (3, 6)
 
 
 def test_distance_constraint_has_expected_sign() -> None:
     state = _state()
     constraint = DistanceConstraint("a", [0, 0, 0], "b", [0, 0, 0], 0.5)
-    assert np.isclose(constraint.residual(state)[0], 0.5)
-    assert np.isclose(constraint.jacobian(state)["a"][0, 2], -1.0)
+    assert np.isclose(residual(constraint, state)[0], 0.5)
+    assert np.isclose(jacobian(constraint, state)["a"][0, 2], -1.0)
 
 
 def test_revolute_and_prismatic_constraints_have_five_rows() -> None:
     state = _state()
     revolute = RevoluteJoint("a", [0, 0, 0], [0, 0, 1], "b", [0, 0, 0], [0, 0, 1])
     prismatic = PrismaticJoint("a", [0, 0, 0], [0, 0, 1], "b", [0, 0, 0], [0, 0, 1])
-    assert revolute.residual(state).shape == (5,)
-    assert revolute.jacobian(state)["a"].shape == (5, 6)
-    assert prismatic.residual(state).shape == (5,)
-    assert prismatic.jacobian(state)["b"].shape == (5, 6)
+    assert residual(revolute, state).shape == (5,)
+    assert jacobian(revolute, state)["a"].shape == (5, 6)
+    assert residual(prismatic, state).shape == (5,)
+    assert jacobian(prismatic, state)["b"].shape == (5, 6)
 
 
 def test_extended_joint_jacobians_match_local_retraction() -> None:
@@ -87,15 +88,15 @@ def test_extended_joint_jacobians_match_local_retraction() -> None:
     )
     step = 1e-7
     for constraint in constraints:
-        analytic = constraint.jacobian(state)
+        analytic = jacobian(constraint, state)
         for body in ("a", "b"):
-            numeric = np.empty((constraint.residual(state).size, 6))
+            numeric = np.empty((residual(constraint, state).size, 6))
             for column in range(6):
                 increment = np.zeros(6)
                 increment[column] = step
                 numeric[:, column] = (
-                    constraint.residual(state.retract({body: increment}))
-                    - constraint.residual(state.retract({body: -increment}))
+                    residual(constraint, state.retract({body: increment}))
+                    - residual(constraint, state.retract({body: -increment}))
                 ) / (2.0 * step)
             np.testing.assert_allclose(numeric, analytic[body], atol=1e-7, rtol=1e-7)
 def test_drive_and_system_assembly() -> None:

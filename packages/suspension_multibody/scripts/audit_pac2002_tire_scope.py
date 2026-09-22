@@ -1,7 +1,7 @@
 """
 Audit the native PAC2002 scope against every tire in the installed Adams library.
 
-The fail-closed registry in ``pac2002_scope.py`` is only trustworthy if it has been
+The fail-closed registry in ``kernel/capabilities.py`` is only trustworthy if it has been
 measured against real tire files.  This script parses every stock ``.tir``, asks
 ``pac2002_unsupported_native_reasons`` whether the native kernel would accept it,
 and reports the accept/reject split with the exact reason for each rejection.
@@ -27,7 +27,7 @@ from collections import Counter
 
 from suspension_multibody.adams import discover_profile
 from suspension_multibody.adams.full_vehicle_model import _parse_tire
-from suspension_multibody.pac2002_scope import (
+from suspension_multibody.kernel.capabilities import (
     PAC2002_SUPPORTED_NATIVE_USE_MODES,
     pac2002_native_use_mode,
     pac2002_unsupported_native_reasons,

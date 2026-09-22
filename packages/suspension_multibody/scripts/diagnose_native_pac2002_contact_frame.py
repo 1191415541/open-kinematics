@@ -13,7 +13,7 @@ from suspension_multibody.adams.time_domain import (
     AdamsResultChannel,
     parse_adams_result_history,
 )
-from suspension_multibody.model import build_vehicle
+from suspension_multibody.preparation.assembly import build_vehicle
 from suspension_multibody.preparation.vehicle_dynamic import (
     _build_tires,
     _initial_body_state,

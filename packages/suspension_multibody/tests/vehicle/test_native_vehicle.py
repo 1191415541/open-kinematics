@@ -536,8 +536,10 @@ def test_pac2002_use_mode_zero_is_vertical_spring_only() -> None:
 
 def test_pac2002_use_mode_zero_is_accepted_by_scope_checks() -> None:
     """USE_MODE 0 is natively supported and must not be rejected."""
-    from suspension_multibody.pac2002_scope import (
+    from suspension_multibody.kernel.capabilities import (
         pac2002_unsupported_native_reasons,
+    )
+    from suspension_multibody.schema.pac2002_scope import (
         validate_pac2002_native_scope,
     )
 

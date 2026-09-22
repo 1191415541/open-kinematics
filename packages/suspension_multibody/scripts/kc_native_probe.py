@@ -24,7 +24,7 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
     DEFAULT_TIMES,
     _side_fields,
 )
-from suspension_multibody.model import build_front_axle
+from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.simulation import SimulationRequest, run_request
 
 BASELINE = Path("packages/suspension_multibody/tests/data/kc_baseline")

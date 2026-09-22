@@ -8,6 +8,7 @@ from suspension_multibody.core import (
     RigidBodyState,
     rotation_vector_to_quaternion,
 )
+from suspension_multibody.core.rigid_body import point_jacobian
 
 
 def test_point_jacobian_matches_retraction() -> None:
@@ -24,7 +25,7 @@ def test_point_jacobian_matches_retraction() -> None:
     ) / 1e-6
     assert np.allclose(
         numerical,
-        state.point_jacobian("upright", point) @ (increment / 1e-6),
+        point_jacobian(state, "upright", point) @ (increment / 1e-6),
         atol=1e-6,
     )
 

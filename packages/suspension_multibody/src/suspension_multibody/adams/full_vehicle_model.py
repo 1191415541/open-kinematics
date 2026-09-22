@@ -21,9 +21,7 @@ from typing import Literal, Mapping, cast
 
 import numpy as np
 
-from ..pac2002_scope import (
-    PAC2002_NATIVE_IMPLEMENTED_FEATURES,
-    PAC2002_NATIVE_NOT_IMPLEMENTED_FEATURES,
+from ..kernel.capabilities import (
     PAC2002_SUPPORTED_NATIVE_USE_MODES,
     pac2002_unsupported_native_reasons,
 )
@@ -52,6 +50,10 @@ from ..schema import (
     VehicleDynamicCase,
     VehicleModel,
     WheelSpec,
+)
+from .pac2002_evidence import (
+    PAC2002_NATIVE_IMPLEMENTED_FEATURES,
+    PAC2002_NATIVE_NOT_IMPLEMENTED_FEATURES,
 )
 
 # Last-resort locations, used only to name a path in the failure message when no
@@ -3162,7 +3164,7 @@ def _source_initial_wheel_speeds(
     """从源主轴角速度投影得到四个轮端的初始自转速度."""
     source_body_map = _source_native_body_part_map(data, model)
     state_by_body = {state.body: state for state in initial_states}
-    from ..model.vehicle import build_vehicle
+    from ..preparation.assembly.vehicle import build_vehicle
 
     assembly = build_vehicle(model, mode="K")
     result: list[tuple[str, float]] = []

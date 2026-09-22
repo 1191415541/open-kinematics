@@ -8,8 +8,8 @@ from typing import Literal
 import numpy as np
 from pydantic import Field, field_validator, model_validator
 
-from ..pac2002_scope import validate_pac2002_native_scope
 from ..schema.common import StrictModel
+from ..schema.pac2002_scope import validate_pac2002_native_scope
 
 Vec3Tuple = tuple[float, float, float]
 QuaternionTuple = tuple[float, float, float, float]
