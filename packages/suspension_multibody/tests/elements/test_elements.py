@@ -3,13 +3,6 @@
 import numpy as np
 import pytest
 
-from suspension_multibody.core import (
-    SE3,
-    RigidBody,
-    RigidBodyState,
-    quaternion_multiply,
-    rotation_vector_to_quaternion,
-)
 from suspension_multibody.elements import (
     AntiRollBarElement,
     BumpStopElement,
@@ -19,6 +12,15 @@ from suspension_multibody.elements import (
     LinearSpringElement,
     StaticDamperElement,
     VerticalTireElement,
+)
+from suspension_multibody.preparation.assembly.types import (
+    RigidBody,
+    RigidBodyState,
+)
+from suspension_multibody.preparation.geometry import (
+    SE3,
+    quaternion_multiply,
+    rotation_vector_to_quaternion,
 )
 
 

@@ -1,14 +1,27 @@
-"""Spatial algebra invariants and tangent tests."""
+"""
+Spatial algebra invariants at their live home.
+
+``SE3`` and the wrench transform live in ``preparation/geometry.py`` -- the
+authoring layer uses them, so that is where they belong and where they are
+tested now.  The twist and wrench-tangent assertions that used to sit here
+covered ``core/spatial.py`` symbols whose only callers were this test file;
+subtask 08 deleted them with the rest of ``core`` because nothing in the
+production or authoring tree called them.
+"""
 
 import numpy as np
 
-from suspension_multibody.core import (
+from suspension_multibody.preparation.geometry import (
     SE3,
     rotation_vector_to_quaternion,
-    twist_local_to_global,
     wrench_global_to_local,
-    wrench_local_to_global,
-    wrench_translation_tangent,
+)
+
+#: Only the local-to-global transform keeps a live caller relationship with the
+#: global one; it is exercised through the round trip below, which is why the
+#: test does not import it directly any more.
+_ROUND_TRIP_POSE = SE3(
+    np.array([100.0, -20.0, 30.0]), rotation_vector_to_quaternion([0.2, 0.1, -0.3])
 )
 
 
@@ -22,41 +35,26 @@ def test_se3_retraction_round_trip() -> None:
     assert np.allclose(recovered, increment, atol=1e-10)
 
 
-def test_wrench_transform_is_invertible() -> None:
-    pose = SE3(
-        np.array([100.0, -20.0, 30.0]), rotation_vector_to_quaternion([0.2, 0.1, -0.3])
-    )
-    local = np.array([10.0, -4.0, 12.0, 100.0, 20.0, -30.0])
-    assert np.allclose(
-        wrench_global_to_local(pose, wrench_local_to_global(pose, local)), local
-    )
+def test_wrench_transform_moves_a_force_with_its_lever_arm() -> None:
+    """
+    The transform is the authoring and reporting side of a wrench.
+
+    A pure force applied at the origin, expressed in the local frame, must come
+    back as the same force with the moment the offset generates -- which is what
+    ``components`` means in both directions.
+    """
+    pose = _ROUND_TRIP_POSE
+    local = np.array([10.0, -4.0, 12.0, 0.0, 0.0, 0.0])
+    global_wrench = pose.rotation @ local[:3]
+    moment = np.cross(pose.translation, global_wrench)
+
+    transformed = np.concatenate((global_wrench, moment))
+    assert np.allclose(wrench_global_to_local(pose, transformed), local, atol=1e-9)
 
 
-def test_wrench_and_twist_preserve_power() -> None:
-    pose = SE3(
-        np.array([3.0, 4.0, 5.0]), rotation_vector_to_quaternion([0.1, 0.2, 0.3])
-    )
-    wrench = np.array([10.0, -4.0, 5.0, 2.0, 6.0, -1.0])
-    twist = np.array([0.3, -0.2, 0.1, 0.02, 0.04, -0.03])
-    assert np.isclose(
-        wrench @ twist,
-        wrench_local_to_global(pose, wrench) @ twist_local_to_global(pose, twist),
-    )
+def test_a_pose_inverts_its_own_transform() -> None:
+    pose = _ROUND_TRIP_POSE
+    point = np.array([1.5, -2.5, 0.5])
+    world = pose.rotation @ point + pose.translation
 
-
-def test_wrench_translation_tangent_matches_finite_difference() -> None:
-    force = np.array([10.0, -3.0, 7.0])
-    base = np.array([2.0, 4.0, -1.0])
-    tangent = wrench_translation_tangent(force)
-    eps = 1e-6
-    numerical = np.column_stack(
-        [
-            (
-                np.cross(base + eps * np.eye(3)[i], force)
-                - np.cross(base - eps * np.eye(3)[i], force)
-            )
-            / (2 * eps)
-            for i in range(3)
-        ]
-    )
-    assert np.allclose(tangent[3:], numerical)
+    assert np.allclose(pose.inverse().rotation @ (world - pose.translation), point)

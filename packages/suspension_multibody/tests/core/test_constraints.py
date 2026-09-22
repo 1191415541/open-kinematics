@@ -1,106 +1,82 @@
-"""Ideal constraint residual and analytic Jacobian tests."""
+"""
+Joint-declaration tests: the data an assembly is described with.
+
+The joint *declarations* live in ``preparation/assembly/types.py`` -- the
+authoring layer builds them, so this is their live home.  What used to sit
+beside them in ``core/constraints.py`` was the residual/Jacobian implementation
+and ``ConstraintSystem``; subtask 08 deleted both, because the native kernel
+owns the solving side and nothing in the production tree called them any more.
+
+The physics those solvers asserted did not disappear with them: the joint row
+counts each kind contributes are asserted against the native contract by
+``tests/vehicle/test_native_vehicle.py`` (``fixed`` is a two-run joint) and the
+solver-level behaviour by ``tests/axle_dynamics/test_solver_invariants.py``.
+What remains here is what these declarations must carry on their own.
+"""
 
 import numpy as np
 
-from suspension_multibody.core import (
-    SE3,
+from suspension_multibody.preparation.assembly.types import (
     BallJoint,
     ConstantVelocityJoint,
-    ConstraintSystem,
+    Constraint,
     CoordinateDrive,
     CylindricalJoint,
     DistanceConstraint,
     InPlaneJoint,
+    PointCoincidence,
     PrismaticJoint,
     RevoluteJoint,
-    RigidBody,
-    RigidBodyState,
     UniversalJoint,
+    WeldJoint,
 )
-from suspension_multibody.core.constraints import jacobian, residual
 
 
-def _state() -> RigidBodyState:
-    return RigidBodyState(
-        {
-            "a": RigidBody("a", SE3.identity()),
-            "b": RigidBody(
-                "b", SE3(np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0, 0.0]))
-            ),
-        }
-    )
+def test_a_declaration_carries_its_bodies_points_and_axes() -> None:
+    joint = RevoluteJoint("a", [0, 0, 0], [0, 0, 1], "b", [0, 0, 0], [0, 0, 1])
+
+    assert isinstance(joint, Constraint)
+    assert (joint.body_a, joint.body_b) == ("a", "b")
+    assert np.allclose(joint.point_a, [0, 0, 0])
+    assert np.allclose(joint.axis_b, [0, 0, 1])
 
 
-def test_ball_joint_residual_and_jacobian() -> None:
-    state = _state()
-    joint = BallJoint("a", [0, 0, 0], "b", [0, 0, 0])
-    assert np.allclose(residual(joint, state), [0, 0, -1])
-    assert jacobian(joint, state)["a"].shape == (3, 6)
+def test_a_declaration_carries_no_solving_surface() -> None:
+    """
+    A declaration is data: no residual, no Jacobian, no evaluate.
+
+    This is the boundary subtask 06 drew and subtask 08 kept -- the solving side
+    is the native kernel's, and a declaration that grew a residual back would
+    put the retired solver in the authoring layer.
+    """
+    assert not hasattr(Constraint, "residual")
+    assert not hasattr(Constraint, "jacobian")
+    assert not hasattr(Constraint, "evaluate")
+
+    for kind in (
+        PointCoincidence,
+        BallJoint,
+        WeldJoint,
+        RevoluteJoint,
+        PrismaticJoint,
+        UniversalJoint,
+        CylindricalJoint,
+        InPlaneJoint,
+        ConstantVelocityJoint,
+        DistanceConstraint,
+        CoordinateDrive,
+    ):
+        assert not hasattr(kind, "residual"), kind.__name__
+        assert not hasattr(kind, "jacobian"), kind.__name__
+        assert not hasattr(kind, "evaluate"), kind.__name__
 
 
-def test_distance_constraint_has_expected_sign() -> None:
-    state = _state()
-    constraint = DistanceConstraint("a", [0, 0, 0], "b", [0, 0, 0], 0.5)
-    assert np.isclose(residual(constraint, state)[0], 0.5)
-    assert np.isclose(jacobian(constraint, state)["a"][0, 2], -1.0)
-
-
-def test_revolute_and_prismatic_constraints_have_five_rows() -> None:
-    state = _state()
-    revolute = RevoluteJoint("a", [0, 0, 0], [0, 0, 1], "b", [0, 0, 0], [0, 0, 1])
-    prismatic = PrismaticJoint("a", [0, 0, 0], [0, 0, 1], "b", [0, 0, 0], [0, 0, 1])
-    assert residual(revolute, state).shape == (5,)
-    assert jacobian(revolute, state)["a"].shape == (5, 6)
-    assert residual(prismatic, state).shape == (5,)
-    assert jacobian(prismatic, state)["b"].shape == (5, 6)
-
-
-def test_extended_joint_jacobians_match_local_retraction() -> None:
-    state = RigidBodyState(
-        {
-            "a": RigidBody("a", SE3.identity()),
-            "b": RigidBody(
-                "b",
-                SE3(
-                    np.array([0.2, 0.3, 0.4]),
-                    np.array([0.98, 0.1, -0.05, 0.15]),
-                ),
-            ),
-        }
-    )
-    constraints = (
-        UniversalJoint(
-            "a", [0.1, 0.2, 0.3], [0.0, 0.0, 1.0],
-            "b", [-0.2, 0.1, 0.05], [1.0, 0.0, 0.0],
-        ),
-        CylindricalJoint(
-            "a", [0.1, 0.2, 0.3], [0.0, 0.0, 1.0],
-            "b", [-0.2, 0.1, 0.05], [0.0, 0.0, 1.0],
-        ),
-        InPlaneJoint(
-            "a", [0.1, 0.2, 0.3], [0.0, 0.0, 1.0],
-            "b", [-0.2, 0.1, 0.05],
-        ),
-        ConstantVelocityJoint(
-            "a", [0.1, 0.2, 0.3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0],
-            "b", [-0.2, 0.1, 0.05], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0],
-        ),
-    )
-    step = 1e-7
-    for constraint in constraints:
-        analytic = jacobian(constraint, state)
-        for body in ("a", "b"):
-            numeric = np.empty((residual(constraint, state).size, 6))
-            for column in range(6):
-                increment = np.zeros(6)
-                increment[column] = step
-                numeric[:, column] = (
-                    residual(constraint, state.retract({body: increment}))
-                    - residual(constraint, state.retract({body: -increment}))
-                ) / (2.0 * step)
-            np.testing.assert_allclose(numeric, analytic[body], atol=1e-7, rtol=1e-7)
-def test_drive_and_system_assembly() -> None:
-    state = _state()
-    system = ConstraintSystem((CoordinateDrive("b", [0, 0, 0], [0, 0, 1], 2.0),))
-    assert np.isclose(system.residual(state)[0], -1.0)
-    assert system.jacobian(state).shape == (1, 12)
+def test_a_declaration_names_the_two_bodies_it_ties() -> None:
+    for joint in (
+        BallJoint("a", [0, 0, 0], "b", [0, 0, 0]),
+        DistanceConstraint("a", [0, 0, 0], "b", [0, 0, 0], 0.5),
+        InPlaneJoint("a", [0, 0, 0], [0, 0, 1], "b", [0, 0, 0]),
+        UniversalJoint("a", [0, 0, 0], [0, 0, 1], "b", [0, 0, 0], [1, 0, 0]),
+    ):
+        assert joint.body_a == "a"
+        assert joint.body_b == "b"

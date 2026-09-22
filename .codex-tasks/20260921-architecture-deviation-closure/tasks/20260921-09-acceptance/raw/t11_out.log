@@ -1,0 +1,5 @@
+mode      : migration
+findings  : 14
+  legacy_module_import: 14
+
+OK: no unregistered Python boundary violation

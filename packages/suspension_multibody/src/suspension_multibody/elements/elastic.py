@@ -7,8 +7,8 @@ from typing import Literal
 
 import numpy as np
 
-from ..core.rigid_body import RigidBodyState
-from ..core.spatial import (
+from ..preparation.assembly.types import RigidBodyState
+from ..preparation.geometry import (
     SE3,
     cross3,
     quaternion_to_matrix,

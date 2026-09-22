@@ -1,0 +1,21 @@
+# 09 G1 证据：C++ 目标模块存在 / 旧模块缺席
+```
+kernel root                : C:\杂件\open-kinematics\packages\suspension_kernel
+mode                       : final
+headers                    : 56
+cpp translation units      : 75
+modules present            : 23
+header edges               : 118
+source edges               : 107
+source edge evidence       : 228 records (tu_include 212, symbol_reference 173, both 157; kind mentions 385)
+target modules missing     : 0
+legacy modules present     : 0
+legacy modules unregistered: 0 []
+mutual (reverse) edges     : 0
+self-including headers     : 0
+cross-aggregate includes   : 0
+module cycles (SCC size>1) : 0
+
+OK: layering matches the recorded baseline
+(--strict --final exit=0)
+```

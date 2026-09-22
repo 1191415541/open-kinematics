@@ -14,8 +14,8 @@ from typing import Callable, Iterable, cast
 
 import numpy as np
 
-from ..core.rigid_body import RigidBodyState
-from ..core.spatial import wrench_global_to_local
+from ..preparation.assembly.types import RigidBodyState
+from ..preparation.geometry import wrench_global_to_local
 from .base import ForceEvaluation
 
 __all__ = ["evaluate_generalized_forces"]

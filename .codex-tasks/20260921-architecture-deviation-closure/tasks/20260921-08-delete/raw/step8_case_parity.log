@@ -1,0 +1,9 @@
+  kc_quasi_static    PASS      worst error / tolerance 0.000186038 over the frozen K/C snapshot
+  axle_dynamic       PASS      13 cases, bit-identical to the frozen snapshot
+  vehicle_kc         PASS      grid matches an independent expansion; 10 mm reaches every wheel drive
+  vehicle_dynamic    PASS      8 cases, bit-identical to the frozen snapshot
+  handling           PASS      4 open-loop shapes match an independent expansion (0.0e+00); closed-loop refused
+  ride_four_post     PASS      expansion matches an independently sampled excitation (0.0e+00)
+  ride_random_road   PASS      expansion matches an independently expanded profile (0.0e+00)
+  comparison         N/A       a per-target gate, not a solve: the kernel never reads a reference
+OK: 8 families accepted
