@@ -1,6 +1,6 @@
 """Front axle topology and K/C mode tests."""
 
-from suspension_multibody.model import build_front_axle
+from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import FrontAxleModel, MassSpec
 
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from suspension_multibody.model import build_vehicle
+from suspension_multibody.preparation.assembly import build_vehicle
 from suspension_multibody.preparation.vehicle_dynamic import (
     _build_elements,
     _build_joints,
@@ -406,7 +406,7 @@ def test_native_fixed_joint_shape_matches_the_registry() -> None:
     rotation.  The row count is what the contract advertises, so a report that
     reads constraint rows can rely on it.
     """
-    from suspension_multibody.core import WeldJoint
+    from suspension_multibody.preparation.assembly.types import WeldJoint
     from suspension_multibody.preparation.vehicle_dynamic import _build_joints
 
     model = _vehicle()

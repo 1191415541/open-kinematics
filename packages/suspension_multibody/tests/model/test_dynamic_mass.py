@@ -1,16 +1,16 @@
-"""Dynamic mass-property mapping tests."""
+"""
+Dynamic mass-property mapping: the schema body spec reaches the assembly body.
+
+The mass-matrix and spatial-inertia assertions that used to live here were made
+against ``model/mass.py``; they are native contract assertions now, in
+``tests/axle_dynamics/test_solver_invariants.py``.
+"""
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
-from suspension_multibody.core import RigidBody
-from suspension_multibody.model import (
-    body_mass_properties,
-    build_front_axle,
-    mass_matrix,
-)
+from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import FrontAxleModel, MassSpec, RigidBodySpec, Vec3
 
 
@@ -47,23 +47,3 @@ def test_body_spec_maps_to_front_axle_runtime_body() -> None:
 
     assert assembly.bodies["upright_L"].mass == pytest.approx(38.0)
     assert assembly.bodies["upright_L"].center_of_mass.tolist() == [1.0, 2.0, 3.0]
-
-
-def test_mass_matrix_rejects_zero_mass_movable_body() -> None:
-    bodies = {"body": RigidBody("body")}
-
-    with pytest.raises(ValueError, match="positive mass"):
-        mass_matrix(bodies)
-
-
-def test_spatial_inertia_contains_mass_and_rotational_inertia() -> None:
-    body = RigidBody(
-        "body",
-        mass=2.0,
-        center_of_mass=np.array([0.0, 0.0, 0.0]),
-        inertia=np.diag([3.0, 4.0, 5.0]),
-    )
-
-    properties = body_mass_properties(body)
-
-    assert np.diag(properties.spatial_inertia).tolist() == [2.0, 2.0, 2.0, 3.0, 4.0, 5.0]

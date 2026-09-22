@@ -29,11 +29,34 @@ workloads against a recorded budget; the retired Python benchmarks covered 100 K
 states and 6600 C states, and that 6600-state C workload was a deliberately
 nonphysical proxy with no native analogue.
 
+## Python 模块结构（08 之后）
+
+08 删除了旧归属里**已无生产调用者**的部分，仍有现役生产调用的模块按 A1/A2 保留：
+
+```text
+src/suspension_multibody/
+  preparation/     作者层：几何、装配声明（assembly/）、工况与信号
+  schema/ results/ kernel/ simulation/ cases/  契约、结果解码与统一 runner
+  report/          报告层：指标、合规、几何与整车载荷汇总（不调用 native、不求解）
+  elements/        A1 保留：力元件本构（native 力旋量通道尚不能承载固定体端反力）
+  core/            A1 保留：spatial 代数、刚体数据与装配声明（elements/ 与作者层的依赖）
+  analysis/        A2 保留：compute_static_wheel_loads（native 无静力 ABI 入口）
+```
+
+已删除：`model/`（06 迁至 `preparation/assembly/`）、`metrics/`（07 迁至
+`report/metrics/`）、顶层 `pac2002_scope.py`（06 迁至 `schema/pac2002_scope.py` 与
+`kernel/capabilities.py`）、`analysis/` 的报告类模块（07 迁至 `report/`、
+`preparation/signals.py`、`simulation/replay.py`），以及 `core/rank.py` 与
+`core/reactions.py`（无生产调用者；其物理断言转为 `tests/axle_dynamics/test_solver_invariants.py`
+的 native 契约断言）。每个保留项的理由、阻断原因与解除条件记录在 08 的删除记录里：
+`.codex-tasks/20260921-architecture-deviation-closure/tasks/20260921-08-delete/raw/step3_deletion_record.md`。
+
+
 ## Native 整车动力学
 
 `run_vehicle_dynamics` 使用与整轴相同的 native DAE 内核，求解车身、前悬架、后悬架和四个轮端的刚体状态。模型支持悬架理想关节、弹簧、阻尼器、限位块、轮胎接触、路面高度、转向输入，以及直接施加到轮端的驱动力矩和制动力矩；动力系统和制动系统在通用整车模型中按外部输入信号简化。使用 Adams 源显式模型时，源动力总成刚体、驱动轴、三脚架和差速器输出体均保留，传动轴通过非完整 `CONVEL` 速度约束连接；驱动/制动仍按项目规格作为轮端外部力矩输入，不伪装成 Adams 内部传动或液压系统。
 
-Adams/Car 数据可通过 `load_adams_full_vehicle_input` 导入，并由 `build_adams_native_vehicle_model` 构造 native 模型。导入层记录源文件哈希和单位声明，并把几何、质量、惯量、轮胎垂向参数及力曲线统一到 `mm/kg/N/s`；弹簧、压缩限位、回弹限位和六轴衬套曲线均可通过版本化整车 ABI 传入求解器，存在源衬套时整车路径选择带衬套的 C 装配模式。当前 PAC2002 路径实现纯滑移、标准 RBX/RBY/RVY 联合滑移、dfz/dpi/外倾/压力/载荷缩放、QV2/QFC/VXLOW 垂向修正、QBZ/QCZ/QDZ/QEZ/QHZ/SSZ 回正力矩、Mx/My/陀螺力矩、USE_MODE 0 与 1-4/11-14/23-25 语义、模式 25 的转滑松弛集与 Q* 驻车因子、deflection/bottoming 曲线、输入有效性区间钳位和负 USE_MODE/TYRESIDE 镜像，并保留 Adams 源 `PHX/PHY/PVX/PVY` 零滑移偏置；PAC-MC、带动力学、非点接触模型、纯轴 advanced-transient 模式 21/22、二阶转滑尾系数与 Maxwell 非滚动垂向单元仍按 fail-closed 处理。这份范围不是手写的：内核通过 `suspension_kernel_capabilities` 声明它能算什么、必须拒绝什么，`pac2002_scope` 读它来拒绝越界轮胎。源模型中的驱动/制动 SFORCE 会写入配对清单；当前 native 可选择逐轮回放已求得的驱动/制动转矩，但仍未实现 Adams 内部控制与液压状态，因此真实 Adams 整车数值对标继续由门禁报告为 `BLOCKED`，直到源力律、力元映射和完整 PAC2002 轮胎完成等价实现。
+Adams/Car 数据可通过 `load_adams_full_vehicle_input` 导入，并由 `build_adams_native_vehicle_model` 构造 native 模型。导入层记录源文件哈希和单位声明，并把几何、质量、惯量、轮胎垂向参数及力曲线统一到 `mm/kg/N/s`；弹簧、压缩限位、回弹限位和六轴衬套曲线均可通过版本化整车 ABI 传入求解器，存在源衬套时整车路径选择带衬套的 C 装配模式。当前 PAC2002 路径实现纯滑移、标准 RBX/RBY/RVY 联合滑移、dfz/dpi/外倾/压力/载荷缩放、QV2/QFC/VXLOW 垂向修正、QBZ/QCZ/QDZ/QEZ/QHZ/SSZ 回正力矩、Mx/My/陀螺力矩、USE_MODE 0 与 1-4/11-14/23-25 语义、模式 25 的转滑松弛集与 Q* 驻车因子、deflection/bottoming 曲线、输入有效性区间钳位和负 USE_MODE/TYRESIDE 镜像，并保留 Adams 源 `PHX/PHY/PVX/PVY` 零滑移偏置；PAC-MC、带动力学、非点接触模型、纯轴 advanced-transient 模式 21/22、二阶转滑尾系数与 Maxwell 非滚动垂向单元仍按 fail-closed 处理。这份范围不是手写的：内核通过 `suspension_kernel_capabilities` 声明它能算什么、必须拒绝什么，`schema/pac2002_scope` 读它来拒绝越界轮胎。源模型中的驱动/制动 SFORCE 会写入配对清单；当前 native 可选择逐轮回放已求得的驱动/制动转矩，但仍未实现 Adams 内部控制与液压状态，因此真实 Adams 整车数值对标继续由门禁报告为 `BLOCKED`，直到源力律、力元映射和完整 PAC2002 轮胎完成等价实现。
 
 若需要复现 Adams 已运行的动力输入，可用 `direct_wheel_torque_signals_from_adams_result` 从 `.res` 的 `differential.output_torque_left_rear/right_rear` 和 `brake_torques` 四个通道提取逐轮 `TimeSignal`，再传给 `build_adams_vehicle_case` 的 `wheel_drive_torque`、`wheel_brake_torque` 参数。源结果中的驱动/制动转矩按 Adams 工程单位读取，进入 native ABI 前由模型单位缩放；这属于可追溯的轮端输入回放，不表示已实现 Adams 内部控制律、制动液压或完整力律等价。
 

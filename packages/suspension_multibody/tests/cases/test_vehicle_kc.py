@@ -51,7 +51,7 @@ from suspension_multibody.cases import (
     vehicle_kc_case_document,
     vehicle_kc_model_document,
 )
-from suspension_multibody.core.spatial import quaternion_to_matrix
+from suspension_multibody.preparation.geometry import quaternion_to_matrix
 from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
 from suspension_multibody.preparation.vehicle_kc import (
     VehicleKcPrepared,

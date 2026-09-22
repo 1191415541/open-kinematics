@@ -102,10 +102,15 @@ SCANNED_SUFFIXES = frozenset(
 SCANNED_NAMES = frozenset({"justfile", "Justfile", "Makefile", "Dockerfile"})
 
 #: A reference to a retired module in non-Python text.  Only the package-qualified
-#: form counts for a package module (see the module docstring); `pac2002_scope`
-#: counts bare because it reads as no English word.
+#: form counts for a package module (see the module docstring).  The retired
+#: top-level module ``pac2002_scope`` is matched through the same qualified form
+#: plus its bare name with a trailing file extension (``pac2002_scope.py``), which
+#: is the shape a config or document writes.  A bare ``pac2002_scope`` word is
+#: *not* matched on its own: the capability and schema modules that replaced it
+#: are legitimately called ``pac2002_scope`` too (`schema/pac2002_scope.py`), and
+#: a bare match would report the live successor as a survivor.
 TEXT_REFERENCE = re.compile(
-    rf"(?P<module>{PACKAGE}\.(?:{'|'.join(RETIRED)})|pac2002_scope)(?=[^\w.]|$)"
+    rf"(?P<module>{PACKAGE}\.(?:{'|'.join(RETIRED)})|pac2002_scope\.py)(?=[^\w.]|$)"
 )
 
 

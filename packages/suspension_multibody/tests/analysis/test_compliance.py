@@ -3,7 +3,10 @@
 import numpy as np
 import pytest
 
-from suspension_multibody.analysis import secant_compliance, validate_compliance
+from suspension_multibody.report.compliance import (
+    secant_compliance,
+    validate_compliance,
+)
 
 
 def test_compliance_requires_symmetric_psd_matrix() -> None:

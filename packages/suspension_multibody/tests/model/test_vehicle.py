@@ -2,9 +2,9 @@
 
 import numpy as np
 
-from suspension_multibody.core import PrismaticJoint
-from suspension_multibody.model import build_vehicle
-from suspension_multibody.model.front_axle import _build_explicit_axle
+from suspension_multibody.preparation.assembly import build_vehicle
+from suspension_multibody.preparation.assembly.front_axle import _build_explicit_axle
+from suspension_multibody.preparation.assembly.types import PrismaticJoint
 from suspension_multibody.schema import (
     FrontAxleModel,
     MassSpec,

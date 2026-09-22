@@ -9,7 +9,7 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
     DEFAULT_TIMES,
 )
 from suspension_multibody.kernel import ContractRun, KernelContractError
-from suspension_multibody.model import build_front_axle
+from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.results import (
     ChannelRegistry,
     CommonResult,

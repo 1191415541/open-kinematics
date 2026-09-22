@@ -59,7 +59,7 @@ packages/suspension_multibody/src/suspension_multibody/
   adams/axle_adams_model.py 由同一 manifest 生成原生 Adams Solver 数据集
   adams/axle_equivalence.py 独立 runner、证据包、严格比较与门禁
   adams/axle_channels.py    结果到 33 个冻结通道的导出
-  model/vehicle.py           车身、前后悬架和四轮的装配及固定轮端质量凝聚
+  preparation/assembly/vehicle.py 车身、前后悬架和四轮的装配及固定轮端质量凝聚（06 由 model/vehicle.py 迁入）
   preparation/
     vehicle_dynamic.py      整车输入编组、路面/转向/驱制动映射与准备上下文
   cases/vehicle_dynamic.py   整车 model/case contract document 发射
@@ -131,7 +131,7 @@ Adams 源动态结果可通过 `direct_wheel_torque_signals_from_adams_result` �
 
 Chrono 的整车实现给出的可迁移原则是：底盘、车桥、转向、制动、传动和轮胎作为分层
 子系统创建，但所有刚体和约束最终进入同一个系统描述器。当前代码采用相同的装配边界：
-`model/vehicle.py` 合并前后轴，`preparation/vehicle_dynamic.py` 将路面、转向和轮端力矩编组到同一个
+`preparation/assembly/vehicle.py` 合并前后轴，`preparation/vehicle_dynamic.py` 将路面、转向和轮端力矩编组到同一个
 native 调用。对于 Adams 源模型，前轴还保留 `rack_housing`、齿条到外壳的平移副和两个
 外壳衬套；通用简化模型仍使用齿条导向副。
 

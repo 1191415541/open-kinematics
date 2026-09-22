@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from suspension_multibody.metrics import (
+from suspension_multibody.report.metrics import (
     compute_axle_metrics,
     compute_case_metrics,
     compute_vehicle_metrics,

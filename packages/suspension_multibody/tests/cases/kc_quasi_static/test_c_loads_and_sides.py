@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from suspension_multibody.cases.kc_quasi_static import case_document, model_document
-from suspension_multibody.model import build_front_axle
+from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.simulation import SimulationRequest, run_request
 
 from .kc_fixtures import _compliant_model

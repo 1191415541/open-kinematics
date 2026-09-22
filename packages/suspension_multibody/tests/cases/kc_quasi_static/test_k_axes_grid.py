@@ -22,7 +22,7 @@ import numpy as np
 from suspension_contracts import validate_case
 
 from suspension_multibody.cases.kc_quasi_static import case_document, model_document
-from suspension_multibody.model import build_front_axle
+from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.simulation import SimulationRequest, run_request
 from tests.benchmark_fixture import benchmark_model
 

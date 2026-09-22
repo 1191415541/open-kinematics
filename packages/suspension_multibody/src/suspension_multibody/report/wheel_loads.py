@@ -1,9 +1,10 @@
 """
 Wheel-load aggregation for report diagnostics.
 
-Moved here from ``analysis/vehicle_physics.py``, which 08 deletes: summing four
-corner loads into axle and side totals is a statement about a decoded result,
-not a physical law.  The sign conventions are unchanged.
+Moved here from ``analysis/vehicle_physics.py``, which 08 keeps only for the A2
+static wheel-load solve: summing four corner loads into axle and side totals is a
+statement about a decoded result, not a physical law.  The sign conventions are
+unchanged.
 """
 
 from __future__ import annotations

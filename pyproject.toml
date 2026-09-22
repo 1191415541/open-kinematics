@@ -55,4 +55,9 @@ exclude = [
     "packages/suspension_kinematics/src/suspension_kinematics/gui/",
     "packages/suspension_kinematics/src/suspension_kinematics/visualization/",
     "packages/suspension_kinematics/src/suspension_kinematics/steering/comparison.py",
+    # Task-record evidence scripts.  They are archived provenance for a finished
+    # task rather than part of the shipped surface, and one of them names a
+    # module that task retired -- type checking it would report a deliberate,
+    # historical import as a live error.
+    ".codex-tasks/",
 ]

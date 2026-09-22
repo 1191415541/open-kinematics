@@ -25,7 +25,7 @@ from suspension_multibody.cases.kc_quasi_static import (
     model_document,
 )
 from suspension_multibody.cases.kc_quasi_static.load_paths import LoadPath
-from suspension_multibody.model import build_front_axle
+from suspension_multibody.preparation.assembly import build_front_axle
 from tests.benchmark_fixture import benchmark_model
 
 from .kc_fixtures import _compliant_model

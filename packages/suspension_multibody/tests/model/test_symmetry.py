@@ -1,6 +1,6 @@
 """Front axle symmetry tests."""
 
-from suspension_multibody.model import mirror_hardpoints, side_hardpoints
+from suspension_multibody.preparation.assembly import mirror_hardpoints, side_hardpoints
 from suspension_multibody.schema import Vec3
 
 

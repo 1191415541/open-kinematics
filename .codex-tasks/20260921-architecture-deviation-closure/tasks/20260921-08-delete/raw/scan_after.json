@@ -1,0 +1,239 @@
+{
+  "moment": "after",
+  "summary": {
+    "total": 31,
+    "by_module": {
+      "analysis": 3,
+      "core": 16,
+      "elements": 11,
+      "pac2002_scope.py": 1
+    },
+    "by_form": {
+      "absolute_import": 9,
+      "relative_import": 21,
+      "text_reference": 1
+    },
+    "by_area": {
+      "packages": 31
+    }
+  },
+  "references": [
+    {
+      "path": "packages/suspension_multibody/README.md",
+      "line": 47,
+      "form": "text_reference",
+      "module": "pac2002_scope.py",
+      "text": "`report/metrics/`）、顶层 `pac2002_scope.py`（06 迁至 `schema/pac2002_scope.py` 与"
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/analysis/__init__.py",
+      "line": 11,
+      "form": "relative_import",
+      "module": "analysis",
+      "text": "from .vehicle_physics import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/api.py",
+      "line": 49,
+      "form": "relative_import",
+      "module": "elements",
+      "text": "from .elements import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/core/__init__.py",
+      "line": 12,
+      "form": "relative_import",
+      "module": "core",
+      "text": "from .constraints import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/core/__init__.py",
+      "line": 27,
+      "form": "relative_import",
+      "module": "core",
+      "text": "from .rigid_body import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/core/__init__.py",
+      "line": 28,
+      "form": "relative_import",
+      "module": "core",
+      "text": "from .spatial import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/core/constraints.py",
+      "line": 49,
+      "form": "relative_import",
+      "module": "core",
+      "text": "from .rigid_body import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/core/constraints.py",
+      "line": 50,
+      "form": "relative_import",
+      "module": "core",
+      "text": "from .spatial import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/core/rigid_body.py",
+      "line": 21,
+      "form": "relative_import",
+      "module": "core",
+      "text": "from .spatial import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/elements/__init__.py",
+      "line": 3,
+      "form": "relative_import",
+      "module": "elements",
+      "text": "from .assembly import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/elements/__init__.py",
+      "line": 4,
+      "form": "relative_import",
+      "module": "elements",
+      "text": "from .base import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/elements/__init__.py",
+      "line": 5,
+      "form": "relative_import",
+      "module": "elements",
+      "text": "from .elastic import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/elements/assembly.py",
+      "line": 17,
+      "form": "relative_import",
+      "module": "core",
+      "text": "from ..core.rigid_body import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/elements/assembly.py",
+      "line": 18,
+      "form": "relative_import",
+      "module": "core",
+      "text": "from ..core.spatial import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/elements/assembly.py",
+      "line": 19,
+      "form": "relative_import",
+      "module": "elements",
+      "text": "from .base import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/elements/elastic.py",
+      "line": 10,
+      "form": "relative_import",
+      "module": "core",
+      "text": "from ..core.rigid_body import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/elements/elastic.py",
+      "line": 11,
+      "form": "relative_import",
+      "module": "core",
+      "text": "from ..core.spatial import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/elements/elastic.py",
+      "line": 17,
+      "form": "relative_import",
+      "module": "elements",
+      "text": "from .base import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/preparation/assembly/front_axle.py",
+      "line": 17,
+      "form": "relative_import",
+      "module": "elements",
+      "text": "from ...elements import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/preparation/assembly/vehicle.py",
+      "line": 20,
+      "form": "relative_import",
+      "module": "elements",
+      "text": "from ...elements import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/preparation/vehicle_dynamic.py",
+      "line": 37,
+      "form": "relative_import",
+      "module": "elements",
+      "text": "from ..elements import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/src/suspension_multibody/vehicle/service.py",
+      "line": 30,
+      "form": "relative_import",
+      "module": "analysis",
+      "text": "from ..analysis.vehicle_physics import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/tests/core/test_constraints.py",
+      "line": 5,
+      "form": "absolute_import",
+      "module": "core",
+      "text": "from suspension_multibody.core import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/tests/core/test_constraints.py",
+      "line": 20,
+      "form": "absolute_import",
+      "module": "core",
+      "text": "from suspension_multibody.core.constraints import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/tests/core/test_rigid_body.py",
+      "line": 5,
+      "form": "absolute_import",
+      "module": "core",
+      "text": "from suspension_multibody.core import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/tests/core/test_rigid_body.py",
+      "line": 11,
+      "form": "absolute_import",
+      "module": "core",
+      "text": "from suspension_multibody.core.rigid_body import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/tests/core/test_spatial.py",
+      "line": 5,
+      "form": "absolute_import",
+      "module": "core",
+      "text": "from suspension_multibody.core import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/tests/elements/test_elements.py",
+      "line": 6,
+      "form": "absolute_import",
+      "module": "core",
+      "text": "from suspension_multibody.core import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/tests/elements/test_elements.py",
+      "line": 13,
+      "form": "absolute_import",
+      "module": "elements",
+      "text": "from suspension_multibody.elements import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/tests/model/test_force_assembly.py",
+      "line": 5,
+      "form": "absolute_import",
+      "module": "elements",
+      "text": "from suspension_multibody.elements import ..."
+    },
+    {
+      "path": "packages/suspension_multibody/tests/physics/test_vehicle_physics.py",
+      "line": 5,
+      "form": "absolute_import",
+      "module": "analysis",
+      "text": "from suspension_multibody.analysis import ..."
+    }
+  ]
+}

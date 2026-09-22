@@ -13,8 +13,8 @@ There is therefore one implementation, and it lives in
 ``preparation/geometry.py``; duplicating it here just to fill a directory would
 be a second implementation of the same transform, which is exactly what the
 boundary forbids.  ``wrench_local_to_global``, the mirror-image transform, has
-no production caller at all: its only user is the retired
-``core/reactions.py``.
+no production caller at all: its only user was ``core/reactions.py``, which 08
+deleted with the rest of the retired solver surface.
 
 So this module is the boundary, not yet a home: it names the side, and the
 report boundary 07 lands its converters here.  It deliberately re-exports

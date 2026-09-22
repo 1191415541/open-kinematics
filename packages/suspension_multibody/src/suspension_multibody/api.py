@@ -38,7 +38,9 @@ from . import __version__
 # runs this package's `__init__`, and `front_axle` needs the element classes --
 # if `cases`, `elements` or `results` is entered first, `elements` is still
 # half-built when `front_axle` asks for `AntiRollBarElement`.  The load-order
-# constraint disappears when 08 deletes the legacy element package.
+# constraint does not disappear with 08: the element package stays under A1,
+# because the native force-wrench channel cannot carry a fixed body's end
+# reactions, so the order below is still load-bearing.
 from .preparation.assembly import FrontAxleAssembly, build_front_axle  # isort: skip
 
 from .axle_dynamics.schema import AxleSolverSettings

@@ -9,11 +9,12 @@ residual and Jacobian kernels over those declarations -- together with
 matrix.
 
 This module is not on the live path: production authors a declaration and the
-native kernel assembles and solves it.  The only remaining callers are
-``core.reactions`` -- which has no production caller of its own, only
-``tests/core/test_reactions.py`` -- and ``tests/core/test_constraints.py``.
-The kernels move to the native ``mb_joint``/``mb_solve_*`` modules as part of
-the epic; this file is deleted with the rest of ``core`` in 08.
+native kernel assembles and solves it.  It survives 08 because the task keeps
+``core`` as a package -- ``core/spatial.py`` and ``core/rigid_body.py`` are
+dependencies of ``elements/`` -- and its callers are ``ConstraintSystem`` itself
+and ``tests/core/test_constraints.py``.  ``core/reactions.py``, the other
+caller, was deleted: it had no production caller.  The kernels move to the
+native ``mb_joint``/``mb_solve_*`` modules as part of the epic.
 """
 
 from __future__ import annotations

@@ -14,7 +14,12 @@ The root `uv.lock` is the workspace's only tracked dependency lockfile.
 - `suspension_kinematics`: daily suspension geometry design and optimization.
 - `suspension_multibody`: high-fidelity quasi-static K&C, load analysis, the
   axle dynamics semantics layer over the native kernel, and optional Adams
-  validation.
+  validation. Its Python surface is the authoring layer (`preparation/`), the
+  contract, result and runner layers (`schema/`, `results/`, `kernel/`,
+  `simulation/`, `cases/`) and the reporting layer (`report/`); the `elements/`
+  (A1) and `analysis/` (A2) packages stay where they are, with the reason and
+  removal condition recorded per item in the deletion record of
+  `.codex-tasks/20260921-architecture-deviation-closure/tasks/20260921-08-delete/`.
 
 ## Native axle dynamics kernel
 

@@ -5,10 +5,10 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from suspension_multibody.analysis import compute_k_metrics
-from suspension_multibody.core.rigid_body import RigidBodyState
-from suspension_multibody.core.spatial import SE3
-from suspension_multibody.model import build_front_axle
+from suspension_multibody.preparation.assembly import build_front_axle
+from suspension_multibody.preparation.assembly.types import RigidBodyState
+from suspension_multibody.preparation.geometry import SE3
+from suspension_multibody.report.metrics import compute_k_metrics
 from suspension_multibody.schema import FrontAxleModel, MassSpec
 
 
