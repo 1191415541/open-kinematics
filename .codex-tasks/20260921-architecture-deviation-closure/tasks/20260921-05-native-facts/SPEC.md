@@ -5,7 +5,7 @@
 让 Python 侧的元件载荷报告、静轮荷与焊接体凝聚都建立在 native 事实上，按三步顺序推进，禁止一次积累全任务 diff：
 
 1. 凝聚与模型映射：**（2026-09-21 用户裁决 A1 修订）** 凝聚保留在 Python 作者层（`model/vehicle.py:243`），不迁入 mb_assembly；本步改为登记 native `kind="fixed"` 关节与 Python 凝聚的等价性契约，并加等价性测试与体 ID 映射登记。原「把计算性焊接体凝聚迁入 mb_assembly」作废，理由：迁入会改变 native 收到的 body 集合（实测 body 22→23），而整车门为字节级 sha256（`case_parity_check.py:398-410`），与 EPIC「不得重录数值基线」冲突。
-2. native 输出与静轮荷：冻结并补齐元件报告通道，`analysis/vehicle_physics.py:88` 的 `compute_static_wheel_loads` 迁到 native 静力辅助求解 + `results` 映射，保持原最小范数算法与 service 调用语义。
+2. native 输出与静轮荷：冻结并补齐元件报告通道；**2026-09-22 裁决 A2 修订**——`analysis/vehicle_physics.py:88` 的 `compute_static_wheel_loads` **不迁 native**（native 无静力求解 ABI 入口且 ABI 导出面冻结），保留 Python 最小范数算法本体与 service 调用语义，归属在 `results` 映射层收口，并登记 file:line + 阻断原因 + 解除条件。
 3. decoder 接线：元件载荷报告从 native 结果读取，保留用户可见字段、单位、方向、参考点与失败证据。
 
 必须冻结的对照范围：名称/ID、两端、坐标系、作用点、符号、单位、能量、active 状态；覆盖弹簧、阻尼、衬套、防倾杆、限位、垂向轮胎以及 K/C 两模式；身份映射覆盖凝聚后的实体。
@@ -28,7 +28,7 @@
 
 ## 范围与文件归属
 
-- 可写：multibody 的 results/**、api.py（只准备结果适配，不提前切换06负责的生产调用）、analysis/vehicle_physics.py（静轮荷迁出）、相关 tests；kernel 的 cpp/include 和 cpp/src 中 assembly/静力辅助/输出及所需契约接线、CMakeLists.txt；contracts 的必要兼容字段与测试。改动限本任务交付。
+- 可写：multibody 的 results/**、api.py（只准备结果适配，不提前切换06负责的生产调用）、analysis/vehicle_physics.py（**A2 修订：只做归属收口与登记，不迁出算法**）、相关 tests；kernel 的 cpp/include 和 cpp/src 中 assembly/输出及所需契约接线、CMakeLists.txt；contracts 的必要兼容字段与测试。改动限本任务交付。
 - 只读：`packages/suspension_kernel/MODULES.md`、`packages/suspension_multibody/src/suspension_multibody/elements/**`（06 才改）、父 `EPIC.md`、`VALIDATION.md`。
 - 不写：`report`（07 新建）、`preparation`（06 负责）、父 `EPIC.md`、`SUBTASKS.csv`、`PROGRESS.md`。
 
@@ -42,7 +42,7 @@
 1. 元件报告字段与 native 通道逐项对照表覆盖名称/ID、两端、坐标系、作用点、符号、单位、能量、active 状态，且覆盖弹簧、阻尼、衬套、防倾杆、限位、垂向轮胎与 K/C 两模式。
 2. 缺口按「向后兼容可选扩展（默认关闭）」由 C++ 输出补字段解决；`kernel` 与 `contracts` 测试及版本兼容门通过，无字段被填零；默认路径 artifact 字节不变。
 3. **（A1 修订）** 凝聚保留在 Python 作者层；native `kind="fixed"` 关节与 Python 凝聚的**等价性**有测试；body ID→凝聚体 ID 映射有登记与测试；凝聚后实体身份在 native 输出与 Adams 渲染中一致。
-4. 静轮荷由 native 静力辅助求解 + `results` 映射提供，保持原最小范数算法与 service 调用语义，并单独有测试。
+4. **（A2 修订）** 静轮荷：保留 Python 最小范数算法与 service 调用语义（`analysis/vehicle_physics.py:88` → `vehicle/service.py:40` 唯一生产调用者），归属在 `results` 映射层收口，单独有测试；须有 file:line 保留登记与解除条件，**不判为「已迁 native」**。
 5. 元件载荷报告经 `results` decoder 从 native 结果读取（可选通道启用时）；默认路径保持现状且两门为绿。通道顺序、单位、方向、参考点与失败证据保持。
 6. 冻结的通道级容差验收逐通道通过；动态数组逐位一致、K/C parity、family parity、ABI 七符号门通过；且未重录任何基线。
 7. Python 与 native 的力律差异全部登记。**（A1 修订）**：力元本构的删除以本任务的可选通道证据为前提；通道未启用期间旧 Python 路径保留，**不因此判本任务未达成**（按 EPIC G3 修订）。
@@ -60,6 +60,6 @@ uv run --package suspension-contracts pytest packages/suspension_contracts/tests
 uv run --package suspension-multibody pytest packages/suspension_multibody/tests/results packages/suspension_multibody/tests/physics packages/suspension_multibody/tests/vehicle packages/suspension_multibody/tests/cases packages/suspension_multibody/tests/architecture -q
 ```
 
-三步顺序固定为"凝聚与模型映射 → native 输出与静轮荷 → decoder 接线"；每步结束都要同时满足构建成功、通道级容差验收与数值门通过。
+三步顺序固定为"凝聚等价性登记 → native 输出与静轮荷归属收口 → decoder 接线"；每步结束都要同时满足构建成功、通道级容差验收与数值门通过。
 
 每个 TODO 行的验收均包含本 SPEC 验证协议全集及父 VALIDATION.md 冻结门禁：构建并同步DLL、动态字节门、K/C与family parity、ABI七符号/契约版本门以及本任务的kernel/contracts/通道测试。CSV validation_command 为该步专项命令，不能代替全集。未执行全集不得将行置DONE。

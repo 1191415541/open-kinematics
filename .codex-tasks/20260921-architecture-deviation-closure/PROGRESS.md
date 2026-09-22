@@ -4,10 +4,10 @@
 
 任务：消除 C++ 模块职责与 Python report/旧模块两处偏差。
 形态：epic。
-进度：4/9 子任务 DONE（01 8/8、02 7/7、03 7/7、04 7/7）；05-09 TODO。
-当前：C++ 侧已完成——01 冻结基线与工具链；02 建立分层与删除门禁；03 拆分基础层（mb_config/mb_numeric/mb_dual/mb_linear/mb_joint/mb_input/mb_solve_dynamic/mb_solve_static）；04 拆解 mb_vehicle（mb_assembly/mb_element/mb_force/mb_tire 落地，模块环与 mutual 边清零，`--strict --final` 全绿）。Python 侧未动——`report`/`preparation` 归位、元件事实通道、旧模块删除、终局验收均待 05-09。
+进度：4/9 子任务 DONE（01 8/8、02 7/7、03 7/7、04 7/7）；子任务 05 实施中（3/8 步：步骤 1 通道对照表、步骤 2 凝聚等价性登记、步骤 3 默认关闭的 `element_wrench` 可选通道已 DONE 并入库 `ecbca0f`）；05 步骤 4-8 与 06-09 待实施。
+当前：C++ 侧已完成——01 冻结基线与工具链；02 建立分层与删除门禁；03 拆分基础层（mb_config/mb_numeric/mb_dual/mb_linear/mb_joint/mb_input/mb_solve_dynamic/mb_solve_static）；04 拆解 mb_vehicle（mb_assembly/mb_element/mb_force/mb_tire 落地，模块环与 mutual 边清零，`--strict --final` 全绿）。Python 侧进行中——05 已完成通道对照、凝聚等价性登记与可选 native 力旋量通道；静轮荷归属收口、decoder 接线、通道验收、差异登记待完成；`report` 建立、作者层归位、旧模块删除、终局验收待 06-09。
 文件：本目录 EPIC.md、SUBTASKS.csv、VALIDATION.md；当前子任务目录 tasks/20260921-05-native-facts/（步骤 1 对照表已交付于其 raw/）。
-下一步：执行子任务 05 —— 步骤 2 凝聚等价性登记、步骤 3 按缺口补默认关闭的可选 native 输出通道、步骤 4 静轮荷迁 native、步骤 5 decoder 接线；每步跑 SPEC 验证协议全集与字节级数值门，且不得重录基线（A1 修订口径见 EPIC 修订记录）。
+下一步：执行子任务 05 剩余步骤 —— 步骤 4 静轮荷归属收口与保留登记（A2 修订：不迁 native）、步骤 5 decoder 接线、步骤 6 逐通道容差验收与凝聚实体对照、步骤 7 力律差异登记、步骤 8 汇总；每步跑 SPEC 验证协议全集与字节级数值门，且不得重录基线（A1/A2 修订口径见 EPIC 修订记录）。
 
 ## 证据
 
@@ -95,3 +95,18 @@
 - 现状（已实测校验）：SUBTASKS.csv 9 行/11 字段；各子任务 TODO.csv 7-8 行/8 字段，无空字段；9 个子任务目录均含 SPEC.md、TODO.md 三件套（05-09 的 `raw/` 待实施时创建）。
 - **两处未采纳的审核建议（低危，登记不阻断）**：05 SPEC 与 06 SPEC 的「待删除登记载体」未点名具体文件（实施时归 06/08 的 PROGRESS）；09 TODO 第 1 行的终局命令用单条 `&&` 链而非逐条记录（notes 已要求逐条留退出码，实施时按 notes 执行）。
 - 本轮仍未运行生产构建或数值测试，未把任何实施行标记为完成。计划修订已闭环，05 可启动实施。
+
+## 2026-09-22 计划修订（用户裁决 A2，第 3 级修改）与 05 实施进度
+
+- **进度定位**（本轮开工时实测）：Epic 9 子任务/66 叶子步骤中，01-04 DONE；05 已完成步骤 1-3（步骤 3 已入库 `ecbca0f`，但父级状态未回填）。剩余 34 个叶子步骤：05 步骤 4-8、06（8 步）、07（7 步）、08（7 步）、09（7 步）。
+- **基线复现**（未改动任何生产代码前实测）：`build_axle_native.py` 退出 0；`dynamic_hash_sentinel.py --check` 退出 0（26/26 artifact 逐位一致，组合哈希 `e7407656731ed556efc28fb89d8fc69881725b3bfb2f39066eb898986389d48e`，与 01 冻结值相同）；`check_module_layering.py --strict` 退出 0；全量 `tests` 为 `712 passed, 47 skipped, 1 xfailed`。
+- **改了什么**：EPIC 的 A2 修订记录与偏差登记口径两节、状态段、G3、事实与修正（vehicle_physics 行）、Python 迁移矩阵（compute_static_wheel_loads 行）、验证协议 05 段、Done-When；05 SPEC 目标 2/范围/验收 4/验证协议末段；05 TODO 第 4 行；09 SPEC 验收 3/4 与 TODO 第 4 行；`SUBTASKS.csv` 第 05 行（状态回填 IN_PROGRESS + A2 口径）；本文件进度/当前/下一步三行。
+- **为什么**：05 步骤 4 实施前核实，`compute_static_wheel_loads` 无法在既有冻结约束下迁入 native。证据：`cpp/src/abi/kernel_abi.cpp:854-858` 明示库只暴露一个 run 入口；`mb_solve_static/functions.hpp:61` 的 `solve_static_least_squares` 是方形方程且无 `extern "C"`；实现 `src/solve_static/kernel_static_projection.cpp:212-213` 强制 `matrix.size()==dimension*dimension`；该函数为 `np.linalg.lstsq` 的 3×4 最小范数（`vehicle_physics.py:115-131`），输入是 `build_vehicle(mode="K")`（:110）这一与动态整车算例不同的装配；唯一生产调用者 `vehicle/service.py:30,40`；静轮荷不参与字节级门（`case_parity_check.py:413-421` 的 `_VEHICLE_LEDGERS` 不含该字段）。
+- **A2 处置**：05 步骤 4 由「迁入 native」改为「按 A1 同类偏差登记」——保留 Python 最小范数算法与 service 语义，归属在 `results` 映射层收口，登记 file:line + 阻断原因 + 解除条件，**不判为已迁 native**。解除条件：先单独裁决「是否允许扩展 ABI 导出面」或「是否允许在既有契约下新增默认关闭的静力输出块」。
+- **A2 第 2 问（后续偏差处置口径）**：06-09 若再遇到「子任务 SPEC 字面要求与 EPIC 冻结约束不可同时成立」，一律按 A1 模式：采纳目标意图、保留生产路径、逐项登记偏差与解除条件，绝不伪造达成。
+- **独立审核**：`code-reviewer 3d76f3a3` 只读复审本轮修订。A1-A5 事实前提全部核验成立（含 `kernel_abi.cpp:854-858` 原文、方形矩阵强制、3×4 lstsq、唯一调用者、两门不含静轮荷）；B7「不伪造达成」成立。B6 指出 G3/Done-When 的「反力求解」禁令与新口径外显冲突，B8 列出 8 处兄弟真源未同步——**均已逐条修复**（见「改了什么」）。
+- **未修改**：G1、G2、G4、「不得重录任何数值基线」、01 冻结的 `VALIDATION.md` 及其容差、ABI 七符号与版本常量。
+- **本轮未运行**生产构建或数值测试以外的任何改动验证；未把任何实施行标记为完成。
+- **已知未闭合项（须显式登记，不判达成）**：
+  1. 用户此前第二问所选「Python 不再凝聚、weld 送 native 作 fixed 约束」的**手段**与 A1「不重录基线、字节门保持绿」冲突（不凝聚使 native body 集合 22→23，整车门字节 sha256 失败）。本次以 A1 为约束上限，只采纳目标（native fixed 关节作契约等价实现 + 等价性测试），生产路径暂留 Python 作者层。解除条件：单独裁决数值门策略（是否允许重录车辆基线）。
+  2. **（A2 新增）** 静轮荷最小范数辅助求解保留在 Python：native 无静力求解 ABI 入口，且 ABI 导出面冻结，故无法迁入。归属已收口到 `results` 映射层并登记保留理由；解除条件同 A2 修订记录。

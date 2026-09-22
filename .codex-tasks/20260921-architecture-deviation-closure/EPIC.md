@@ -3,7 +3,7 @@
 - 任务编号：20260921-architecture-deviation-closure
 - 创建日期：2026-09-21
 - 形态：epic
-- 状态：IN_PROGRESS（子任务 01-04 DONE，完成 4/9；05-09 待实施，计划已按用户裁决 A1 修订并登记）
+- 状态：IN_PROGRESS（子任务 01-04 DONE；子任务 05 已实施 3/8 步——步骤 1 通道对照表、步骤 2 凝聚等价性登记、步骤 3 默认关闭的 `element_wrench` 可选通道；完成 4/9 子任务，06-09 待实施。计划已按用户裁决 A1（2026-09-21）与 A2（2026-09-22）修订并登记）
 - 真源：本目录 SUBTASKS.csv；子任务相对路径均相对此 Epic 目录解析。
 
 ## 状态与原始需求
@@ -19,7 +19,7 @@
 
 G1. C++ 按职责形成 numeric/dual/config、model/contract/input、joint/element/tire/energy、assembly/force、linear/solve_static/solve_dynamic、cases/output/abi；对应模块使用 mb_ 前缀（abi 除外）。删除 mb_base、mb_vehicle 等被替代模块与旧 include 路径。不能靠重命名掩盖职责混合。
 G2. Python 建立 report，报告和派生指标从 analysis/metrics 收敛于此；core/elements/model/analysis 的现役职责各有明确新归属，并删除其中**已无生产调用者**的旧模块；仍有现役生产调用的模块按 G3 的修订保留，不设「必须删完」的强制项，不保留转发壳。
-G3. Python 不再保留关节残差/Jacobian 与反力求解实现；力元本构按「05 通道证据 → 06 切换」推进，但允许在 native 力旋量通道尚未启用期间继续存在，其删除以 05 的可选通道证据为前提。原有元件载荷报告保持用户可见字段、单位、方向、参考点和失败证据。
+G3. Python 不再保留关节残差/Jacobian 与反力求解实现；力元本构按「05 通道证据 → 06 切换」推进，但允许在 native 力旋量通道尚未启用期间继续存在，其删除以 05 的可选通道证据为前提。原有元件载荷报告保持用户可见字段、单位、方向、参考点和失败证据。**本条「反力求解」指关节约束反力恢复（`core/reactions.py`）；`analysis/vehicle_physics.py:88` 的静轮荷最小范数辅助求解不属本条范围，按 2026-09-22 裁决 A2 登记保留（见 A2 修订记录），未解除前不判达成。**
 G4. 保留最新统一 preparation、simulation、results、service 和 artifact 生命周期，不退回历史“仅七个目录”的草案；保持现有 API、CLI、七个 family、Adams 输入输出和历史 artifact 读取功能。
 
 ### 修订记录（2026-09-21，用户裁决 A1）
@@ -39,6 +39,23 @@ G4. 保留最新统一 preparation、simulation、results、service 和 artifact
 4. 元件报告新通道：按向后兼容可选扩展实现，**默认关闭**，默认路径的 artifact 字节不变，两个字节级门保持绿。
 
 未修订：G1（C++ 模块职责与 DAG）、G4（API/CLI/family/Adams/历史读取）保持原文；「不得重录数值基线」保持原文。
+### 修订记录（2026-09-22，用户裁决 A2）
+
+修订原因：05 步骤 4 实施前核实，`analysis/vehicle_physics.py:88` 的 `compute_static_wheel_loads` **无法**在既有冻结约束下迁入 native：
+
+- native 侧没有静力求解 ABI 入口，`cpp/src/abi/kernel_abi.cpp:854-858` 明示「the shared library exposes exactly one run entry point: `suspension_kernel_run`」；`mb_solve_static/functions.hpp:61` 的 `solve_static_least_squares` 是**方形**方程求解且无 `extern "C"` 声明，不是 3×4 最小范数。
+- EPIC 冻结「ABI 签名及现有导出不变」，故不得新增静态求解导出符号。
+- 该函数的输入是 `build_vehicle(vehicle, mode="K")`（`vehicle_physics.py:110`）的 K 模式装配，与动态整车算例（`preparation/vehicle_dynamic.py`）不是同一套装配；唯一生产调用者是 `vehicle/service.py:40`，且静轮荷**不参与**两个字节级门（`case_parity_check.py:413-421` 的 `_VEHICLE_LEDGERS` 与 `dynamic_hash_sentinel.py` 的 26 个 axle artifact 均不含该字段）。
+
+本次修订为第 3 级计划修改（改验收口径），修订内容：**05 步骤 4 由「迁入 native」改为「按 A1 同类偏差登记」**——保留 Python 最小范数算法本体与 service 调用语义不变，只在 `results` 映射层收口归属，逐项登记 file:line + 阻断原因 + 解除条件，**不判该步为「已迁 native」**。
+
+解除条件：先单独裁决「是否允许扩展 ABI 导出面」或「是否允许在既有契约下新增默认关闭的静力输出块」；在此之前不得以登记代替交付。
+
+未修订：G1、G2、G3、G4、「不得重录数值基线」、ABI 七符号冻结。
+
+### 偏差登记口径（2026-09-22，用户裁决 A2 第 2 问）
+
+06-09 实施中若再遇到「子任务 SPEC 字面要求与 EPIC 冻结约束（不重录基线／字节门保持绿／ABI 不变）不可同时成立」，一律按 A1 模式处置：**采纳目标的意图、保留生产路径、逐项登记偏差与解除条件，绝不伪造达成**。集中登记于父 `PROGRESS.md` 的「未闭合项」小节。
 
 ## 事实与修正
 
@@ -46,7 +63,7 @@ G4. 保留最新统一 preparation、simulation、results、service 和 artifact
 - build_model 位于 cpp/src/abi/kernel_model_build.cpp:23；车辆注册在 src/vehicle/kernel_registration.cpp；标量总线为 external_force_vector，对偶总线为 external_force_directional。
 - Python elements/elastic.py:253 的 evaluate 含弹簧力律；api.py:742 在内核返回的状态上调用 evaluate_generalized_forces。因此先前“Python 无本构”的结论不成立，不能把它整体搬到 report。
 - core/constraints.py 的对象被 preparation 使用，但 residual/jacobian 不应随数据对象保留。
-- analysis/vehicle_physics.py:88 的 compute_static_wheel_loads 用最小二乘求支反力，属于求解；若仍保留该现役功能，应迁到内核而非 report。
+- analysis/vehicle_physics.py:88 的 compute_static_wheel_loads 用最小二乘求支反力，属于求解；若仍保留该现役功能，应迁到内核而非 report。**2026-09-22 裁决 A2 改判：native 无静力 ABI 入口且导出面冻结，该功能按 A2 修订记录登记保留，不迁内核；本行结论仅「不得迁 report」部分继续有效。**
 - 实测 DLL 是 7 个导出符号，不是历史架构草案中的三个函数；本次冻结实际符号面与调用签名，不新增 suspension_kernel_free。
 
 ## Non-Goals / Constraints
@@ -89,7 +106,7 @@ G4. 保留最新统一 preparation、simulation、results、service 和 artifact
 | metrics、analysis 的轮几何/柔度/统计 | report/metrics/、report/geometry.py、report/compliance.py；只消费结果及只读说明数据 |
 | analysis/time_signals | preparation/signals.py；属于输入信号采样，不是报告 |
 | VehicleKCTimeDomainSolver 规定运动 replay | simulation/replay.py 编排 + results/timeseries.py 结果聚合；保留“无积分”的原语义 |
-| compute_static_wheel_loads | native 静力辅助求解 + results 映射；保持原最小范数算法和 service 调用语义 |
+| compute_static_wheel_loads | **修订（A2）**：native 无静力求解 ABI 入口且 ABI 导出面冻结，算法本体与 service 调用语义保持原样并登记保留（file:line + 阻断原因 + 解除条件）；不迁 report。详见 A2 修订记录。 |
 | analysis/benchmarks | tests/data 的声明式夹具；脚本通过明确夹具路径读取，不导入测试包 |
 | core/rank、reactions、model/mass 等无生产调用的求解实现 | 删除实现；保留有价值的物理断言，转 native 测试，逐项登记覆盖关系 |
 | analysis/time_domain_physics 等仅导出功能 | 逐符号判定：纯诊断迁 report；求解迁 native；不以“无内部调用”擅自删除公开能力 |
@@ -115,7 +132,7 @@ CMakeLists.txt、layering_baseline.json、api.py、包 __init__.py、compiler/ru
 
 03/04/05 每步构建并同步 DLL，运行动态字节门、K/C/family parity、ABI 七符号与版本门。03/04 同步运行 cpp+header 分层与 architecture 门禁。05 涉及新增输出或契约字段时额外执行 kernel/contracts 测试与版本兼容门；现有输入和输出通道顺序/单位不变。
 
-05 冻结 Python 元件报告的 name/ID、两端、坐标系、作用点、符号、单位、能量、active 状态与 native 输出逐项对照。覆盖弹簧、阻尼、衬套、防倾杆、限位、垂向轮胎及 K/C 两模式；单独测静轮荷辅助求解。**2026-09-21 修订（A1）**：缺口按「向后兼容可选扩展、默认关闭」补 C++ 输出，默认路径 artifact 字节不得变化；不得缺字段填零；不得为让可选通道生效而重录数值基线。凝聚按修订记录第 3 条处理（保留 Python 作者层 + native fixed 关节等价性测试）。
+05 冻结 Python 元件报告的 name/ID、两端、坐标系、作用点、符号、单位、能量、active 状态与 native 输出逐项对照。覆盖弹簧、阻尼、衬套、防倾杆、限位、垂向轮胎及 K/C 两模式；静轮荷按 **A2 登记保留**，其 Python 最小范数算法单独有测试（该测试验证保留语义，不是迁移证据）。**2026-09-21 修订（A1）**：缺口按「向后兼容可选扩展、默认关闭」补 C++ 输出，默认路径 artifact 字节不得变化；不得缺字段填零；不得为让可选通道生效而重录数值基线。凝聚按修订记录第 3 条处理（保留 Python 作者层 + native fixed 关节等价性测试）。
 
 06/07 保留 API、CLI、Adams source rendering、七 family preparation/document bypass、结果异常/partial、历史读取；report 的计算以冻结结果验证，replay 时间与聚合协议不变。
 
@@ -137,7 +154,7 @@ CMakeLists.txt、layering_baseline.json、api.py、包 __init__.py、compiler/ru
 
 ## Done-When
 
-独立逐条确认 G1–G4：目标模块职责和 cpp+header DAG 实测通过；**已无生产调用者**的旧模块与旧导入、wheel 残留为零（仍有现役生产调用的模块按 G3 修订保留，须逐项列明其保留理由）；Python 无关节残差/Jacobian 与反力求解实现，且 native 输出有逐通道证据（力元本构的删除以 05 可选通道证据为前提）；**凝聚等价性有实测证据**：native `kind="fixed"` 关节与 Python 凝聚的等价性测试通过，body ID→凝聚体 ID 映射有登记；公开 API/CLI、七 family、Adams 渲染、历史读取与 success/partial/failed artifact 端到端通过。**数值门为独立项**：`dynamic_hash_sentinel` 与 `case_parity_check` 的字节级门必须保持绿，且未重录任何基线；若某 Goal 与字节门冲突，以字节门为准并将该 Goal 退回修订，不得改基线使其通过。每行 DONE 不代替这些条件。
+独立逐条确认 G1–G4：目标模块职责和 cpp+header DAG 实测通过；**已无生产调用者**的旧模块与旧导入、wheel 残留为零（仍有现役生产调用的模块按 G3 修订保留，须逐项列明其保留理由）；Python 无关节残差/Jacobian 与反力求解实现（反力求解指关节约束反力恢复；`analysis/vehicle_physics.py:88` 的静轮荷最小范数辅助求解按 A2 登记保留，须有保留理由与解除条件），且 native 输出有逐通道证据（力元本构的删除以 05 可选通道证据为前提）；**凝聚等价性有实测证据**：native `kind="fixed"` 关节与 Python 凝聚的等价性测试通过，body ID→凝聚体 ID 映射有登记；公开 API/CLI、七 family、Adams 渲染、历史读取与 success/partial/failed artifact 端到端通过。**数值门为独立项**：`dynamic_hash_sentinel` 与 `case_parity_check` 的字节级门必须保持绿，且未重录任何基线；若某 Goal 与字节门冲突，以字节门为准并将该 Goal 退回修订，不得改基线使其通过。每行 DONE 不代替这些条件。
 
 ## 风险与回退
 

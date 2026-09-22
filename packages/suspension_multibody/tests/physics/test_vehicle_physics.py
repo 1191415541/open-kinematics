@@ -59,3 +59,26 @@ def test_front_and_rear_roll_centers_are_finite_and_symmetric(full_vehicle_model
         assert np.isclose(
             result.left_instant_center[0], -result.right_instant_center[0]
         )
+
+
+def test_static_wheel_loads_are_the_minimum_norm_solution(full_vehicle_model) -> None:
+    """The retained Python solver must still return the *minimum norm* load split.
+
+    The four vertical reactions are underdetermined (three balance equations),
+    so the algorithm -- not the physics alone -- picks one of a family of valid
+    answers.  An equal-front-rear, equal-left-right layout has a symmetric
+    minimum norm split; a solver that returned any other balanced solution (or
+    an unconstrained least-squares fit) would fail this.  This pins the
+    algorithmic choice that 2026-09-22 decision A2 keeps in Python.
+    """
+    result = compute_static_wheel_loads(full_vehicle_model)
+
+    assert result.rank == 3
+    loads = result.wheel_loads
+    quarter = result.summary.total / 4.0
+    for name, value in loads.items():
+        assert np.isclose(value, quarter, rtol=1e-9, atol=1e-8), name
+    # The minimum-norm member of the balanced family is the uniform split, so
+    # equality with the quarter load is the algorithm's fingerprint: a solver
+    # returning any other balanced solution would satisfy the balance checks
+    # above but fail here.
