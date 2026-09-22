@@ -62,7 +62,8 @@ def test_front_and_rear_roll_centers_are_finite_and_symmetric(full_vehicle_model
 
 
 def test_static_wheel_loads_are_the_minimum_norm_solution(full_vehicle_model) -> None:
-    """The retained Python solver must still return the *minimum norm* load split.
+    """
+    The retained Python solver must still return the *minimum norm* load split.
 
     The four vertical reactions are underdetermined (three balance equations),
     so the algorithm -- not the physics alone -- picks one of a family of valid

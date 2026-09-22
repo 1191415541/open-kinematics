@@ -1,0 +1,62 @@
+
+########## mode K ##########
+contract_version: 2
+element_wrench shape: (2, 10, 13)
+finite rows per type code: {7: 10}
+external rows receiving body (first): ['chassis']
+
+native bushing rows=0 python bushing elements=0
+element                    end body              |dF|max     |dM|max   |dM|/|M|
+
+worst force diff  = 0 N
+worst moment diff = 0 N*m (max relative 0)
+python-only (body absent from native rows): []
+native rows receiving 'chassis': 0, of which all-NaN (no force applied): 0
+python evaluations reporting a non-zero wrench on 'chassis': 0
+
+########## mode C ##########
+contract_version: 2
+element_wrench shape: (2, 42, 13)
+finite rows per type code: {2: 16, 7: 10}
+external rows receiving body (first): ['chassis']
+
+native bushing rows=32 python bushing elements=16
+element                    end body              |dF|max     |dM|max   |dM|/|M|
+upper_arm_0_L                0 upper_arm_L   1.32578e-06    0.501793    0.00287
+upper_arm_0_L                1 chassis               nan         nan        nan
+upper_arm_0_R                0 upper_arm_R             0 2.61605e-15        116
+upper_arm_0_R                1 chassis               nan         nan        nan
+upper_arm_1_L                0 upper_arm_L   9.11964e-07    0.501793    0.00287
+upper_arm_1_L                1 chassis               nan         nan        nan
+upper_arm_1_R                0 upper_arm_R             0 2.61605e-15        116
+upper_arm_1_R                1 chassis               nan         nan        nan
+lower_arm_0_L                0 lower_arm_L   1.80052e-06    0.188733    0.00108
+lower_arm_0_L                1 chassis               nan         nan        nan
+lower_arm_0_R                0 lower_arm_R             0 2.11247e-15       93.9
+lower_arm_0_R                1 chassis               nan         nan        nan
+lower_arm_1_L                0 lower_arm_L   1.80052e-06    0.188732    0.00108
+lower_arm_1_L                1 chassis               nan         nan        nan
+lower_arm_1_R                0 lower_arm_R             0 2.11247e-15       93.9
+lower_arm_1_R                1 chassis               nan         nan        nan
+uca_bushing_L_inner_front    0 upper_arm_L             0           0          0
+uca_bushing_L_inner_front    1 chassis               nan         nan        nan
+uca_bushing_L_inner_rear     0 upper_arm_L             0           0          0
+uca_bushing_L_inner_rear     1 chassis               nan         nan        nan
+lca_bushing_L_inner_front    0 lower_arm_L             0           0          0
+lca_bushing_L_inner_front    1 chassis               nan         nan        nan
+lca_bushing_L_inner_rear     0 lower_arm_L             0           0          0
+lca_bushing_L_inner_rear     1 chassis               nan         nan        nan
+uca_bushing_R_inner_front    0 upper_arm_R             0           0          0
+uca_bushing_R_inner_front    1 chassis               nan         nan        nan
+uca_bushing_R_inner_rear     0 upper_arm_R             0           0          0
+uca_bushing_R_inner_rear     1 chassis               nan         nan        nan
+lca_bushing_R_inner_front    0 lower_arm_R             0           0          0
+lca_bushing_R_inner_front    1 chassis               nan         nan        nan
+lca_bushing_R_inner_rear     0 lower_arm_R             0           0          0
+lca_bushing_R_inner_rear     1 chassis               nan         nan        nan
+
+worst force diff  = 1.80052e-06 N
+worst moment diff = 0.501793 N*m (max relative 116)
+python-only (body absent from native rows): []
+native rows receiving 'chassis': 16, of which all-NaN (no force applied): 16
+python evaluations reporting a non-zero wrench on 'chassis': 8
