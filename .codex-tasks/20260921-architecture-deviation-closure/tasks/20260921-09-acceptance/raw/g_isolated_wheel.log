@@ -1,0 +1,81 @@
+### 1. import + 版本
+import OK, version 0.1.0
+public API: ['AxleDynamicsResult', 'CaseSpec', 'FrontAxleModel', 'Manifest', 'ResultBundle', 'SchemaVersion', 'VehicleDynamicsResult', '__version__', 'load_case', 'load_model', 'load_vehicle_dynamic_case', 'load_vehicle_model', 'read_artifact', 'run_case', 'run_dynamic_case', 'run_vehicle_dynamics', 'write_artifact']
+
+### 2. CLI
+                                                                               
+ Usage: python -m suspension_multibody.cli [OPTIONS] COMMAND [ARGS]...         
+                                                                               
+ Handle global CLI options.                                                    
+                                                                               
+(cli --help exit=0)
+
+### 3. 七导出符号 + 版本常量
+dll exists: True C:\Users\zzy11\.pi-desktop\scratch\a3963220-3b19-431f-bb37-d9a19b328edc\iso_venv\Lib\site-packages\suspension_kernel\native\suspension_kernel.dll
+symbols present: {'suspension_kernel_run': True, 'suspension_kernel_capabilities': True, 'suspension_kernel_contract_version': True, 'axle_kernel_abi_version': True, 'vehicle_kernel_abi_version': True, 'mb_core_abi_version': True, 'mb_core_run': True}
+  suspension_kernel_contract_version = 1
+  axle_kernel_abi_version = 15
+  vehicle_kernel_abi_version = 30
+  mb_core_abi_version = 1
+suspension_kernel_free present (must be False): False
+
+### 4. 已删旧模块必须缺席
+deleted modules still importable: none
+report present: True
+elements retained (A1): True
+analysis.vehicle_physics retained (A2): True
+### 5. 隔离环境 native 可执行（真实跑一个 K&C 工况）
+Traceback (most recent call last):
+  File "<string>", line 2, in <module>
+    from suspension_multibody.analysis.benchmarks import benchmark_model
+ModuleNotFoundError: No module named 'suspension_multibody.analysis.benchmarks'
+(native exec exit=1)
+
+### 6. 公开 API 端到端（run_case + artifact 读写）
+Traceback (most recent call last):
+  File "<string>", line 2, in <module>
+    from suspension_multibody.analysis.benchmarks import benchmark_model
+ModuleNotFoundError: No module named 'suspension_multibody.analysis.benchmarks'
+(api e2e exit=1)
+fixture model: benchmark_front_double_wishbone
+
+### 5. native execution
+status: success | cases: 1 | bodies: 10
+contract_version: 1
+
+### 6. public API end to end (run_case + artifact round trip)
+Traceback (most recent call last):
+  File "C:\Users\zzy11\.pi-desktop\scratch\a3963220-3b19-431f-bb37-d9a19b328edc/iso_probe.py", line 42, in <module>
+    bundle = run_case(model, CaseSpec(name="iso-api", controls=[]))
+                             ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\zzy11\.pi-desktop\scratch\a3963220-3b19-431f-bb37-d9a19b328edc\iso_venv\Lib\site-packages\pydantic\main.py", line 263, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+pydantic_core._pydantic_core.ValidationError: 1 validation error for CaseSpec
+mode
+  Field required [type=missing, input_value={'name': 'iso-api', 'controls': []}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.13/v/missing
+fixture model: benchmark_front_double_wishbone
+
+### 5. native execution
+status: success | cases: 1 | bodies: 10
+contract_version: 1
+
+### 6. public API end to end (run_case + artifact round trip)
+Traceback (most recent call last):
+  File "C:\Users\zzy11\.pi-desktop\scratch\a3963220-3b19-431f-bb37-d9a19b328edc/iso_probe.py", line 43, in <module>
+    print("run_case OK ->", type(bundle).__name__)
+                                 ^^^^^^
+NameError: name 'bundle' is not defined
+
+### 5-6 重跑（归档整份输出）
+fixture model: benchmark_front_double_wishbone
+
+### 5. native execution
+status: success | cases: 1 | bodies: 10
+contract_version: 1
+
+### 6. public API end to end (run_case + artifact round trip)
+run_case OK -> ResultBundle
+artifact_type: result_bundle | status: success
+
+ALL PROBE CHECKS PASSED

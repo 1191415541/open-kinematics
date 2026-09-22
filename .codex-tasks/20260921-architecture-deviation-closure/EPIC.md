@@ -3,7 +3,7 @@
 - 任务编号：20260921-architecture-deviation-closure
 - 创建日期：2026-09-21
 - 形态：epic
-- 状态：IN_PROGRESS（子任务 01-07 DONE，完成 7/9；08 实施中、09 待实施。计划已按用户裁决 A1（2026-09-21）与 A2（2026-09-22）修订并登记）
+- 状态：**DONE**（子任务 01-09 全部 DONE，9/9；G1–G4 逐条验收达成，见 `tasks/20260921-09-acceptance/raw/acceptance_record.md`）。两条按 A1/A2 保留的未闭合项显式登记、未判达成，见下方修订记录与父 PROGRESS「未闭合项」。
 - 真源：本目录 SUBTASKS.csv；子任务相对路径均相对此 Epic 目录解析。
 
 ## 状态与原始需求
