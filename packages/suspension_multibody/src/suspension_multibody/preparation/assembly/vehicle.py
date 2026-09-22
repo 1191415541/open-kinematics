@@ -250,10 +250,27 @@ def _rename_connections(
 
 
 def _condense_welded_bodies(assembly: VehicleAssembly) -> VehicleAssembly:
-    """Exactly merge bodies connected by WeldJoint constraints."""
-    flag = os.environ.get("SUSPENSION_MULTIBODY_CONDENSE_WELDS")
-    if flag is not None and flag != "" and flag == "0":
+    """
+    Return the assembly unchanged: the kernel's ``fixed`` joint carries a weld.
+
+    Condensation used to fuse welded bodies here so the kernel never saw them.
+    The kernel has its own ``fixed`` kind for exactly this constraint -- six rows,
+    the coincident point plus the full relative rotation -- and taking it means
+    the authoring layer no longer answers a *solving* question (which bodies are
+    really one).  Bodies stay separate and the weld is sent as a constraint.
+
+    ``SUSPENSION_MULTIBODY_CONDENSE_WELDS=1`` restores the fused form.  It is kept
+    because the fusion is still a correct statement of the same physics and the
+    two agree in the world frame -- same total mass, same centre of mass -- while
+    the fused form is the smaller body set an external caller may still want.
+    """
+    if os.environ.get("SUSPENSION_MULTIBODY_CONDENSE_WELDS") != "1":
         return assembly
+    return _fuse_welded_bodies(assembly)
+
+
+def _fuse_welded_bodies(assembly: VehicleAssembly) -> VehicleAssembly:
+    """Exactly merge bodies connected by WeldJoint constraints."""
     welds = tuple(
         constraint
         for constraint in assembly.constraints

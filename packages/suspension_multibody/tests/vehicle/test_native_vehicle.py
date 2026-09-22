@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pytest
 
@@ -320,15 +322,10 @@ def test_native_vehicle_runs_two_suspensions_and_four_wheels() -> None:
     result = run_vehicle_dynamics(model, _case(model))
 
     # chassis + front rack + 8 front links + rear rack + 8 rear links + 4 wheels.
-    # ``build_vehicle`` condenses welded bodies and drops isolated ones, so the
-    # resolved body set no longer matches the raw spec body count.
-    assert len(result.body_names) == 22
-    assert result.tire_names == (
-        "front_left",
-        "front_right",
-        "rear_left",
-        "rear_right",
-    )
+    # The welded rear rack is now its own body: the weld reaches the kernel as a
+    # `fixed` joint instead of being fused away here (A1 decision, 2026-09-22).
+    assert len(result.body_names) == 23
+    assert "rear_rack" in result.body_names
     assert result.steering_state("front_rack").shape == (2, 4)
     assert np.all(result.diagnostics.accepted)
     assert np.all(np.isfinite(result.states))
@@ -343,27 +340,21 @@ def _frames_for(assembly, model) -> dict[str, object]:
     return body_frames
 
 
-def test_native_fixed_joint_matches_python_weld_condensation() -> None:
+def test_native_fixed_joint_is_what_carries_a_weld() -> None:
     """
-    The native ``kind="fixed"`` joint is the contract equivalent of Python's
-    weld condensation (subtask 05, A1 revision).
+    The native ``kind="fixed"`` joint carries the weld; Python no longer fuses.
 
-    ``build_vehicle`` condenses welded bodies in Python before the model reaches
-    the kernel, so the equivalence claim is about what each side *means*, not
-    about two runs of the same input:
+    This is the target state of the A1 decision (2026-09-22): the authoring layer
+    stopped answering a *solving* question, so ``build_vehicle`` hands the kernel
+    the welded pair as two bodies plus a six-row ``fixed`` joint
+    (``mb_joint/types.hpp``: the coincident point plus the full relative
+    rotation) instead of fusing them itself.
 
-    * Python's condensation fuses the pair into one body whose mass, centre of
-      mass and inertia are the combined ones, and the weld constraint disappears
-      from ``assembly.constraints``.
-    * The native path receives the same pair as separate bodies plus a
-      six-row ``fixed`` joint (``mb_joint/types.hpp``: the coincident point plus
-      the full relative rotation).
-
-    This test pins the *contract*: the fused body carries the pair's mass, the
-    weld is gone from the constraint list, and the alias map records where each
-    original body went.  It does not compare two solver runs -- moving the
-    production path onto the native joint needs a numeric-gate decision that is
-    tracked as an open item in the epic, not assumed here.
+    Both routes are the same physics and agree in the world frame -- same total
+    mass, same centre of mass -- so the production default is the one that keeps
+    the constraint visible to the kernel.  The fused form is still reachable with
+    ``SUSPENSION_MULTIBODY_CONDENSE_WELDS=1``; this test pins both, so the
+    rollback switch is real rather than assumed.
     """
     model = _vehicle()
     mount = model.wheels[0].model_copy(
@@ -376,29 +367,68 @@ def test_native_fixed_joint_matches_python_weld_condensation() -> None:
     )
     model = model.model_copy(update={"wheels": (mount, *model.wheels[1:])})
 
+    # 1. The default path: separate bodies, the weld sent as a fixed joint.
+    os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
     assembly = build_vehicle(model)
-
-    # 1. The fused body exists under the mount name and carries the pair's mass.
-    # 1. The fused body exists under the mount name and its mass is the pair's.
-    #    The upright carries 100 kg in this fixture; the wheel adds 20 kg.
-    fused_name = "front_upright_L"
-    assert fused_name in assembly.bodies
-    assert assembly.bodies[fused_name].mass == 120.0  # 100 kg upright + 20 kg wheel
-    # 2. The weld is gone: the kernel's own `fixed` kind is what would express it
-    #    instead, and a condensed assembly must not still carry one.
-    assert not any(item.name.startswith("wheel_mount_") for item in assembly.constraints)
     joints = _build_joints(assembly, _frames_for(assembly, model), 1.0)
-    assert not any(joint.kind == "fixed" for joint in joints), (
-        "a condensed assembly must not still carry a fixed joint: the weld is "
-        "either fused here or sent to the kernel, never both"
-    )
+    fixed = [joint for joint in joints if joint.kind == "fixed"]
+    assert fixed, "the weld has to reach the kernel as a fixed joint"
+    assert not assembly.body_aliases, "nothing is fused, so nothing is aliased"
+    for joint in fixed:
+        assert (joint.body_a, joint.body_b) in {
+            (item.body_a, item.body_b) for item in assembly.constraints
+        }
 
-    # 3. Each condensed-away body is still addressable through the alias map, so
-    #    a report or an Adams render can trace an original body to its fused one.
-    assert assembly.body_aliases, "condensation must record where bodies went"
-    for original, aliased in assembly.body_aliases.items():
-        assert original not in assembly.bodies
-        assert aliased in assembly.bodies
+    # 2. The rollback: the fused form still works and still carries the pair's mass.
+    os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = "1"
+    try:
+        fused = build_vehicle(model)
+        assert fused.bodies["front_upright_L"].mass == 120.0  # 100 kg upright + 20 kg
+        assert not any(
+            joint.kind == "fixed"
+            for joint in _build_joints(fused, _frames_for(fused, model), 1.0)
+        ), "the fused form must not also send the weld"
+        assert fused.body_aliases, "fusion must record where the bodies went"
+    finally:
+        os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
+
+
+def test_the_two_weld_routes_agree_on_the_world_mass_properties() -> None:
+    """
+    Fusing a weld and sending it to the kernel describe the same vehicle.
+
+    The two routes differ in the *body set* (one fused body against two separate
+    ones) and therefore in how the body-level rows are laid out -- but the
+    vehicle as a whole must weigh the same and balance at the same point, or the
+    production switch would have changed the physics rather than the bookkeeping.
+    """
+    model = _vehicle()
+
+    def world_mass(assembly):
+        total = 0.0
+        moment = np.zeros(3)
+        for name, body in assembly.bodies.items():
+            if body.mass > 0.0:
+                total += body.mass
+                moment += body.mass * assembly.state.point_world(
+                    name, body.center_of_mass
+                )
+        return total, moment / total
+
+    os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
+    separate = build_vehicle(model)
+    os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = "1"
+    try:
+        fused = build_vehicle(model)
+    finally:
+        os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
+
+    separate_mass, separate_com = world_mass(separate)
+    fused_mass, fused_com = world_mass(fused)
+
+    assert np.isclose(separate_mass, fused_mass, rtol=0.0, atol=1e-9)
+    assert np.allclose(separate_com, fused_com, rtol=0.0, atol=1e-9)
+
 
 def test_native_fixed_joint_shape_matches_the_registry() -> None:
     """

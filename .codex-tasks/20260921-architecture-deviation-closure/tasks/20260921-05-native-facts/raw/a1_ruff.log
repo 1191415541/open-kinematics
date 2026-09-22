@@ -1,0 +1,18 @@
+D213 [*] Multi-line docstring summary should start at the second line
+   --> packages\suspension_multibody\tests\vehicle\test_native_vehicle.py:397:5
+    |
+396 |   def test_the_two_weld_routes_agree_on_the_world_mass_properties() -> None:
+397 | /     """Fusing a weld and sending it to the kernel describe the same vehicle.
+398 | |
+399 | |     The two routes differ in the *body set* (one fused body against two separate
+400 | |     ones) and therefore in how the body-level rows are laid out -- but the
+401 | |     vehicle as a whole must weigh the same and balance at the same point, or the
+402 | |     production switch would have changed the physics rather than the bookkeeping.
+403 | |     """
+    | |_______^
+404 |       model = _vehicle()
+    |
+help: Insert line break and indentation after opening quotes
+
+Found 1 error.
+[*] 1 fixable with the `--fix` option.

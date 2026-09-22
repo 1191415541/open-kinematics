@@ -33,9 +33,8 @@ G4. 保留最新统一 preparation、simulation、results、service 和 artifact
 
 1. G2 收窄：旧目录删除只覆盖**已无生产调用者**的部分；保留仍有现役生产调用的模块，不设「必须删完」的强制项。
 2. G3 收窄：力元本构的删除以 05 的可选 native 通道证据为前提，通道未启用期间允许保留；关节残差/Jacobian 与反力求解的删除保持不变。
-3. 凝聚：保留在 Python 作者层；native 的 `kind="fixed"` 关节作为**契约等价实现**，须有等价性测试。不再要求「把计算性凝聚迁入 mb_assembly」。
-   - **与用户第二问答复的关系（须明确）**：用户对第二问选的选项 A 字面为「Python 不再凝聚，把 weld 作为 fixed 约束送 native，验证与现凝聚结果等价」。该选项的**目标**是「由 native 的 fixed 契约承接焊接语义」，本次修订**采纳该目标**（第 3 条：native fixed 关节作契约等价实现 + 等价性测试）；但其**手段（Python 不再凝聚）**与用户对第一问选择的 A1（元件通道默认关、不重录基线、字节门保持绿）直接冲突——Python 不再凝聚会改变 native 收到的 body 集合，使整车门字节 sha256 失败。
-   - **处置**：以 A1（用户对第一问的选择，且明确含「不重录基线」）为约束上限，凝聚的**生产路径**暂保留在 Python 作者层；native fixed 关节的等价性作为契约测试交付。待后续单独裁决数值门策略后，再决定是否把生产路径切到「不凝聚 + native fixed」。此项作为本 Epic 的**已知未闭合项**登记，不判为达成。
+3. 凝聚：**已被 2026-09-22 裁决 A3 取代**——原口径为「保留在 Python 作者层；native 的 `kind="fixed"` 关节作为契约等价实现，须有等价性测试，不再要求迁入 mb_assembly」。A3 后生产路径改为**不凝聚 + weld 送 native fixed**，车辆基线经授权重录；详见下方 A3 修订记录。
+   - **[已被 A3 取代]** 与用户第二问答复的关系：该选项的目标是「由 native 的 fixed 契约承接焊接语义」，当时只采纳目标、保留手段，因为手段（Python 不再凝聚）与 A1 的「不重录基线」冲突。A3 解除该上限后，手段亦已实施。
 4. 元件报告新通道：按向后兼容可选扩展实现，**默认关闭**，默认路径的 artifact 字节不变，两个字节级门保持绿。
 
 未修订：G1（C++ 模块职责与 DAG）、G4（API/CLI/family/Adams/历史读取）保持原文；「不得重录数值基线」保持原文。
@@ -56,6 +55,22 @@ G4. 保留最新统一 preparation、simulation、results、service 和 artifact
 ### 偏差登记口径（2026-09-22，用户裁决 A2 第 2 问）
 
 06-09 实施中若再遇到「子任务 SPEC 字面要求与 EPIC 冻结约束（不重录基线／字节门保持绿／ABI 不变）不可同时成立」，一律按 A1 模式处置：**采纳目标的意图、保留生产路径、逐项登记偏差与解除条件，绝不伪造达成**。集中登记于父 `PROGRESS.md` 的「未闭合项」小节。
+
+### 修订记录（2026-09-22，用户裁决 A3：解除 A1 的字节门上限）
+
+修订原因：用户就 A1 开放项给出裁决——**A1 改为由 native 的 `fixed` 契约承接焊接语义，可以重录车辆基线**；A2 保持现状。这解除了 A1 原先「不重录基线、字节门保持绿」这一约束上限，使 A1 的**手段**（生产路径不再凝聚）得以实施。
+
+本次修订为第 3 级计划修改（改 Done-When 口径），修订内容：
+
+1. **A1 关闭**：`preparation/assembly/vehicle.py` 的 `_condense_welded_bodies` 默认**不再融合**——焊接体保持为独立 body，weld 以 `WeldJoint` → `kind="fixed"` 交给 native（6 行：点重合 + 全相对旋转）。融合实现保留为 `_fuse_welded_bodies`，由 `SUSPENSION_MULTIBODY_CONDENSE_WELDS=1` 恢复（回退开关有测试覆盖）。原「凝聚保留在 Python 作者层」的第 3 条随之**被本次修订取代**。
+2. **基线重录（经用户明确授权）**：`tests/data/vehicle_dynamics_baseline/sha256.json` 按**切换到 native fixed 后的 native 执行结果**重录（8 个 case），不与旧 Python 凝聚的数值做对比。这是本 Epic 唯一被改动的数值基线；`dynamic_hash_baseline.json`、`kc_baseline/`、`kc_perf_baseline*.json` **未改动**（实测 axle 侧 26 artifact 组合哈希仍为 `e7407656…8d48e`，kc parity 仍在容差内）。
+3. **既有字节门口径更新**：整车门 `case_parity_check` 的 `vehicle_dynamic` 快照随本次重录更新；该门的性质不变（仍是字节级 bit-identity，只是基准改为新生产路径的结果）。`dynamic_hash_sentinel` 与 `kc_parity_check` 维持原冻结基线不动。
+
+**等价性证据（实测，非推断）**：两条路径在同一工况下的**物理量一致**——总质量均为 `3080.0`、世界质心均为 `[12.987013, 0.0, 160.390]`、`tire_output` 与 `energy` 逐位相同。差异仅在**表示层**：融合体的 body 原点被移到质量加权中心（chassis 的 states 呈常数偏移 `px=-0.1077, pz=+0.0192`），且 native 路径多出 `rear_rack` 一个 body（22→23）、`constraint_wrench` 29→30。新增测试 `test_the_two_weld_routes_agree_on_the_world_mass_properties` 钉住「同一物理、两种表示」这一等价性；`test_native_fixed_joint_is_what_carries_a_weld` 钉住两条路径的形态与回退开关。
+
+**A2 未变**：静轮荷最小范数求解仍按 A2 保留在 Python（native 无静力 ABI 入口且导出面冻结），登记与解除条件不变。
+
+**未修订**：G1、G2、G3（除第 3 条凝聚项被本次取代）、G4；「不得重录数值基线」收窄为「除本次经用户授权的 vehicle 基线外不得重录」。
 
 ## 事实与修正
 
@@ -91,7 +106,7 @@ G4. 保留最新统一 preparation、simulation、results、service 和 artifact
 | mb_model / mb_input / mb_energy | 中性数据与输入采样 | 保持纯数据边界；质量矩阵装配与线性分解分属 assembly/linear |
 | mb_cases / mb_output / abi | 工况展开/输出/入口编排 | cases 不承担求解实现；入口调用装配和求解 |
 
-装配范围须核对 Python build_vehicle 的焊接体凝聚。**2026-09-21 用户裁决 A1 修订**：凝聚保留在 Python 作者层（`model/vehicle.py:243` `_condense_welded_bodies`），不再要求迁入 mb_assembly；native 侧已有的 `kind="fixed"` 关节（`contract_registry.cpp:24`，6 行）作为契约等价实现，须有等价性测试与体 ID 映射登记。原文「不能因为当前 C++ 没有同名函数就判为无需迁移」对凝聚一项不再适用，理由与证据见本文件修订记录及 `tasks/20260921-05-native-facts/raw/step1_channel_mapping.md` §8。
+装配范围须核对 Python build_vehicle 的焊接体凝聚。**2026-09-22 用户裁决 A3**：生产路径**不凝聚**——焊接体保持独立 body，weld 由 native 的 `kind="fixed"` 关节（`contract_registry.cpp:24`，6 行）承接，须有等价性测试与体 ID 映射/回退开关登记；`vehicle_dynamics_baseline` 按新路径的 native 结果重录。（原 2026-09-21 裁决 A1「凝聚保留在 Python 作者层」已被 A3 取代。）原文「不能因为当前 C++ 没有同名函数就判为无需迁移」对凝聚一项不再适用，理由与证据见本文件 A3 修订记录及 `tasks/20260921-05-native-facts/raw/step1_channel_mapping.md` §8。
 
 ## Python 迁移矩阵
 
@@ -100,7 +115,7 @@ G4. 保留最新统一 preparation、simulation、results、service 和 artifact
 | model/front_axle、model/vehicle 的硬点镜像、命名、schema→声明转换 | preparation/assembly/ 下的 front_axle、vehicle；只作者侧转换 |
 | core 的关节/刚体/元素数据字段 | preparation/assembly/types.py；不携带 residual/jacobian/evaluate |
 | DOF、约束系统、质量矩阵、反力求解 | C++ assembly/joint/solve；Python 旧实现删除，物理测试转成 native 契约测试 |
-| 焊接体凝聚 | **修订（A1）**：保留在 Python 作者层 `model/vehicle.py:243`；native 的 `kind="fixed"` 关节作契约等价实现，须有等价性测试。不再迁入 mb_assembly。 |
+| 焊接体凝聚 | **修订（A3）**：生产路径不凝聚，weld 作为 `WeldJoint` → `kind="fixed"` 交给 native（6 行）；融合实现保留为 `_fuse_welded_bodies`（`SUSPENSION_MULTIBODY_CONDENSE_WELDS=1` 回退）；车辆字节基线经授权重录。（原 A1 的「保留在 Python 作者层」已被取代。） |
 | core/spatial 的现役输入坐标转换 | preparation/geometry.py；结果侧坐标转换置 results/geometry.py，复核调用方向，避免 report→preparation |
 | elements/elastic、assembly 的本构和力汇总 | **修订（A1）**：删除以 05 的可选 native 力旋量通道**实际启用**为前提（先完成通道与 results 解码，再切换 api 元件报告，再删除）。通道未启用期间保留，但须有 file:line 待删除登记（阻断原因 + 启用条件）；不得为删除而启用可选通道，不得在 report 侧复算本构。 |
 | metrics、analysis 的轮几何/柔度/统计 | report/metrics/、report/geometry.py、report/compliance.py；只消费结果及只读说明数据 |

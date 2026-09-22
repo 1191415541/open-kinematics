@@ -5,7 +5,7 @@
 形态：epic。
 进度：**9/9 子任务 DONE**（01 8/8、02 7/7、03 7/7、04 7/7、05 8/8、06 8/8、07 7/7、08 8/8、09 7/7）。
 当前：**Epic 完成**。C++ 侧：模块按职责拆分、旧模块与旧 include 清零（`--strict --final` 退出 0）。Python 侧：`report` 建立、作者层归位 `preparation/`、`kernel/capabilities`、旧模块中已无生产调用者的部分删除（`core/`、`model/`、`metrics/`、顶层 `pac2002_scope.py`、`analysis/` 7 文件）；`elements/`(A1) 与 `analysis/vehicle_physics.py`(A2) 按裁决保留并逐项登记。终局验收 G1–G4 全部达成。
-下一步：无。Epic 9/9 DONE，终局验收已独立核对 G1–G4（`tasks/20260921-09-acceptance/raw/acceptance_record.md`）。唯一剩余事项为两条已登记的未闭合项，各自等待单独裁决（解除条件见 EPIC A1/A2 修订记录与「未闭合项」小节）。
+下一步：无。Epic 9/9 DONE，终局验收已独立核对 G1–G4（`tasks/20260921-09-acceptance/raw/acceptance_record.md`）。A1 已按 2026-09-22 裁决关闭（生产路径切到 native fixed，车辆基线经授权重录）；A2 按同轮裁决保持现状。
 ## 证据
 
 - 两路 explorer 完成 C++ 文件/函数与 Python 符号/调用者清单；补充报告确认 external_force_vector/directional 总线及 Python 元件 evaluate 力律。
@@ -136,7 +136,10 @@
 - **既有失败与限制（与 01 一致，不阻断）**：47 skipped / 1 xfailed；真实 Adams 执行缺许可，**未做整车数值等价声明**；动态 acceptance 9 个 case 的既有失败（字节级门本身为绿）；未运行 frozen median-of-N performance protocol。
 - **两条未闭合项（登记，不判达成）**：见下一小节。
 
-## 未闭合项（Epic 完成时仍开放，各自等待单独裁决）
+## 未闭合项（Epic 完成后的裁决结果）
 
-1. **A1：凝聚手段**。用户第二问所选「Python 不再凝聚、weld 送 native 作 fixed 约束」的**手段**与第一问所选 A1「不重录基线、字节门保持绿」冲突（不凝聚使 native body 集合 22→23，整车门字节 sha256 失败）。本次以 A1 为约束上限，只采纳该选项的**目标**（native `kind="fixed"` 关节作契约等价实现 + 等价性测试，已交付并登记 body ID 映射），生产路径暂留 Python 作者层。解除条件：单独裁决数值门策略（是否允许重录车辆基线）。
-2. **A2：静轮荷求解**。`analysis/vehicle_physics.py` 的 `compute_static_wheel_loads` 保留在 Python：native 无静力求解 ABI 入口（`kernel_abi.cpp:854-858` 明示只有 `suspension_kernel_run`），且 ABI 导出面冻结；输入是 `build_vehicle(mode="K")` 装配，与动态整车算例不是同一套。已按 A1 模式登记 file:line + 阻断原因 + 解除条件。解除条件：单独裁决「是否允许扩展 ABI 导出面」或「是否允许在既有契约下新增默认关闭的静力输出块」。
+**A1：已关闭（2026-09-22 裁决 A3）。** 用户裁决「A1 改为由 native 的 `fixed` 契约承接焊接语义，可以重录车辆基线」，解除了原「不重录基线、字节门保持绿」的约束上限。生产路径已切换：`preparation/assembly/vehicle.py` 的 `_condense_welded_bodies` 默认**不再融合**焊接体，weld 作为 `WeldJoint` → `kind="fixed"` 交给 native（6 行）；融合实现保留为 `_fuse_welded_bodies`，由 `SUSPENSION_MULTIBODY_CONDENSE_WELDS=1` 恢复（回退有测试覆盖）。这是本 Epic **唯一**被重录的数值基线：`tests/data/vehicle_dynamics_baseline/sha256.json`（8 个 case，按新路径的 native 结果）。`dynamic_hash_baseline.json`、`kc_baseline/`、`kc_perf_baseline*.json` 未改动（组合哈希 `e7407656…8d48e` 仍逐位一致）。
+
+**等价性证据（实测）**：两条路径物理量一致——总质量 `3080.0`、世界质心 `[12.987013, 0.0, 160.390]`、`tire_output` 与 `energy` 逐位相同；差异仅表示层（融合体原点移到质量加权中心 → chassis states 常数偏移；多出 `rear_rack` body，body 22→23、约束行 29→30）。测试：`test_native_fixed_joint_is_what_carries_a_weld`、`test_the_two_weld_routes_agree_on_the_world_mass_properties`。
+
+**A2：保持现状（用户同轮裁决）。** `analysis/vehicle_physics.py` 的 `compute_static_wheel_loads` 继续保留在 Python：native 无静力求解 ABI 入口（`kernel_abi.cpp:854-858` 明示只有 `suspension_kernel_run`），且 ABI 导出面冻结；输入是 `build_vehicle(mode="K")` 装配，与动态整车算例不是同一套。登记 file:line + 阻断原因 + 解除条件见 `tasks/20260921-05-native-facts/raw/step4_static_wheel_loads_registration.md`。解除条件（未变）：单独裁决「是否允许扩展 ABI 导出面」或「是否允许在既有契约下新增默认关闭的静力输出块」。
