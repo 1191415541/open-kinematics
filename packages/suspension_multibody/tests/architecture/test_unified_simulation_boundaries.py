@@ -31,6 +31,14 @@ AXLE_SOURCE = (
     / "suspension_multibody"
     / "axle_dynamics"
 )
+PREPARATION_SOURCE = (
+    ROOT
+    / "packages"
+    / "suspension_multibody"
+    / "src"
+    / "suspension_multibody"
+    / "preparation"
+)
 
 
 def _imported_modules(path: Path) -> set[str]:
@@ -101,3 +109,34 @@ def test_the_axle_package_forwards_the_kernel_runtime_names() -> None:
 
     assert NativeKernelUnavailableError is kernel_native.NativeKernelUnavailableError
     assert native_build_metadata is kernel_native.native_build_metadata
+
+
+def test_preparation_authors_data_and_never_solves_or_decodes() -> None:
+    """
+    Subtask 06 acceptance 1: `preparation` converts author input, nothing else.
+
+    The package turns a caller's model and case into the contract documents the
+    kernel reads.  It must not reach for the kernel, must not solve, and must not
+    decode a result -- those are the runner's, the kernel's and `results`' jobs.
+    The check is on imports because that is what an accidental dependency looks
+    like before it becomes a call.
+    """
+    forbidden = ("kernel", "results", "simulation.backend", "io")
+    for path in sorted(PREPARATION_SOURCE.rglob("*.py")):
+        offending = {
+            module
+            for module in _imported_modules(path)
+            if any(module.endswith(f".{name}") or module == name for name in forbidden)
+        }
+        assert not offending, f"{path}: {sorted(offending)}"
+
+
+def test_preparation_does_not_reach_the_solver_entry_points() -> None:
+    """A prepared document is handed to the runner; preparation never runs it."""
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(PREPARATION_SOURCE.rglob("*.py"))
+    )
+
+    for call in ("run_request", "run_contract", "suspension_kernel_run", "load_library"):
+        assert call not in source, call
