@@ -7,7 +7,7 @@
 1. 执行 EPIC 终局命令全集，逐条记录实际退出码与摘要。
 2. G1（C++ 职责）：目标模块职责与 cpp+header 实测 DAG 通过，`mb_base`/`mb_vehicle` 等被替代模块缺席。
 3. G2（Python report）**（A1 修订）**：`report` 已建立，且其中**已无生产调用者**的旧模块、旧导入、转发壳为零；仍有现役生产调用的模块逐项有保留登记。
-4. G3（Python 无求解/本构）**（A1/A2 修订）**：生产代码无关节残差/Jacobian 与反力求解（反力求解指关节约束反力恢复，即 `core/reactions.py`）；`analysis/vehicle_physics.py:88` 的静轮荷最小范数辅助求解按 **A2 登记保留**，须核对 file:line 保留登记与解除条件；力元本构按 05 可选通道的实际状态核对（通道已启用则须删除，未启用则须有 file:line 保留登记与解除条件）；元件载荷报告有 native 逐通道证据。数值门为独立项：字节级门保持绿且未重录任何基线。
+4. G3（Python 无求解/本构）**（A1/A2 修订）**：生产代码无关节残差/Jacobian 与反力求解（反力求解指关节约束反力恢复，即 `core/reactions.py`）；`analysis/vehicle_physics.py:88` 的静轮荷最小范数辅助求解按 **A2 登记保留**，须核对 file:line 保留登记与解除条件；力元本构按 05 可选通道的实际状态核对（通道已启用则须删除，未启用则须有 file:line 保留登记与解除条件）；元件载荷报告有 native 逐通道证据。数值门为独立项：字节级门保持绿；**A3 前**未重录任何基线，**A3 后**唯一经授权重录 `tests/data/vehicle_dynamics_baseline/sha256.json`。
 5. G4（保留能力）：公开 API 与 CLI、七个 family、Adams 渲染、历史 artifact 读取与 success/partial/failed artifact 端到端通过。
 6. 隔离 wheel 验证**（A1 修订）**：安装后 import/CLI 可用、七个导出符号一致、native 可执行、**已无生产调用者**的旧模块缺席（按 A1 保留的部分不要求缺席）。
 7. 不相关的既有失败独立列明；任何新增失败阻断完成。
@@ -42,9 +42,9 @@
 2. G1 证据：`check_module_layering.py --strict` 覆盖 cpp+header 且通过；目标模块集合存在、旧模块缺席；C++ 侧无 Python 本构/求解残留。
 3. G2 证据**（A1 修订）**：`report` 存在且不调用 native、不执行 preparation、不复算本构；删除后扫描显示**已无生产调用者**的旧模块、旧导入、转发壳为零，仍有现役生产调用的模块逐项有保留登记。
 4. G3 证据**（A1/A2 修订）**：生产代码无关节残差/Jacobian 与反力求解（范围为关节约束反力恢复；静轮荷按 A2 保留并有登记）；力元本构按 05 可选通道实际状态核对（未启用则须有 file:line 保留登记与解除条件）；元件载荷报告逐通道与 native 输出对照（名称/ID、两端、坐标系、作用点、符号、单位、能量、active 状态）。
-5. 凝聚证据**（A1 修订）**：凝聚保留在 Python 作者层；native `kind="fixed"` 关节的等价性测试存在且通过；body ID→凝聚体 ID 映射有登记。
+5. 凝聚证据**（A3 修订）**：生产路径不凝聚、weld 以 native `kind="fixed"` 关节承接（6 行）；两条路径的世界系质量性质等价有实测证据（总质量与质心，全部 8 case）；回退开关 `SUSPENSION_MULTIBODY_CONDENSE_WELDS=1` 有测试；差异已逐 case 登记，不得表述为逐位相同。
 6. G4 证据：公开 API 与 CLI、七个 family、Adams source rendering、历史 artifact 读取与 success/partial/failed artifact 端到端通过。
-7. 数值门证据（独立项）：`dynamic_hash_sentinel` 与 `case_parity_check` 字节级门保持绿，且未重录任何基线。
+7. 数值门证据（独立项）：`dynamic_hash_sentinel` 与 `case_parity_check` 的字节级门保持绿；**A3 前**未重录任何基线，**A3 后**唯一经授权重录 `tests/data/vehicle_dynamics_baseline/sha256.json`（其余基线未改动）。
 8. 隔离环境安装两个 wheel 后 import/CLI 可用、七个导出符号与 01 冻结清单一致、native 可执行、**已无生产调用者**的旧模块缺席（保留部分不要求缺席）。
 9. 不相关既有失败独立列明；新增失败为零；未把未实现的整车 Adams 对标标为通过。
 

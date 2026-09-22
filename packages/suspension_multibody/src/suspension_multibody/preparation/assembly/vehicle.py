@@ -2,10 +2,11 @@
 Full-vehicle multibody topology and wheel-end assembly.
 
 The author-side half of the vehicle: two axles merged under one chassis, the
-wheel ends attached, and the load-bearing names the contract needs.  The weld
-condensation below stays here by the epic's A1 ruling: it must not move into
-native, because condensing first is what gives the native assembly its body
-set, and dropping it changes the whole-vehicle byte hash.  Moved here from
+wheel ends attached, and the load-bearing names the contract needs.  Welded
+bodies stay separate by default (the epic's A3 ruling): each weld goes to the
+kernel as a ``kind="fixed"`` joint, six rows of point coincidence plus full
+relative rotation.  ``_fuse_welded_bodies`` keeps the Python-side fusion
+behind ``SUSPENSION_MULTIBODY_CONDENSE_WELDS=1``.  Moved here from
 ``model/vehicle.py``, which 08 deletes.
 """
 

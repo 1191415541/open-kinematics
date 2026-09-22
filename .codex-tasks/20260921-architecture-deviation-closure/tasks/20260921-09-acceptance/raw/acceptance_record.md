@@ -1,6 +1,6 @@
 # 09 终局验收：逐条核对 G1–G4
 
-本文件是子任务 09 的交付，用于判定 EPIC `20260921-architecture-deviation-closure` 的 Goal 是否达成。结论先行：**G1、G2、G3、G4 均达成**，两条已登记偏差（A1 凝聚手段、A2 静轮荷）按裁决保留且未伪装达成，既有失败与 Adams 限制独立列明。
+本文件是子任务 09 的交付，用于判定 EPIC `20260921-architecture-deviation-closure` 的 Goal 是否达成。结论先行：**G1、G2、G3、G4 均达成**。**未闭合项只剩 A2 一条**（静轮荷最小范数保留 Python）；原 A1 凝聚手段一栏**已于 2026-09-22 由用户裁决 A3 关闭**（见第 8 节），未伪装达成，既有失败与 Adams 限制独立列明。
 
 判定口径：`DONE` 行不等于 Goal 达成；本文件的每条结论都指向独立证据（命令退出码或文件）。
 
@@ -14,7 +14,7 @@ EPIC 终局清单 12 条 + 2 条构建命令，逐条记录于 `raw/terminal_com
 | T2 | `check_module_layering.py --strict` | 0 | layering matches baseline |
 | T3 | `pytest suspension_kernel/tests -q` | 0 | 15 passed |
 | T4 | `pytest suspension_contracts/tests -q` | 0 | 22 passed |
-| T5 | `pytest suspension_multibody/tests -q` | 0 | 736 passed, 47 skipped, 1 xfailed |
+| T5 | `pytest suspension_multibody/tests -q` | 0 | 737 passed, 47 skipped, 1 xfailed（本表初版误写 736，实录见 `raw/t5_out.log`） |
 | T6 | `ruff check .` | 0 | All checks passed |
 | T7 | `ty check .` | 0 | All checks passed |
 | T8 | `dynamic_hash_sentinel.py --check` | 0 | 26/26 逐位一致 |
@@ -92,13 +92,13 @@ module cycles (SCC size>1)  : 0
 
 ## 6. 既有失败与限制（独立列明，不阻断完成）
 
-- **47 skipped** 与 **1 xfailed** 与 01 基线完全一致（基线 `712 passed, 47 skipped, 1 xfailed`；现 `736 passed` 的增量为各子任务新增测试）。skip 原因仍是既有证据缺失：1 项 Adams 参考轮胎不可用、15 项 strict Adams source artifacts 或 Fiala/PAC2002 source case 不可用、其余为 USE_MODE 3/4/13/23/24/25 工件缺失。xfail 是 `test_native_brake_opposes_the_instantaneous_wheel_spin` 的退化制动夹具（无悬架刚度且轮胎无载荷时求解器无可接受步长）。
+- **47 skipped** 与 **1 xfailed** 在本次验收时与 01 基线一致（基线 `668 passed, 47 skipped, 1 xfailed`；当时 `737 passed` 的增量为各子任务新增测试）。skip 原因仍是既有证据缺失：1 项 Adams 参考轮胎不可用、15 项 strict Adams source artifacts 或 Fiala/PAC2002 source case 不可用、其余为 USE_MODE 3/4/13/23/24/25 工件缺失。**收口时本机再实测为 `783 passed, 1 skipped, 1 xfailed`**：46 项 skip 转为实跑通过，原因是 `artifacts/` 下 Adams 参考工件在本机已就绪（环境差异，非门禁削弱；守卫代码未改动，collected 总数 785 未变）。xfail 是 `test_native_brake_opposes_the_instantaneous_wheel_spin` 的退化制动夹具（无悬架刚度且轮胎无载荷时求解器无可接受步长）。
 - **真实 Adams 执行不可用**（需本地 Adams/Car 安装与许可）：**未做整车数值等价声明**，与 01 的 `adams accuracy: BLOCKED` 一致。
 - **动态验收的既有失败**：`dynamic_hash_sentinel.py --check` 输出中 acceptance 退出码仍为 1（9 个 case：`combined_load`、`in_phase_road` 等失败的既有状态）；**字节级门本身退出 0 且 26/26 逐位一致**，该 acceptance 失败是 01 记录的既有独立项，未因本 Epic 消除。
 - **未运行** frozen median-of-N performance protocol（既有状态，01 已记录）。
-- **两条已登记偏差**（不判达成，见 EPIC A1/A2 修订记录与父 PROGRESS「未闭合项」）：
-  1. A1：用户第二问所选「Python 不再凝聚、weld 送 native 作 fixed 约束」的**手段**与「不重录基线」冲突，生产路径保留 Python 作者层凝聚，只采纳其目标（native fixed 关节作契约等价实现 + 等价性测试）。解除条件：单独裁决数值门策略。
-  2. A2：静轮荷最小范数求解保留 Python（native 无静力 ABI 入口、导出面冻结）。解除条件：单独裁决是否扩展 ABI 导出面或在既有契约下加默认关闭的静力输出块。
+- **已登记偏差**（不判达成，见 EPIC A1/A2/A3 修订记录与父 PROGRESS「未闭合项」）：
+  1. **A1（已由 2026-09-22 裁决 A3 关闭）**：用户第二问所选「Python 不再凝聚、weld 送 native 作 fixed 约束」的**手段**曾与「不重录基线」冲突，故 09 当时只采纳其目标（native fixed 关节作契约等价实现 + 等价性测试）。A3 解除该上限后手段已实施：生产路径不凝聚、weld 送 native fixed、`vehicle_dynamics_baseline/sha256.json` 经授权重录。**本项不再是未闭合项**，证据见第 8 节。
+  2. **A2（仍保留）**：静轮荷最小范数求解保留 Python（native 无静力 ABI 入口、导出面冻结）。解除条件：单独裁决是否扩展 ABI 导出面或在既有契约下加默认关闭的静力输出块。
 - **一处口径说明**：`legacy_surface_gate.py --check --final` 退出 1。其 finding 全为 A1/A2 保留项（`legacy package still present`: `analysis`/`elements`；test-scope 导入）与 test scope 的覆盖测试；且门禁自身测试 `test_migration_mode_passes_and_final_mode_fails_on_the_live_tree` 断言「迁移模式 0、终局模式 1」。08 验收 3 与本文件 G2 的判据均为「**已无生产调用者**的部分不存在」，`--check` 退出 0 即满足；`--final` 退 0 与 architecture 测试全绿在 A1 下不可兼得，已在 `../20260921-08-delete/raw/step6_scan_after.md` §7 登记裁决。
 
 ## 7. 逐条 Goal 结论
@@ -110,4 +110,35 @@ module cycles (SCC size>1)  : 0
 | G3 | **达成（A1/A2 口径）** | 关节残差/Jacobian 与反力求解已删；`elements`/静轮荷保留登记；通道逐项证据；字节门未动 |
 | G4 | **达成** | 隔离 wheel 端到端 + 八 family + Adams 渲染 + 历史读取全通过 |
 
-**Done-When 核对**：所有行 DONE；「已无生产调用者的旧模块与旧导入为零」由扫描残留全部可归因为保留项证明；「数值门为独立项」由 T8 组合哈希与 01 冻结值逐位一致、且全程未改基线证明；两条已知未闭合项按 A1/A2 显式登记、**未判为达成**。
+**Done-When 核对**：所有行 DONE；「已无生产调用者的旧模块与旧导入为零」由扫描残留全部可归因为保留项证明；「数值门为独立项」由 T8 组合哈希与 01 冻结值逐位一致证明，基线重录口径见第 8 节；未闭合项只剩 A2 一条，**未判为达成**。
+
+## 8. A3 后的收口复验（2026-09-22，主代理在一次独立复审后执行）
+
+**为什么需要**：本节之前的内容是**A3 之前**的终局验收。A3 改动了生产路径（`preparation/assembly/vehicle.py` 默认不凝聚）并重录了一项车辆基线，故终局门必须在 A3 之后重跑一次。
+
+**本轮实测（命令与退出码）**：
+
+| 命令 | 退出码 | 摘要 |
+|---|---:|---|
+| `build_axle_native.py` | 0 | DLL 产出 |
+| `check_module_layering.py --strict --final` | 0 | target missing 0 / legacy present 0 / unregistered 0 / mutual 0 / cycles 0 |
+| `pytest suspension_kernel/tests -q` | 0 | 15 passed |
+| `pytest suspension_contracts/tests -q` | 0 | 22 passed |
+| `pytest suspension_multibody/tests -q` | 0 | **783 passed, 1 skipped, 1 xfailed** |
+| `ruff check .` / `ty check .` | 0 / 0 | All checks passed |
+| `dynamic_hash_sentinel.py --check` | 0 | 26/26 逐位一致，组合哈希 `e7407656731ed556efc28fb89d8fc69881725b3bfb2f39066eb898986389d48e`（与 01 冻结值相同） |
+| `kc_parity_check.py --check` | 0 | within tolerance |
+| `case_parity_check.py` | 0 | 8 families accepted（`vehicle_dynamic` 8 cases bit-identical 于 A3 重录后的快照） |
+| `legacy_surface_gate.py --check` | 0 | no unregistered boundary violation |
+| `uv build` ×3（contracts/kernel/multibody） | 0 | wheel + sdist |
+| `git diff --check` | 0 | 无输出 |
+
+**隔离 wheel 复验（A3 后）**：会话 scratch 新建 venv，装三个本地 wheel。结果与 A3 前一致——import 通过（`__all__` 17 名）、`python -m suspension_multibody.cli --help` 退出 0、七符号 `{run, capabilities, contract_version}` + `axle/vehicle/mb_core_abi_version` + `mb_core_run` 全部 present 且 `suspension_kernel_free` 不存在、版本常量 `1/15/30/1`、已删 15 个模块全部 `ModuleNotFoundError`、`report`/`elements`/`analysis.vehicle_physics` 在位、native 真实运行 `status=success`（1 case、10 bodies、`contract_version=1`）、`run_case` → `write_artifact` → `read_artifact` 往返 `status=success`。
+
+**对第 6 节两条结论的处理**：
+
+- 第 6 节的「47 skipped 与 01 基线一致」在**当时**成立；收口时因本机 Adams 参考工件就绪，46 项转实跑通过（见第 6 节括注）。
+- 第 6 节第 1 条（A1 未闭合）**由 A3 关闭**，第 6 节第 2 条（A2）保持。
+- 第 6 节末「`legacy_surface_gate --check --final` 退 1」的口径**不变**：其 finding 为 A1/A2 保留项（`elements`、`analysis`）与门禁自测断言；判据仍取 `--check` 退 0。
+
+**结论**：A3 之后 G1–G4 仍全部达成，无新增失败；唯一被重录的基线是经授权的 `tests/data/vehicle_dynamics_baseline/sha256.json`。

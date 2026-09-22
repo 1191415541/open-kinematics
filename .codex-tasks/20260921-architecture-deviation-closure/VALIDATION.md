@@ -176,7 +176,10 @@ multibody 的 skip/xfail 原因均为基线既有状态，不是本任务引入�
 
 - 1 项因 Adams 参考轮胎不可用；15 项因 strict Adams source artifacts 或 Fiala/PAC2002 source case 不可用。
 - 其余 skip 为 Adams mode/reference tire/parking reference 工件不可用，包括 USE_MODE 3、4、13、23、24、25 的既有证据缺失。
+
 - 1 项 xfail 是 `test_native_brake_opposes_the_instantaneous_wheel_spin` 的退化制动夹具：无悬架刚度且轮胎无载荷，求解器无可接受步长；测试说明要求 fixture redesign 或可细分 solver，不通过调容差伪装通过。
+
+**（2026-09-22 主代理加注，不改写上述 01 冻结记录）**：上表是子任务 01 的基线实测。A3 收口时本机再实测为 `783 passed, 1 skipped, 1 xfailed`（退出 0）——46 项 skip 转为实跑通过，原因是 `artifacts/adams-mode-ref/**`、`artifacts/adams-full-source-2025_1_1/**` 等被 gitignore 的本地 Adams 参考工件在本机已就绪；skip 守卫代码未改动，collected 总数（785）未变，属环境差异，不是门禁削弱。本文件冻结的容差、命令与基线文件均未改动。
 
 详细原因：`.codex-tasks/20260921-architecture-deviation-closure/tasks/20260921-01-baseline/raw/pytest_multibody_reasons.log`。汇总：`raw/test-summary.log`；各命令完整日志为 `raw/pytest_kernel.log`、`raw/pytest_contracts.log`、`raw/pytest_multibody.log`、`raw/ruff_all.log`、`raw/ty_all.log`。
 
@@ -295,7 +298,7 @@ K/C parity、八 family parity 和 native 性能门均通过；动态数组逐�
 | 所有数值字段单位 | native result map 已记录 SI 列含义（`axle_dynamics/result.py:39-124`）；model 声明 SI 与车辆坐标系（`schema.py:1070-1073`） | native descriptor 不携带单位；K/C 报告仍有 mm/N 缩放（`api.py:434`），存在 SI 与用户报告口径转换边界 | 05 冻结，06 接线，07 保持展示口径 | 阻断单位等价声明；禁止以数值接近代替单位核验 |
 | 逐元件能量 | native `energy` 只有按类型聚合的 storage（`kernel_output.cpp:391-436`、`result.py:169-191`）；Python `ForceEvaluation.energy` 仍逐元件存在（`elements/base.py:10-19`、`elastic.py:283,326,488,554,582,634`） | 没有逐元件能量；当前 `ComponentLoad`/`BushingResult` 不承载该字段（`schema/result.py:68-85`） | 05 决定并补输出，06 切换，07 只读消费 | 阻断能量字段保持和报告事实切换；不得缺字段填零 |
 | active 状态 | native `tire_output[0]` 有 active，另有 `active_contacts` diagnostics（`kernel_tire_assembly.cpp:36-80,184-188,383-391,429-457`；`result.py:68,206`） | spring/bushing/anti-roll/stop 无统一 active；stop 只能由 stop force 列间接推断（`spring.cpp:174-177`）；Python active 仍来自 `ForceEvaluation.active` | 05 | 阻断 active/事件状态等价，尤其 stop 与接触启停报告 |
-| body ID → 凝聚体 ID | `VehicleAssembly.body_aliases` 在 `model/vehicle.py:52,296-303,517` 生成，并由 `preparation/vehicle_dynamic.py:338,405-411` 消费 | native 模型收到展平后的 body 名，manifest 只带 body names（`kernel_contract_run.cpp:813`），不输出 alias 身份映射 | 05 | 阻断凝聚后实体身份、native 输出和 Adams 渲染的一致性 |
+| body ID → 凝聚体 ID | `VehicleAssembly.body_aliases` 在 `preparation/assembly/vehicle.py` 的 `_fuse_welded_bodies` 内生成（原 `model/vehicle.py:52,296-303,517`），并由 `preparation/vehicle_dynamic.py:338,405-411` 消费。**A3 后该映射只在 `SUSPENSION_MULTIBODY_CONDENSE_WELDS=1` 回退路径产生；默认路径 `body_aliases` 为空** | native 模型收到展平后的 body 名，manifest 只带 body names（`kernel_contract_run.cpp:813`），不输出 alias 身份映射 | 05 | 阻断凝聚后实体身份、native 输出和 Adams 渲染的一致性 |
 | K/C family 元件事实覆盖 | K/C native contract 当前模型文档仅发送 bushing（`cases/kc_quasi_static/contract.py:118-120`）；native block map 对动态 family 有 spring/bushing/anti-roll/tire | K/C 中 spring/tire/anti-roll/gravity 仍依赖 Python 现役本构，不能声称 K/C 报告已全面 native | 05、06 | 阻断 K/C 元件事实切换及旧 `elements/elastic.py` 删除 |
 | 用户报告构造路径 | `_collect_element_results` 从 `assembly.elements` 和 `evaluate_generalized_forces` 生成 `ComponentLoad`/`BushingResult`（`api.py:737-777`；`assembly.py:24`） | native result decoder 尚未成为唯一元件事实来源；energy、active、event 等字段在构造中被丢弃 | 06 | 阻断作者层切换和 08 删除旧本构/装配实现 |
 

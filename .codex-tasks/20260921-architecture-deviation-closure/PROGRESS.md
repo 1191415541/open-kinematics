@@ -79,7 +79,7 @@
 - **未修改**：G1、G4、「不得重录数值基线」、01 冻结的 VALIDATION.md 及其容差。
 - **改动级别**：第 3 级（改 Goal/Non-Goals/Done-When），按 taskmaster 规则须重新独立审核，通过前不得把新行置为 IN_PROGRESS。
 - **本轮只改规划文件**，未运行生产构建或数值测试，未把任何实施行标记为完成。05 步骤 1 的对照表作为只读交付已产出（`raw/step1_channel_mapping.md`）。
-- **已知未闭合项（须显式登记，不判达成）**：用户第二问所选「Python 不再凝聚、weld 送 native 作 fixed 约束」的**手段**，与第一问所选 A1 的「不重录基线、字节门保持绿」冲突（不凝聚使 native body 集合 22→23，整车门字节 sha256 失败）。本次以 A1 为约束上限，只采纳该选项的目标（native fixed 关节作契约等价实现 + 等价性测试），生产路径暂留 Python 作者层。解除条件：单独裁决数值门策略（是否允许重录车辆基线）。
+- **当时登记的未闭合项（已被 A3 关闭，保留为历史记录）**：用户第二问所选「Python 不再凝聚、weld 送 native 作 fixed 约束」的**手段**，与第一问所选 A1 的「不重录基线、字节门保持绿」冲突（不凝聚使 native body 集合 22→23，整车门字节 sha256 失败）。当时以 A1 为约束上限，只采纳该选项的目标（native fixed 关节作契约等价实现 + 等价性测试），生产路径暂留 Python 作者层。**解除条件已于 2026-09-22 由用户裁决 A3 满足**（允许重录车辆基线），手段亦已实施；本项**已关闭**，不再是未闭合项。
 
 ## 2026-09-21 计划修订的两轮独立审核与修订补全
 
@@ -105,7 +105,7 @@
 - **未修改**：G1、G2、G4、「不得重录任何数值基线」、01 冻结的 `VALIDATION.md` 及其容差、ABI 七符号与版本常量。
 - **本轮未运行**生产构建或数值测试以外的任何改动验证；未把任何实施行标记为完成。
 - **已知未闭合项（须显式登记，不判达成）**：
-  1. 用户此前第二问所选「Python 不再凝聚、weld 送 native 作 fixed 约束」的**手段**与 A1「不重录基线、字节门保持绿」冲突（不凝聚使 native body 集合 22→23，整车门字节 sha256 失败）。本次以 A1 为约束上限，只采纳目标（native fixed 关节作契约等价实现 + 等价性测试），生产路径暂留 Python 作者层。解除条件：单独裁决数值门策略（是否允许重录车辆基线）。
+  1. **（已被 2026-09-22 裁决 A3 关闭）** 用户此前第二问所选「Python 不再凝聚、weld 送 native 作 fixed 约束」的**手段**与 A1「不重录基线、字节门保持绿」冲突（不凝聚使 native body 集合 22→23，整车门字节 sha256 失败）。当时以 A1 为约束上限，只采纳目标、生产路径暂留 Python 作者层；解除条件为「单独裁决数值门策略（是否允许重录车辆基线）」，**该条件已由 A3 满足并实施**。此项保留为历史记录，**不再是未闭合项**。
   2. **（A2 新增）** 静轮荷最小范数辅助求解保留在 Python：native 无静力求解 ABI 入口，且 ABI 导出面冻结，故无法迁入。归属已收口到 `results` 映射层并登记保留理由；解除条件同 A2 修订记录。
 
 ## 2026-09-22 子任务 05 完成
@@ -126,20 +126,29 @@
 ## 2026-09-22 Epic 完成（9/9）与终局验收
 
 - **子任务 05-09 在本会话完成**，提交序列：05 步骤 4 `5700e72`、05 步骤 5-8 `81e4d57`、05 复审修正 `fb2ea8d`、父级回填 `0f26cd6`、06 `a734038`+`393ee46`、07 `550566e`、08 步骤 3-6 `f7c1f61`、08 收尾 `89ca113`、G3 残余 `core/` 闭合 `8b81c56`、09 终局验收（本提交）。
-- **终局 12 条命令 + 2 条构建命令全部退出 0**：构建 0；`--strict` 0；kernel 15；contracts 22；multibody 736 passed / 47 skipped / 1 xfailed（基线 712，增量全为各子任务新增测试，**新增失败 0**）；ruff 0；ty 0；动态哈希 26/26 逐位一致（组合哈希 `e7407656…8d48e` 未变）；K/C parity 0；8 family 0；`legacy_surface --check` 0；两包 `uv build` 0；`git diff --check` 0。
-- **G1–G4 逐条达成**（证据见 `tasks/20260921-09-acceptance/raw/acceptance_record.md`）：G1 由 `--strict --final` 退出 0（target missing 0 / legacy present 0 / mutual 0 / cycles 0）证明；G2 由 `report` 建立 + import 面实测干净 + 已无生产调用者旧模块为零证明；G3 由 `core/` 整包删除（关节残差/Jacobian 与反力求解）+ 保留项登记 + 通道逐项证据 + 字节门未动证明；G4 由隔离 wheel 端到端（import/CLI/七符号 15-30-1-1/native 真实运行/artifact 往返）+ 8 family parity 证明。
+- **终局 12 条命令 + 2 条构建命令全部退出 0**：构建 0；`--strict` 0；kernel 15；contracts 22；multibody **737** passed / 47 skipped / 1 xfailed（基线 668，增量全为各子任务新增测试，**新增失败 0**；实录见 `tasks/20260921-09-acceptance/raw/t5_out.log` 与 `terminal_commands.md`，本行初版误写 736）；ruff 0；ty 0；动态哈希 26/26 逐位一致（组合哈希 `e7407656…8d48e` 未变）；K/C parity 0；8 family 0；`legacy_surface --check` 0；两包 `uv build` 0；`git diff --check` 0。
+- **G1–G4 逐条达成**（证据见 `tasks/20260921-09-acceptance/raw/acceptance_record.md`）：G1 由 `--strict --final` 退出 0（target missing 0 / legacy present 0 / mutual 0 / cycles 0）证明；G2 由 `report` 建立 + import 面实测干净 + 已无生产调用者旧模块为零证明；G3 由 `core/` 整包删除（关节残差/Jacobian 与反力求解）+ 保留项登记 + 通道逐项证据证明（**凝聚项的字节门口径在 A3 后更新**：车辆基线经授权重录）；G4 由隔离 wheel 端到端（import/CLI/七符号 15-30-1-1/native 真实运行/artifact 往返）+ 8 family parity 证明。
 - **隔离 wheel 验证**：会话 scratch 新建 venv，装三个本地 wheel（contracts/kernel/multibody）；15 个已删模块全部 `ModuleNotFoundError`，`report`/`elements`/`analysis.vehicle_physics` 在位；`suspension_kernel_free` 不存在（未新增导出）。
-- **数值门为独立项且未重录**：全程未修改 `dynamic_hash_baseline.json`、`kc_*_baseline*`、`vehicle_dynamics_baseline/`；`report` 切换后字节级门保持绿。
+- **数值门为独立项**：`report` 切换后字节级门保持绿。**基线重录口径（A3 后更正）**：本次 A3 之前全程未修改任何基线；**A3（2026-09-22 用户裁决）之后**，唯一经明确授权重录 `tests/data/vehicle_dynamics_baseline/sha256.json`（8 个 case，按不凝聚路径的 native 结果）。`dynamic_hash_baseline.json`、`kc_baseline/`、`kc_perf_baseline*.json` **未改动**（组合哈希 `e7407656…8d48e` 仍逐位一致）。本行初版「未修改 `vehicle_dynamics_baseline/`」在 A3 后已不成立。
 - **本会话新增的独立复审与修正**（未掩盖）：`code-reviewer 3d76f3a3` 审 A2 修订（事实前提成立，G3 口径冲突与兄弟真源同步已修）；`code-reviewer d1a8db9f` 审 05 交付，指出并**经主代理实测确认**两项——力矩差实为参考点语义差（对齐后 2.195e-10 N·m，力律等价）而非力律差异、解码器丢弃纯力矩行（已修 + 补回归测试）。两处原归因与缺陷均已在登记文档中据实更正。
 - **三处口径裁决**（08 上报，主代理裁决并登记）：`legacy_surface --check --final` 退 1 系 A1 保留项与门禁自测断言的必然（不放宽门禁、不改测试，判据取 `--check` 退 0）；`core/constraints.py` 的 `residual`/`jacobian` 与其唯一消费者 `ConstraintSystem` 一并删除（只删前者才是半删）；`ty check .` 原退 1 因本 Epic 目录下 05 的证据探针按设计引用已退役模块，已在 `pyproject.toml` 的 `[tool.ty.src] exclude` 加 `.codex-tasks/` 修复。
 - **G3 的终局闭合**：08 曾把 `core/{constraints,rigid_body,spatial}` 作为「A1 连带保留」。主代理核查发现它们分别是「仅剩 residual/Jacobian 实现的文件」与自称「re-export 后待 08 删除的转发壳」，且唯一消费者是 `tests/core/test_constraints.py`、生产路径零调用，故整体删除 `core/` 并把断言改造为契约/声明测试（合并进 `tests/core/{test_constraints,test_rigid_body,test_spatial}.py` 与既有的 `tests/axle_dynamics/test_solver_invariants.py`）。删除后扫描 30 → 15 条。
-- **既有失败与限制（与 01 一致，不阻断）**：47 skipped / 1 xfailed；真实 Adams 执行缺许可，**未做整车数值等价声明**；动态 acceptance 9 个 case 的既有失败（字节级门本身为绿）；未运行 frozen median-of-N performance protocol。
-- **两条未闭合项（登记，不判达成）**：见下一小节。
+- **既有失败与限制（与 01 基线一致，不阻断）**：01 基线为 47 skipped / 1 xfailed；**收口时本机实测为 1 skipped / 1 xfailed**（783 passed），差异来自 `artifacts/` 下 Adams 参考工件在本机已就绪，46 项由 skip 转为实跑通过，collected 总数 785 未变。真实 Adams 执行缺许可，**未做整车数值等价声明**；动态 acceptance 9 个 case 的既有失败（字节级门本身为绿）；未运行 frozen median-of-N performance protocol。
+- **未闭合项**：A1 已由 A3 关闭；只剩 **A2 一条**（登记，不判达成）。见下一小节。
 
 ## 未闭合项（Epic 完成后的裁决结果）
 
 **A1：已关闭（2026-09-22 裁决 A3）。** 用户裁决「A1 改为由 native 的 `fixed` 契约承接焊接语义，可以重录车辆基线」，解除了原「不重录基线、字节门保持绿」的约束上限。生产路径已切换：`preparation/assembly/vehicle.py` 的 `_condense_welded_bodies` 默认**不再融合**焊接体，weld 作为 `WeldJoint` → `kind="fixed"` 交给 native（6 行）；融合实现保留为 `_fuse_welded_bodies`，由 `SUSPENSION_MULTIBODY_CONDENSE_WELDS=1` 恢复（回退有测试覆盖）。这是本 Epic **唯一**被重录的数值基线：`tests/data/vehicle_dynamics_baseline/sha256.json`（8 个 case，按新路径的 native 结果）。`dynamic_hash_baseline.json`、`kc_baseline/`、`kc_perf_baseline*.json` 未改动（组合哈希 `e7407656…8d48e` 仍逐位一致）。
 
-**等价性证据（实测；已按全 8 case 逐 case 实测更正）**：世界系质量性质完全一致——总质量 `3080.0`、世界质心 `[12.987013, 0.0, 160.390]`（全部 8 case）。差异两类、均非物理改变：(a) 布局——多出 `rear_rack` body（22→23）、weld 以 6 行 `fixed` 保留（`constraint_wrench` 29→30）、融合体原点移动导致 chassis 位姿常数偏移；(b) 求解器残差级数值差——`tire_output` ≤`1.4e-9` N、`energy` ≤`3.9e-14` J、`bushing_output` `2.2e-13`（`spring_output` 全 0）。测试：`test_native_fixed_joint_is_what_carries_a_weld`、`test_the_two_weld_routes_agree_on_the_world_mass_properties`。详见 `tasks/20260921-05-native-facts/raw/a3_condensation_switchover.md`。
+**等价性证据（实测；已按全 8 case 逐 case 实测更正）**：世界系质量性质完全一致——总质量 `3080.0`、世界质心 `[12.987013, 0.0, 160.390]`（全部 8 case）。差异两类、均非物理改变：(a) 布局——多出 `rear_rack` body（22→23）、weld 以 6 行 `fixed` 保留（`constraint_wrench` 29→30）、融合体原点移动导致 chassis 位姿常数偏移；(b) 求解器残差级数值差——`tire_output` ≤`1.4e-9` N、`energy` ≤`3.9e-14` J、`bushing_output` `2.2e-13`（**`tire_output` 与 `energy` 中 3 个 case 非零，`bushing_output` 仅 bushing force curves 1 个 case 非零，`spring_output` 全 0**）。测试：`test_native_fixed_joint_is_what_carries_a_weld`、`test_the_two_weld_routes_agree_on_the_world_mass_properties`。详见 `tasks/20260921-05-native-facts/raw/a3_condensation_switchover.md`。
 
 **A2：保持现状（用户同轮裁决）。** `analysis/vehicle_physics.py` 的 `compute_static_wheel_loads` 继续保留在 Python：native 无静力求解 ABI 入口（`kernel_abi.cpp:854-858` 明示只有 `suspension_kernel_run`），且 ABI 导出面冻结；输入是 `build_vehicle(mode="K")` 装配，与动态整车算例不是同一套。登记 file:line + 阻断原因 + 解除条件见 `tasks/20260921-05-native-facts/raw/step4_static_wheel_loads_registration.md`。解除条件（未变）：单独裁决「是否允许扩展 ABI 导出面」或「是否允许在既有契约下新增默认关闭的静力输出块」。
+
+## 2026-09-22 A3 后的收口复验（主代理）
+
+- **触发**：A3（关闭 A1、切换生产路径、重录车辆基线）发生在 09 终局验收**之后**，多处真源仍停留在 A3 之前的口径。本次派 `code-reviewer aa9ff342` 只读复审，其 A–E 五项结论为：A3 的手段已真实落地（`preparation/assembly/vehicle.py:267-269` 默认不凝聚、`_fuse_welded_bodies` 回退开关有测试、两个等价性测试是真断言）；A3 记录本身诚实；Done-When 残留 A1 冲突措辞；列出记录不一致清单；并判定 46 项 skip 转实跑为环境差异。
+- **复审无法核验、由主代理补齐的一项**：A3 是否只重录了车辆基线。实测 `git show 90d6d23 --stat`：唯一被改的基线是 `tests/data/vehicle_dynamics_baseline/sha256.json`（29 增 29 删）；`git log -- <path>` 显示 `dynamic_hash_baseline.json` 与 `kc_baseline/` 自 `60a6976` 起未再改动。
+- **本轮修正的文件**（全部为记录/口径，生产代码只有一处 docstring）：`EPIC.md`（状态行、状态段、执行顺序、验证协议 05 段、Done-When、A3 等价性证据的通道归属）、父 `PROGRESS.md`（82/108/129/130/132/136/137/143 行）、`SUBTASKS.csv` 第 09 行、`tasks/20260921-09-acceptance/{SPEC.md,PROGRESS.md,raw/acceptance_record.md}`、`tasks/20260921-05-native-facts/{SPEC.md,PROGRESS.md,TODO.csv,raw/step2_condensation_equivalence.md,raw/step6_channel_acceptance.md}`、`preparation/assembly/vehicle.py` 的模块 docstring。
+- **本轮实测复验**（A3 之后）：`build_axle_native.py` 0；`check_module_layering.py --strict --final` 0；kernel 15；contracts 22；全量 multibody **783 passed / 1 skipped / 1 xfailed**（退出 0）；ruff 0；ty 0；动态哈希 26/26 逐位一致（组合哈希 `e7407656…8d48e` 未变）；K/C parity 0；`case_parity_check.py` 8 families accepted；`legacy_surface_gate.py --check` 0；三包 `uv build` 0；`git diff --check` 0。逐条命令见 `tasks/20260921-09-acceptance/raw/acceptance_record.md` 第 8 节。
+- **隔离 wheel 复验**（A3 后重跑）：17 个公开名、CLI 退出 0、七符号 15-30-1-1 且无 `suspension_kernel_free`、已删 15 模块全部 `ModuleNotFoundError`、native 真实运行 `status=success`、artifact 往返 `status=success`。
+- **性质说明**：本轮未新增功能、未改物理语义、未改测试断言与门禁判据、未重录任何基线；只把 A3 之后的记录同步到与实测一致，A2 仍为唯一未闭合项。

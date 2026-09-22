@@ -3,11 +3,11 @@
 - 任务编号：20260921-architecture-deviation-closure
 - 创建日期：2026-09-21
 - 形态：epic
-- 状态：**DONE**（子任务 01-09 全部 DONE，9/9；G1–G4 逐条验收达成，见 `tasks/20260921-09-acceptance/raw/acceptance_record.md`）。两条按 A1/A2 保留的未闭合项显式登记、未判达成，见下方修订记录与父 PROGRESS「未闭合项」。
+- 状态：**DONE**（子任务 01-09 全部 DONE，9/9；G1–G4 逐条验收达成，见 `tasks/20260921-09-acceptance/raw/acceptance_record.md`）。**未闭合项只剩 A2 一条**（静轮荷最小范数保留 Python，显式登记、未判达成）；**A1 已由 2026-09-22 裁决 A3 关闭**（生产路径不凝聚、weld 送 native fixed，车辆基线经授权重录），见下方修订记录与父 PROGRESS「未闭合项」。
 - 真源：本目录 SUBTASKS.csv；子任务相对路径均相对此 Epic 目录解析。
 
 ## 状态与原始需求
-状态（2026-09-21 更新）：子任务 01-04 DONE——01 冻结基线与工具链；02 建立终局分层与删除门禁；03 拆分 C++ 基础层；04 拆解 mb_vehicle 并清零终局缺口（C++ 侧 DAG 与 `--strict --final` 全绿）。05-09 待实施（Python 侧：元件事实通道、作者层归位、report、删除、终局验收）；计划已按用户裁决 A1 修订（见下方修订记录与 PROGRESS.md）。
+状态（2026-09-22 更新）：子任务 01-09 **全部 DONE**（9/9）。01 冻结基线与工具链；02 建立终局分层与删除门禁；03 拆分 C++ 基础层；04 拆解 mb_vehicle 并清零终局缺口（C++ 侧 DAG 与 `--strict --final` 全绿）；05-09 完成 Python 侧（元件事实通道、作者层归位、report、删除、终局验收）。计划按用户裁决 **A1 → A2 → A3** 三次修订；A3 关闭 A1（生产路径不凝聚 + 车辆基线经授权重录），A2 保持现状。
 
 用户原话：“针对上述存在的两处偏差，制定全新计划，消除这两处偏差”；后续：“继续”。
 
@@ -66,7 +66,7 @@ G4. 保留最新统一 preparation、simulation、results、service 和 artifact
 2. **基线重录（经用户明确授权）**：`tests/data/vehicle_dynamics_baseline/sha256.json` 按**切换到 native fixed 后的 native 执行结果**重录（8 个 case），不与旧 Python 凝聚的数值做对比。这是本 Epic 唯一被改动的数值基线；`dynamic_hash_baseline.json`、`kc_baseline/`、`kc_perf_baseline*.json` **未改动**（实测 axle 侧 26 artifact 组合哈希仍为 `e7407656…8d48e`，kc parity 仍在容差内）。
 3. **既有字节门口径更新**：整车门 `case_parity_check` 的 `vehicle_dynamic` 快照随本次重录更新；该门的性质不变（仍是字节级 bit-identity，只是基准改为新生产路径的结果）。`dynamic_hash_sentinel` 与 `kc_parity_check` 维持原冻结基线不动。
 
-**等价性证据（实测，非推断；已于同日按全 8 case 的逐 case 实测更正）**：两条路径的**世界系质量性质完全一致**——总质量均为 `3080.0`、世界质心均为 `[12.987013, 0.0, 160.390]`（全部 8 个 case）。差异分两类，均**非物理改变**：(a) **形状/布局**——native 路径多出 `rear_rack` 一个 body（22→23），weld 以 6 行 `fixed` 关节保留而非被凝聚消去（`constraint_wrench` 29→30）；融合体的 body 原点移到质量加权中心，故 chassis 位姿行带常数偏移 `px=-0.1077, pz=+0.0192`。(b) **求解器残差级数值差**——`tire_output` 最大 `1.4e-9` N、`energy` 最大 `3.9e-14` J、`bushing_output` `2.2e-13`（8 个 case 中 3 个非零，`spring_output` 全为 0）。来源是两种表述下约束求解的数值路径不同。测试 `test_the_two_weld_routes_agree_on_the_world_mass_properties` 钉住世界系质量性质等价，`test_native_fixed_joint_is_what_carries_a_weld` 钉住两条路径的形态与回退开关。**初版曾表述为「tire_output 与 energy 逐位相同」，该结论仅对 5 个 case 成立、已更正**（详见 `tasks/20260921-05-native-facts/raw/a3_condensation_switchover.md` §4）。
+**等价性证据（实测，非推断；已于同日按全 8 case 的逐 case 实测更正）**：两条路径的**世界系质量性质完全一致**——总质量均为 `3080.0`、世界质心均为 `[12.987013, 0.0, 160.390]`（全部 8 个 case）。差异分两类，均**非物理改变**：(a) **形状/布局**——native 路径多出 `rear_rack` 一个 body（22→23），weld 以 6 行 `fixed` 关节保留而非被凝聚消去（`constraint_wrench` 29→30）；融合体的 body 原点移到质量加权中心，故 chassis 位姿行带常数偏移 `px=-0.1077, pz=+0.0192`。(b) **求解器残差级数值差**——`tire_output` 最大 `1.4e-9` N、`energy` 最大 `3.9e-14` J、`bushing_output` `2.2e-13`（**`tire_output` 与 `energy` 在 8 个 case 中有 3 个非零，`bushing_output` 仅 bushing force curves 1 个 case 非零，`spring_output` 全为 0**）。来源是两种表述下约束求解的数值路径不同。测试 `test_the_two_weld_routes_agree_on_the_world_mass_properties` 钉住世界系质量性质等价，`test_native_fixed_joint_is_what_carries_a_weld` 钉住两条路径的形态与回退开关。**初版曾表述为「tire_output 与 energy 逐位相同」，该结论仅对 5 个 case 成立、已更正**（详见 `tasks/20260921-05-native-facts/raw/a3_condensation_switchover.md` §4）。
 
 **A2 未变**：静轮荷最小范数求解仍按 A2 保留在 Python（native 无静力 ABI 入口且导出面冻结），登记与解除条件不变。
 
@@ -133,7 +133,7 @@ pac2002_scope 删除来源：`.codex-tasks/20260917-native-multibody-takeover/AR
 
 ## 执行顺序与共享文件
 
-子任务见 SUBTASKS.csv（01-04 DONE，05-09 TODO）。采用串行主线：冻结基线→门禁→C++ 基础→C++ 职责→native 输出接管→Python 作者层→report/replay→删除→终局验收。
+子任务见 SUBTASKS.csv（01-09 全部 DONE）。执行采用串行主线：冻结基线→门禁→C++ 基础→C++ 职责→native 输出接管→Python 作者层→report/replay→删除→终局验收。
 
 CMakeLists.txt、layering_baseline.json、api.py、包 __init__.py、compiler/runner/decoder、schema 和共享测试门禁均顺序修改，不并行写。每个任务有独立 task_dir，不能据此假设代码写范围互斥。
 
@@ -147,7 +147,7 @@ CMakeLists.txt、layering_baseline.json、api.py、包 __init__.py、compiler/ru
 
 03/04/05 每步构建并同步 DLL，运行动态字节门、K/C/family parity、ABI 七符号与版本门。03/04 同步运行 cpp+header 分层与 architecture 门禁。05 涉及新增输出或契约字段时额外执行 kernel/contracts 测试与版本兼容门；现有输入和输出通道顺序/单位不变。
 
-05 冻结 Python 元件报告的 name/ID、两端、坐标系、作用点、符号、单位、能量、active 状态与 native 输出逐项对照。覆盖弹簧、阻尼、衬套、防倾杆、限位、垂向轮胎及 K/C 两模式；静轮荷按 **A2 登记保留**，其 Python 最小范数算法单独有测试（该测试验证保留语义，不是迁移证据）。**2026-09-21 修订（A1）**：缺口按「向后兼容可选扩展、默认关闭」补 C++ 输出，默认路径 artifact 字节不得变化；不得缺字段填零；不得为让可选通道生效而重录数值基线。凝聚按修订记录第 3 条处理（保留 Python 作者层 + native fixed 关节等价性测试）。
+05 冻结 Python 元件报告的 name/ID、两端、坐标系、作用点、符号、单位、能量、active 状态与 native 输出逐项对照。覆盖弹簧、阻尼、衬套、防倾杆、限位、垂向轮胎及 K/C 两模式；静轮荷按 **A2 登记保留**，其 Python 最小范数算法单独有测试（该测试验证保留语义，不是迁移证据）。**2026-09-21 修订（A1）**：缺口按「向后兼容可选扩展、默认关闭」补 C++ 输出，默认路径 artifact 字节不得变化；不得缺字段填零。**2026-09-22 裁决 A3 后**：凝聚按 A3 修订记录处理（生产路径不凝聚 + weld 送 native fixed + 车辆基线经授权重录），原文「不得为让可选通道生效而重录数值基线」仍适用于可选通道，不适用于 A3 授权的车辆基线。
 
 06/07 保留 API、CLI、Adams source rendering、七 family preparation/document bypass、结果异常/partial、历史读取；report 的计算以冻结结果验证，replay 时间与聚合协议不变。
 
@@ -169,7 +169,7 @@ CMakeLists.txt、layering_baseline.json、api.py、包 __init__.py、compiler/ru
 
 ## Done-When
 
-独立逐条确认 G1–G4：目标模块职责和 cpp+header DAG 实测通过；**已无生产调用者**的旧模块与旧导入、wheel 残留为零（仍有现役生产调用的模块按 G3 修订保留，须逐项列明其保留理由）；Python 无关节残差/Jacobian 与反力求解实现（反力求解指关节约束反力恢复；`analysis/vehicle_physics.py:88` 的静轮荷最小范数辅助求解按 A2 登记保留，须有保留理由与解除条件），且 native 输出有逐通道证据（力元本构的删除以 05 可选通道证据为前提）；**凝聚等价性有实测证据**：native `kind="fixed"` 关节与 Python 凝聚的等价性测试通过，body ID→凝聚体 ID 映射有登记；公开 API/CLI、七 family、Adams 渲染、历史读取与 success/partial/failed artifact 端到端通过。**数值门为独立项**：`dynamic_hash_sentinel` 与 `case_parity_check` 的字节级门必须保持绿，且未重录任何基线；若某 Goal 与字节门冲突，以字节门为准并将该 Goal 退回修订，不得改基线使其通过。每行 DONE 不代替这些条件。
+独立逐条确认 G1–G4：目标模块职责和 cpp+header DAG 实测通过；**已无生产调用者**的旧模块与旧导入、wheel 残留为零（仍有现役生产调用的模块按 G3 修订保留，须逐项列明其保留理由）；Python 无关节残差/Jacobian 与反力求解实现（反力求解指关节约束反力恢复；`analysis/vehicle_physics.py:88` 的静轮荷最小范数辅助求解按 A2 登记保留，须有保留理由与解除条件），且 native 输出有逐通道证据（力元本构的删除以 05 可选通道证据为前提）；**凝聚等价性有实测证据**：生产路径不凝聚、weld 以 native `kind="fixed"` 关节承接（6 行），两条路径的世界系质量性质等价有实测证据（总质量与质心，全部 8 case），回退开关与等价性测试齐备；公开 API/CLI、七 family、Adams 渲染、历史读取与 success/partial/failed artifact 端到端通过。**数值门为独立项**：`dynamic_hash_sentinel` 与 `kc_parity_check` 的字节级/容差门必须保持绿；**基线重录口径（A3 修订）**：除 2026-09-22 经用户明确授权的 `tests/data/vehicle_dynamics_baseline/sha256.json` 外，不得重录任何基线，也不得为使某个门通过而改基线。每行 DONE 不代替这些条件。
 
 ## 风险与回退
 

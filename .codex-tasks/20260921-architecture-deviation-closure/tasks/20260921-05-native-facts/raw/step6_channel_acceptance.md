@@ -33,7 +33,7 @@
 
 - 凝聚的等价性契约与 body ID→凝聚体 ID 映射登记在步骤 2（`raw/step2_condensation_equivalence.md`，含 2 个新测试），本步沿用，未改动。
 - native 通道的身份列按 **body 索引**输出（列 10/11/12），而 Python 报告侧按 **body 名**（`ComponentLoad.endpoint`）；映射登记见 `VALIDATION.md:298`（`VehicleAssembly.body_aliases` → `preparation/vehicle_dynamic.py:338,405-411`）。本步实测确认：native 未输出别名身份映射（manifest 只带 body names，`kernel_contract_run.cpp:813`），因此**凝聚后实体身份**在 native 通路中仍需报告侧解析，与步骤 1 对照表的判定一致。
-- 因整体切换已被阻断（第 2 节），凝聚实体的 native 通路对照**不构成已通过项**；其等价性仅在步骤 2 的 Python 作者层登记范围内成立。
+- 因整体切换已被阻断（第 2 节），凝聚实体的 native 通路对照**不构成已通过项**；**A3 之后**凝聚等价性转为「生产路径不凝聚 + weld 送 native fixed」的实测等价（世界系质量性质，见 `a3_condensation_switchover.md` §4），本步当时的判定已被 A3 取代，不再是未闭合项。
 
 ## 4. 门禁实测（本步全集）
 
@@ -48,7 +48,7 @@
 | results+physics+vehicle+cases+architecture | 0（263 passed, 1 xfailed） | `raw/step5_suite.log` |
 | `ruff check .` / `ty check .` | 0 / 0 | `raw/step5_ruff.log`、`raw/step5_ty.log` |
 
-**未改任何容差，未重录任何基线**：`dynamic_hash_baseline.json`、`kc_baseline/`、`vehicle_dynamics_baseline/`、`kc_perf_baseline*.json` 均未修改（`git status` 无这些文件）。
+**未改任何容差**：本步当时 `dynamic_hash_baseline.json`、`kc_baseline/`、`kc_perf_baseline*.json` 与 `vehicle_dynamics_baseline/` 均未修改（`git status` 无这些文件）。**A3 之后**（2026-09-22 用户裁决）`vehicle_dynamics_baseline/sha256.json` 经明确授权重录（8 个 case，按不凝聚路径的 native 结果）；其余三项仍未改动。
 
 ## 5. 本步骤结论
 
