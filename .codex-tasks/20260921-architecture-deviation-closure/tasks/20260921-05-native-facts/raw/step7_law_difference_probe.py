@@ -32,7 +32,7 @@ from typing import Literal
 from suspension_multibody.analysis.benchmarks import benchmark_model
 from suspension_multibody.cases.kc_quasi_static import model_document
 from suspension_multibody.elements import evaluate_generalized_forces
-from suspension_multibody.model import build_front_axle
+from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import Bushing6x6, Pose, Vec3
 from suspension_multibody.simulation import SimulationRequest, run_request
 import suspension_multibody.api as api
@@ -133,18 +133,31 @@ def compare(mode: Literal["K", "C"]) -> dict:
     print("contract_version:", raw.document.get("contract_version"))
     print("element_wrench shape:", block.shape)
 
-    flat = block[0].reshape(-1, 13)
-    finite_rows = [row for row in flat if not np.isnan(row[0:6]).any()]
+    sample = 0
+    flat = block[sample].reshape(-1, 13)
+
+    # Classify rows by which columns carry a value.  A row the element applied a
+    # *torque* to has finite moment columns and untouched (NaN) force columns --
+    # the native contract calls that a record, so it must be counted, not skipped.
+    def _has_nan(values):
+        return bool(np.isnan(values).any())
+
+    force_rows = [r for r in flat if not _has_nan(r[0:6])]
+    torque_only = [r for r in flat if _has_nan(r[0:3]) and not _has_nan(r[3:6])]
+    opened_only = [r for r in flat if _has_nan(r[0:6])]
     counts: dict[int, int] = {}
-    for row in finite_rows:
+    for row in force_rows + torque_only:
         counts[int(row[6])] = counts.get(int(row[6]), 0) + 1
-    print("finite rows per type code:", counts)
+    print(f"records per type code (force rows + torque-only rows): {counts}")
+    print(f"  force+moment rows={len(force_rows)}  torque-only rows={len(torque_only)}  "
+          f"opened-only (no wrench) rows={len(opened_only)}")
 
-    # structural finding: does native ever give a row whose receiving body is fixed?
-    fixed = [names[int(r[12])] for r in flat if int(r[6]) == 7][:1]
-    print("external rows receiving body (first):", fixed)
+    # structural finding: which bodies do the recorded rows belong to?
+    receivers = sorted({names[int(r[12])] for r in force_rows + torque_only})
+    print("receiving bodies of recorded rows:", receivers)
 
-    physical = api._rigid_state(assembly, names, raw.case_body_state(0))
+    physical = api._rigid_state(assembly, names, raw.case_body_state(0, sample))
+    body_origins = raw.states[sample]
     _force, evaluations = evaluate_generalized_forces(
         physical,
         assembly.elements,
@@ -159,9 +172,14 @@ def compare(mode: Literal["K", "C"]) -> dict:
     print(f"\nnative bushing rows={len(native_bushings)} "
           f"python bushing elements={len(bush_elements)}")
     print(f"{'element':26s} {'end':>3s} {'body':13s} "
-          f"{'|dF|max':>11s} {'|dM|max':>11s} {'|dM|/|M|':>10s}")
+          f"{'|dF|max':>11s} {'|dM|world':>13s} {'|dM|body':>13s} {'|dM|b/|M|':>10s}")
 
-    summary = {"force_max": 0.0, "moment_max": 0.0, "moment_rel_max": 0.0}
+    summary = {
+        "force_max": 0.0,
+        "moment_world_max": 0.0,
+        "moment_body_max": 0.0,
+        "moment_rel_max": 0.0,
+    }
     fixed_body_missing: list[str] = []
     for index, element in enumerate(bush_elements):
         for end in (0, 1):
@@ -177,21 +195,32 @@ def compare(mode: Literal["K", "C"]) -> dict:
                       f"{'-':>11s} {'-':>11s} {'-':>10s}  <python: no wrench for this body>")
                 fixed_body_missing.append(f"{element.name}/{body}")
                 continue
+            native_moment = row[3:6]
+            python_moment = python[3:6] / MM      # N*mm -> N*m, about the world origin
+            origin = body_origins[names.index(body), 0:3]
+            # The native channel writes the moment about the receiving body's own
+            # origin (element_wrench.hpp:18-21); Python reports it about the world
+            # origin.  Compare in both frames, so a reference-point difference is
+            # never mistaken for a constitutive one.
+            d_moment_world = float(np.max(np.abs(native_moment - python_moment)))
+            d_moment_body = float(
+                np.max(np.abs(native_moment - (python_moment - np.cross(origin, python[0:3]))))
+            )
             d_force = float(np.max(np.abs(row[0:3] - python[0:3])))
-            d_moment = float(np.max(np.abs(row[3:6] - python[3:6] / MM)))
-            reference = float(np.max(np.abs(row[3:6]))) or 1.0
+            reference = float(np.max(np.abs(native_moment))) or 1.0
             summary["force_max"] = max(summary["force_max"], d_force)
-            summary["moment_max"] = max(summary["moment_max"], d_moment)
-            summary["moment_rel_max"] = max(summary["moment_rel_max"], d_moment / reference)
+            summary["moment_world_max"] = max(summary["moment_world_max"], d_moment_world)
+            summary["moment_body_max"] = max(summary["moment_body_max"], d_moment_body)
+            summary["moment_rel_max"] = max(summary["moment_rel_max"], d_moment_body / reference)
             print(f"{element.name:26s} {end:3d} {body:13s} "
-                  f"{d_force:11.6g} {d_moment:11.6g} {d_moment / reference:10.3g}")
-
+                  f"{d_force:11.6g} {d_moment_world:13.6g} {d_moment_body:13.6g} "
+                  f"{d_moment_body / reference:10.3g}")
     print(f"\nworst force diff  = {summary['force_max']:.6g} N")
-    print(f"worst moment diff = {summary['moment_max']:.6g} N*m "
+    print(f"worst moment diff, world-origin reference = {summary['moment_world_max']:.6g} N*m")
+    print(f"worst moment diff, body-origin reference  = {summary['moment_body_max']:.6g} N*m "
           f"(max relative {summary['moment_rel_max']:.3g})")
     print("python-only (body absent from native rows):",
           sorted(set(fixed_body_missing)))
-
     # the fixed body's own rows: native NaN vs python finite
     if "chassis" in names:
         chassis_rows = [r for r in flat if int(r[6]) == 2 and names[int(r[12])] == "chassis"]

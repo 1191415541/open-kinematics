@@ -31,11 +31,11 @@ two rows each (end 0 and end 1 -- for a bushing, end 0 is its ``body_b`` end and
 end 1 its ``body_a`` end), a tire's drive/brake pair four (drive, its reaction,
 brake, its reaction), and a tire's contact wrench or an external source one.
 A row nothing was applied to stays NaN rather than being filled with zeros, so a
-row whose force, moment and type code are all NaN is *not* a record: the element
+row whose force *and* moment are both entirely NaN is *not* a record: the element
 applied nothing to that body in that sample.  A genuinely applied zero stays
-``0.0`` and *is* a record.  An element that carries one body rather than two --
-a tire's contact wrench, an external source -- writes ``-1`` in the body column
-it does not have, which is native's "no such body" and not an out-of-range name.
+``0.0`` and *is* a record, and so is a row an element applied only a torque to --
+its force columns stay NaN while its moment columns carry the value.  An element
+that carries one body rather than two --
 """
 
 from __future__ import annotations
@@ -98,9 +98,12 @@ _ROWS_PER_ELEMENT: Mapping[int, int] = MappingProxyType(
     {code: rows for code, _, rows in _ELEMENT_WRENCH_TYPES}
 )
 
-# The columns a row has to carry for the element to have applied anything: the
-# force, the moment and the type code, which the layout keeps contiguous.
-_APPLIED_COLUMNS = slice(FORCE_COLUMNS[0], TYPE_CODE_COLUMN + 1)
+# The columns that decide whether a row is a record: the force and the moment.
+# Native leaves a column untouched (NaN) until a law adds to it, so the test is
+# "some of these is finite", never "all of them are": an element that applies
+# only a torque -- `add_torque` writes the moment columns alone -- is a record
+# with untouched force columns, and requiring finite force would drop it.
+_APPLIED_COLUMNS = slice(FORCE_COLUMNS[0], MOMENT_COLUMNS[2] + 1)
 
 
 class ElementWrenchBlocks(Protocol):
@@ -156,8 +159,10 @@ class ElementWrenchRecord:
     a ``-1`` in ``body_a`` or ``body_b`` means the element has no such body,
     which is what a tire's contact wrench and an external source write.  A
     record is only produced for a row the element actually applied something to,
-    so a row left NaN never becomes one; a pure-moment record keeps the point
-    its row was opened with, which may be NaN.
+    so a row left NaN never becomes one.  A record that carries only a torque --
+    a drive or a brake -- has NaN in ``force`` while ``moment`` holds the value.
+    A pure-moment record keeps the point its row was opened with, which may be
+    NaN.
     """
 
     sample: int
@@ -228,7 +233,7 @@ def decode_element_wrench(
     for sample in range(values.shape[0]):
         for row in range(values.shape[1]):
             entry = values[sample, row]
-            if np.isnan(entry[_APPLIED_COLUMNS]).any():
+            if not np.isfinite(entry[_APPLIED_COLUMNS]).any():
                 # The element applied nothing to this body in this sample.
                 continue
             records.append(_record(entry, sample, row, body_names))

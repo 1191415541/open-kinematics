@@ -142,6 +142,31 @@ def test_a_hand_built_block_decodes_only_the_rows_that_carry_a_wrench() -> None:
     ), "a row the element applied nothing to was decoded as a fact"
 
 
+def test_a_pure_torque_row_is_a_record_and_keeps_its_nan_force() -> None:
+    """
+    A drive or a brake applies only a torque; its force columns stay NaN.
+
+    Native's ``add_torque`` writes the moment columns alone, so a row an element
+    applied only a torque to has NaN force and a real moment.  Requiring finite
+    force would silently drop every drive/brake record, so the "did it apply
+    anything" test has to accept a row on either vector.
+    """
+    torque_only = _row(
+        moment=(10.0, -20.0, 30.0),
+        type_code=5.0,
+        body_a=0.0,
+        body_b=-1.0,
+        body=2.0,
+    )
+    block = np.stack([torque_only])[None, :, :]
+
+    records = decode_element_wrench({ELEMENT_WRENCH_BLOCK: block})
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.type_name == "drive_brake"
+    assert record.moment == (10.0, -20.0, 30.0)
+    assert all(np.isnan(value) for value in record.force)
 def test_rows_per_element_is_the_row_stride_of_the_frozen_layout() -> None:
     assert rows_per_element(1) == 2
     assert rows_per_element(2) == 2

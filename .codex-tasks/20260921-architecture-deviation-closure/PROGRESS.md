@@ -112,7 +112,7 @@
 
 ## 2026-09-22 子任务 05 完成
 
-- **8/8 步骤 DONE**，提交 `81e4d57`（步骤 4）与 `81e4d57` 后续提交。步骤 1-3 为上一会话产物（步骤 3 入库 `ecbca0f`）。
+- **8/8 步骤 DONE**。提交：步骤 1-2 `87b7445`、步骤 3 `ecbca0f`（上一会话产物）、步骤 4 `5700e72`、步骤 5-8 `81e4d57`、父级回填 `0f26cd6`。
 - **步骤 4（静轮荷归属收口，A2）**：按裁决保留 Python 最小范数算法本体与 service 调用语义，归属收口于 `VehicleDynamicsResult.static_wheel_loads`；登记 `raw/step4_static_wheel_loads_registration.md`。新增**真判别器**测试 `test_static_wheel_loads_are_the_minimum_norm_solution`：实测平衡矩阵秩 3、零空间维 1（方向 `[1,-1,-1,1]`，`A·v=0` 残差 0）、均匀解 2-范数 7161300 为族内最小；族内其它平衡解满足余额断言却在此失败。
 - **步骤 5（decoder 接线）**：新增 `results/element_wrench.py` 只读事实解码面（13 列契约、类型码 1-7、`ElementWrenchRecord`、`decode_element_wrench`、`element_wrench_block`、`rows_per_element`），接入 `results` 包级导出；新增 7 个测试含两条真实 native 运行。开关开：shape `(2,42,13)`、52 条记录（bushing 32 / external 20）、`contract_version=2`；开关关：无块、空 tuple、`contract_version=1`。**`api.py` 生产取值来源未改**。
 - **步骤 6（逐通道容差验收）**：按 01 冻结的 K/C 容差与两字节级门逐通道核验，五类元件**无一通过等价性验收**；登记 `raw/step6_channel_acceptance.md`。
