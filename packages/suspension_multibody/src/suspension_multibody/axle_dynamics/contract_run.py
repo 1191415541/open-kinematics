@@ -97,7 +97,7 @@ def run_axle_dynamics(
     from dataclasses import replace
 
     from ..kernel import KernelContractError
-    from ..metrics import compute_case_metrics
+    from ..report.metrics import compute_case_metrics
     from ..simulation import SimulationRequest, run_request
     try:
         simulation_run = run_request(

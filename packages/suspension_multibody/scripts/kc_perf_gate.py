@@ -33,6 +33,9 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASELINE = (
     PACKAGE_ROOT / "tests" / "data" / "kc_perf_baseline_native.json"
 )
+#: The declarative benchmark-axle fixture, read by explicit path: this gate must
+#: not import a test package.
+BENCHMARK_FIXTURE = PACKAGE_ROOT / "tests/data/benchmark_axle.json"
 #: Wall-clock allowance over the recorded baseline.  A gate that demands exact
 #: parity with a two-sample median fails on machine load alone (a shared laptop
 #: drifts by well over 10%), which teaches nothing and hides real regressions
@@ -48,11 +51,15 @@ BUDGET_FACTOR = 1.25
 DEFAULT_REPEATS = 5
 
 
+def _benchmark_payload() -> dict[str, Any]:
+    """Read the declarative benchmark-axle fixture by explicit path."""
+    return json.loads(BENCHMARK_FIXTURE.read_text(encoding="utf-8"))
+
+
 def _native_workloads() -> dict[str, Callable[[], int]]:
     """Return one callable per workload, each returning its state count."""
     import importlib.util
 
-    from suspension_multibody.analysis.benchmarks import benchmark_grid, benchmark_model
     from suspension_multibody.cases.kc_quasi_static import case_document, model_document
     from suspension_multibody.cases.kc_quasi_static.load_paths import LoadPath
     from suspension_multibody.cases.kc_quasi_static.workflow import (
@@ -60,6 +67,7 @@ def _native_workloads() -> dict[str, Callable[[], int]]:
         DEFAULT_TIMES,
     )
     from suspension_multibody.preparation.assembly import build_front_axle
+    from suspension_multibody.schema import FrontAxleModel
     from suspension_multibody.simulation import SimulationRequest, run_request
     fixture = PACKAGE_ROOT / "tests/cases/kc_quasi_static/kc_fixtures.py"
     spec = importlib.util.spec_from_file_location("kc_perf_fixture", fixture)
@@ -67,12 +75,16 @@ def _native_workloads() -> dict[str, Callable[[], int]]:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
+    # The axle and the 10x10 grid come from the declarative fixture every K/C
+    # gate reads, by explicit path: a gate must not import a test package.
+    payload = _benchmark_payload()
     # A physical C sweep needs a compliance to answer with, so it uses the
     # compliant fixture every other native C gate uses.
-    k_assembly = build_front_axle(benchmark_model(), "K")
+    k_assembly = build_front_axle(FrontAxleModel.model_validate(payload["model"]), "K")
     compliant = getattr(module, "_compliant_model")()  # test fixture, not a public API
     c_assembly = build_front_axle(compliant, "C")
-    wheel_values, rack_values = benchmark_grid()
+    wheel_values = tuple(float(value) for value in payload["grid"]["wheel_values_mm"])
+    rack_values = tuple(float(value) for value in payload["grid"]["rack_values_mm"])
     axes = tuple(path.name for path in LoadPath.standard())
 
     def k_100() -> int:

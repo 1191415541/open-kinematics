@@ -1,7 +1,7 @@
 {
   "version": 1,
   "mode": "migration",
-  "notes": "Exact registry for the migration mode: every production/script legacy import must appear here, and every entry must still match a live finding, so the registry can only shrink.  The final mode ignores it and refuses every legacy import and legacy package.  Owners come from the epic's Python migration matrix; findings in tests are not registered because 08 deletes them with the packages.",
+  "notes": "Exact registry for the migration mode: every production/script legacy import must appear here, and every entry must still match a live finding, so the registry can only shrink.  The final mode ignores it and refuses every legacy import and legacy package.  Owners come from the epic's Python migration matrix; findings in tests are not registered because 08 deletes them with the packages.  07 switched every report/metrics/replay caller to the new homes, so the metrics and analysis entries for api.py, axle_dynamics/contract_run.py, vehicle/service.py, adams/reference.py, cases/kc_quasi_static/workflow.py and the three benchmark-reading scripts are gone; what is left is the element construction of the authoring layer (A1) and the A2-retained compute_static_wheel_loads.",
   "successors": {
     "core": {
       "target": "preparation/assembly/types.py",
@@ -21,55 +21,10 @@
     },
     "analysis": {
       "target": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)"
+      "owner": "06-authoring (signals) + 07-report (replay and metrics); the surviving entry is the A2-retained compute_static_wheel_loads"
     }
   },
   "entry": [
-    {
-      "path": "scripts/case_parity_check.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
-      "occurrences": 1
-    },
-    {
-      "path": "scripts/kc_native_probe.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
-      "occurrences": 1
-    },
-    {
-      "path": "scripts/kc_perf_gate.py",
-      "scope": "script",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/adams/reference.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/api.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
-      "occurrences": 2
-    },
     {
       "path": "src/suspension_multibody/api.py",
       "scope": "production",
@@ -77,33 +32,6 @@
       "symbol": "elements",
       "successor": "native facts decoded by results/, then report/",
       "owner": "05-native-facts + 07-report",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/api.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "metrics",
-      "successor": "report/metrics/",
-      "owner": "07-report",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/axle_dynamics/contract_run.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "metrics",
-      "successor": "report/metrics/",
-      "owner": "07-report",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/cases/kc_quasi_static/workflow.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
       "occurrences": 1
     },
     {
@@ -138,17 +66,8 @@
       "scope": "production",
       "rule": "legacy_module_import",
       "symbol": "analysis",
-      "successor": "preparation/signals.py, simulation/replay.py, results/timeseries.py, report/",
-      "owner": "06-authoring (signals) + 07-report (replay and metrics)",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/vehicle/service.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "metrics",
-      "successor": "report/metrics/",
-      "owner": "07-report",
+      "successor": "report/metrics/ for the reporting calls; compute_static_wheel_loads stays registered in analysis/vehicle_physics.py under A2 (native has no static-solve ABI entry, and the ABI export surface is frozen)",
+      "owner": "07-report (reporting calls switched) + A2 retention for the static wheel-load algorithm",
       "occurrences": 1
     }
   ]

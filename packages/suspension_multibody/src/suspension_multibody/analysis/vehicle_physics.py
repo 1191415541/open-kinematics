@@ -80,7 +80,7 @@ def summarize_wheel_loads(loads: Mapping[str, float]) -> WheelLoadSummary:
 
 def wheel_load_metrics(loads: Mapping[str, float]) -> dict[str, float]:
     """Compatibility forwarder to the registered vehicle metric owner."""
-    from ..metrics.vehicle import wheel_load_metrics as _wheel_load_metrics
+    from ..report.metrics.vehicle import wheel_load_metrics as _wheel_load_metrics
 
     return _wheel_load_metrics(loads)
 

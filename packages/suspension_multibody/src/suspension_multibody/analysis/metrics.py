@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..metrics.case_specific import (
+from ..report.metrics.case_specific import (
     compute_k_metrics as _compute_k_metrics,
 )
-from ..metrics.case_specific import (
+from ..report.metrics.case_specific import (
     wheel_metrics as _wheel_metrics,
 )
 

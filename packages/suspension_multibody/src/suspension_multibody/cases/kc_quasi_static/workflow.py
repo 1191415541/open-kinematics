@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...analysis._geometry import _wheel_geometry
 from ...axle_dynamics import AxleSolverSettings
+from ...report.geometry import _wheel_geometry
 from .convert import MM, NativeKcError, quaternion_to_rotation
 
 SIDES = ("L", "R")

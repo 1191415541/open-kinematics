@@ -34,6 +34,11 @@ import numpy as np
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 TEST_DATA = REPOSITORY_ROOT / "packages/suspension_multibody/tests/data/kc_baseline"
+#: The declarative benchmark-axle fixture, read by explicit path: this gate must
+#: not import a test package.
+BENCHMARK_FIXTURE = (
+    REPOSITORY_ROOT / "packages/suspension_multibody/tests/data/benchmark_axle.json"
+)
 
 #: Every family the case contract declares, in the order the contract lists them.
 FAMILIES = (
@@ -290,9 +295,16 @@ def _c_path_records(assembly, *, paths: tuple[str, ...]) -> list[dict[str, objec
     return records
 
 
+def _benchmark_model() -> Any:
+    """Build the shared benchmark axle from the declarative fixture."""
+    from suspension_multibody.schema import FrontAxleModel
+
+    payload = json.loads(BENCHMARK_FIXTURE.read_text(encoding="utf-8"))
+    return FrontAxleModel.model_validate(payload["model"])
+
+
 def check_kc_quasi_static() -> tuple[bool, str]:
     """Compare the contract-path K grid and C load paths with the snapshot."""
-    from suspension_multibody.analysis.benchmarks import benchmark_model
     from suspension_multibody.cases.kc_quasi_static import AXIS_ORDER
     from suspension_multibody.preparation.assembly import build_front_axle
 
@@ -313,7 +325,7 @@ def check_kc_quasi_static() -> tuple[bool, str]:
         state["case_id"]: state
         for state in json.loads((TEST_DATA / "k_states.json").read_text(encoding="utf-8"))
     }
-    k_produced = _k_grid_records(build_front_axle(benchmark_model(), "K"))
+    k_produced = _k_grid_records(build_front_axle(_benchmark_model(), "K"))
     if {state["case_id"] for state in k_produced} != set(k_expected):
         return False, "the K grid did not cover the frozen case set"
     for state in k_produced:

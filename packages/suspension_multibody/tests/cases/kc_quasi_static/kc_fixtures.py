@@ -3,10 +3,19 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from suspension_multibody.analysis.benchmarks import benchmark_model
 from suspension_multibody.schema import Bushing6x6, FrontAxleModel, Pose, Vec3
 
 BASELINE = Path(__file__).parents[2] / "data" / "kc_baseline"
+#: Read here rather than imported from ``tests.benchmark_fixture``: the gate
+#: scripts load this module by explicit path, so it cannot rely on ``tests``
+#: being importable, and a gate must not import a test package anyway.
+BENCHMARK_FIXTURE = Path(__file__).parents[2] / "data" / "benchmark_axle.json"
+
+
+def benchmark_model() -> FrontAxleModel:
+    """Return the fixed non-proprietary axle the K/C gates share."""
+    payload = json.loads(BENCHMARK_FIXTURE.read_text(encoding="utf-8"))
+    return FrontAxleModel.model_validate(payload["model"])
 
 
 def _compliant_model() -> FrontAxleModel:

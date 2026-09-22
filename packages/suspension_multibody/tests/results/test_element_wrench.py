@@ -16,7 +16,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from suspension_multibody.analysis.benchmarks import benchmark_model
 from suspension_multibody.cases.kc_quasi_static import model_document
 from suspension_multibody.model import build_front_axle
 from suspension_multibody.results import (
@@ -31,6 +30,7 @@ from suspension_multibody.results import (
 from suspension_multibody.results.element_wrench import rows_per_element
 from suspension_multibody.schema import Bushing6x6, FrontAxleModel, Pose, Vec3
 from suspension_multibody.simulation import SimulationRequest, run_request
+from tests.benchmark_fixture import benchmark_model
 
 _NAN = float("nan")
 

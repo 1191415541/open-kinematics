@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from suspension_multibody.analysis.benchmarks import benchmark_model
 from suspension_multibody.cases.kc_quasi_static import (
     NativeKcError,
     case_document,
@@ -25,13 +24,26 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
     _side_fields,
 )
 from suspension_multibody.preparation.assembly import build_front_axle
+from suspension_multibody.schema import FrontAxleModel
 from suspension_multibody.simulation import SimulationRequest, run_request
 
 BASELINE = Path("packages/suspension_multibody/tests/data/kc_baseline")
 OUT = Path("artifacts/kc-native-probe")
+#: The declarative benchmark-axle fixture, read by explicit path: this gate must
+#: not import a test package.
+BENCHMARK_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "packages/suspension_multibody/tests/data/benchmark_axle.json"
+)
 
 WHEEL_VALUES_MM = (-10.0, 0.0, 10.0)
 RACK_VALUES_MM = (-5.0, 0.0, 5.0)
+
+
+def benchmark_model() -> FrontAxleModel:
+    """Build the shared benchmark axle from the declarative fixture."""
+    payload = json.loads(BENCHMARK_FIXTURE.read_text(encoding="utf-8"))
+    return FrontAxleModel.model_validate(payload["model"])
 
 
 def tolerance(field: str, reference: float) -> float:

@@ -17,10 +17,10 @@ import numpy as np
 import pytest
 from suspension_contracts import validate_case
 
-from suspension_multibody.analysis.benchmarks import benchmark_model
 from suspension_multibody.cases.kc_quasi_static import model_document
 from suspension_multibody.model import build_front_axle
 from suspension_multibody.simulation import SimulationRequest, run_request
+from tests.benchmark_fixture import benchmark_model
 
 _TIMES = {"start_s": 0.0, "end_s": 1e-3, "step_s": 1e-3}
 

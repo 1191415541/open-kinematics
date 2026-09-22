@@ -8,6 +8,7 @@ form of the same file passes.  The production tree is only ever read.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
@@ -336,6 +337,89 @@ def test_native_tokens_outside_the_report_scope_are_not_findings(tmp_path: Path)
         "    return run_contract(model, case)\n",
     )
     assert gate.scan_tree(root) == []
+
+
+def test_report_importing_or_running_preparation_is_detected(tmp_path: Path) -> None:
+    """The report publishes what came back; it must not author an input."""
+    root = _package(tmp_path)
+    _write(
+        _module_path(root, "report/authors_inputs.py"),
+        "from suspension_multibody.preparation.signals import time_grid\n"
+        "from ..preparation.assembly import build_front_axle\n\n"
+        "def replay(model, case):\n"
+        "    return build_front_axle(model, 'K'), time_grid(case)\n",
+    )
+    findings = gate.scan_tree(root)
+    rules = _rules(findings)
+    assert "report_preparation_import" in rules
+    assert "report_preparation_call" in rules
+    imported = _symbols(findings, "report_preparation_import")
+    assert "suspension_multibody.preparation.signals" in imported
+    assert "suspension_multibody.preparation.assembly" in imported
+    called = _symbols(findings, "report_preparation_call")
+    assert {"build_front_axle", "time_grid"} <= called
+    assert gate.evaluate(findings, mode=gate.MODE_MIGRATION) != []
+    assert gate.evaluate(findings, mode=gate.MODE_FINAL) != []
+
+
+def test_report_recomputing_a_constitutive_law_is_detected(tmp_path: Path) -> None:
+    """A force law the kernel already answered must not be rebuilt here."""
+    root = _package(tmp_path)
+    _write(
+        _module_path(root, "report/rebuilds_the_law.py"),
+        "from suspension_multibody.results import decode_element_wrench\n\n"
+        "_LAWS = {'spring': spring_force}\n\n"
+        "def rebuild(record):\n"
+        "    wrench = decode_element_wrench(record)\n"
+        "    return spring_force(wrench, 1000.0)\n",
+    )
+    findings = gate.scan_tree(root)
+    assert _rules(findings) == {"report_constitutive_call"}
+    assert _symbols(findings, "report_constitutive_call") == {"spring_force"}
+    assert gate.evaluate(findings, mode=gate.MODE_MIGRATION) != []
+    assert gate.evaluate(findings, mode=gate.MODE_FINAL) != []
+
+
+def test_the_live_report_tree_stays_inside_its_boundary() -> None:
+    """
+    The real ``report`` package passes every rule, and the scan sees it.
+
+    The fixture tests above prove each rule can fire; this one proves the live
+    tree is clean in both directions -- no boundary finding at all, and, read
+    independently of the scanner's rules, no import of native/kernel/solver or
+    preparation code in any module under ``report/``.
+    """
+    report_root = PACKAGE_ROOT / "src" / "suspension_multibody" / "report"
+    modules = sorted(report_root.rglob("*.py"))
+    assert report_root.is_dir()
+    assert len(modules) >= 5, (
+        "the report tree is too small for the assertion to mean anything"
+    )
+
+    findings = gate.scan_tree(PACKAGE_ROOT)
+    boundary = [finding for finding in findings if gate.is_report_scope(finding.path)]
+    assert boundary == [], [finding.describe() for finding in boundary]
+    assert not {
+        "report_native_import",
+        "report_native_call",
+        "report_preparation_import",
+        "report_preparation_call",
+        "report_constitutive_call",
+    } & _rules(findings)
+
+    imported: set[str] = set()
+    for path in modules:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                resolved = gate.resolve_import(path, node.module, node.level)
+                if resolved:
+                    imported.add(resolved)
+    assert imported, "the report tree imports nothing at all"
+    assert [name for name in sorted(imported) if gate._native_of(name)] == []
+    assert [name for name in sorted(imported) if gate._preparation_of(name)] == []
 
 
 # --------------------------------------------------------------------------- #

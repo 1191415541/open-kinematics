@@ -23,6 +23,12 @@ Rules
     Inside ``report``: importing native/kernel/solver code, or calling a solve
     or a native entry point.  The report consumes decoded results; it does not
     produce them.
+``report_preparation_import`` / ``report_preparation_call``
+    Inside ``report``: importing or running preparation/authoring code.  The
+    report publishes what came back; it does not author what goes in.
+``report_constitutive_call``
+    Inside ``report``: evaluating an element force law.  The constitutive
+    behaviour belongs to the kernel; the report reads the wrench it decoded.
 ``legacy_forwarding_shell``
     A non-package module whose whole body is imports and re-exports.  A package
     ``__init__.py`` is a facade, not a shell, and is not reported.
@@ -66,6 +72,33 @@ SOLVE_NAMES = (
     "solve_static",
     "solve_dynamic",
     "run_solver",
+)
+#: A name that means authoring/preparation code: the report must not run it.
+PREPARATION_TOKENS = ("preparation",)
+#: The authoring entry points a report module must not call.
+PREPARE_NAMES = (
+    "prepare",
+    "prepare_request",
+    "prepare_vehicle_run",
+    "build_front_axle",
+    "build_vehicle",
+    "time_grid",
+    "loads_at_time",
+    "wrenches_at_time",
+)
+#: Element force laws: evaluating one recomputes constitutive behaviour the
+#: kernel already answered, so it is not the report's job.
+CONSTITUTIVE_NAMES = (
+    "apply_element",
+    "bushing_force",
+    "constitutive_force",
+    "damper_force",
+    "element_forces",
+    "evaluate_element",
+    "evaluate_generalized_forces",
+    "generalized_forces",
+    "spring_force",
+    "tire_force",
 )
 
 MODE_MIGRATION = "migration"
@@ -154,6 +187,13 @@ def _native_of(module: str | None) -> bool:
     if parts[0] == "suspension_kernel":
         return True
     return any(token in parts for token in NATIVE_TOKENS)
+
+
+def _preparation_of(module: str | None) -> bool:
+    """Return whether a dotted module names authoring/preparation code."""
+    if not module:
+        return False
+    return any(token in module.split(".") for token in PREPARATION_TOKENS)
 
 
 def resolve_import(path: Path, module: str | None, level: int) -> str | None:
@@ -250,6 +290,8 @@ def scan_file(path: Path, *, root: Path) -> list[SurfaceFinding]:
             )
         if report_scope and _native_of(module):
             add("report_native_import", str(module), node)
+        if report_scope and _preparation_of(module):
+            add("report_preparation_import", str(module), node)
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -279,6 +321,14 @@ def scan_file(path: Path, *, root: Path) -> list[SurfaceFinding]:
                 or receiver in NATIVE_TOKENS
             ):
                 add("report_native_call", name or receiver, node)
+            if (
+                name in PREPARE_NAMES
+                or receiver in PREPARATION_TOKENS
+                or any(token in name for token in PREPARATION_TOKENS)
+            ):
+                add("report_preparation_call", name or receiver, node)
+            if name in CONSTITUTIVE_NAMES:
+                add("report_constitutive_call", name, node)
     return findings
 
 

@@ -31,7 +31,7 @@ def run_vehicle_dynamics(
     from ..axle_dynamics.contract_run import safe_failure_row
     from ..axle_dynamics.errors import NativeAxleError
     from ..kernel import KernelContractError
-    from ..metrics import compute_case_metrics
+    from ..report.metrics import compute_case_metrics
     from ..results.decoder import decode_result
 
     prepared = prepare_vehicle_run(model, case)

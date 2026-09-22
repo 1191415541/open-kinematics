@@ -1,14 +1,29 @@
-"""Prescribed vehicle-body K/C time-history replay."""
+"""
+Prescribed-motion replay orchestration.
+
+``VehicleKCTimeDomainSolver`` replays a *prescribed* body motion: every sample
+is the value of the case's own motion signal at that time, so there is no
+integrator here and no state is propagated between samples.  The orchestration
+belongs to ``simulation`` because it turns a case into samples; the aggregation
+of those samples into one immutable result belongs to
+``results/timeseries.py`` (``aggregate_replay_samples``).
+
+Moved here from ``analysis/vehicle_kc_time_domain.py``, which 08 deletes.  The
+time grid, the sample contents, the provenance and the aggregate metric are
+unchanged, and so is the ``mode`` check that refuses anything but
+``vehicle_kc_dynamic``.
+"""
 
 from __future__ import annotations
 
 import numpy as np
 
 from .. import __version__
-from ..core import rotation_vector_to_quaternion
 from ..io import canonical_hash
+from ..preparation.geometry import rotation_vector_to_quaternion
 from ..preparation.signals import loads_at_time, time_grid
 from ..results import TimeSeriesResult, TimeSeriesSample
+from ..results.timeseries import aggregate_replay_samples
 from ..schema import (
     DynamicCaseSpec,
     FrontAxleModel,
@@ -52,12 +67,10 @@ class VehicleKCTimeDomainSolver:
             model_hash=canonical_hash(model.model_dump(mode="json")),
             case_hash=canonical_hash(case.model_dump(mode="json")),
         ).model_dump(mode="json")
-        return TimeSeriesResult.from_samples(
+        return aggregate_replay_samples(
             samples,
-            times_s=tuple(sample.time for sample in samples),
-            provenance=provenance,
             mode=case.mode,
-            metrics={"sample_count": len(samples)},
+            provenance=provenance,
         )
 
 
@@ -107,3 +120,6 @@ def _pose_from_angles(roll: float, pitch: float, yaw: float, heave: float) -> Po
             z=float(quaternion[3]),
         ),
     )
+
+
+__all__ = ["VehicleKCTimeDomainSolver"]

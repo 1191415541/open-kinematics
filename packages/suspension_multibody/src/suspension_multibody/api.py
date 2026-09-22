@@ -31,16 +31,22 @@ from typing import Any, Iterable
 import numpy as np
 
 from . import __version__
-from .analysis.compliance import secant_compliance
-from .analysis.vehicle_kc_time_domain import VehicleKCTimeDomainSolver
+
+# Imported before the rest of the module, out of alphabetical order, on
+# purpose: the authoring assembly has to be the package the import order
+# enters.  The legacy chain `elements -> core -> preparation.assembly.types`
+# runs this package's `__init__`, and `front_axle` needs the element classes --
+# if `cases`, `elements` or `results` is entered first, `elements` is still
+# half-built when `front_axle` asks for `AntiRollBarElement`.  The load-order
+# constraint disappears when 08 deletes the legacy element package.
+from .preparation.assembly import FrontAxleAssembly, build_front_axle  # isort: skip
+
 from .axle_dynamics.schema import AxleSolverSettings
 from .cases.kc_quasi_static.contract import model_document, time_document
 from .cases.kc_quasi_static.convert import MM
 from .elements import BushingElement, evaluate_generalized_forces
 from .io import CheckpointStore, canonical_hash, write_artifact
 from .kernel.solver import solver_settings_document
-from .metrics import compute_axle_metrics, compute_case_metrics, compute_common_metrics
-from .preparation.assembly import FrontAxleAssembly, build_front_axle
 from .preparation.assembly.types import RigidBody, RigidBodyState
 from .preparation.geometry import (
     SE3,
@@ -48,6 +54,12 @@ from .preparation.geometry import (
     wrench_global_to_local,
 )
 from .preparation.signals import loads_at_time, motion, time_grid, wrenches_at_time
+from .report.compliance import secant_compliance
+from .report.metrics import (
+    compute_axle_metrics,
+    compute_case_metrics,
+    compute_common_metrics,
+)
 from .results import TimeSeriesResult, TimeSeriesSample
 from .schema import (
     BushingResult,
@@ -69,6 +81,7 @@ from .schema import (
 )
 from .schema.case import DisplacementControl, LoadControl
 from .simulation import SimulationRequest, run_request
+from .simulation.replay import VehicleKCTimeDomainSolver
 
 #: The output grid a K/C case is solved on.  The kernel's case layer expands a
 #: start/end/step, so the product API has to state one; two samples is the

@@ -24,7 +24,6 @@ from suspension_contracts import validate_result
 
 from suspension_multibody.adams.reference import _k_grid_states
 from suspension_multibody.adams.strict_c import _c_path_records
-from suspension_multibody.analysis.benchmarks import benchmark_model
 from suspension_multibody.cases.kc_quasi_static import case_document, model_document
 from suspension_multibody.cases.kc_quasi_static.load_paths import LoadPath
 from suspension_multibody.cases.kc_quasi_static.workflow import (
@@ -46,6 +45,7 @@ from suspension_multibody.simulation import (
     prepare_request,
     run_request,
 )
+from tests.benchmark_fixture import benchmark_model
 
 from .kc_fixtures import _c_tolerance, _compliant_model, _k_tolerance, _snapshot
 

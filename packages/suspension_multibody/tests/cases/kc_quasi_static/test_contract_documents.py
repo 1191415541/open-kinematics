@@ -19,7 +19,6 @@ from suspension_contracts import (
     validate_model,
 )
 
-from suspension_multibody.analysis.benchmarks import benchmark_model
 from suspension_multibody.cases.kc_quasi_static import (
     NativeKcError,
     case_document,
@@ -27,6 +26,7 @@ from suspension_multibody.cases.kc_quasi_static import (
 )
 from suspension_multibody.cases.kc_quasi_static.load_paths import LoadPath
 from suspension_multibody.model import build_front_axle
+from tests.benchmark_fixture import benchmark_model
 
 from .kc_fixtures import _compliant_model
 

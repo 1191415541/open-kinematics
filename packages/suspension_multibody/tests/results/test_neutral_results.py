@@ -3,7 +3,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from suspension_multibody.analysis.benchmarks import benchmark_model
 from suspension_multibody.cases.kc_quasi_static import case_document, model_document
 from suspension_multibody.cases.kc_quasi_static.workflow import (
     DEFAULT_SETTINGS,
@@ -17,6 +16,7 @@ from suspension_multibody.results import (
     decode_result,
 )
 from suspension_multibody.simulation import SimulationRequest, run_request
+from tests.benchmark_fixture import benchmark_model
 
 
 def _run():

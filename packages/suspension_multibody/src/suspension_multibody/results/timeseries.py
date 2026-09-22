@@ -246,6 +246,36 @@ class TimeSeriesResult:
         }
 
 
+def aggregate_replay_samples(
+    samples: tuple[TimeSeriesSample, ...] | list[TimeSeriesSample],
+    *,
+    mode: str | None,
+    provenance: Mapping[str, Any] | None = None,
+    metrics: Mapping[str, Any] | None = None,
+    diagnostics: Any = (),
+    performance: Mapping[str, Any] | None = None,
+    status: str = "success",
+) -> TimeSeriesResult:
+    """
+    Aggregate formally built replay samples into one immutable result.
+
+    The aggregation protocol is fixed and shared: the time grid is exactly the
+    sample times in order, and the default metric is the sample count.  Replay
+    orchestration supplies the samples; it does not choose the aggregation.
+    """
+    values = tuple(samples)
+    return TimeSeriesResult.from_samples(
+        values,
+        times_s=tuple(sample.time for sample in values),
+        diagnostics=diagnostics,
+        metrics={"sample_count": len(values)} if metrics is None else metrics,
+        performance=performance,
+        provenance=provenance,
+        status=status,
+        mode=mode,
+    )
+
+
 def _coerce_sample(value: Any) -> TimeSeriesSample:
     if isinstance(value, Mapping):
         payload = dict(value)
@@ -269,4 +299,9 @@ def _coerce_sample(value: Any) -> TimeSeriesSample:
     return TimeSeriesSample(**payload)  # ty: ignore[missing-argument]
 
 
-__all__ = ["TimeSeriesManifest", "TimeSeriesResult", "TimeSeriesSample"]
+__all__ = [
+    "TimeSeriesManifest",
+    "TimeSeriesResult",
+    "TimeSeriesSample",
+    "aggregate_replay_samples",
+]
