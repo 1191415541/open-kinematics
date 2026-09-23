@@ -1091,6 +1091,12 @@ def _build_tires(
                 longitudinal_relaxation_length_m=relaxation_length * scale,
                 lateral_relaxation_length_m=relaxation_length * scale,
                 detached_relaxation_s=spec.detached_relaxation_s,
+                # The share of the wheel's mass that belongs to the tire (D2).  The
+                # solver adds it back into the carrying body's inertia, so moving it
+                # here changes ownership and not the dynamics.  A model that declares
+                # no share emits nothing, which is what keeps every recorded
+                # full-vehicle baseline valid.
+                mass_kg=float(wheel.tire_mass),
                 model_kind=(
                     "pac2002_pure_slip"
                     if spec.kind == "pac2002"

@@ -58,6 +58,20 @@ class WheelSpec(StrictModel):
     # 仅用于静态配平的被动转轴；动态积分仍保留完整轮端刚体。
     static_rotation_axis_local: Vec3 | None = None
     mass: float = Field(default=0.0, ge=0)
+    #: The part of `mass` that belongs to the *tire* rather than the wheel-end body
+    #: (decision D2, requirement 10).  A tire used to carry no mass of its own: the
+    #: wheel-end body owned the whole wheel.  Declaring a share here moves it, and
+    #: the solver sums what the tire declares back into its carrying body, so the
+    #: dynamics are unchanged and only the ownership moves.
+    #:
+    #: Zero -- the default, and the value every existing model has -- means the body
+    #: still owns the whole wheel, so no recorded baseline moves.
+    #:
+    #: Excluded from `model_dump` on purpose: `api.py` hashes the dump into
+    #: `Provenance.model_hash` and `io/artifacts.py` hashes that again into the
+    #: artifact manifest, so a dump-visible field would change every recorded
+    #: full-vehicle result.
+    tire_mass: float = Field(default=0.0, ge=0, exclude=True)
     axial_inertia: float = Field(default=1.0, gt=0)
     tire: TireModelSpec = Field(default_factory=TireModelSpec)
     driven: bool = False

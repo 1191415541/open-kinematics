@@ -325,7 +325,23 @@ def _tire_entry(tire, index: int, kind: int, mirror: int) -> dict[str, Any]:
     for field, rows in tables.items():
         if rows:
             parameters[field] = f"tire-{field.replace('_', '-')}-{index}"
-    return {"name": tire.name, "model": model, "body": tire.body, "parameters": parameters}
+    entry: dict[str, Any] = {
+        "name": tire.name,
+        "model": model,
+        "body": tire.body,
+        "parameters": parameters,
+    }
+    # The tire's own mass, when the model declares a share (decision D2,
+    # requirement 10).  The field is optional in the contract, so a model that
+    # declares none emits nothing and the document is byte-identical to what it
+    # was before the field existed -- which is what keeps every recorded
+    # full-vehicle baseline valid.
+    if float(tire.mass_kg) > 0.0:
+        entry["mass"] = float(tire.mass_kg)
+        inertia = tire.inertia_kg_m2
+        if inertia is not None:
+            entry["inertia"] = [[float(value) for value in row] for row in inertia]
+    return entry
 
 
 def _steering_element(steering, index: int, body_names: tuple[str, ...]) -> dict[str, Any]:
