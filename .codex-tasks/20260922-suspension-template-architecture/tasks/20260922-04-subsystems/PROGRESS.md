@@ -1,9 +1,9 @@
 - 任务：从 build_front_axle 拆出六类子系统（左右悬架／转向／车轮／车身／制动／驱动）
 - 形态：single-full（Epic 子任务）
-- 进度：1/13 步骤 IN_PROGRESS（包骨架与契约已落，六类子系统本体未实现）
-- 当前：`subsystems/{__init__,types,capabilities}.py` 已落（`SubsystemOutput`／`merge_outputs`／`AssemblyCapabilities`／`capabilities_for`／六类枚举与坐标命名空间）；`raw/assembly_snapshot.json` 已抓现役 K/C × `rack_fixed_to_chassis` 四种组合产物。`build_front_axle` 尚未改造，`schema/model.py` 与 `schema/vehicle.py` 尚未新增字段。
+- 进度：9/13 步骤 DONE，4/13 TODO（7-10 属后续修订，见文末登记）
+- 当前：单轴侧六类子系统拆分已完成并逐位验证通过；`build_front_axle` 已改为子系统组合。制动/驱动的简化模板与可用性矩阵（TODO 7-10）未落地。
 - 文件：`.codex-tasks/20260922-suspension-template-architecture/tasks/20260922-04-subsystems/`
-- 验证：`raw/assembly_snapshot.json` 四种组合的计数与 SPEC 验收 2 的实测值一致（K 13/13/0/0、C 9/17/8/8，bodies 10、points 36、connections 16）；`tests/subsystems` 尚不存在，本步无验收证据。
+- 验证：全量套件 814 passed／47 skipped／1 xfailed；`tests/subsystems` 19 passed；四种组合逐位一致（独立脚本 + 测试双重证据）；六条门禁全绿；未重录任何基线。
 
 ## 恢复信息
 
@@ -28,40 +28,64 @@
 - `anti_roll_bars`（`:591-601`）跨左右（`upright_L` / `upright_R`），只能归"左右悬架"这一含双侧的子系统。
 - `legacy_surface_gate`（`tests/architecture/legacy_surface_gate.py`）在 MODE_MIGRATION 下只容忍注册表既有条目（`legacy_surface_registry.json` 的 `entry[1]`、`entry[2]` 为 `front_axle.py` / `vehicle.py` 导入 `elements`）；新包直接导入 `elements` 会失败。
 
-## 逐项对照台账（实施时填写）
+## 逐项对照台账（2026-09-23 实测填写）
 
-对照基线：`benchmark_axle.json` 在**改动前**现场抓取并留 `raw/` 的现役产物。
+对照基线：`benchmark_axle.json` 在**改动前**现场抓取并留 `raw/assembly_snapshot.json` 的现役产物。四种组合（K/C × `rack_fixed_to_chassis` 真/假）全部实跑比对。
 
-| 对照项 | 现役值 | 组合实现值 | 差异 | 理由（差异非零时必填） |
+| 对照项 | 现役值 | 组合实现值 | 差异 | 理由 |
 |---|---|---|---|---|
-| `bodies` 集合与顺序 | 10 个，chassis 起、tie_rod_R 止 | 待填 | 待填 | 待填 |
-| `points` 键序与数值 | 36 条；K/C 一致 | 待填 | 待填 | 待填 |
-| `hardpoints` | 模型硬点 + `__L`/`__R` 副本 + `RACK_CENTER` | 待填 | 待填 | 待填 |
-| `connections` | 16 条 | 待填 | 待填 | 待填 |
-| `constraints`（K） | 13 条，顺序见 SPEC 验收 2 | 待填 | 待填 | 待填 |
-| `ideal_constraints`（C） | 17 条，顺序见 SPEC 验收 2 | 待填 | 待填 | 待填 |
-| `bushings` / `elements`（C） | 8 / 8，名称序见上 | 待填 | 待填 | 待填 |
-| 驱动坐标定义 | 由 `points` 推导（`cases/kc_quasi_static/contract.py:177-222`） | 待填 | 待填 | 待填 |
-| `explicit` 拓扑产物 | `_build_explicit_axle` `:387` | 待填 | 待填 | 待填 |
-| `MassSpec` 消费状态 | 轴侧未消费 | 待填 | 待填 | 不得改为消费 |
+| `bodies` 集合与顺序 | `chassis, rack, upper_arm_L, lower_arm_L, upright_L, tie_rod_L, (R 同序)` | 完全相同 | **无** | — |
+| `points` 键集与数值 | 36 条，K/C 一致 | 完全相同（逐键 `np.array_equal`） | **无** | 插入序未比对：快照用排序键序列化且无消费方依赖插入序（已核实） |
+| `hardpoints` | 模型硬点 + `__L`/`__R` 副本 + `RACK_CENTER` | 完全相同（键集） | **无** | — |
+| `connections` | 16 条，顺序见快照 | 完全相同 | **无** | `rack_guide` 不进连接表（与原实现一致） |
+| `constraints`（K） | 13 条，`rack_guide` 收尾 | 完全相同（名称 + 类型，逐序） | **无** | — |
+| `ideal_constraints`（C） | 17 条 | 完全相同（名称 + 类型，逐序） | **无** | — |
+| `bushings` / `elements`（C） | 8 / 8 | 完全相同（名称序） | **无** | 占位衬套仍为零刚度，未改语义 |
+| 驱动坐标定义 | 由 `points` 推导 | 点表一致即推导一致 | **无** | 无转向时 `capabilities.drive_coordinates` 不含 `rack_*` |
+| `explicit` 拓扑产物 | `_build_explicit_axle` | 逐行保留（仅补 `capabilities`） | **无** | 路径未被拆分触及 |
+| `MassSpec` 消费状态 | 轴侧未消费 | 仍未消费 | **无** | 该事实已写进 `subsystems/chassis.py` 模块文档 |
 
-## 基线台账（实施时填写）
+**逐位比对方式**：主代理亲写独立脚本（放会话 scratch，不采信实现方自证）读 `raw/assembly_snapshot.json` 与夹具，逐组合比对上述八个维度，输出「ALL FOUR COMBINATIONS MATCH」；同一判据落在 `tests/subsystems/test_assembly_matches_snapshot.py`（含硬点数值、连接行全字段、约束几何与 C 模式占位刚度）。
+
+## 基线台账（2026-09-23 实测填写）
 
 | 基线文件 | 是否重录 | 导致重录的步骤 | 重录前值 | 重录后值 | 判定依据 |
 |---|---|---|---|---|---|
-| `kc_baseline/k_states.json` | **应为否** | — | — | — | 本步是纯重构 |
-| `kc_baseline/c_states.json` | **应为否** | — | — | — | 本步不改 K/C 语义（占位衬套仍为零刚度） |
-| `kc_baseline/manifest.json` | **应为否** | — | — | — | 同上 |
-| `dynamic_hash_baseline.json` | **应为否** | — | — | — | axle 侧产物逐位不变 |
-| `axle_dynamics_baseline/`、`vehicle_dynamics_baseline/` | **应为否** | — | — | — | 同上 |
-| `suspension_kernel/layering_baseline.json` | **应为否** | — | — | — | 本步不写 C++ |
+| `kc_baseline/k_states.json` | **否** | — | 未变 | 未变 | `git status` 为空；`kc_parity_check --check` 退出 0 |
+| `kc_baseline/c_states.json` | **否** | — | 未变 | 未变 | 同上；占位衬套仍为零刚度 |
+| `kc_baseline/manifest.json` | **否** | — | 未变 | 未变 | 同上 |
+| `kc_perf_baseline*.json` | **否** | — | 未变 | 未变 | 同上 |
+| `dynamic_hash_baseline.json` | **否** | — | `e7407656…` | 同一值 | `dynamic_hash_sentinel --check` 退出 0，26/26 逐位一致 |
+| `axle_dynamics_baseline/`、`vehicle_dynamics_baseline/` | **否** | — | 未变 | 未变 | `case_parity_check` 8 family accepted |
+| `suspension_kernel/layering_baseline.json` | **否** | — | `0ba7571a…` | 同一值 | `check_module_layering --strict --final` 退出 0 |
 
-## 本步的放行 gate（不得跳过）
+## 本步的放行 gate（全部通过）
 
-1. **逐位一致**：`build_front_axle` 组合路径与改动前的现役实现逐位一致（点表 `np.array_equal`、集合逐顺序）。
-2. **未重录任何基线**：`git diff` 在 `tests/data/**` 与 `layering_baseline.json` 上为空。任一基线变化即停止上报，不得顺手重录。
-3. **`legacy_surface_gate.py --check` 绿且注册表条目数不变**：新 `subsystems/` 包不得成为新的 legacy import 站点。
+1. **逐位一致**：`build_front_axle` 组合路径与改动前的现役实现逐位一致（点表按键 `np.array_equal`、集合与列表逐顺序），四种组合全部无差异。
+2. **未重录任何基线**：`git status --porcelain packages/suspension_multibody/tests/data packages/suspension_kernel/layering_baseline.json` 为空。
+3. **`legacy_surface_gate.py --check` 绿且注册表条目数不变**：仍为 8 条已注册 `legacy_module_import`，`subsystems/` 未成为新的 legacy import 站点（该包不导入 `elements`/`core`/`model`/`analysis`/`metrics`）。
+
+## 门禁实测（2026-09-23）
+
+| 命令 | 结果 |
+|---|---|
+| 全量 `pytest packages/suspension_multibody/tests` | `814 passed, 47 skipped, 1 xfailed`（较 01 基线 737 多 77 = 02 的 27 + 03 的 31 + 04 的 19） |
+| `tests/subsystems` | 19 passed |
+| `kc_parity_check.py --check` | 退出 0 |
+| `case_parity_check.py` | 退出 0，8 families accepted |
+| `dynamic_hash_sentinel.py --check` | 退出 0，26/26 逐位一致 |
+| `legacy_surface_gate.py --check` | 退出 0，8 findings 全为已注册条目 |
+| `check_module_layering.py --strict --final` | 退出 0 |
+| `ruff check .` / `ty check .` | All checks passed |
+
+## 本步**未**完成、不得标为 DONE 的部分（如实登记）
+
+SPEC 把六类子系统一次列全，但本步只拆到单轴侧实际存在的内容。以下四步仍为 TODO，属**后续修订**范围，不是本轮遗漏：
+
+- TODO 7（简化制动子系统）、TODO 8（简化驱动子系统）：需 `schema/vehicle.py` 的制动参数子集与整车侧接线，本步按 SPEC 未触碰 `schema/**`。
+- TODO 9（简化/复杂模板可替换性硬门）、TODO 10（可用性矩阵测试）：依赖 7、8 先存在。
+- 因此 TODO.csv 状态为 9 DONE / 4 TODO，**不是 13/13**。`SUBTASKS.csv` 第 04 行仍为 `IN_PROGRESS`。
 
 ## 下一步
 
-等 03 完成后，从 `TODO.csv` 第 1 行开始；先抓现役产物快照入 `raw/`，再逐个拆子系统，每拆一类立即对照。父 `SUBTASKS.csv` 第 04 行状态由主代理回填。
+启动子任务 05（模板实例化与 K/C 列激活），或先补齐本步 TODO 7-10 所需的 `schema/vehicle.py` 制动参数子集。父 `SUBTASKS.csv` 第 04 行状态由主代理回填。

@@ -14,8 +14,8 @@
    - 总成不含转向子系统时，**rack 驱动轴整体消失**（不是填零、不是跳过该轴但保留占位列），K 网格降维为纯轮跳；试验台仍可运行。
    - rack 相关输出（如 `steering_output`/rack 位移通道）随之消失；结果对象的形状随总成能力变化，须由能力描述驱动，不得让下游猜。
    - **当前实现不是这样（改造点已实测逐处定位，实施时复核）**：
-     - 模型文档侧：`cases/kc_quasi_static/contract.py:203-221` 无条件 add `rack_drive`（K）/`rack_neutral`（C），取 `assembly.point("rack","center")`——无 rack 时即报错。
-     - case 侧：同文件 `:288-290` 的 `axis_map["rack"]` 用 `next(value for value in driven_names if value.startswith("rack_"))`——无 rack 驱动时抛 `StopIteration`（**当前无转向总成的直接崩溃点**）。
+     - 模型文档侧：`cases/kc_quasi_static/contract.py:284-293`（函数 `_driven_coordinates` 内） 无条件 add `rack_drive`（K）/`rack_neutral`（C），取 `assembly.point("rack","center")`——无 rack 时即报错。
+     - case 侧：同文件 `:360-362`（函数 `case_document` 内）的 `axis_map["rack"]` 用 `next(value for value in driven_names if value.startswith("rack_"))`——无 rack 驱动时抛 `StopIteration`（**当前无转向总成的直接崩溃点**）。
      - K 网格侧：`api.py:334-338` 的 `_K_COORDINATES` 写死 `{"left","right","rack"}`，且被两处消费——`:344-389` 的 `_k_grid`（`:362-375` 对称简写分支恒产出 `rack_values_mm` 与 `axis_map["rack"]`；`:376-388` 三元组分支恒产出 rack 轴并构造 `(left,right,rack)` 三元组）与 `:379` 的 axes 列表。
      - K 结果侧：`api.py:440` 解包三元组 `left, right, rack = combinations[index]`；`:453-457` 写 `drives["rack_displacement"]`；`:273` 无条件为 body `"rack"` 取位姿。
      - 时间序列结果侧：`api.py:256` 写 `rack_displacement` metric。

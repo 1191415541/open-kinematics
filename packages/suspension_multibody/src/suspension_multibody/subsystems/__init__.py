@@ -9,6 +9,8 @@ some subsystems plus a rig.
 This package holds the pieces that make that split real:
 
 * `types.py` -- what a subsystem hands back (declarations, not runtime objects);
+* `geometry.py` -- hardpoint lookup, mirroring and body-local conversion, shared
+  with the assembly layer;
 * `capabilities.py` -- what an assembly can offer a rig, so a rig never has to
   guess by inspecting body names;
 * `suspension.py`, `steering.py`, `wheel.py`, `chassis.py`, `brake.py`,
@@ -26,15 +28,36 @@ from .capabilities import (
     CapabilityError,
     capabilities_for,
 )
-from .types import SubsystemOutput, merge_outputs
+from .types import (
+    DEFAULT_AXLE_SUBSYSTEMS,
+    ELEMENT_KINDS,
+    MODES,
+    SIDES,
+    SUBSYSTEM_ROLES,
+    AssemblyRequest,
+    Connection,
+    ResolvedElement,
+    SubsystemContext,
+    SubsystemOutput,
+    merge_outputs,
+)
 
 __all__ = [
     "ALL_SUBSYSTEMS",
+    "DEFAULT_AXLE_SUBSYSTEMS",
     "DRIVE_COORDINATE_NAMES",
+    "ELEMENT_KINDS",
+    "MODES",
     "RACK_COORDINATES",
+    "SIDES",
+    "SUBSYSTEM_ROLES",
     "WHEEL_COORDINATES",
     "AssemblyCapabilities",
+    "AssemblyRequest",
     "CapabilityError",
+    "Connection",
+    "ResolvedElement",
+    "SubsystemContext",
     "SubsystemOutput",
     "capabilities_for",
     "merge_outputs",
