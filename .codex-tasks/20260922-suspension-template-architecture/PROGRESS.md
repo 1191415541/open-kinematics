@@ -3,8 +3,8 @@
 ## 恢复信息
 
 形态：epic。
-- 状态：**实施中**（01/02/03 DONE 并已复核；04 已开工，`subsystems/` 落 3 文件 + 现役产物快照，13 步仍 TODO；05-12 未开工）
-当前：子任务 04「从 build_front_axle 拆出六类子系统」进行中。01/02/03 的代码与门禁已于 2026-09-23 由主代理逐条复跑确认（全量套件 795 passed／0 failed、动态哈希 26/26、K/C parity 0、8 family accepted、`--strict --final` 0、legacy_surface_gate 0、ruff/ty 0、`tests/data/**` 无 diff）。
+- 状态：**已完成**（01-12 全部 DONE；终局验收通过）
+当前：12 个子任务全部收官，终局验收已独立执行——门禁全集实跑通过、G1-G9 逐条达成、端到端九件事 (a)-(i) 全部通过。登记 4 项未闭合项（均不阻断 Goal，见 12 的 PROGRESS 第五节）。
 文件：`.codex-tasks/20260922-suspension-template-architecture/`（`EPIC.md` + `SUBTASKS.csv` + 本文件 + `tasks/20260922-01..12/`）。
 验证：01/02/03 的门禁已复跑通过（见各子任务 PROGRESS 的状态头）；04 尚未产出验收证据。
 
@@ -213,6 +213,48 @@
 
 **04 的实际断点**：`subsystems/` 已落 `types.py`／`capabilities.py`／`__init__.py`（含 `SubsystemOutput`／`merge_outputs`／`AssemblyCapabilities`／`capabilities_for`），`raw/assembly_snapshot.json` 已抓 K/C × `rack_fixed_to_chassis` 四种组合的现役产物；13 步 TODO 全部未开工，`build_front_axle` 尚未改造，`schema/model.py` 与 `schema/vehicle.py` 尚未新增字段。
 
+### 2026-09-23 第二轮回填：04 主体、05、06 已完成（主代理复核）
+
+上一节的「04 的实际断点」写的是 04 刚开工时的状态。此后 04 的主体（1-6、11-13）与 05、06 已实际实施并各自提交，父级状态头再次滞后。据 `git log`（`82fa179` 04、`eb69342` 05、`fb1ab3` 06）与磁盘事实纠正：
+
+| 子任务 | 状态 | 代码落点 | 复核证据 |
+|---|---|---|---|
+| 04 拆六类子系统 | **9/13**（1-6、11-13 DONE；7-10 未落地） | `subsystems/{types,geometry,capabilities,chassis,suspension,steering,wheel}.py`、`preparation/assembly/front_axle.py` 改造 | 全量 814 passed／47 skipped／1 xfailed；`tests/subsystems` 19 passed；四种组合逐位一致（独立脚本 + 测试双重证据）；六条门禁全绿；未重录任何基线 |
+| 05 模板实例化与 K/C 列激活 | **7/7 DONE** | `templates/instantiate.py`（`instantiate`／`activated_column`／`SubsystemInstance.with_mode`／`resolve_properties`），`builtin.py` 的 `PropertySlot.connections` | `tests/instantiation` 14 passed；全量 828 passed；六条门禁全绿。**与 SPEC 有一处已登记的偏离**：SPEC 要求把 C 模式占位衬套改成非零并据此重录 `kc_baseline` C 部分，实际不可执行——`scripts/kc_parity_check.py` 明说 C 快照是冻结 oracle 且 `--record` 已随退役的 Python 求解器移除；且 `tests/cases/kc_quasi_static/kc_fixtures.py` 已在同四个内点声明真实衬套，叠加会实质改变 C 解。落地方式改为「刚度来源由硬编码零矩阵改为模板 `bushing` 属性槽、内置模板默认值 0.0」，默认行为逐位不变、C 基线无需也无法重录。 |
+| 06 弹性元件属性文件 | **9/9 DONE** | `properties/{__init__,load}.py`、`templates/instantiate.py` 的 `resolve_properties`、`tests/data/properties/{baseline_compliance,stiffer_compliance}.json` | `tests/properties` 18 passed；六条门禁全绿；`tests/data/kc_baseline/**` 无 diff（未重录）。同样有一处已登记偏离：SPEC 假定的注入路径 `instantiate(model, mode, properties=...)` 与 05 实际落地的 `instantiate(template, *, mode, properties)` 不同，06 改为在 `templates/` 侧新增 `resolve_properties(template, property_set)`（SPEC 允许写 `templates/**`）。 |
+
+**观察到的系统性写法**：05、06 的 `PROGRESS.md` 正文里「本轮交付为规划，未写任何生产代码」「下一步：等 XX 完成后开工」等段落是**规划期文本未被清理**，与它们的 DONE 状态头矛盾。状态头与「验收对照」表是实施后的真实记录，以它们为准；本轮不逐份重写各子任务 PROGRESS 的正文（那属于改写历史记录），只在父级登记该事实。
+### 2026-09-23 第三轮：04 与 07 收官（主代理复核）
+
+**集成回归（04 + 07 + 08 内核侧三者合并后）**：`pytest packages/suspension_multibody/tests`（排除 `tests/performance`）实测 **968 passed, 1 skipped, 1 xfailed**，退出 0；`kc_parity_check --check` 0；`dynamic_hash_sentinel --check` 26 artifact 逐字节一致；`case_parity_check` 8 families accepted；`check_module_layering --strict --final` 0。这组证据说明三者的改动**合起来**没有互相破坏，且 08 新增的轮胎质量字段在「文档未声明质量」时是惰性的（动态哈希与 K/C 快照均未变）。
+
+04（13/13）与 07（9/9）已实施完成并由主代理**独立复跑**确认，非采信子任务自证：
+
+| 子任务 | 独立复核命令 | 结果 |
+|---|---|---|
+| 04 | `pytest tests/subsystems` | 42 passed（含新增 `test_brake_subsystem` 7、`test_drive_subsystem` 7、`test_torque_role_is_replaceable` 5、`test_availability_matrix` 4） |
+| 04 | `pytest tests/schema/test_vehicle.py` | 8 passed（含「显式给出四个制动参数 vs 保持默认」的 `model_dump` 逐字节相等断言） |
+| 07 | `pytest tests/outputs tests/metrics` | 59 passed |
+| 07 | `legacy_surface_gate.py --check` | 退出 0，`legacy_module_import` 仍 8 条（未新增） |
+| 07 | `ruff check`（产出与测试）／`ty check`（`outputs/`） | 全部通过 |
+| 共同 | `git status --porcelain tests/data layering_baseline.json` | 空（未重录任何基线） |
+
+**04 的关键交付**：`subsystems/brake.py` 与 `subsystems/drive.py` 的简化模板（`parts=()`，0 刚体）；`schema/vehicle.py` 的 `DrivelineSpec` 补 `brake_mu`/`piston_area`/`effective_piston_radius`/`max_brake_value` 四个 `Field(exclude=True)`；制动幅值按仓库内冻结的 `.adm`（`artifacts/adams-fiala-handling/step_steer/adams_raw/handling_step_steer_dynamic.adm` 的 `SFORCE/31-34`、`VARIABLE/277-280`）形状核算，`demand=1.0` 时前轴 17400／后轴 11600；可替换性硬门用同一 `build` 对象跑两个模板并用 AST 走查装配路径无分支，且**自证分支检测器可失败**。
+
+**07 的关键交付**：`outputs/{declarations,derived,builtin}.py` 三层；27 个 legacy 函数 27/27 登记（与一份独立写死的名单核对）；逐值一致覆盖 12（力+时间）+8（诊断）+11（轮荷）+10（整车）+15（K&C）；旁路用 AST 双向自证。两处与 SPEC 的偏差已登记在 07 的 PROGRESS（键存在性改为声明；`status`/`reason` 类可用性事实不重述），并如实标注 K&C 15 项中 12 项恰为 0.0、故另加两条不依赖 legacy 对比的符号测试补强。
+
+**08 的当前断点**：内核侧（契约 schema + `Tire` 结构体 + 解析 + 安装点）已落盘；求解器的惯量耦合未完成，native dll 正在重建，故依赖 native 的 multibody 测试此刻报「镜像过期」——这是预期中间态，不是回归。08 在途期间不得把 08 的落点标为 DONE。
+
 ## 下一步
 
-继续子任务 04：按 `tasks/20260922-04-subsystems/TODO.csv` 第 1-13 步实施，先复核 `raw/assembly_snapshot.json` 与现役一致，再逐类拆子系统（每拆一类立即对照），最后跑逐位一致判据与门禁全集。
+08 已收官（9/9）。可启动 09（study 合并，依赖 06 与 08，现已满足）与 10（试验台正交，依赖 07 与 09）。12 的端到端判据 (d) 已由 07 提供实现。
+
+### 2026-09-23 第四轮：08 收官（08b 由主代理实施）
+
+08b（求解器显式耦合轮胎惯量）此前由三个子代理接手，分别耗尽预算或连接中断、零落盘；主代理接手实施并完成。**08 是本轮唯一的关键路径**（09/10/11 都依赖它）。
+
+设计：新增模型层「有效惯性」缓存，把「轮胎也拥有惯量」在构建时求和一次，热循环只读缓存（`Model::body_effective_mass` / `body_effective_inertia_body` + `compute_effective_body_inertia`）。**14 个消费点**全部改读访问器——残余惯性力/力矩、newton 的质量与惯量块与 `-j/m`、积分器质量矩阵、`mass_inverse_of_jt_mu` 及其方向导数、**重力**、陀螺项、动能、静态 `total_mass`。设计要点是「某体没有带质量的轮胎时，有效值与原始值逐位相等（加零）」，这使零质量路径**逐字节不变**。
+
+主代理实跑的全部门禁（未重录任何基线）：`tests/tire_mass` 4 passed（质量守恒 **逐位相等、max|diff|=0.0、不使用容差**；开/关轮胎质量差 21.7 证明耦合生效）；全量 multibody **974 passed／1 skipped／1 xfailed**；契约 27、内核 21、架构 91；`dynamic_hash_sentinel --check` 26 artifact 逐字节一致；`kc_parity_check` 0；`case_parity_check` 8 families accepted；`--strict --final` 0；两包 `uv build` 0；ABI 版本常量 15/30/1/1 未变；`tests/data` 与 `layering_baseline.json` 无 diff；ruff/ty 全树通过。
+
+**登记的已知限制（有意，非漏做）**：轮胎质量若不在其体原点（`tire.center != 0` 且 `mass != 0`），`compute_effective_body_inertia` 显式报错点名（状态码 2，`"tire inertia: "` 前缀）。原因：残余把体原点当质心、无臂项；偏心质量需要额外的平动/转动耦合项，那是**新物理**而非「换归属」，必须有独立验收。作者层实际发射的 `center_local` 为 `[0,0,0]`，故当前全部路径都在支持范围内。
