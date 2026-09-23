@@ -26,6 +26,11 @@ from ...elements import (
     VerticalTireElement,
 )
 from ...schema import RigidBodySpec, VehicleModel, WheelSpec
+from ...subsystems import (
+    DEFAULT_VEHICLE_SUBSYSTEMS,
+    AssemblyCapabilities,
+    capabilities_for,
+)
 from ..geometry import SE3
 from .front_axle import (
     Connection,
@@ -60,6 +65,11 @@ class VehicleAssembly:
     wheel_rotations_local: dict[str, np.ndarray]
     axle_assemblies: dict[str, FrontAxleAssembly]
     body_aliases: dict[str, str] = field(default_factory=dict)
+    #: What this assembly carries.  A full-vehicle rig binds to this instead of
+    #: probing for body names; the full vehicle carries all six roles, brake and
+    #: drive included (requirement 17 / D8).  Defaulted so existing constructions
+    #: and `replace` calls keep working unchanged.
+    capabilities: AssemblyCapabilities | None = None
 
     @property
     def component_ids(self) -> tuple[str, ...]:
@@ -194,6 +204,12 @@ def build_vehicle(model: VehicleModel, mode: Literal["K", "C"] = "K") -> Vehicle
         wheel_body_names=wheel_body_names,
         wheel_rotations_local=wheel_rotations_local,
         axle_assemblies=axle_assemblies,
+        # The full vehicle carries all six roles, brake and drive included
+        # (requirement 17 / D8), so a vehicle rig can ask rather than probe.
+        capabilities=capabilities_for(
+            subsystems=frozenset(DEFAULT_VEHICLE_SUBSYSTEMS),
+            body_names=frozenset(bodies),
+        ),
     )
     return _drop_isolated_bodies(_condense_welded_bodies(assembly))
 

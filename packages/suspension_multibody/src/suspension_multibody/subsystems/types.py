@@ -34,10 +34,12 @@ if TYPE_CHECKING:
 
 __all__ = [
     "DEFAULT_AXLE_SUBSYSTEMS",
+    "DEFAULT_VEHICLE_SUBSYSTEMS",
     "ELEMENT_KINDS",
     "MODES",
     "SIDES",
     "SUBSYSTEM_ROLES",
+    "WHEELS",
     "AssemblyRequest",
     "Connection",
     "ResolvedElement",
@@ -65,6 +67,26 @@ SUBSYSTEM_ROLES: frozenset[str] = frozenset(
 #: the rig supplies the wheels (D9), not because the axle builds a wheel body.
 DEFAULT_AXLE_SUBSYSTEMS: frozenset[str] = frozenset(
     {"chassis", "suspension", "steering", "wheel"}
+)
+
+#: The subsystem set the full-vehicle assembly carries: all six.  Brake and drive
+#: are the vehicle's own (requirement 17 / D8) and are what the simplified brake
+#: and drive templates implement.
+DEFAULT_VEHICLE_SUBSYSTEMS: frozenset[str] = frozenset(
+    {"chassis", "suspension", "steering", "wheel", "brake", "drive"}
+)
+
+#: The four corner names a wheel torque is emitted for, in the document's own
+#: order.  This mirrors `_WHEEL_NAMES` in `preparation/vehicle_dynamic.py` (the
+#: order the kernel ABI takes its per-wheel torque buffers in) and the
+#: `WheelSpec.name` literal; a torque map keyed in another order would still
+#: compare equal as a dict, so the order is written down here rather than left to
+#: whichever loop happens to build it.
+WHEELS: tuple[str, str, str, str] = (
+    "front_left",
+    "front_right",
+    "rear_left",
+    "rear_right",
 )
 
 #: Element declarations a subsystem may return.  `front_axle` maps each kind to

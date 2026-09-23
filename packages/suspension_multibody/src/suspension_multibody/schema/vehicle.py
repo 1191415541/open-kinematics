@@ -167,13 +167,46 @@ class JointCoordinateCouplerSpec(StrictModel):
 
 
 class DrivelineSpec(StrictModel):
-    """Simplified but torque-based brake and drive actuator contract."""
+    """
+    Simplified but torque-based brake and drive actuator contract.
+
+    Two brake/drive descriptions live here, and they are not alternatives:
+
+    * `maximum_brake_torque`, `front_brake_bias`, `maximum_drive_torque` and
+      `drive_split` are the *lumped* limits the Python-side torque builder
+      (`preparation/vehicle_dynamic.py`, `_build_wheel_torque_signals`) has
+      always used; a wheel's brake torque is `maximum_brake_torque * share *
+      brake_input`, so one number caps every wheel;
+    * `brake_mu`, `piston_area`, `effective_piston_radius` and
+      `max_brake_value` are the *per-parameter* torque subset decision D10 takes
+      from the Adams simple brake.  They let the same torque be checked parameter
+      by parameter against the frozen Adams document, which the lumped form
+      cannot express.
+
+    `max_brake_value` is the `.adm`'s `0.1` demand scaling; the effective piston
+    radius there is 145.0 at the front and 130.0 at the rear, and one field
+    cannot hold both -- a recorded deviation, not an oversight.
+
+    The four new fields are excluded from `model_dump`: `api.py` hashes
+    `model.model_dump(mode="json")` into `Provenance.model_hash`, so a
+    dump-visible field would change every existing full-vehicle model hash and
+    invalidate the recorded baselines.  Exclusion is what keeps them usable --
+    declared, typed, validated, and invisible to the hash.
+    """
 
     driven_wheels: tuple[str, ...] = ()
     maximum_drive_torque: float = Field(default=0.0, ge=0)
     maximum_brake_torque: float = Field(default=10_000.0, ge=0)
     front_brake_bias: float = Field(default=0.6, ge=0, le=1)
     drive_split: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    #: Friction coefficient of the simplified brake (Adams simple brake `mu`).
+    brake_mu: float = Field(default=0.4, gt=0, exclude=True)
+    #: Piston area of the simplified brake (Adams `piston_area`).
+    piston_area: float = Field(default=2500.0, gt=0, exclude=True)
+    #: Effective piston radius of the simplified brake (Adams front value 145.0).
+    effective_piston_radius: float = Field(default=145.0, gt=0, exclude=True)
+    #: Demand scaling of the simplified brake (the `.adm`'s `0.1`).
+    max_brake_value: float = Field(default=0.1, gt=0, le=1, exclude=True)
 
     @model_validator(mode="after")
     def _validate_distribution(self) -> DrivelineSpec:

@@ -1,5 +1,7 @@
 """Full-vehicle schema contracts."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -140,3 +142,58 @@ def test_dynamic_case_validates_direct_wheel_torque_signals() -> None:
                 ("spare", TimeSignal(constant=1.0)),
             ),
         )
+
+
+def test_the_brake_parameter_subset_is_invisible_to_the_model_hash() -> None:
+    """
+    The D10 brake parameters must not move a single existing `model_hash`.
+
+    `api.py` hashes `VehicleModel.model_dump(mode="json")` into
+    `Provenance.model_hash`, and `io/artifacts.py` hashes that again into the
+    artifact manifest.  A dump-visible field would therefore change every
+    recorded full-vehicle result, which is exactly what "no baseline may be
+    re-recorded" forbids.  So a vehicle whose `DrivelineSpec` carries explicit
+    brake parameters must dump byte for byte like one that leaves them at their
+    defaults -- and the parameters must still be readable, or the exclusion would
+    have bought nothing.
+    """
+    default = _vehicle()
+    explicit = _vehicle().model_copy(
+        update={
+            "driveline": DrivelineSpec(
+                driven_wheels=("front_left", "front_right"),
+                maximum_drive_torque=2_000.0,
+                drive_split=(0.5, 0.5, 0.0, 0.0),
+                brake_mu=0.55,
+                piston_area=3_000.0,
+                effective_piston_radius=160.0,
+                max_brake_value=0.25,
+            )
+        }
+    )
+
+    # The parameters are real and were validated, ...
+    assert explicit.driveline.brake_mu == 0.55
+    assert explicit.driveline.piston_area == 3_000.0
+    assert explicit.driveline.effective_piston_radius == 160.0
+    assert explicit.driveline.max_brake_value == 0.25
+
+    # ... and the JSON dump is identical to the default vehicle's, byte for byte.
+    assert json.dumps(
+        explicit.model_dump(mode="json"), sort_keys=True
+    ) == json.dumps(default.model_dump(mode="json"), sort_keys=True)
+    # Spelled out in the dump itself, not just via the top-level string.
+    assert "brake_mu" not in explicit.model_dump(mode="json")["driveline"]
+    assert "piston_area" not in explicit.model_dump(mode="json")["driveline"]
+    assert "effective_piston_radius" not in explicit.model_dump(mode="json")["driveline"]
+    assert "max_brake_value" not in explicit.model_dump(mode="json")["driveline"]
+
+
+def test_the_brake_parameter_subset_rejects_nonphysical_values() -> None:
+    """The new fields are validated, not merely carried."""
+    with pytest.raises(ValidationError, match="greater than 0"):
+        DrivelineSpec(brake_mu=0.0)
+    with pytest.raises(ValidationError, match="greater than 0"):
+        DrivelineSpec(piston_area=-1.0)
+    with pytest.raises(ValidationError, match="less than or equal to 1"):
+        DrivelineSpec(max_brake_value=1.5)

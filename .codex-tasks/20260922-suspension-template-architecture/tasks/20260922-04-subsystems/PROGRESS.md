@@ -1,9 +1,22 @@
 - 任务：从 build_front_axle 拆出六类子系统（左右悬架／转向／车轮／车身／制动／驱动）
 - 形态：single-full（Epic 子任务）
-- 进度：9/13 步骤 DONE，4/13 TODO（7-10 属后续修订，见文末登记）
-- 当前：单轴侧六类子系统拆分已完成并逐位验证通过；`build_front_axle` 已改为子系统组合。制动/驱动的简化模板与可用性矩阵（TODO 7-10）未落地。
+- 进度：13/13 步骤 DONE
+- 当前：单轴侧六类子系统拆分、`build_front_axle` 子系统组合、简化制动/驱动模板、可替换性硬门与可用性矩阵全部落地。
 - 文件：`.codex-tasks/20260922-suspension-template-architecture/tasks/20260922-04-subsystems/`
-- 验证：全量套件 814 passed／47 skipped／1 xfailed；`tests/subsystems` 19 passed；四种组合逐位一致（独立脚本 + 测试双重证据）；六条门禁全绿；未重录任何基线。
+- 验证：`tests/subsystems` 42 passed（含新增四项 23 项）；`tests/schema` 8 passed（含 model_dump 不变断言）；四种组合逐位一致；六条门禁全绿；`tests/data/**` 与 `layering_baseline.json` 无 diff。
+
+## TODO 7-10 的实现（2026-09-23）
+
+| 步骤 | 落点 | 关键值 |
+|---|---|---|
+| 7 简化制动 | `subsystems/brake.py`（`SIMPLIFIED_BRAKE`，`parts=()`）、`schema/vehicle.py` 的 `DrivelineSpec` 补 `brake_mu`/`piston_area`/`effective_piston_radius`/`max_brake_value` | 幅值 = `2*piston_area*bias_share*demand*max_brake_value*brake_mu*effective_piston_radius`；`demand=1.0` 时前轴 **17400**、后轴 **11600**（`test_brake_subsystem.py` 7 项）；方向不翻转，归内核 |
+| 8 简化驱动 | `subsystems/drive.py`（`SIMPLIFIED_DRIVE`，`parts=()`） | 与现役 `_build_wheel_torque_signals` 的驱动分支**逐值一致**（`test_drive_subsystem.py` 7 项） |
+| 9 可替换性硬门 | `tests/subsystems/test_torque_role_is_replaceable.py` | 同一 role 下用声明 1 个刚体的桩模板替换简化模板，经**同一个** `brake.build`/`assemble_from_template` 跑通；AST 走查断言装配路径无 `len(...)` 计数、无按名/role 判断、无「is simplified」分支；并自证分支检测器可失败 |
+| 10 可用性矩阵 | `tests/subsystems/test_availability_matrix.py` | 单轴 `capabilities` 不含 `brake`/`drive`，整车含二者；两声明集恰差这两类；单轴请求被拒且点名 |
+
+**`model_dump` 约束的处置**：四个制动参数以 `Field(..., exclude=True)` 声明，`tests/schema/test_vehicle.py` 新增用例断言「显式给出四参数」与「保持默认」的 `VehicleModel.model_dump(mode="json")` 逐字节相等，故 `model_hash` 不受影响——这是「不得重录任何基线」得以成立的关键。
+
+**登记的两项偏差**（与本步骤验收第 12 条要求一致）：`.adm` 的单个 `effective_piston_radius` 无法同时表达前 145 / 后 130（本步用单参数、测试钉住前轴值，后轴偏差如实登记）；常数 `0.1` 的来源**未能核实**（Adams 安装目录本机已不可访问，`C:\MSC.Software` 只剩 Licensing），基准取自仓库内冻结的 `artifacts/adams-fiala-handling/step_steer/adams_raw/handling_step_steer_dynamic.adm` 的 `SFORCE/31-34` 与 `VARIABLE/277-280` 原文，证据落在 `raw/brake_torque_evidence.md`。
 
 ## 恢复信息
 
