@@ -1,0 +1,69 @@
+{
+  "name": "stiffer_compliance",
+  "properties": {
+    "bushing": {
+      "kind": "bushing6x6",
+      "stiffness": [
+        [
+          25000.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          25000.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          25000.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "damper": {
+      "kind": "damper",
+      "viscous_damping": 3.0
+    },
+    "spring": {
+      "free_length": 250.0,
+      "kind": "spring",
+      "stiffness": 90.0
+    }
+  },
+  "schema_version": 1,
+  "units": "mm-N-N*mm-kg-deg"
+}

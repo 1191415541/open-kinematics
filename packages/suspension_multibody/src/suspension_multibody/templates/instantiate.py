@@ -32,6 +32,7 @@ __all__ = [
     "SubsystemInstance",
     "activated_column",
     "instantiate",
+    "resolve_properties",
 ]
 
 #: The two modes a template can be instantiated for.
@@ -255,3 +256,97 @@ def _resolve_defaults(
         elif slot.default is not None:
             merged[slot.name] = float(slot.default)
     return merged
+
+#: Which entry field carries the scalar a slot reads, per entry kind.
+#:
+#: A damper's single number is its viscous damping; everything else's is a
+#: stiffness.  Mapping it here keeps the template's slot vocabulary ("how stiff")
+#: separate from the file's element vocabulary ("what kind of element").
+_SLOT_SCALAR_FIELD: dict[str, str] = {
+    "spring": "stiffness",
+    "damper": "viscous_damping",
+    "bushing6x6": "stiffness",
+    "tire": "stiffness",
+    "bump_stop": "stiffness",
+}
+
+
+def resolve_properties(template: Template, property_set: object) -> dict[str, float]:
+    """
+    Bind a loaded properties file to a template's slots, producing slot values.
+
+    A properties file is keyed by *property name*, and a template's slots are
+    named the same way, so binding is a lookup rather than a translation.  A slot
+    the file does not mention keeps the template's own default -- that is what
+    "a template may also carry its numbers directly" means in practice, and it is
+    why this is an added option rather than a replacement.
+
+    A slot the role requires, that the template gives no default for, and that the
+    file does not supply, is an error that names the slot and the file: silently
+    substituting zero would turn a missing stiffness into a floating linkage.
+    """
+    entries = getattr(property_set, "entries", None)
+    if not isinstance(entries, dict):
+        raise TemplateError(
+            "resolve_properties expects a loaded properties file (a PropertySet "
+            f"with an 'entries' mapping), found {type(property_set).__name__}"
+        )
+    path = getattr(property_set, "path", "<properties>")
+    values: dict[str, float] = {}
+    for slot in template.property_slots:
+        entry = entries.get(slot.name)
+        if entry is not None:
+            field = _SLOT_SCALAR_FIELD.get(str(entry.get("kind")), "stiffness")
+            value = entry.get(field)
+            if isinstance(value, list):
+                values[slot.name] = _scalar_from_matrix(
+                    path, slot.name, template.name, value
+                )
+                continue
+            if not isinstance(value, (int, float)):
+                raise TemplateError(
+                    f"{path}: property {slot.name!r} (kind {entry.get('kind')!r}) "
+                    f"has no numeric {field!r} to fill slot {slot.name!r} of "
+                    f"template {template.name!r}"
+                )
+            values[slot.name] = float(value)
+        elif slot.default is not None:
+            values[slot.name] = float(slot.default)
+    required = set(template.role_spec.required_slots)
+    missing = sorted(
+        slot.name
+        for slot in template.property_slots
+        if slot.name in required
+        and slot.name not in values
+        and slot.default is None
+    )
+    if missing:
+        raise TemplateError(
+            f"{path}: properties file is missing required slot(s) {missing} for "
+            f"template {template.name!r} (role {template.role!r})"
+        )
+    return values
+
+def _scalar_from_matrix(
+    path: object, slot_name: str, template_name: str, matrix: list
+) -> float:
+    """
+    Reduce an isotropic 6x6 stiffness to the scalar a template slot holds.
+
+    A slot is one number (a translational stiffness in N/m), while a properties
+    entry may legitimately describe a full `bushing6x6`.  The two agree only when
+    the matrix is isotropic on its translational diagonal; anything else cannot be
+    represented by the slot, and saying so is better than silently keeping the
+    first diagonal entry and dropping the rest of the description.
+    """
+    diagonal = []
+    for index in range(3):
+        row = matrix[index] if index < len(matrix) else []
+        diagonal.append(float(row[index]) if index < len(row) else 0.0)
+    if len({round(value, 12) for value in diagonal}) != 1:
+        raise TemplateError(
+            f"{path}: property {slot_name!r} has an anisotropic stiffness matrix, "
+            f"but template {template_name!r} reads slot {slot_name!r} as a single "
+            f"number; its translational diagonal is {diagonal}"
+        )
+    return diagonal[0]

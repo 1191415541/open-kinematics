@@ -25,6 +25,7 @@ from .instantiate import (
     SubsystemInstance,
     activated_column,
     instantiate,
+    resolve_properties,
 )
 from .model import (
     ConnectionDefinition,
@@ -63,6 +64,7 @@ __all__ = [
     "activated_column",
     "clear",
     "instantiate",
+    "resolve_properties",
     "get",
     "get_role",
     "names",

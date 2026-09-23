@@ -1,9 +1,9 @@
 - 任务：弹性元件属性文件加载
 - 形态：single-full（Epic 子任务）
-- 进度：0/9 步骤 TODO，尚未实施
-- 当前：未开工。前置 05（模板实例化与 K/C 列激活）未完成。
+- 进度：9/9 步骤 DONE
+- 当前：`properties/` 包已落（冻结格式 + `load_properties`）；`templates/` 新增 `resolve_properties`，按槽名把属性集绑定到模板；默认属性文件逐位复现 05 的模板默认值。
 - 文件：`.codex-tasks/20260922-suspension-template-architecture/tasks/20260922-06-properties/`
-- 验证：未运行。
+- 验证：`tests/properties` 18 passed；六条门禁全绿；`tests/data/kc_baseline/**` 无 diff（未重录）。
 
 ## 恢复信息
 
@@ -67,3 +67,46 @@
 ## 下一步
 
 等 05 完成后，从 `TODO.csv` 第 1 行开始：先落格式与加载器（含三个负例），再落 `templates/` 的解析接线，最后跑"可复现 / 换文件"两个对照与门禁。父 `SUBTASKS.csv` 第 06 行状态由主代理回填。
+
+## 落地方式与 05 的接口差异（登记）
+
+SPEC 目标 3 与约束假定注入路径是 `instantiate(model, mode, properties=...)`；05 实际落地的是 `instantiate(template, *, mode, properties)`，且 `properties` 是**槽名 -> 标量**的字典。本步未改 `preparation/`（SPEC 明令禁止），改为在 `templates/` 侧新增解析入口 `resolve_properties(template, property_set)`，把属性文件解析成 05 需要的那个字典。SPEC 允许这条路径：约束只禁止改 `preparation/`/`subsystems/`/`outputs/`，并允许写 `templates/**`。
+
+## 格式与规则（R1-R3 实测）
+
+- JSON 根对象 + `schema_version == 1` + `properties` 对象；未知根键拒绝。
+- 条目必须有 `kind` ∈ `{spring, damper, bushing6x6, tire, bump_stop}`，其余字段与 `schema/elements.py` 同名同义；未知字段拒绝。
+- **必填字段规则**：只强制 schema 类中**无默认值**的字段；有默认值的字段（如 `Bushing6x6.damping`）省略合法。放置类字段（`name`/`body_a`/`body_b`/`point_a`/`point_b`/`contact_point`）属性文件不必提供——数字归文件、位置归模型。
+- 取值约束沿用 `schema/elements.py`（`stiffness > 0`、`damping >= 0`、`unloaded_radius > 0`、`clearance >= 0`、6×6 形状），不另立一套；这是 R3 的唯一来源（03 的 `PropertySlot` 未提供 bounds，已登记）。
+- 报错抛 `PropertiesError(ValueError)`，消息含**文件路径 + 属性名 + 字段名 + 原因**。
+
+## 标量槽与矩阵属性之间的桥
+
+模板槽是标量（一个 N/m），而属性条目可以是完整 6×6。规则（两侧一致、非有损）：
+
+- 6×6 平动对角**各向同性** → 取该对角值填入槽；
+- 平动对角**各向异性** → 拒绝并点名槽与对角值（不静默取首项、不丢信息）。
+
+`damper` 的标量字段是 `viscous_damping`（非 `stiffness`），映射表在两处保持一致。
+
+## 验收对照
+
+| SPEC 验收 | 结果 |
+|---|---|
+| 1 格式有 schema 级约束，R1-R3 均有测试，未知根键与条目键被拒 | 18 项含根键/条目键/kind/必填/越界/形状负例 |
+| 2 同模板 + 同文件逐位一致 | `test_same_file_twice_is_reproducible` |
+| 3 换文件只改刚度/阻尼，几何逐项不变 | `test_a_different_file_changes_stiffness_and_nothing_else`（bodies/points/connections/hardpoints/constraints 全等，仅刚度变） |
+| 4 三个负例失败并点名 | 缺失（`resolve_properties` 点名槽 + 文件路径）、类型错（点名属性 + 字段 + 路径）、越界（点名属性 + 字段 + 路径） |
+| 5 模板直接给数值的现役路径仍可用 | `test_the_default_file_reproduces_the_template_defaults_bit_for_bit`：默认文件与模板默认值实例化结果相等 |
+| 6 门禁保持且未重录基线 | 六条门禁退出 0；`tests/data/kc_baseline/**` 无 diff |
+
+## 交付物
+
+- `src/suspension_multibody/properties/{__init__,load}.py`
+- `templates/instantiate.py` 的 `resolve_properties`
+- `tests/data/properties/{baseline_compliance,stiffer_compliance}.json`（夹具；前者逐位复现模板默认值，后者用于"换文件"对照）
+- `tests/properties/test_properties.py`（18 项）
+
+## 下一步
+
+07（输出声明与衍生输出）与 09（study 合并）可启动；本步为 12 的判据 (c)「换一份属性文件重跑」提供了实现。
