@@ -228,12 +228,26 @@ def _tire_entry(tire, index: int, kind: int, mirror: int) -> dict[str, Any]:
     ):
         if tire.pac2002_tables.get(key):
             parameters[field] = f"tire-{field.replace('_', '-')}-{index}"
-    return {
+    entry: dict[str, Any] = {
         "name": tire.name,
         "model": model,
         "body": tire.body,
         "parameters": parameters,
     }
+    # The tire's own mass, when the model declares one (decision D2).  The field is
+    # optional in the contract, so a tire that carries none emits nothing and the
+    # document is byte-identical to what it was before the field existed -- which
+    # is what keeps every recorded baseline valid.  The inertia rides in a 3x3 the
+    # contract already accepts; without it the mass alone is still the right
+    # statement, because the solver adds both to the carrying body.
+    if float(tire.mass_kg) > 0.0:
+        entry["mass"] = float(tire.mass_kg)
+        inertia = tire.inertia_kg_m2
+        if inertia is not None:
+            entry["inertia"] = [
+                [float(value) for value in row] for row in inertia
+            ]
+    return entry
 
 
 def model_document(

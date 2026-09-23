@@ -934,6 +934,21 @@ class AxleTire(StrictModel):
     longitudinal_relaxation_length_m: float = Field(gt=0)
     lateral_relaxation_length_m: float = Field(gt=0)
     detached_relaxation_s: float = Field(gt=0)
+    # The tire's own mass and inertia (decision D2).  A tire used to carry none:
+    # the wheel-end body owned the whole wheel.  Declaring them here is what lets
+    # the tire be an inertia source, and the solver sums it into its carrying
+    # body's inertia at build time -- so the two readings of one axle (a
+    # quasi-static grid and a dynamic history) can share one tire definition.
+    #
+    # Zero means "the body still owns it", which is the historical answer and the
+    # only one an existing model can give.
+    # Excluded from `model_dump` on purpose: the dynamic hash gates hash
+    # `model.model_dump(mode="json")`, so a dump-visible field would change every
+    # recorded `model_sha256` and invalidate the frozen axle-dynamics baselines for
+    # a field none of those documents sets.  Exclusion keeps the parameters usable
+    # -- declared, typed, validated -- and invisible to the hash.
+    mass_kg: float = Field(default=0.0, ge=0, exclude=True)
+    inertia_kg_m2: Matrix3Tuple | None = Field(default=None, exclude=True)
     model_kind: Literal["native_brush", "pac2002_pure_slip", "fiala"] = "native_brush"
     pac2002_parameter_source: Literal["user", "adams_builtin"] = "user"
     pac2002_mirror: bool | None = None

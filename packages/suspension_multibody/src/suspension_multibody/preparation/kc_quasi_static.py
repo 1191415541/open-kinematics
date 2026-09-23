@@ -25,7 +25,7 @@ from ..axle_dynamics.schema import AxleSolverSettings
 from ..schema import FrontAxleModel
 from ..simulation.preparation import PreparedSimulation
 from ..simulation.request import SimulationRequest
-from .assembly import FrontAxleAssembly, build_front_axle
+from .assembly import FrontAxleAssembly
 
 ASSEMBLY = "axle"
 FAMILY = "kc_quasi_static"
@@ -71,15 +71,26 @@ def _validate_identity(request: SimulationRequest) -> None:
 
 
 def _assembly(model: Any, *, drive_wheels: bool) -> FrontAxleAssembly:
-    """Return the front-axle assembly the request describes."""
+    """
+    Return the front-axle assembly the request describes.
+
+    The assembly is built through the study layer rather than here, so a
+    quasi-static request and a dynamic one are configurations of one construction.
+    Building it locally would put a second assembly path back in place, which is
+    the thing this family and `axle_dynamic` were merged to remove.
+    """
     if isinstance(model, FrontAxleAssembly):
         return model
-    if isinstance(model, FrontAxleModel):
-        return build_front_axle(model, "K" if drive_wheels else "C")
-    raise TypeError(
-        "kc quasi-static preparation requires a FrontAxleAssembly or "
-        f"FrontAxleModel, got {type(model).__name__}"
-    )
+    if not isinstance(model, FrontAxleModel):
+        raise TypeError(
+            "kc quasi-static preparation requires a FrontAxleAssembly or "
+            f"FrontAxleModel, got {type(model).__name__}"
+        )
+    from ..studies import QUASI_STATIC, build_study_assembly
+
+    return build_study_assembly(
+        model, study=QUASI_STATIC, mode="K" if drive_wheels else "C"
+    ).assembly
 
 
 def prepare_request(request: SimulationRequest) -> PreparedSimulation:
