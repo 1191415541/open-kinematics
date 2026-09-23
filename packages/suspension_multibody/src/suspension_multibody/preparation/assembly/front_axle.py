@@ -518,10 +518,21 @@ def _bushing(row: ResolvedElement) -> BushingElement:
     """
     Build one declared bushing.
 
-    A `spec` of `None` means a C-mode slot placeholder: the original build writes
-    those with a zero stiffness and an identity rotation, and they stay that way
-    until subtask 05 gives them the template's default properties.
+    A `spec` that is already an array is a template slot bushing: the template
+    declared the connection's bushing column and the stiffness came from its
+    property slot (zero for the built-in template, a real number for one that
+    declares one).  The local poses are the identity-rotation slots the build has
+    always written, so only the stiffness can move.
     """
+    if isinstance(row.spec, np.ndarray):
+        return BushingElement(
+            name=row.name,
+            body_a=cast(str, row.body_a),
+            body_b=cast(str, row.body_b),
+            local_pose_a=cast(SE3, row.local_pose_a),
+            local_pose_b=cast(SE3, row.local_pose_b),
+            stiffness=row.spec,
+        )
     if row.spec is None:
         return BushingElement(
             name=row.name,

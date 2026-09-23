@@ -153,7 +153,12 @@ def side_content(context: SubsystemContext, side: Side) -> SubsystemOutput:
                     ResolvedElement(
                         kind="bushing",
                         name=f"{stem}_bushing_{side}_{label}",
-                        spec=None,
+                        # The stiffness comes from the template's bushing slot via
+                        # the assembly context, not from a constant written here.
+                        # The built-in template's own value is zero, so C-mode
+                        # compliance is unchanged by default and a template that
+                        # declares real stiffness changes it deliberately.
+                        spec=context.mount_bushing_stiffness,
                         body_a="chassis",
                         body_b=body,
                         local_pose_a=SE3(

@@ -13,7 +13,19 @@ works: a `.tpl` is one file format and `MAJOR_ROLE` is a field inside it.
 template transcribed from the existing `symmetric_proxy` assembly.
 """
 
-from .builtin import DOUBLE_WISHBONE, DOUBLE_WISHBONE_NAME, register_builtins
+from .builtin import (
+    DEFAULT_MOUNT_STIFFNESS,
+    DOUBLE_WISHBONE,
+    DOUBLE_WISHBONE_NAME,
+    register_builtins,
+)
+from .instantiate import (
+    ACTIVATED_MODES,
+    MODES,
+    SubsystemInstance,
+    activated_column,
+    instantiate,
+)
 from .model import (
     ConnectionDefinition,
     OutputDeclaration,
@@ -33,9 +45,13 @@ from .roles import ROLES, RoleSpec, RoleSpecError, get_role, role_names
 register_builtins()
 
 __all__ = [
+    "ACTIVATED_MODES",
+    "DEFAULT_MOUNT_STIFFNESS",
     "DOUBLE_WISHBONE",
     "DOUBLE_WISHBONE_NAME",
+    "MODES",
     "ROLES",
+    "SubsystemInstance",
     "ConnectionDefinition",
     "OutputDeclaration",
     "PartDefinition",
@@ -44,7 +60,9 @@ __all__ = [
     "RoleSpecError",
     "Template",
     "TemplateError",
+    "activated_column",
     "clear",
+    "instantiate",
     "get",
     "get_role",
     "names",

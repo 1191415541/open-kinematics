@@ -108,10 +108,54 @@ class AssemblyRequest:
     #: Which of the six roles this assembly carries.  The default is the
     #: single-axle set, which is what every existing caller gets.
     subsystems: frozenset[str] = DEFAULT_AXLE_SUBSYSTEMS
+    #: The instantiated suspension template, or `None` for the built-in one.
+    #:
+    #: This is how a template reaches the assembly: the assembly asks the
+    #: template for its numbers (mount stiffness today, springs and dampers once
+    #: subtask 06 lands) instead of carrying constants of its own.
+    suspension_template: object | None = None
 
     def carries(self, role: str) -> bool:
         """Return whether this assembly carries a subsystem role."""
         return role in self.subsystems
+
+    @property
+    def instantiated_suspension(self) -> object:
+        """Return the suspension instantiation, building the default if needed."""
+        from ..templates import DOUBLE_WISHBONE, instantiate
+
+        if self.suspension_template is not None:
+            return self.suspension_template
+        return instantiate(
+            DOUBLE_WISHBONE,
+            mode=self.mode,
+            properties=self._model_properties(),
+        )
+
+    def _model_properties(self) -> dict[str, float]:
+        """Return the property values the default instantiation needs."""
+        # The spring and damper slots are model-owned today; a zero keeps the
+        # instantiation constructible without claiming a stiffness nobody set.
+        return {"spring": 0.0, "damper": 0.0}
+
+    def mount_stiffness(self) -> np.ndarray:
+        """
+        Return the 6x6 stiffness for the template's mount bushing slot.
+
+        A zero-stiffness matrix means the slot is declared but carries no
+        compliance, which is the built-in template's state.  Anything else means a
+        template or properties file supplied a real number.
+        """
+        instance = self.instantiated_suspension
+        values: dict[str, float] = getattr(instance, "properties", {})
+        slot_names = [name for name in values if name == "bushing"]
+        if not slot_names:
+            return np.zeros((6, 6))
+        stiffness = float(values["bushing"])
+        matrix = np.zeros((6, 6))
+        for index in range(3):
+            matrix[index, index] = stiffness
+        return matrix
 
 
 @dataclass
@@ -140,6 +184,18 @@ class SubsystemContext:
     def mode(self) -> Mode:
         """Return the K/C mode this assembly is being built in."""
         return self.request.mode
+
+    @property
+    def mount_bushing_stiffness(self) -> np.ndarray:
+        """
+        Return the 6x6 stiffness the template's mount bushing slot resolves to.
+
+        A subsystem asks for the *number* and never decides it: the template (or,
+        from subtask 06 on, a properties file) owns it.  The built-in template
+        declares zero, which is what keeps the frozen C snapshot valid; a template
+        with real compliance is a different template, substituted by name.
+        """
+        return self.request.mount_stiffness()
 
     @property
     def body_specs(self) -> dict[str, RigidBodySpec]:

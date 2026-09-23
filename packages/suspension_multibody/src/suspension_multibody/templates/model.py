@@ -6,8 +6,6 @@ differences between a suspension template and a brake template are *content*: th
 parts it lists, the connections it declares, the slots it asks a properties file
 to fill, the outputs it contributes.  The shape is identical, which is what makes
 them interchangeable within a role and what makes a new role a declaration rather
-import json
-from typing import Any
 than a new class.
 
 That is also how Adams Car works: a `.tpl` is one file format for every subsystem,
@@ -106,6 +104,14 @@ class PropertySlot:
     #: Default value, for templates whose simplified form carries its own numbers
     #: rather than referring to a file.
     default: float | None = None
+    #: Connection names that read this slot.
+    #:
+    #: One slot can feed several connections: a template declares *one* mount
+    #: bushing and the left and right arms share it, because the number an author
+    #: writes down is one number.  Without this mapping the assembly could only
+    #: find a slot by guessing from a connection name, which would make the
+    #: template's own naming load-bearing.
+    connections: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -255,7 +261,12 @@ def template_to_json(template: Template) -> dict[str, Any]:
         "connections": _connections_to_json(template),
         "elastic_slots": list(template.elastic_slots),
         "property_slots": [
-            {"name": slot.name, "unit": slot.unit, "default": slot.default}
+            {
+                "name": slot.name,
+                "unit": slot.unit,
+                "default": slot.default,
+                "connections": list(slot.connections),
+            }
             for slot in template.property_slots
         ],
         "outputs": [
@@ -295,6 +306,7 @@ def template_from_json(payload: dict[str, Any]) -> Template:
                 name=str(slot["name"]),
                 unit=str(slot["unit"]),
                 default=None if slot.get("default") is None else float(slot["default"]),
+                connections=tuple(str(n) for n in slot.get("connections", ())),
             )
             for slot in payload.get("property_slots", ())
         ),

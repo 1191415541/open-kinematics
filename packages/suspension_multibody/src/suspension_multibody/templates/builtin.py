@@ -31,7 +31,22 @@ from .model import (
 )
 from .registry import register
 
-__all__ = ["DOUBLE_WISHBONE", "register_builtins"]
+__all__ = [
+    "DEFAULT_MOUNT_STIFFNESS",
+    "DOUBLE_WISHBONE",
+    "DOUBLE_WISHBONE_NAME",
+    "register_builtins",
+]
+
+#: The built-in template's own bushing stiffness: zero.
+#:
+#: Zero is the *recorded* state of this template, not a placeholder waiting to be
+#: filled.  The C-mode compliance in the published baseline comes from the model's
+#: own `model.bushings`, and the four inboard slots this template declares are
+#: zero-stiffness slots on top of that.  Changing this number changes the C solve,
+#: and the frozen C snapshot cannot be regenerated, so a template that wants real
+#: stiffness here supplies it through a properties file instead (subtask 06).
+DEFAULT_MOUNT_STIFFNESS = 0.0
 
 #: The template name the assembly layer will refer to.
 DOUBLE_WISHBONE_NAME = "double_wishbone"
@@ -93,7 +108,24 @@ _RACK_GUIDE = ConnectionDefinition("rack_guide", "rack_center", "prismatic")
 _PROPERTY_SLOTS: tuple[PropertySlot, ...] = (
     PropertySlot("spring", "N/m"),
     PropertySlot("damper", "N*s/m"),
-    PropertySlot("bushing", "N/m"),
+    #: The inboard mount bushing the C-mode column activates.  Its default is
+    #: zero, not an oversight: the frozen C snapshot in `tests/data/kc_baseline`
+    #: was solved with the compliant mounts at *zero* stiffness, and that snapshot
+    #: is an oracle the implementation is judged against -- it cannot be
+    #: regenerated (the Python quasi-static solver that produced it was retired).
+    #: A template whose bushing column is meant to carry real stiffness supplies
+    #: one through a properties file; `DEFAULT_MOUNT_STIFFNESS` is simply the
+    #: built-in simplified template's own number.
+    PropertySlot(
+        "bushing",
+        "N/m",
+        default=DEFAULT_MOUNT_STIFFNESS,
+        connections=tuple(
+            connection.name
+            for connection in _CONNECTIONS
+            if connection.bushing is not None
+        ),
+    ),
     PropertySlot("wheel_mass", "kg"),
     PropertySlot("unloaded_radius", "m"),
     PropertySlot("spin_axis", "-"),
