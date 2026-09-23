@@ -341,8 +341,29 @@ _K_COORDINATES = {
 _K_WHEEL_COORDINATES = ("wheel_drive_L", "wheel_drive_R")
 
 
+def _k_drivable_coordinates(assembly: FrontAxleAssembly) -> frozenset[str]:
+    """
+    Return the drive coordinates an assembly actually offers.
+
+    The judgement is `AssemblyCapabilities.drive_coordinates` and nothing else.
+    An assembly without steering has no rack coordinate, so the rack axis and the
+    rack outputs disappear together -- a run that carried a rack axis of zeros
+    would look steered and not be.
+
+    A capabilities-less assembly (an older caller, or one built outside the
+    subsystem path) falls back to the full set, which is what every such assembly
+    has always been able to drive.
+    """
+    capabilities = getattr(assembly, "capabilities", None)
+    if capabilities is None:
+        return frozenset(_K_COORDINATES.values())
+    return frozenset(capabilities.drive_coordinates)
+
+
 def _k_grid(
     controls: list[DisplacementControl],
+    *,
+    drivable: frozenset[str] | None = None,
 ) -> tuple[dict[str, object], list[tuple[float, float, float]]]:
     """
     Return the kernel's `k` section and the drives of each case, in order.
@@ -359,19 +380,45 @@ def _k_grid(
         named[_k_control_axis(control.target)] = tuple(
             float(value) for value in control.expanded()
         )
+    # A control for a coordinate the assembly cannot drive is dropped before the
+    # grid is built, so the axis is absent rather than zero-valued.  Dropping it
+    # here -- rather than letting the case layer pad it -- is what keeps the grid's
+    # dimensionality a consequence of the assembly.
+    if drivable is not None:
+        named = {
+            axis: values
+            for axis, values in named.items()
+            if _K_COORDINATES[axis] in drivable
+        }
     left = named.get("left", (0.0,))
-    rack = named.get("rack", (0.0,))
+    # "No rack axis" and "a rack axis of zero" are different statements, and the
+    # difference is visible downstream: an empty list means the coordinate does not
+    # exist, a `[0.0]` means it exists and happens to sit at zero.  Only the latter
+    # would make a run look steered when it is not.
+    rack_present = drivable is None or _K_COORDINATES["rack"] in drivable
+    rack = named.get("rack", (0.0,)) if rack_present else ()
     if "right" not in named:
         section: dict[str, object] = {
             "wheel_values_mm": list(left),
             "rack_values_mm": list(rack),
+            # The rack entry of the axis map is present only when the assembly
+            # has a rack to drive.  `next(...)` over the document's `rack_*` names
+            # is what the case layer used to do, and it raised `StopIteration` on
+            # a steered assembly -- a failure that said nothing about why.
             "axis_map": {
                 "wheel": list(_K_WHEEL_COORDINATES),
-                "rack": _K_COORDINATES["rack"],
+                **({"rack": _K_COORDINATES["rack"]} if rack_present else {}),
             },
             "left_right_mode": "symmetric",
         }
-        combinations = [(travel, travel, position) for travel in left for position in rack]
+        # The rack is a real axis only when the assembly has one.  Iterating an
+        # empty axis would collapse the whole grid to zero states -- worse than
+        # padding with zeros, because the run would produce nothing at all -- so an
+        # absent axis is a dimension the grid simply does not have.
+        rack_axis = rack if rack_present else (0.0,)
+        combinations = [
+            (travel, travel, position) for travel in left for position in rack_axis
+        ]
         return section, combinations
     order = [name for name in ("left", "right", "rack") if name in named]
     section = {
@@ -422,7 +469,7 @@ def _run_k(
     controls = [
         control for control in case.controls if isinstance(control, DisplacementControl)
     ]
-    section, combinations = _k_grid(controls)
+    section, combinations = _k_grid(controls, drivable=_k_drivable_coordinates(assembly))
     model = model_document(assembly, name=f"{case.name}-k", drive_wheels=True)
     run = run_request(
         SimulationRequest(

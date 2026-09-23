@@ -1,68 +1,46 @@
-- 任务：试验台抽取与总成 × 试验台正交组合
+- 任务：试验台抽取与总成×试验台正交组合（含接口自适应与单轴侧车轮）
 - 形态：single-full（Epic 子任务）
-- 进度：0/12 步骤 TODO，尚未实施
-- 当前：未开工。前置 09（准静态/动态 study 合并）未完成。
+- 进度：12/12 步骤 DONE
+- 当前：`rigs/` 包已落（7 个试验台注册 + 正交组合与能力收缩）；kc 的 K 网格按总成能力降维。
 - 文件：`.codex-tasks/20260922-suspension-template-architecture/tasks/20260922-10-rigs/`
-- 验证：未运行。
+- 验证：`tests/rigs` 19 passed；全量 1016 passed／1 skipped／1 xfailed；`kc_parity_check --check` 0；`case_parity_check` 8 families accepted；`dynamic_hash_sentinel --check` 26 artifact 逐字节一致；`--strict --final` 0；ruff/ty 全树通过；`tests/data` 与 `layering_baseline.json` **无 diff**。
 
-## 恢复信息
+## 交付物
 
-**本轮交付为规划，未写任何生产代码。** 开工前必须核验：
+- `rigs/rig.py`：`RigSpec`（`drives`/`outputs`/`study`/`supplies_wheels`）与 `DriveSpec`；7 个试验台按现有 family 名注册（`kc_quasi_static`/`axle_dynamic`/`vehicle_kc`/`vehicle_dynamic`/`handling`/`ride_four_post`/`ride_random_road`），使按 family 名调用的既有请求继续可用，同时两根轴变得可分离。
+- `rigs/compose.py`：`resolve_combination` / `compose` / `combinations`。分两层判定：
+  - **归属是注册错误**：`ride_four_post` 属整车，接到单轴上必须报「registered for the 'vehicle' assembly」，而不是「你的单轴缺零件」——后者会把读者引到错的地方；
+  - **能力是收缩**：逐条按 `coordinate in capabilities.drive_coordinates` 决定该驱动轴是否保留。
+- `api.py`：新增 `_k_drivable_coordinates(assembly)`（**只读** `AssemblyCapabilities.drive_coordinates`；无 capabilities 的旧调用方回退到全集，行为不变）与 `_k_grid(..., drivable=...)`。
 
-- 09 已完成：准静态/动态 study 概念落地，同一装配入口可用。
-- 07 已完成：输出声明与衍生输出机制可用（本步把总成输出与试验台输出接进组合）。
-- 04/05 已完成：六类子系统与模板实例化可用（总成的"可驱动坐标名义空间"从这里来）。
-- 父 `EPIC.md` 的 G7（正交组合）与验证协议中 10 的验收口径有效。
+## 需求 15 / D6：接口按总成能力自适应
 
-## 本步对应的用户需求原文
+实测（单轴总成，含/不含转向）：
 
-- 「我设想的对于任意仿真应该是不同总成+试验台的组合，比如 kc_quasi_static 是单轴总成+悬架 KC 试验台、vehicle_kc 是整车总成（整车总成又相当于两个单轴总成+其他子总成）+悬架 KC 试验台、axle_dynamic 是单轴总成+悬架 KC 试验台」
-- 「所有仿真的输出由总成+试验台定义，总成带有它所定义的输出，试验台也带有它独有的输出」
-
-## 本任务的现状事实（制定计划时实测，实施时复核）
-
-现有 7 个写死的组合，每个一个 compiler（`simulation/dispatch.py:20-33` 的 `default_registry`）：
-
-| # | assembly | family | compiler |
+| 总成 | 可驱动坐标 | 试验台保留的驱动 | 丢弃 |
 |---|---|---|---|
-| 1 | `axle` | `kc_quasi_static` | `KcQuasiStaticCompiler` |
-| 2 | `axle` | `axle_dynamic` | `AxleDynamicCompiler` |
-| 3 | `vehicle` | `vehicle_dynamic` | `VehicleDynamicCompiler` |
-| 4 | `vehicle` | `vehicle_kc` | `VehicleKcCompiler` |
-| 5 | `vehicle` | `handling` | `HandlingCompiler` |
-| 6 | `vehicle` | `ride_four_post` | `RideFourPostCompiler` |
-| 7 | `vehicle` | `ride_random_road` | `RideRandomRoadCompiler` |
+| 含转向 | `rack_drive`/`rack_neutral`/`wheel_drive_L`/`wheel_drive_R` | 全部三个驱动轴 | — |
+| 不含转向 | `wheel_drive_L`/`wheel_drive_R` | `wheel_drive_L`、`wheel_drive_R` | `rack_drive` |
 
-内核侧 family 枚举在 `cpp/src/cases/case_dispatch.cpp:17-19`（7 个 + `comparison` 按设计 N/A，`case_parity_check` 亦标其为 N/A）。
+收缩语义严格区分「**轴不存在**」与「**轴存在且为零**」：无转向时 `rack_values_mm == []`、`axis_map` 里**没有** `rack` 键，而不是 `[0.0]`。填零会让一次未转向的运行看起来被转向过。
 
-**"试验台职责"尚未成型的证据**（模型侧与 case 侧的边界因 family 而异）：
+**修掉的两个中间缺陷（都是测试抓到的）**：
 
-- `axle × kc_quasi_static`：驱动坐标由**模型侧**声明（`cases/kc_quasi_static/contract.py:177-222` 的 `_driven_coordinates`），case 只给网格值（`api.py:403-411` 的 `_case_envelope`）。
-- `vehicle × ride_four_post`／`ride_random_road`／`handling`：case 侧**只产出 `case_document`**（如 `cases/ride_four_post.py:39`、`cases/handling.py:82`），模型文档复用 `cases/vehicle_dynamic.py` 的 `model_document`。
-- `vehicle × vehicle_kc`：模型文档由 `cases/vehicle_kc.py:101` 的 `model_document` 在整车文档基础上**追加驱动关节**，并移除转向执行器（`:118-122`）。
+1. 最初只把 `axis_map["rack"]` 摘掉，却仍留 `rack_values_mm=[0.0]`——等同保留占位列，违反 SPEC「不是填零、不是跳过该轴但保留占位列」。
+2. 修掉 (1) 后 `combinations` 用 `left × rack` 做笛卡尔积，`rack=()` 使**组合数塌缩为 0**——比填零更糟，运行会产出零个 case。现改为「轴缺席则该维不存在」，网格降维而非消失。
 
-这三类边界互不相同，正是本步要统一的。
+**原 `StopIteration` 崩溃点已消除**：`axis_map` 的 rack 项现在是**构建**出来的（按 `rack_present` 决定是否放入），不再用 `next(...)` 在文档的 `rack_*` 名字里搜索，因此无转向时不会抛内部异常，而是在边界处就不产生该轴。
 
-## 本步的边界
+## 需求 19 / D9 与需求 20 / D11
 
-- **不改各 family 的物理语义**：驱动坐标含义、时间网格意义、求解器默认值都不动。
-- **不删除现有 7 个组合**，它们必须继续可用且行为不变。
-- **不做"总成组合"**（整车 = 两个轴总成之和）：那属于 04 的子系统与 05 的实例化；本步只做**总成 × 试验台**这一维。
+- `supplies_wheels=True` 对 `kc_quasi_static`/`axle_dynamic` 显式声明，与 04 的「单轴侧不产出 `wheel.body`（车轮归试验台）」一致。
+- `rigs/` 层只读 capabilities 与驱动声明，**不检查任何模板、也不判断是否简化版**；模板无分支由 `tests/subsystems/test_torque_role_is_replaceable.py` 的 AST 门覆盖（04 已落）。
 
-## 基线重录台账（实施时填写；本步预期不应重录）
+## 与 SPEC 的偏离
 
-| 基线文件 | 是否重录 | 导致重录的步骤 | 重录前值 | 重录后值 | 判定依据 |
-|---|---|---|---|---|---|
-| `case_parity_check.py` 8 family 快照 | **应为否** | — | — | — | 现有组合行为不变 |
-| `vehicle_dynamics_baseline/sha256.json` | **应为否** | — | — | — | 同上；若变须单独裁决 |
-| `dynamic_hash_baseline.json`（26 artifact） | **应为否** | — | — | — | axle 侧不受本步影响 |
+- **本步未改 `simulation/dispatch.py` 的注册表结构**：7 个 family 编译器保持原样，正交性由新增的 `rigs` 层表达（组合矩阵可查询、归属与能力分层判定）。理由是 dispatch 是既有调用方的入口，改动它会波及全部既有请求；SPEC 的目标（正交组合 + 可查询 + 无效组合点名 + 能力收缩）已由 `rigs` 层达成，且 `tests/rigs` 逐条锁定。
+- **未删除任何 family 名**：`rigs` 的 rig 名沿用 family 名，故既有 `(assembly, family)` 调用语义不变。
 
-**若现有 7 个组合中任何一个行为变化**：先判断是"重构引入的回归"还是"物理改变"。前者必须修掉；后者必须单独裁决并登记——**不得以"重构"为名顺手重录 vehicle 系列基线**。
+## 未闭合项
 
-## 全量套件基线（主代理实测）
-
-`uv run --package suspension-multibody pytest packages/suspension_multibody/tests -q` → `783 passed, 1 skipped, 1 xfailed`（退出 0）。
-
-## 下一步
-
-等 09 完成后，从 `TODO.csv` 第 1 行开始。父 `SUBTASKS.csv` 第 10 行状态由主代理回填。
+- **`api.py` 的 K 结果侧收缩未落地**：SPEC 提到「K 结果侧」与「`:440` 三元组解包」「`:453-457` drives」「`:256` 时间序列 metric」也需按能力收缩。本步完成了**网格与驱动轴**的收缩（有测试），结果侧的 rack 通道收缩未做——因 SPEC 同时要求「不得在本步私改结果对象契约」，需与 07 的输出声明对齐后再动。当前无转向总成在 `_run_k` 的驱动轴层面已不会引用 rack。
