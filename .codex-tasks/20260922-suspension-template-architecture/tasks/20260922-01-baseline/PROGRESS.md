@@ -1,13 +1,13 @@
 - 任务：冻结现状基线与可执行验证命令
 - 形态：single-full（Epic 子任务）
-- 进度：0/9 步骤 TODO，尚未实施
-- 当前：未开工。本任务无前置，是 02–11 判据的唯一来源；开工时不依赖任何旧任务结论。
+- 进度：9/9 步骤 DONE（2026-09-23 复核）
+- 当前：已完成并提交入父级 `SUBTASKS.csv` 第 01 行 DONE。
 - 文件：`.codex-tasks/20260922-suspension-template-architecture/tasks/20260922-01-baseline/`
-- 验证：未运行。
+- 验证：14 条命令逐条实跑（见 `raw/baseline_commands.md`）；本机实测 `737 passed／47 skipped／1 xfailed`（与计划记录的 `783/1/1` 差异已定性为环境差异，同批 784 用例）、`--strict --final` 0、动态哈希 26/26 逐位一致（`e7407656...`）、K/C parity 0、8 family accepted、两包 build 0、ruff/ty 0、`git diff --check` 0。
 
 ## 恢复信息
 
-**本轮交付为规划，未写任何生产代码，`raw/` 为空（不预填未执行的证据）。**
+**本任务已实施完成，交付物为 `raw/` 下四份实测记录（`baseline_commands.md`／`joint_inventory.md`／`tire_mass_inventory.md`／`baseline_values.md`）。** 以下为开工前须核验的约束，已全部满足：
 
 开工前必须核验：
 

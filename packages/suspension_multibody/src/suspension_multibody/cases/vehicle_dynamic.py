@@ -29,6 +29,7 @@ from ..axle_dynamics.schema import (
     PAC2002_PARAMETER_DEFAULTS,
     PAC2002_PARAMETER_NAMES,
 )
+from ..joints import document_type_for_schema_kind as _joint_document_type
 from ..kernel.solver import solver_settings_document
 from ..preparation.vehicle_dynamic import prepare_vehicle_run
 from ..schema import VehicleDynamicCase, VehicleModel
@@ -76,7 +77,7 @@ def _quaternion(values) -> list[float]:
 def _joint_entry(joint) -> dict[str, Any]:
     entry = {
         "name": joint.name,
-        "type": "convel" if joint.kind == "constant_velocity" else joint.kind,
+        "type": _joint_document_type(joint.kind),
         "body_a": joint.body_a,
         "body_b": joint.body_b,
         "point_a": _vec3(joint.point_a_m),

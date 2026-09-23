@@ -1,13 +1,13 @@
-- 任务：建立模板与连接点的双列数据模型
+- 任务：建立模板与连接点的双列数据模型，并解耦 role 与模板
 - 形态：single-full（Epic 子任务）
-- 进度：0/9 步骤 TODO，尚未实施
-- 当前：未开工。前置 02（统一副表）未完成，模板的 joint 列需引用统一表。
+- 进度：10/10 步骤 DONE（2026-09-23 复核）
+- 当前：已完成并提交入父级 `SUBTASKS.csv` 第 03 行 DONE。
 - 文件：`.codex-tasks/20260922-suspension-template-architecture/tasks/20260922-03-template-model/`
-- 验证：未运行。
+- 验证：`tests/templates` 31 passed（与 `tests/joints` 合跑 58 passed）；全量套件 795 passed／47 skipped／1 xfailed（无新增失败）；动态哈希 26/26 逐位一致；K/C parity 0；8 family accepted；`--strict --final` 0；legacy_surface_gate 0；ruff/ty 0；`tests/data/**` 与 `layering_baseline.json` 无 diff。
 
 ## 恢复信息
 
-**本轮交付为规划，未写任何生产代码。** 开工前必须核验：
+**本任务已实施完成。** 交付物：`templates/{__init__,model,roles,registry,builtin}.py` + `tests/templates/{test_template_model,test_builtin_against_assembly}.py`。以下为开工前须核验的约束，已全部满足：
 
 - 02 已完成，`suspension_multibody/joints/` 的统一副表可用，且与内核行数表一致性测试通过。
 - `preparation/assembly/types.py` 未被 04 占用（本步与 04 的写范围冲突，须等 04 之前或之后串行）。

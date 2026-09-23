@@ -3,12 +3,13 @@
 ## 恢复信息
 
 形态：epic。
-进度：**0/12 子任务 DONE**（全部 `TODO`）。本轮为**规划交付**，未写任何生产代码。
-当前：规划已闭环，可启动 01。
-文件：`.codex-tasks/20260922-suspension-template-architecture/`（`EPIC.md` + `SUBTASKS.csv` + 本文件 + `tasks/20260922-01..11/`）。
-验证：本轮未运行生产构建或数值测试；只做了计划文件结构与一致性自检（见下）。
+- 状态：**实施中**（01/02/03 DONE 并已复核；04 已开工，`subsystems/` 落 3 文件 + 现役产物快照，13 步仍 TODO；05-12 未开工）
+当前：子任务 04「从 build_front_axle 拆出六类子系统」进行中。01/02/03 的代码与门禁已于 2026-09-23 由主代理逐条复跑确认（全量套件 795 passed／0 failed、动态哈希 26/26、K/C parity 0、8 family accepted、`--strict --final` 0、legacy_surface_gate 0、ruff/ty 0、`tests/data/**` 无 diff）。
+文件：`.codex-tasks/20260922-suspension-template-architecture/`（`EPIC.md` + `SUBTASKS.csv` + 本文件 + `tasks/20260922-01..12/`）。
+验证：01/02/03 的门禁已复跑通过（见各子任务 PROGRESS 的状态头）；04 尚未产出验收证据。
 
 ## 用户原话（本轮需求原文，逐条）
+15. 「针对G2：悬架实验总成可以没有转向系统，试验台要更具所选子系统自动适配接口」（第二轮补强；本轮仍只规划，不实施代码）
 
 1. 「我想把 K/C 模式给通用化，任何的仿真都可以由用户选择 K 或 C 模式」
 2. 「在模型装配时声明是 K 模式还是 C 模式，如果用 K 模式则使用 joint，如果是 C 模式则使用 bushing；各个悬架类型的 K、C 模式的运动副、衬套的定义都是预先设定好的，比如下摆臂在 K 模式三个连接点都是运动副，在 C 模式则只有前后点是衬套。模型装配好后也可以任意切换 K、C 模式。」
@@ -25,7 +26,7 @@
 13. 「子系统是左右悬架、转向、轮胎、车身，左右悬架加转向加轮胎加悬架实验台得到悬架实验总成，前后悬架加转向加车身加轮胎加整车 kc 实验台得到整车实验总成」
 14. 「先制定计划，不具体实现代码」（本轮交付边界）
 
-## 用户裁决登记（本轮四项）
+### 用户裁决登记（D1-D4，首轮；D5-D7 见第二轮、D8-D11 见第三轮）
 
 | 编号 | 问题 | 用户裁决 | 落点子任务 |
 |---|---|---|---|
@@ -73,15 +74,15 @@
 
 ## 本轮计划自检结果
 
-- `SUBTASKS.csv`：13 行（含表头）、**11 字段一致**、12 个子任务、id 唯一、`depends_on` 无环且依赖存在、状态全 `TODO`、类型全 `single-full`。
+- `SUBTASKS.csv`：13 行（含表头）、11 字段一致、12 个子任务、id 唯一、`depends_on` 无环且依赖存在、状态全 `TODO`、类型全 `single-full`。
 - 12 个子任务目录均含 `SPEC.md` + `TODO.csv` + `PROGRESS.md` + `raw/`。
-- 12 个子任务的 `TODO.csv` 全部**8 列一致**、id 连续、状态全 `TODO`、`completed_at` 空、`retry_count=0`；叶子步骤数 9-11 行。
+- 12 个子任务的 `TODO.csv` 全部 **8 列一致**、id 连续、状态全 `TODO`、`completed_at` 空、`retry_count=0`；叶子步骤数 **9-13 行**（04 为 13、11 为 13、10 为 12、12 为 12、03 为 10；第三轮按需求 16-20 扩编，03 因 role/RoleSpec 增一步）。
 - 各 `PROGRESS.md` 均写明「0/N 步骤 TODO，尚未实施」与恢复信息。
 - 本轮**未**把任何实施行置为 DONE，**未**写生产代码，**未**重录任何基线。
 
 ## 计划修订记录
 
-### 2026-09-22 首轮（规划交付）
+### 用户裁决登记（D5-D7，第二轮需求 15）
 
 - **改了什么**：新建本 Epic 全部文件（`EPIC.md`、`SUBTASKS.csv`、本文件、12 个子任务三件套）。
 - **为什么**：用户要求「先制定计划，不具体实现代码」，并给出 13 条需求补充与 4 项裁决（D1-D4）。
@@ -103,10 +104,115 @@
 
 **注意**：本轮修订曾一度引入依赖环（09→11→10→09），已修正为 09 不加 11、整车侧落点归 11；修正后 `depends_on` 无环（脚本校验）。
 
-## 未闭合项
+### 2026-09-22 第二轮需求补强（需求 15：转向可选 + 试验台自适应）
 
-无。本轮为规划交付，未产生实施性未闭合项。D1-D4 四项裁决已全部登记并落到具体子任务。
+用户第二轮原话：「针对G2：悬架实验总成可以没有转向系统，试验台要更具所选子系统自动适配接口」。
+
+**核查结论：这两条在首版计划里都是缺口。** 证据：
+
+- **转向在 Python 侧是强制子系统**：`schema/vehicle.py:233` 的 `VehicleModel.steering: SteeringSystemSpec` 必填无默认；`:249-259` 把 `rack`/`tie_rod_L`/`tie_rod_R` 列入 `symmetric_proxy` 轴的 `required_bodies`（缺一即 `raise`）；`preparation/vehicle_dynamic.py:227` 无条件调 `_build_steering`。单轴侧同样无条件：`front_axle.py:643-647` 无条件建 `rack` 体、`:655-660` 每侧建 `tie_rod_{side}`、`:838-873` 每侧两个球铰、`:874-903` rack 中心点与 `rack_guide`；`rack_center` 硬点由 `_ALIASES["rack_center"]`（`:144`）经 `_lookup` 强制。内核侧反而不强制（`std::vector<SteeringActuator>` 可空、`kernel/solver.py` 无转向字段）。
+- **试验台接口是硬编码的**：KC 试验台无条件要 `rack` 体与 `rack.center` 点（`cases/kc_quasi_static/contract.py:203-221`），K 模式控制轴映射写死在 `api.py:334-338` 的 `_K_COORDINATES` 并被 `_k_grid`（`:344-389`）两条分支消费，且 `contract.py:288-290` 的 `axis_map["rack"]` 用 `next(...)` 取第一个 `rack_*` 名字——**总成无转向时会抛 `StopIteration`**，不是报错点名。10 原验收只到「声明要求 + 无效组合报错点名」，缺「按总成能力收缩接口」。
+- **`schema/**` 原本无人可写**：04/05/09/11 的写范围里 `schema/**` 全是只读，而转向可选必然要动 `schema/model.py`（单轴侧）。
+- **无转向的唯一先例是 `explicit` 拓扑**（`front_axle.py:446` 仅在 `"rack" in bodies` 时处理 rack；`symmetric_proxy` 无任何开关），既有测试与基线没有无转向路径（`tests/model/test_front_axle.py:38-44` 直接断言 `"rack" in assembly.bodies`）。
+
+**用户裁决（D5-D7）**：
+
+| 编号 | 问题 | 裁决 | 落点 |
+|---|---|---|---|
+| D5 | 可选转向的范围 | **只放开单轴悬架实验总成**；整车侧 `SteeringSystemSpec` 与 `required_bodies` 维持必填，`_build_steering` 不改，5 个 vehicle family 行为不变 | 04 / 11 |
+| D6 | 试验台接口如何自适应 | **自适应收缩**：无转向时 rack 驱动轴与 rack 相关输出整体消失，K 网格降维为纯轮跳，试验台仍可跑 | 10 |
+| D7 | 承接落点 | **并入现有子任务，不新增编号** | 04/10/11/12 |
+
+**改了什么**：
+
+- `EPIC.md`：G2 补「子系统在总成内可选」；G7 补「试验台按总成能力自适应收缩」；需求原话登记第 15 条；裁决表补 D5-D7；事实节补四条现状（转向强制、试验台硬编码与崩溃点、无转向唯一先例是 `explicit`、`model_dump` 哈希传导）；三层结构图、依赖图、验证协议 04/10、Done-When G2/G7、端到端判据 (a)-(g) 与冻结约束同步。
+- `SUBTASKS.csv`：04 标题与验收补「转向子系统可缺席」并注明新增写范围 `schema/model.py`（措辞与 SPEC 对齐）；10 补「试验台接口自适应」；11 补「登记整车侧不放开并加锁定测试」；12 补无转向端到端判据。
+- `tasks/20260922-04-subsystems/{SPEC,TODO}.csv`：目标加第 5、6 条（缺席时哪些产物整体不产出、不得用退化 rack 体、`AssemblyCapabilities` 契约含字段名与命名空间口径）；约束加「只落单轴侧」「不改默认装配」「新增字段不得改变 `model_dump` 输出」；写范围显式加 `schema/model.py`；验收加第 8-10 条（逐项差集一致并注明按点表推导、能力描述、默认路径逐位不变）；TODO 由 9 步扩为 10 步。
+- `tasks/20260922-10-rigs/{SPEC,TODO}.csv`：目标加第 5 条（自适应收缩，含逐处改造点 file:line——模型文档侧、case 侧 `StopIteration` 崩溃点、K 网格 `_k_grid` 两条分支、K 结果侧、`_run_axle_quasi_static` 准静态重放路径、`StateResult.drives` 键集——以及「收缩 vs 报错」的判据区分与「勿过度收缩」的范围边界）；验收加第 6 条；验证协议加第 5 步；TODO 加第 5 步并重排后续编号。
+- `tasks/20260922-11-vehicle-assembly/{SPEC,TODO}.csv`：非目标加「整车侧不放开」；验收加第 7 条（不对称锁定测试）；验证协议加第 4 步；TODO 插入新步骤。
+- `tasks/20260922-12-acceptance/{SPEC,TODO,PROGRESS}`：标题笔误「子任务 11」改为 12；端到端项由四件事改为七件事 (a)-(g)（SPEC、PROGRESS、TODO 三处旧口径残留一并清除）；TODO 重复行清理。
+
+**影响与风险**：
+
+- 无转向是**新增路径**，含转向的默认路径与 7 个现有组合必须逐位不变——各 SPEC 已把「任一基线变化即停止上报」写死；04 仍保持「不得重录任何基线」。
+- 逐项差集一致（不含转向侧 = 含转向侧去掉 rack/tie_rod/4 个球铰/rack_guide 的精确子集）是本轮新增的关键判据，用于防止「拆子系统时顺便改了别的东西」。
+- 需求 15 只动单轴侧，整车侧的不对称是**有意的**，11 用锁定测试固化，避免后续被当成缺陷"修"掉或为对称而放开（那会波及 5 个 vehicle family 与整车基线）。
+- **`model_dump` 哈希传导风险（复核时发现）**：`api.py:116`/`:284` 把 `model.model_dump(mode="json")` 的规范化哈希写进 `Provenance.model_hash`，`io/artifacts.py` 又把它哈希成 artifact manifest 的 `model_sha256`（被 `dynamic_hash_sentinel.py` 的 key 集覆盖）。因此 04 若给 `FrontAxleModel` 加一个会进 dump 的字段，含转向模型的 `model_hash`/`model_sha256` 会变——与「不得重录任何基线」隐性冲突。已在 04 SPEC 与 EPIC 冻结约束写明：新增字段不得改变现有 `model_dump` 输出，且须有断言证明。
+- **能力描述契约必须冻结在 04**：04 与 10 的接口（`AssemblyCapabilities`：字段名、取值枚举、坐标命名空间用 `wheel_drive_L`/`rack_drive` 这套而非 `axis_map` 的分组键）已写进两份 SPEC，否则两个独立实现者会各自命名而接不上。
+
+### 2026-09-22 第三轮需求（需求 16-20：制动/驱动/车轮子系统 + 可扩展性）
+用户第三轮原话见 `EPIC.md` 的需求 16-20。核心是**两条架构要求**：制动与驱动要成为子系统（整车必须有、单轴不要），且**简化实现必须能升级为带刚体的复杂实现**。
+**取证（Adams 2024_1 安装目录，`C:\Program Files\MSC.Software\Adams\2024_1`）**：
+
+- **同 role 不同模板是 Adams 的既有设计**：`acar_concept.cdb/subsystems.tbl/` 下 `default_brakes.sub`、`sedan_brake_system.sub` 的 `[PART_ASSEMBLY]` 段数 = **0**（只有 `[PARAMETER]`），而 `convertible_brake_system.sub` = **4**（`front_caliper` 质量 0.0、`front_rotor` 6.72kg、`rear_caliper` 0.0、`rear_rotor` 5.70kg）；四者 `MAJOR_ROLE` **同为 `brake_system`**，模板分别是 `_brake_system_4Wdisk.tpl` 与 `_brake_system_4Wdisk_calipers.tpl`（另有 `_detailed_brake.tpl` 90KB）。**连复杂版卡钳质量都是 0.0**，只作 marker/几何载体。
+- **制动力矩公式**（本项目 `handling_step_steer_dynamic.adm:8875-8889` 的 `SFORCE/33` 原文）：`2.0*2500.0*IF(0:0,1.0,0.0)*0.6*VARVAL(96)*1.0*0.1*0.4*145.0*STEP(...)` = pad 数 × `piston_area` × 左右侧 × `front_brake_bias` × 制动需求 × 效率 × **0.1** × `brake_mu` × `effective_piston_radius` × 按轮速符号反向。**式中常数 `0.1` 不等于 `1/max_brake_value`（后者 0.01）**，且在管路压力式（`VARIABLE/274-276`）中同样出现，来源待核实——已作为显式未核实项写入计划。
+- **单轴装配不含 wheel/brake/powertrain**：`acar/examples/vehicles/achassis_gs.vdb/assemblies.tbl/acar_gs_front.asy` = `[SUBSYSTEM] suspension/front` + `[SUBSYSTEM] steering/front` + `[TESTRIG] '__MDI_SUSPENSION_TESTRIG'`；车轮由试验台提供（`testrig_tire_property_file='RIGID_WHEEL'`、`testrig_wheel_radius=300.0`、`tire_stiffness=200.0`）。对照 `acar_gs_full.asy` 含 `wheel`（前后）、`powertrain`、`brake_system`、`body`。**这直接印证需求 17 与需求 19**。
+- **驱动的两态**：`_powertrain.tpl` 有刚体（`powertrain` 300kg + `diff_output` 2kg×2 + 发动机悬置衬套 + `MDI_viscous.dif`）；`help/adams_car/appendix/drivelines.html` 明确 `pvs_driveline`（0=Inactive/1=Active）控制 driveline 组件激活。用户选的「只做分配声明 + 轮端力矩」= 失活路径。
+
+**用户裁决（D8-D11）**：
+
+| 编号 | 问题 | 裁决 | 落点 |
+|---|---|---|---|
+| D8 | 制动/驱动的承接与粒度 | 并入现有子任务（04 定义、10 接输入、11 整车组装）；0 刚体，只做「分配声明 + 轮端力矩」；**悬架实验总成不含、整车实验总成必须含** | 04/10/11 |
+| D9 | 单轴侧车轮归属 | **归悬架试验台**（对标 `__MDI_SUSPENSION_TESTRIG` 的 `testrig_*` 参数）；单轴总成不产出 `wheel.body`，整车侧维持 wheel 子系统 | 04/10/11 |
+| D10 | 制动参数对标范围 | 只取力矩子集：`brake_mu`/`piston_area`/`effective_piston_radius`/`front_brake_bias`/`max_brake_value`；转子几何属详细版 | 04 |
+| D11 | **简化版的可扩展性（本轮核心）** | 简化制动/驱动是**可替换的提供者**：同一 role 下模板可替换（简化 0 刚体 ↔ 复杂带刚体）；装配层与试验台**不得有分支**；复杂模板落地只允许新增模板 + 注册 | 03/04/10/11/12 |
+
+**改了什么**：
+
+- `EPIC.md`：登记需求 16-20 与裁决 D8-D11；**G2 由四类子系统扩为六类**（左右悬架/转向/车轮/车身/制动/驱动）并给出**可用性矩阵**；新增 **G2b**（简化→复杂可扩展性）与 **G9**（role 与模板解耦）；事实节补四条 Adams 官方取证；三层结构图、依赖图、验证协议 04/10、Done-When、端到端判据由七件事扩为**九件事 (a)-(i)**；冻结约束补「需求 20 不得被简化实现堵死」；风险节补对应风险。
+- `SUBTASKS.csv`：03 补 role/模板解耦；04 改六类 + 制动/驱动可用性 + 可替换性；10 补单轴侧车轮与模板无分支；11 补制动/驱动接入与幅值语义；12 改为核对 G1-G9 与九件事判据。
+- `tasks/20260922-03-template-model/`：目标加第 3、4、5 条（role 与模板解耦、六个 role 的最小接口、接口强制方式）；**六个 role 全部补齐**（suspension/steering/wheel/chassis/brake/drive，其中仅 brake/drive 有力矩通道）；**强制方式定死为单一 `Template` 结构 + 声明式 `RoleSpec` 校验**（不用基类+六个子类，理由：用户要求所有模板同一格式，Adams 的 `.tpl` 亦然）；约束加「role 接口不得泄漏实现细节」；验收加第 7-11 条（同 role 双模板、制动参数槽、六 role 覆盖、RoleSpec 校验负例、新增 role 不改结构）；TODO 由 9 步扩为 10 步。
+- `tasks/20260922-04-subsystems/`：目标改六类并加车轮/制动/驱动三条与「可替换的提供者」第 7 条；约束加 D8/D9/D10/D11 四条；写范围加 `schema/vehicle.py` 的制动参数子集（明确不得动 `SteeringSystemSpec`/`required_bodies`）；验收加第 11-13 条；TODO 由 10 步扩为 **13 步**。
+- `tasks/20260922-10-rigs/`：目标加第 6 条（单轴侧车轮由试验台提供）；约束加模板无分支；验收加第 8、9 条；TODO 由 10 步扩为 **12 步**。
+- `tasks/20260922-11-vehicle-assembly/`：目标加第 7 条（接入制动/驱动、幅值语义、模板无分支）；非目标加「不得为单轴侧引入制动」；验收加第 8-10 条；TODO 扩为 **12 步**。
+- `tasks/20260922-12-acceptance/`：SPEC 改核对 G1-G9 与九件事；TODO 第 3、7、8、9 行同步并新增第 11 行（G2b/G9 核对）。
+
+**关键设计取舍（供实施者理解意图）**：
+
+- **单轴侧仍然没有独立轮体**：D9 把车轮归试验台后，单轴侧维持 `VerticalTireElement`（挂 `upright_{side}`）的现状，**不改**成独立轮体——因此单轴侧不能施加制动/驱动，与需求 17 自洽。
+- **内核不需要为单轴侧加制动通道**：`axle_dynamic.cpp:31` 的 `TireRole` 无 `BrakeTorque`，而制动只走 `vehicle_dynamic`（`vehicle_dynamic.cpp:33`），故本轮**不触及内核制动路径**。
+- **`brake_torque` 是非负幅值**：方向由内核按轴向转速符号决定（`drive_brake.cpp:89-98`），并带转向节反作用（`:111-120`）；Python 侧只算幅值，不得翻转符号。
+
+## 未闭合项
+无。本轮为规划交付，未产生实施性未闭合项。D1-D11 十一项裁决已全部登记并落到具体子任务。
+
+（第二轮「D1-D7 七项裁决已全部登记」的表述已被第三轮取代，见下方第三轮修订记录与本节末尾的未闭合项。）
+**第三轮的未闭合项（显式登记，非阻断）**：①制动力矩公式中的常数 `0.1` 来源未核实；②源 `.adm` 的公式常数（2500/0.6/145.0）混用了 `default_brakes.sub`（135.0）与 `sedan_brake_system.sub`（145.0）两套口径，D10 的「与 Adams 简单版逐参数对标」**基准文件须先选定并登记**。两项均已写入 EPIC 事实节与 04 的验收第 12 条。Adams 真实整车数值对标仍为 `BLOCKED`，本轮不改变该结论。
+
+
+### 2026-09-22 第三轮补充：模板格式统一性与 role 接口强制方式（用户追问）
+
+用户追问：「实现后是否所有模板（转向、悬架、制动、车身等等）都是由同一个模板格式，区别只有刚体、joint、属性等等区别？」
+
+**核查结论：计划原本只写了 3 个 role 的接口**（03 SPEC 标题写「六个 role 的最小接口定义」，正文只列 `brake`/`drive`/`wheel`），`suspension`/`steering`/`chassis` 缺失；且**接口的强制方式未定**（只说「`Template` 增加 `role` 字段」，未排除「基类 + 六个子类」的实现形态）。两处都已补齐。
+
+**答复用户的核心口径**：格式统一，但差异不止刚体/joint/属性——还有 role 标签、几何挂点、力矩通道三类。同一 role 内模板可互换（简化↔复杂），**跨 role 不可互换**（制动模板顶不了悬架 role 的挂点要求）。
+
+**改了什么**：
+
+- `EPIC.md` G9：补「接口的强制方式（已定死）」段——单一 `Template` 结构 + 声明式 `RoleSpec` 校验，不用子类化；补「role 与可用性正交」（role 不表达可选性，转向可缺席/制动驱动仅整车属总成层 D5/D8）。
+- `tasks/20260922-03-template-model/SPEC.md`：第 4 条补齐**六个 role 的完整接口**（每个列几何挂点/参数槽/输出/是否有力矩通道）；新增第 5 条定死强制方式（`RoleSpec` 字段 `required_mounts`/`required_slots`/`outputs`/`has_torque_channel`、校验时机 `register()`+`instantiate()`、报错点名、新增 role 只加 `RoleSpec`）；验收加第 9-11 条；验证协议加第 6-7 步。
+- `tasks/20260922-03-template-model/TODO.csv`：新增「定义六个 role 的 RoleSpec 与声明式校验」一步（第 5 步），负例步扩为六例（含缺挂点、缺槽位），注册表步补 RoleSpec 校验；由 9 步扩为 10 步。
+- `SUBTASKS.csv` 03 行：验收与 notes 同步 role/RoleSpec 口径。
+
+**关键设计取舍**：选「声明式 `RoleSpec`」而非「基类 + 六个子类」，理由是用户明确要求「所有模板是同一个模板格式」——子类化会把 role 差异写进类型系统，与「同一格式」相悖，也让「新增 role 不改结构」落空。Adams 的 `.tpl` 正是同一道理：只有一种文件格式，`MAJOR_ROLE` 只是一个字段。
+## 2026-09-23 实施进度回填（主代理复核）
+
+01/02/03 三个子任务在 2026-09-22 夜至 09-23 午间已实际实施完成（代码与测试均已落盘），但此前只有 `TODO.csv` 被回填为 DONE，三份 `PROGRESS.md` 的状态头与父级 `EPIC.md` / 本文件仍停留在「规划中／未开工」。本轮据磁盘事实与实跑证据纠正：
+
+| 子任务 | 代码落点 | 复核证据 |
+|---|---|---|
+| 01 基线冻结 | `tasks/20260922-01-baseline/raw/` 四份实测记录 | 14 条命令实跑；本机 `737 passed／47 skipped／1 xfailed`（与计划记录的 `783/1/1` 为环境差异，同批 784 用例）；`--strict --final` 0；动态哈希 26/26；两包 build 0 |
+| 02 统一副底座 | `joints/{__init__,table,validate}.py`、`tests/joints/**`、`cases/kc_quasi_static/contract.py`（拆截断）、`cases/{axle,vehicle}_dynamic.py`（改名收口） | `tests/joints`+`tests/templates` 58 passed；K/C parity 0；8 family accepted；legacy_surface_gate 0 |
+| 03 模板数据模型 | `templates/{__init__,model,roles,registry,builtin}.py`、`tests/templates/**` | 同上；动态哈希 26/26 逐位一致（`e7407656...`） |
+
+**复核方式**：主代理亲自复跑全部门禁（非采信子任务自证）——`build_axle_native.py`、`check_module_layering.py --strict --final`、`legacy_surface_gate.py --check`、`dynamic_hash_sentinel.py --check`、`kc_parity_check.py --check`、`case_parity_check.py`、全量 `pytest`（795 passed／47 skipped／1 xfailed，401s）、`ruff check .`、`ty check .`、`git diff --check`，全部退出 0；`git status` 在 `tests/data/**` 与 `layering_baseline.json` 上为空，即**未重录任何基线**。
+
+**新增测试数核对**：795 − 737 = 58 = 02 的 `tests/joints` 27 + 03 的 `tests/templates` 31，与两任务自报数一致，无凭空计数。
+
+**04 的实际断点**：`subsystems/` 已落 `types.py`／`capabilities.py`／`__init__.py`（含 `SubsystemOutput`／`merge_outputs`／`AssemblyCapabilities`／`capabilities_for`），`raw/assembly_snapshot.json` 已抓 K/C × `rack_fixed_to_chassis` 四种组合的现役产物；13 步 TODO 全部未开工，`build_front_axle` 尚未改造，`schema/model.py` 与 `schema/vehicle.py` 尚未新增字段。
 
 ## 下一步
 
-启动子任务 01（冻结现状基线与可执行验证命令）。01 完成前，02-11 不得开工。
+继续子任务 04：按 `tasks/20260922-04-subsystems/TODO.csv` 第 1-13 步实施，先复核 `raw/assembly_snapshot.json` 与现役一致，再逐类拆子系统（每拆一类立即对照），最后跑逐位一致判据与门禁全集。

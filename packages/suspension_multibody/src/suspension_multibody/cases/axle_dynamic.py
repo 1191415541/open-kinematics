@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from ..axle_dynamics.schema import AxleDynamicsCase, AxleDynamicsModel
+from ..joints import document_type_for_schema_kind as _joint_document_type
 from ..kernel.solver import solver_settings_document
 
 __all__ = [
@@ -289,7 +290,7 @@ def model_document(
     for joint in model.joints:
         entry: dict[str, Any] = {
             "name": joint.name,
-            "type": "convel" if joint.kind == "constant_velocity" else joint.kind,
+            "type": _joint_document_type(joint.kind),
             "body_a": joint.body_a,
             "body_b": joint.body_b,
             "point_a": _vec3_mm(joint.point_a_m),

@@ -2,7 +2,7 @@
 
 ## 目标
 
-在不动任何生产代码的前提下，**本轮实测**现有全部门禁的退出码与当前基线值，形成 02–11 每个子任务都可引用的冻结判据：
+在不动任何生产代码的前提下，**本轮实测**现有全部门禁的退出码与当前基线值，形成 02–12 每个子任务都可引用的冻结判据：
 
 1. 冻结命令集（14 条）并逐条记录实测退出码：
 
@@ -31,7 +31,7 @@ git diff --check
 - `raw/tire_mass_inventory.md`：轮胎/轮端质量的现状路径（`WheelSpec.mass` → `preparation/assembly/vehicle.py:653,722` 合并进轮端刚体；内核 `Tire` 结构体无质量字段）。
 - `raw/baseline_values.md`：各基线文件的当前值——`kc_baseline/`、`kc_perf_baseline.json`、`kc_perf_baseline_native.json`、`dynamic_hash_baseline.json`、`axle_dynamics_baseline/`、`vehicle_dynamics_baseline/`；C++ 侧 `packages/suspension_kernel/layering_baseline.json`。
 
-3. `raw/baseline_commands.md`：命令原文 + 实测退出码 + 结果摘要 + 证据文件路径，成为 02–11 的唯一判据来源。
+3. `raw/baseline_commands.md`：命令原文 + 实测退出码 + 结果摘要 + 证据文件路径，成为 02–12 的唯一判据来源。
 
 4. 记录既有失败与 skip/xfail 原因，作为后续「新增失败为零」的对照底线。
 
@@ -59,7 +59,7 @@ git diff --check
 ## 依赖
 
 - 无前置，是串行主线的起点。
-- 02–11 全部依赖本任务：未冻结判据前不得开始。02 的 `PROGRESS.md` 已明确引用 `raw/baseline_commands.md`（命令与退出码）与 `raw/joint_inventory.md`（8 种副的现状落点与截断点 file:line）；08 引用 `raw/tire_mass_inventory.md` 与 `raw/baseline_values.md`。
+- 02–12 全部依赖本任务：未冻结判据前不得开始。02 的 `PROGRESS.md` 已明确引用 `raw/baseline_commands.md`（命令与退出码）与 `raw/joint_inventory.md`（8 种副的现状落点与截断点 file:line）；08 引用 `raw/tire_mass_inventory.md` 与 `raw/baseline_values.md`。
 
 ## 验收标准
 
@@ -68,7 +68,7 @@ git diff --check
 3. `raw/tire_mass_inventory.md` 给出 `WheelSpec.mass`（`schema/vehicle.py:60`，`axial_inertia` 在 `:61`）→ `preparation/assembly/vehicle.py:653,722` 的合并路径与总质量/质心聚合点（`preparation/assembly/vehicle.py:374-397`），并实测确认内核 `Tire`（`cpp/include/mb_model/types.hpp:101-146`）无质量字段。
 4. `raw/baseline_values.md` 给出 6 个 multibody 基线 + 1 个 C++ `layering_baseline.json` 的当前值/哈希/规模。
 5. 既有失败、skip、xfail 独立列明并各带原因，形成后续对照底线。
-6. 未改动任何生产代码与基线文件：`git diff --check` 干净，且 `git status` 中不存在本任务对 `packages/**` 的改动（`.codex-tasks/*` 已被 `.gitignore` 忽略，交付物本身不出现在 diff 中）。
+6. 未改动任何生产代码与基线文件：`git diff --check` 干净，且 `git status` 中不存在本任务对 `packages/**` 的改动。**注意**：`.codex-tasks/**` 已被 git 跟踪（不是 gitignore 忽略），因此计划文件本身会出现在 `git status` 里——判断「未改动生产代码」时须按路径过滤，只断言 `packages/**` 无改动。
 
 ## 验证协议
 
@@ -89,4 +89,4 @@ uv build --package suspension-multibody
 git diff --check
 ```
 
-上述参数以本任务 `--help` 实测结果为准，实测后把命令原文与退出码写入 `raw/baseline_commands.md`；02–11 只引用该文件中的命令原文，不得自行改写参数或容差。
+上述参数以本任务 `--help` 实测结果为准，实测后把命令原文与退出码写入 `raw/baseline_commands.md`；02–12 只引用该文件中的命令原文，不得自行改写参数或容差。

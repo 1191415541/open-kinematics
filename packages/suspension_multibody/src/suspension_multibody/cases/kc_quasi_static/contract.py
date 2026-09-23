@@ -30,8 +30,22 @@ from __future__ import annotations
 
 import numpy as np
 
+from ...joints import (
+    DRIVEN_KINDS,
+    JOINT_KINDS,
+    JointTableError,
+    definition_for,
+    validate_joint_axes,
+)
 from ...kernel.solver import solver_settings_document as _solver_settings_document
-from ...preparation.assembly.types import PrismaticJoint, RevoluteJoint
+from ...preparation.assembly.types import (
+    ConstantVelocityJoint,
+    CylindricalJoint,
+    InPlaneJoint,
+    PrismaticJoint,
+    RevoluteJoint,
+    UniversalJoint,
+)
 from .convert import (
     NativeKcError,
     _local_axis,
@@ -41,15 +55,59 @@ from .convert import (
 )
 
 UNITS = {"length": "mm", "mass": "kg", "time": "s", "angle": "rad"}
-_JOINT_KINDS = {
-    "BallJoint": "spherical",
-    "RevoluteJoint": "revolute",
-    "PrismaticJoint": "prismatic",
-}
+#: The joint table lives in `joints/`; this module no longer keeps its own copy.
+#: `_JOINT_KINDS` used to map only three of the eight types and reject the rest,
+#: which is what made "any assembly can use any joint" false in practice.
+_JOINT_KINDS = JOINT_KINDS
 #: Distinct from the joint table: a driven coordinate is a *prescribed* degree
 #: of freedom, not a joint in the assembly's sense, but it travels in the same
 #: list because that is where the kernel expects to find it.
-_DRIVEN_KINDS = {"translation": "driven_translation", "rotation": "driven_rotation"}
+_DRIVEN_KINDS = {
+    kind: definition.kernel_name for kind, definition in DRIVEN_KINDS.items()
+}
+
+
+def _constraint_axes(
+    constraint, body_a, body_b
+) -> dict[str, list[float]]:
+    """
+    Return the axis fields one assembly constraint carries, in body-local form.
+
+    Each branch mirrors the dataclass it reads: `InPlaneJoint` has only `axis_a`
+    (the plane normal), `ConstantVelocityJoint` carries a primary and a secondary
+    axis on each body, and the rest carry one axis per body.  A type with no axis
+    returns an empty mapping -- the caller decides which of them are required.
+    """
+    if isinstance(constraint, InPlaneJoint):
+        return {"axis_a": _unit_axis(_local_axis(constraint.axis_a, body_a))}
+    if isinstance(constraint, ConstantVelocityJoint):
+        return {
+            "axis_a": _unit_axis(_local_axis(constraint.axis_a, body_a)),
+            "axis_b": _unit_axis(_local_axis(constraint.axis_b, body_b)),
+            "axis_a_secondary": _unit_axis(
+                _local_axis(constraint.axis_a_secondary, body_a)
+            ),
+            "axis_b_secondary": _unit_axis(
+                _local_axis(constraint.axis_b_secondary, body_b)
+            ),
+        }
+    if isinstance(
+        constraint, (RevoluteJoint, PrismaticJoint, UniversalJoint, CylindricalJoint)
+    ):
+        return {
+            "axis_a": _unit_axis(_local_axis(constraint.axis_a, body_a)),
+            "axis_b": _unit_axis(_local_axis(constraint.axis_b, body_b)),
+        }
+    return {}
+UNITS = {"length": "mm", "mass": "kg", "time": "s", "angle": "rad"}
+#: The joint table lives in `joints/`; this module no longer keeps its own copy.
+#: `_JOINT_KINDS` used to map only three of the eight types and reject the rest,
+#: which is what made "any assembly can use any joint" false in practice.
+_JOINT_KINDS = JOINT_KINDS
+#: Distinct from the joint table: a driven coordinate is a *prescribed* degree
+#: of freedom, not a joint in the assembly's sense, but it travels in the same
+#: list because that is where the kernel expects to find it.
+_DRIVEN_KINDS = {kind: definition.kernel_name for kind, definition in DRIVEN_KINDS.items()}
 
 
 def _vec3(values) -> list[float]:
@@ -96,23 +154,37 @@ def model_document(assembly, *, name: str = "front-axle", drive_wheels: bool = T
         else assembly.constraints
     )
     joints = []
+    joints = []
     for constraint in joint_source:
-        kind = _JOINT_KINDS.get(type(constraint).__name__)
-        if kind is None:
-            raise NativeKcError(f"unsupported joint {type(constraint).__name__}")
+        try:
+            definition = definition_for(type(constraint).__name__)
+        except JointTableError as exc:
+            # The joint table owns the message; this keeps the kc layer's own
+            # error type so callers that catch `NativeKcError` still work.
+            raise NativeKcError(str(exc)) from exc
         body_a = assembly.bodies[constraint.body_a]
         body_b = assembly.bodies[constraint.body_b]
         entry: dict[str, object] = {
             "name": constraint.name,
-            "type": kind,
+            "type": definition.kernel_name,
             "body_a": constraint.body_a,
             "body_b": constraint.body_b,
             "point_a": _vec3(_local_point(constraint.point_a, body_a)),
             "point_b": _vec3(_local_point(constraint.point_b, body_b)),
         }
-        if isinstance(constraint, (RevoluteJoint, PrismaticJoint)):
-            entry["axis_a"] = _unit_axis(_local_axis(constraint.axis_a, body_a))
-            entry["axis_b"] = _unit_axis(_local_axis(constraint.axis_b, body_b))
+        # The axes each type needs come from the table, so a joint added to the
+        # assembly layer cannot be encoded with the wrong field set.  The
+        # defaults the kernel substitutes for a missing axis are plausible
+        # numbers, which is why an omission has to fail here instead.
+        axes = _constraint_axes(constraint, body_a, body_b)
+        validate_joint_axes(
+            joint_name=constraint.name,
+            kernel_name=definition.kernel_name,
+            axes=axes,
+        )
+        entry.update(axes)
+        if isinstance(constraint, ConstantVelocityJoint):
+            entry["convel_angle_target"] = float(constraint.angle_target)
         joints.append(entry)
 
     elements = []

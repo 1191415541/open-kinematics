@@ -1,22 +1,22 @@
-- 任务：从 build_front_axle 拆出四类子系统（左右悬架／转向／轮胎／车身）
+- 任务：从 build_front_axle 拆出六类子系统（左右悬架／转向／车轮／车身／制动／驱动）
 - 形态：single-full（Epic 子任务）
-- 进度：0/9 步骤 TODO，尚未实施
-- 当前：未开工。前置 03（模板与连接点双列数据模型）未完成。
+- 进度：1/13 步骤 IN_PROGRESS（包骨架与契约已落，六类子系统本体未实现）
+- 当前：`subsystems/{__init__,types,capabilities}.py` 已落（`SubsystemOutput`／`merge_outputs`／`AssemblyCapabilities`／`capabilities_for`／六类枚举与坐标命名空间）；`raw/assembly_snapshot.json` 已抓现役 K/C × `rack_fixed_to_chassis` 四种组合产物。`build_front_axle` 尚未改造，`schema/model.py` 与 `schema/vehicle.py` 尚未新增字段。
 - 文件：`.codex-tasks/20260922-suspension-template-architecture/tasks/20260922-04-subsystems/`
-- 验证：未运行。
+- 验证：`raw/assembly_snapshot.json` 四种组合的计数与 SPEC 验收 2 的实测值一致（K 13/13/0/0、C 9/17/8/8，bodies 10、points 36、connections 16）；`tests/subsystems` 尚不存在，本步无验收证据。
 
 ## 恢复信息
 
-**本轮交付为规划，未写任何生产代码。** 开工前必须核验：
+**本步已开工（包骨架与能力契约已落），六类子系统本体与 `build_front_axle` 改造尚未实施。** 以下为开工前必须核验的约束，已全部满足：
 
 - 03 已完成：`templates/` 包存在，`ConnectionDefinition` 支持 joint 与 bushing 双列，内置双叉臂模板与现役装配已建立逐点对照。
 - 02 已完成：统一副表 `joints/` 可用（本步的副编码沿用其名称）。
-- 父 `EPIC.md` 的 G2（三层架构、四类子系统粒度）与「不得修改 `templates/**`」约束有效。
+- 父 `EPIC.md` 的 G2（三层架构、六类子系统粒度与可用性矩阵）、G2b（简化→复杂可扩展性）与「不得修改 `templates/**`」约束有效。
 - 与 03 串行：两者都触及 `preparation/assembly/types.py`，不得同时进行。
 
 ## 用户裁决的落点（本步是其实现）
 
-用户原话：「子系统是左右悬架、转向、轮胎、车身，左右悬架加转向加轮胎加悬架实验台得到悬架实验总成，前后悬架加转向加车身加轮胎加整车 kc 实验台得到整车实验总成」——本步把四类子系统从 `build_front_axle` 中拆出，就是这条裁决的实现；「前后悬架加转向加车身加轮胎」说明整车侧是同一批子系统的复用，因此子系统必须是可独立实例化、可复用的单元。
+用户原话：「子系统是左右悬架、转向、轮胎、车身……」（需求 13）与「我想把制动系统和驱动系统以及轮胎也分别实现为子系统」（需求 16）、「悬架实验总成不需要制动、驱动子系统，整车总成必须要」（需求 17）、「当前制动和驱动子系统可以做成简化实现，但是一定要有能力在后续的模板中可以扩展成带刚体的复杂形式」（需求 20）——本步把六类子系统从 `build_front_axle` 拆出，并让制动/驱动以**可替换的简化模板**落地。
 
 ## 本任务的现状事实（制定计划时实测，实施时复核）
 

@@ -1,13 +1,13 @@
 - 任务：统一副底座并拆除作者层的副类型截断
 - 形态：single-full（Epic 子任务）
-- 进度：0/9 步骤 TODO，尚未实施
-- 当前：未开工。前置 01（冻结基线与现状清单）未完成，未冻结判据前不得开始。
+- 进度：9/9 步骤 DONE（2026-09-23 复核）
+- 当前：已完成并提交入父级 `SUBTASKS.csv` 第 02 行 DONE。
 - 文件：`.codex-tasks/20260922-suspension-template-architecture/tasks/20260922-02-joint-foundation/`
-- 验证：未运行。
+- 验证：`tests/joints` 与 `tests/templates` 合跑 58 passed；全量套件 795 passed／47 skipped／1 xfailed（较 01 基线多 58 = 02 的 27 + 03 的 31 新增测试，无新增失败）；动态哈希 26/26 逐位一致；K/C parity 0；case parity 8 family accepted；`--strict --final` 0；legacy_surface_gate 0；ruff/ty 0；`git diff --check` 0；`tests/data/**` 与 `layering_baseline.json` 无 diff。
 
 ## 恢复信息
 
-**本轮交付为规划，未写任何生产代码。** 开工前必须核验：
+**本任务已实施完成。** 交付物：`joints/{__init__,table,validate}.py` + `tests/joints/{test_joint_table,test_any_joint_encodes}.py`；`cases/kc_quasi_static/contract.py` 拆截断、`cases/{axle,vehicle}_dynamic.py` 改名收口。以下为开工前须核验的约束，已全部满足：
 
 - 01 已完成并产出 `raw/baseline_commands.md`（逐条命令与退出码）与 `raw/joint_inventory.md`（8 种副的现状落点与截断点 file:line）。
 - 父 `EPIC.md` 的冻结约束有效：ABI 七符号与版本（15/30/1/1）不变；`check_module_layering.py --strict --final` 保持绿；纯结构阶段要求动态数组逐位一致。
