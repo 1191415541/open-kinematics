@@ -11,6 +11,7 @@
 #include "mb_numeric/vector.hpp"
 #include "mb_model/enums.hpp"
 #include <array>
+#include <string>
 #include <vector>
 
 namespace axle_kernel {
@@ -177,6 +178,31 @@ struct Tire {
     // `[BOTTOMING_CURVE]` as flattened (rim_penetration_m, load_n) rows.  Empty means
     // the tire file has no such curve and no rim reaction is added.
     std::vector<double> bottoming_curve;
+    // --- Tire mass ownership (subtask 08, D2 option B) -----------------------
+    //
+    // The tire's own mass and inertia, in kernel SI units.  Before these two
+    // fields the wheel-end body carried the tire's mass, so the tire had no
+    // independent inertia to couple.  Zero mass means "no independent inertia":
+    // the wheel-end body still carries it, and every document that does not
+    // declare the fields keeps its historical answer bit for bit.
+    //
+    // They are appended at the end of the structure on purpose.  `Tire` is not
+    // part of the frozen C ABI (`AxleInput`/`VehicleInput` are, and neither
+    // carries a tires-by-value array), but the assembly and the solver read it
+    // through offsets the compiler is free to lay out again -- keeping the new
+    // fields last is what makes every pre-existing field offset provably
+    // unchanged, which the kernel test asserts.
+    //
+    // The document reaches these fields through `ContractModel`, not through a
+    // new `AxleInput` array: adding one to a frozen structure would be an ABI
+    // freeze release, and this step deliberately does not open one.  See
+    // `contract_model.cpp` (`tire_mass_`/`tire_inertia_`) and
+    // `kernel_contract_run.cpp`, which installs them on the built model the
+    // same way it installs `body_wrench_point_local`.
+    /// The tire's own mass in kg.  Zero keeps the wheel-end body's ownership.
+    double mass{0.0};
+    /// The tire's own inertia tensor about its centre, in kg*m^2.
+    Mat3 inertia{};
 };
 
 struct AerodynamicDrag {
@@ -273,11 +299,44 @@ struct Model {
     // the swept body -- measured as 2.8e-8 rad on a 2.5e-5 rad response,
     // against a 1e-8 rad acceptance tolerance.
     std::vector<Vec3> body_wrench_point_local;
+    // Per-body inertia after the tires are taken into account, in body order.
+    //
+    // A tire used to carry no mass of its own: the wheel-end body owned the
+    // whole wheel, and the solver read `Body::mass` / `Body::inertia_body`
+    // directly.  When a document declares the tire's own mass (decision D2), the
+    // inertia has two owners, and the solver must see their sum.  Summing here,
+    // once, at build time is what keeps that a property of the *model*: every
+    // consumer reads the same number, and no consumer has to know a tire exists.
+    //
+    // Empty means "not computed": a consumer then falls back to the body's own
+    // values, which is both the historical answer and the answer for a document
+    // that declares no tire mass.  `compute_effective_body_inertia` fills them.
+    std::vector<double> body_effective_mass;
+    std::vector<Mat3> body_effective_inertia_body;
     std::vector<int> free_body;
     std::vector<int> body_to_free;
     int rows{0};
     int ndof{0};
 };
+
+
+/// Fill `Model::body_effective_mass` / `body_effective_inertia_body` from the
+/// bodies and the tires the model already carries.
+///
+/// `m_eff = m_body + sum(tire mass)` and
+/// `I_eff = I_body + sum(tire inertia + tire mass * ((c.c)E - c (x) c))` with
+/// `c` the tire centre in the carrying body's frame -- the parallel-axis term the
+/// wheel end needs once its tire is a separate inertia source.  A body with no
+/// massive tire gets its own values back bit for bit, so the historical path is
+/// untouched.
+///
+/// Returns false, with `error` naming the tire, when a massive tire is mounted
+/// away from its body's origin.  The residual evaluates a body's inertia with no
+/// lever arm (it treats the body origin as the centre of mass); honouring an
+/// offset would change the translational/rotational coupling, which is new
+/// physics rather than a change of ownership and needs its own acceptance.  The
+/// caller reports it instead of silently dropping the term.
+bool compute_effective_body_inertia(Model& model, std::string& error);
 
 struct State {
     std::vector<Vec3> r, v, a, omega, alpha;

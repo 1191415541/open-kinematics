@@ -158,7 +158,25 @@
         "model": {"enum": ["vertical_linear", "fiala", "pac2002", "native_brush"]},
         "body": {"type": "string", "minLength": 1},
         "parameters": {"type": "object"},
-        "blob": {"type": "string"}
+        "blob": {"type": "string"},
+        "mass": {
+          "description": "The tire's own mass, in the document's mass unit (D2 option B: the tire becomes an independent inertia source). Omitted, or zero, means the mass is still carried by the wheel-end body -- the behaviour of every document written before this field existed.",
+          "type": "number",
+          "minimum": 0,
+          "finite": true
+        },
+        "inertia": {
+          "description": "The tire's own 3x3 inertia tensor about its centre, in the document's mass unit times the square of its length unit (D2 option B). Omitted, or all zero, means the tire has no independent inertia and the wheel-end body still carries it. Shape, finiteness and non-negativity are enforced by the Python validator alongside this schema; the kernel reads the matrix as given.",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {"type": "number", "minimum": 0, "finite": true}
+          }
+        }
       }
     },
     "road": {

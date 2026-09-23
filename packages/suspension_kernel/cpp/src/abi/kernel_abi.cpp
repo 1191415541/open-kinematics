@@ -59,6 +59,14 @@ int run_model(
             set_error(error_buffer, error_capacity, error);
             return 2;
         }
+        // This entry point rebuilds a model from the flat input alone, so no tire
+        // mass can have been declared; the call is still made so the effective
+        // tables exist for every consumer rather than only on the contract path.
+        // With no massive tire the tables equal the bodies' own values.
+        if (!compute_effective_body_inertia(owned_model, error)) {
+            set_error(error_buffer, error_capacity, error);
+            return 2;
+        }
         model_pointer = &owned_model;
     }
     const Model& model = *model_pointer;
@@ -997,6 +1005,14 @@ extern "C" int vehicle_kernel_abi_version() {
         input->coordinate_coupler_scale_b
     );
     if (!error.empty()) {
+        set_error(error_buffer, error_capacity, error);
+        return 2;
+    }
+    // Same reasoning as the axle entry point above: fill the effective tables so
+    // every consumer reads through one accessor.  A vehicle document declares no
+    // tire mass (the field is contract-level), so this sums nothing and the tables
+    // equal the bodies' own values.
+    if (!compute_effective_body_inertia(model, error)) {
         set_error(error_buffer, error_capacity, error);
         return 2;
     }

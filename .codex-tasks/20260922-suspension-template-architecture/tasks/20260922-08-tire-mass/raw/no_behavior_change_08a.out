@@ -1,0 +1,6 @@
+body_state (401, 6, 19) bit-identical: True max|diff|: 0.0
+diagnostics (403, 16) bit-identical: False max|diff|: nan
+energy (401, 21) bit-identical: True max|diff|: 0.0
+diagnostics equal_nan: True
+nan count base/patched: 8 8
+nanmax diff: 0.0

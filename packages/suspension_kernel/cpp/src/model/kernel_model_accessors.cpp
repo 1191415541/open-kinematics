@@ -70,4 +70,71 @@ const StaticRotationGauge* static_rotation_gauge_for_pivot(
     return nullptr;
 }
 
+
+// Effective body inertia, after any tire that declares its own mass (D2).
+//
+// The tables are summed once, at build time, by `compute_effective_body_inertia`.
+// These two accessors are how the solver reads the result: a caller that still
+// touched `body.mass` directly would silently ignore a declared tire mass, so
+// every consumer goes through here.
+//
+// Falling back to the body's own values when the tables are absent is deliberate:
+// a model that was never passed through the computation must behave exactly as it
+// did before this existed, and a document with no tire mass produces tables that
+// equal those values anyway.
+double body_effective_mass(const Model& model, int body) {
+    const std::size_t index = static_cast<std::size_t>(body);
+    if (index < model.body_effective_mass.size()) {
+        return model.body_effective_mass[index];
+    }
+    return model.bodies[index].mass;
+}
+
+const Mat3& body_effective_inertia_body(const Model& model, int body) {
+    const std::size_t index = static_cast<std::size_t>(body);
+    if (index < model.body_effective_inertia_body.size()) {
+        return model.body_effective_inertia_body[index];
+    }
+    return model.bodies[index].inertia_body;
+}
+
+
+bool compute_effective_body_inertia(Model& model, std::string& error) {
+    const std::size_t count = model.bodies.size();
+    model.body_effective_mass.assign(count, 0.0);
+    model.body_effective_inertia_body.assign(count, Mat3{});
+    for (std::size_t index = 0; index < count; ++index) {
+        model.body_effective_mass[index] = model.bodies[index].mass;
+        model.body_effective_inertia_body[index] = model.bodies[index].inertia_body;
+    }
+    for (const Tire& tire : model.tires) {
+        if (tire.mass == 0.0) continue;
+        const std::size_t index = static_cast<std::size_t>(tire.body);
+        if (tire.body < 0 || index >= count) {
+            error = "tire mass is declared on an unknown body";
+            return false;
+        }
+        const Vec3& c = tire.center;
+        if (c.x != 0.0 || c.y != 0.0 || c.z != 0.0) {
+            // A massive tire mounted away from its body's origin needs a lever-arm
+            // term in the residual, which treats the body origin as the centre of
+            // mass.  Adding it is new physics, not a change of ownership, so it is
+            // reported rather than approximated away.
+            error =
+                "tire mass must sit at its body origin: the solver treats a body's "
+                "origin as its centre of mass, so an offset tire inertia needs a "
+                "lever-arm term this build does not have";
+            return false;
+        }
+        model.body_effective_mass[index] += tire.mass;
+        for (int row = 0; row < 3; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                model.body_effective_inertia_body[index].a[row][column] +=
+                    tire.inertia.a[row][column];
+            }
+        }
+    }
+    return true;
+}
+
 } // namespace axle_kernel

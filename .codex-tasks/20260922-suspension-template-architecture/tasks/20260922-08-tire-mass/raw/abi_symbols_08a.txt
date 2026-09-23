@@ -1,0 +1,9 @@
+# 镜像 dll 的七符号探针（packages/suspension_multibody/src/suspension_multibody/native/suspension_kernel.dll）
+# ctypes 逐符号 getattr，重建本步之后实测
+suspension_kernel_run present
+suspension_kernel_contract_version present
+suspension_kernel_capabilities present
+axle_kernel_abi_version present
+vehicle_kernel_abi_version present
+mb_core_abi_version present
+mb_core_run present

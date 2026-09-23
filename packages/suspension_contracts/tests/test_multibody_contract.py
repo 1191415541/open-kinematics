@@ -41,6 +41,19 @@ def _model() -> dict:
     }
 
 
+def _tire_model() -> dict:
+    """Return a minimal model with one tire, for the tire-entry coverage."""
+    document = _model()
+    document["tires"] = [
+        {
+            "name": "front_left",
+            "model": "native_brush",
+            "body": "chassis",
+        }
+    ]
+    return document
+
+
 def _case() -> dict:
     return {
         "contract": "multibody-case",
@@ -142,6 +155,72 @@ def test_blob_slice_rejects_out_of_range_descriptors() -> None:
 
 def test_model_validation_accepts_a_minimal_document() -> None:
     validate_model(_model())
+
+
+def test_tire_validation_accepts_an_entry_with_mass_and_inertia() -> None:
+    """The tire's own mass and inertia are optional entries of the tire object."""
+    document = _tire_model()
+    tire = document["tires"][0]
+    tire["mass"] = 12.5
+    tire["inertia"] = [[0.4, 0.0, 0.0], [0.0, 0.7, 0.0], [0.0, 0.0, 0.7]]
+    validate_model(document)
+
+
+def test_tire_validation_rejects_a_malformed_mass_by_name() -> None:
+    """A mass of the wrong type is refused, and the message names the field."""
+    document = _tire_model()
+    document["tires"][0]["mass"] = "heavy"
+    with pytest.raises(ContractError) as captured:
+        validate_model(document)
+    assert "$/tires[0]/mass" in str(captured.value)
+    assert "expected number" in str(captured.value)
+
+
+def test_tire_validation_rejects_a_negative_or_non_finite_mass_by_name() -> None:
+    """A mass below zero and a non-finite mass are both refused by name."""
+    for bad in (-1.0, math.inf, math.nan):
+        document = _tire_model()
+        document["tires"][0]["mass"] = bad
+        with pytest.raises(ContractError) as captured:
+            validate_model(document)
+        message = str(captured.value)
+        assert "$/tires[0]/mass" in message, bad
+        assert ("must be >= 0" in message) or ("must be finite" in message), bad
+
+
+def test_tire_validation_rejects_a_malformed_inertia_by_name() -> None:
+    """
+    Check that a tensor with a bad entry is refused by name.
+
+    The four entries cover the wrong shape in both directions, a non-numeric
+    element and a negative element; each message has to name the inertia path.
+    """
+    cases = (
+        ([[1.0, 0.0], [0.0, 1.0]], "needs at least 3 items"),
+        ([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]],
+         "at most 3 items"),
+        ([[1.0, 0.0, 0.0], [0.0, "x", 0.0], [0.0, 0.0, 1.0]], "expected number"),
+        ([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]], "must be >= 0"),
+    )
+    for bad, expected in cases:
+        document = _tire_model()
+        document["tires"][0]["inertia"] = bad
+        with pytest.raises(ContractError) as captured:
+            validate_model(document)
+        message = str(captured.value)
+        assert "$/tires[0]/inertia" in message, bad
+        assert expected in message, (bad, message)
+
+
+def test_tire_validation_rejects_an_unknown_tire_field_by_name() -> None:
+    """`additionalProperties: false` still holds for the new optional pair."""
+    document = _tire_model()
+    document["tires"][0]["unsprung_mass"] = 12.5
+    with pytest.raises(ContractError) as captured:
+        validate_model(document)
+    message = str(captured.value)
+    assert "$/tires[0]" in message
+    assert "unsprung_mass" in message
 
 
 def test_model_validation_rejects_an_unknown_field() -> None:

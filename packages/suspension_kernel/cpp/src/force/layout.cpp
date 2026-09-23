@@ -191,9 +191,13 @@ void assemble_external_and_gravity(
         );
         for (int i = 0; i < n; ++i) {
             if (!model.bodies[i].fixed) {
-                force[i].x += external_load_scale * model.bodies[i].mass * gravity_x;
-                force[i].y += external_load_scale * model.bodies[i].mass * gravity_y;
-                force[i].z += external_load_scale * model.bodies[i].mass * gravity_z;
+                // Gravity acts on the whole body's effective mass -- the body's own
+                // plus any tire that declared its own (D2).  Using the raw mass here
+                // would quietly delete a declared tire's weight from the load.
+                const double loaded_mass = body_effective_mass(model, i);
+                force[i].x += external_load_scale * loaded_mass * gravity_x;
+                force[i].y += external_load_scale * loaded_mass * gravity_y;
+                force[i].z += external_load_scale * loaded_mass * gravity_z;
                 // Gravity lands in the same row as a declared wrench on this
                 // body: both are non-element loads the row's type code covers.
                 if (sink != nullptr) {
@@ -201,15 +205,15 @@ void assemble_external_and_gravity(
                                state.r[i].x, state.r[i].y, state.r[i].z);
                     sink->add_wrench(
                         Vec3{
-                            external_load_scale * model.bodies[i].mass * gravity_x,
-                            external_load_scale * model.bodies[i].mass * gravity_y,
-                            external_load_scale * model.bodies[i].mass * gravity_z
+                            external_load_scale * loaded_mass * gravity_x,
+                            external_load_scale * loaded_mass * gravity_y,
+                            external_load_scale * loaded_mass * gravity_z
                         },
                         Vec3{}
                     );
                 }
                 if (record_energy) {
-                    const double gravity_energy = -model.bodies[i].mass * (
+                    const double gravity_energy = -loaded_mass * (
                         external_load_scale * gravity_x * state.r[i].x
                         + external_load_scale * gravity_y * state.r[i].y
                         + external_load_scale * gravity_z * state.r[i].z
@@ -241,9 +245,8 @@ void assemble_generalized_force(
         generalized_force.assign(static_cast<std::size_t>(model.ndof), 0.0);
         for (int fi = 0; fi < static_cast<int>(model.free_body.size()); ++fi) {
             const int bi = model.free_body[fi];
-            const Body& b = model.bodies[bi];
             const Mat3 R = qmat(state.q[bi]);
-            const Mat3 Iw = R * b.inertia_body * transpose(R);
+            const Mat3 Iw = R * body_effective_inertia_body(model, bi) * transpose(R);
             const Vec3 gyro = cross(state.omega[bi], Iw*state.omega[bi]);
             const Vec3 F = force[bi];
             const Vec3 T = torque[bi];

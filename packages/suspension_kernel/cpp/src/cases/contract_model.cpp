@@ -22,6 +22,10 @@
 #include "case_common.hpp"
 
 #include "mb_model/enums.hpp"
+// `install_tire_mass` below writes into `Model`, and the model type is complete
+// here so the definition can index `Model::tires`.  The module edge this adds is
+// one `mb_cases` already has in its translation units.
+#include "mb_model/types.hpp"
 
 #include <string>
 #include <unordered_map>
@@ -138,6 +142,35 @@ bool optional_vec3(const Json& object, const char* key, const double* fallback, 
   return vec3_at(*value, out);
 }
 
+/// Read a 3x3 numeric array into nine row-major doubles.
+///
+/// The shape is checked here rather than trusted: the schema says `3x3`, but a
+/// document can reach the kernel through a payload that never went past the
+/// Python validator, and a short matrix would otherwise read past its own row.
+bool mat3_at(const Json& value, double* out) {
+  if (!value.is_array() || value.items.size() != 3) return false;
+  for (std::size_t row = 0; row < 3; ++row) {
+    const Json& line = value.items[row];
+    if (!line.is_array() || line.items.size() != 3) return false;
+    for (std::size_t column = 0; column < 3; ++column) {
+      if (!number_at(line.items[column], out[row * 3 + column])) return false;
+    }
+  }
+  return true;
+}
+
+/// Read an optional 3x3 field, leaving every entry zero when it is absent.
+///
+/// A zero tensor is the dense spelling of "the tire owns no inertia of its
+/// own", so an absent field and an explicitly zero one mean the same thing.
+bool optional_mat3(const Json& object, const char* key, double* out) {
+  const Json* value = object.find(key);
+  if (value == nullptr) {
+    for (std::size_t index = 0; index < 9; ++index) out[index] = 0.0;
+    return true;
+  }
+  return mat3_at(*value, out);
+}
 bool optional_quaternion(const Json& object, const char* key, double* out) {
   const Json* value = object.find(key);
   if (value == nullptr) {
@@ -996,6 +1029,37 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
           !optional_number(*parameters, "detached_relaxation_s", detached_relaxation)) {
         return fail(error, "tire " + quote(*tire_name) + " has a malformed parameter");
       }
+      // The tire's own mass and inertia are optional top-level fields of the
+      // entry, not parameters of the force law: they say who owns the inertia,
+      // not how the tire pushes on the road.  An entry that declares neither is
+      // exactly the entry it would have been before these fields existed --
+      // zero mass, zero tensor, and the wheel-end body keeps carrying the
+      // inertia.  The values do not travel through `AxleInput` (that would be
+      // an ABI freeze release); `ContractModel` keeps them and the contract
+      // entry point installs them on the built model.
+      double tire_mass = 0.0;
+      if (!optional_number(tire, "mass", tire_mass)) {
+        return fail(error, "tire " + quote(*tire_name) + " has a malformed mass");
+      }
+      if (tire_mass < 0.0) {
+        return fail(error, "tire " + quote(*tire_name) +
+                                " declares a negative mass");
+      }
+      double tire_inertia[9];
+      if (!optional_mat3(tire, "inertia", tire_inertia)) {
+        return fail(error, "tire " + quote(*tire_name) + " has a malformed inertia");
+      }
+      // An inertia is a mass times a length squared, so under a millimetre
+      // document it arrives in kg*mm^2 and the kernel wants kg*m^2.  The mass
+      // needs no conversion: the contract fixes the mass unit to kilograms.
+      const double tire_inertia_factor = inertia_scale();
+      for (double& entry : tire_inertia) {
+        if (entry < 0.0) {
+          return fail(error, "tire " + quote(*tire_name) +
+                                  " declares a negative inertia");
+        }
+        entry *= tire_inertia_factor;
+      }
       // The frame a tire is measured against is not always the body its force
       // acts on: a wheel spins on a carrier that does not.  The authoring layer
       // resolves that pair, so the reader only has to honour it.
@@ -1134,6 +1198,8 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
       tire_relaxation_longitudinal_.push_back(relaxation_longitudinal * length_scale_);
       tire_relaxation_lateral_.push_back(relaxation_lateral * length_scale_);
       tire_detached_relaxation_.push_back(detached_relaxation);
+      tire_mass_.push_back(tire_mass);
+      for (double entry : tire_inertia) tire_inertia_.push_back(entry);
     }
   }
 
@@ -1376,6 +1442,44 @@ bool ContractModel::find_marker(const std::string& name, ContractMarker& out) co
   }
   return false;
 }
+
+/// Install the tire-own mass and inertia a model document declared.
+///
+/// Lives in this translation unit because `ContractModel` is the object that
+/// holds the parsed declaration; `mb_cases/functions.hpp` forward declares
+/// `Model` so the declaration costs no new header edge.
+bool install_tire_mass(const ContractModel& model, Model& built, std::string& error) {
+  const std::vector<double>& masses = model.tire_masses();
+  const std::vector<double>& inertias = model.tire_inertias();
+  if (masses.empty() && inertias.empty()) {
+    // A document that declares neither field.  The reader still produces dense
+    // tables (one zero per tire), so this branch only fires for a model with no
+    // tires at all; either way there is nothing to install and the wheel-end
+    // body keeps owning the inertia, which is the historical answer.
+    return true;
+  }
+  if (masses.size() != built.tires.size() ||
+      inertias.size() != built.tires.size() * 9) {
+    // Truncating here would leave some tires owning their inertia and others
+    // not, and the resulting mass error would not be attributable to this line.
+    error = "tire mass declaration does not match the built tires: " +
+            std::to_string(masses.size()) + " masses and " +
+            std::to_string(inertias.size() / 9) + " inertias for " +
+            std::to_string(built.tires.size()) + " tires";
+    return false;
+  }
+  for (std::size_t index = 0; index < built.tires.size(); ++index) {
+    built.tires[index].mass = masses[index];
+    for (std::size_t row = 0; row < 3; ++row) {
+      for (std::size_t column = 0; column < 3; ++column) {
+        built.tires[index].inertia.a[row][column] =
+            inertias[index * 9 + row * 3 + column];
+      }
+    }
+  }
+  return true;
+}
+
 
 void ContractModel::fill(VehicleInput& input) const {
   AxleInput& axle = input.axle;

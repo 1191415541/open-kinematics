@@ -447,9 +447,11 @@ void residual(
     );
     for (int fi=0; fi<static_cast<int>(model.free_body.size()); ++fi) {
         const int bi=model.free_body[fi];
-        const Body& b=model.bodies[bi];
         const Mat3 R=qmat(evaluation.q[bi]);
-        const Mat3 Iw=R*b.inertia_body*transpose(R);
+        // Effective inertia: the body's own, plus any tire that declared its mass
+        // (decision D2).  Reading it here rather than the body's own is what makes
+        // a declared tire mass part of the dynamics instead of a field nobody uses.
+        const Mat3 Iw=R*body_effective_inertia_body(model, bi)*transpose(R);
         Vec3 av{
             (1-ctx.alpha_m)*a_next[6*fi]+ctx.alpha_m*ctx.previous.a[bi].x,
             (1-ctx.alpha_m)*a_next[6*fi+1]+ctx.alpha_m*ctx.previous.a[bi].y,
@@ -462,7 +464,7 @@ void residual(
         const double* Fx=force.data();
         // external_force_vector already moved the gyroscopic term onto the
         // right-hand side, so the rotational rows must not add it again.
-        const Vec3 inertial_force = av*b.mass;
+        const Vec3 inertial_force = av*body_effective_mass(model, bi);
         const Vec3 inertial_torque = Iw*aa;
         out[off+0]=inertial_force.x-Fx[6*fi+0];
         out[off+1]=inertial_force.y-Fx[6*fi+1];

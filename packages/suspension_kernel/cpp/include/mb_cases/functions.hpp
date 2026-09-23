@@ -25,6 +25,14 @@
 
 namespace axle_kernel {
 
+// The assembled model, named but not included: `install_tire_mass` below takes a
+// reference to it, and the definition includes `mb_model/types.hpp`.  Forward
+// declaring keeps the header edge list unchanged -- `mb_cases` already depends on
+// `mb_model` in the translation units, and a reference parameter needs no
+// complete type.
+struct Model;
+
+
 /// A named body-local point of the model, in metres.  Markers are how a case
 /// document refers to a geometric location ("the left wheel centre") without
 /// knowing body indices or the frame the assembly was authored in.
@@ -233,6 +241,21 @@ class ContractModel {
   /// semantics and change the answer.
   bool needs_vehicle_stages() const { return vehicle_stages_ || !driven_names_.empty(); }
 
+  /// Optional per-tire mass and inertia declared by the tire entry itself, in
+  /// kernel SI units (kg and kg*m^2).  The vectors are dense, one entry per
+  /// tire, so a tire that declares neither gets an explicit zero.  Zero means
+  /// "the wheel-end body still carries this tire's inertia", which is the
+  /// historical convention and what makes the pair inert for the documents the
+  /// Python authoring layer currently emits.
+  ///
+  /// The values are deliberately *not* pushed into `AxleInput`: that structure
+  /// is the frozen C ABI, and a new per-tire array in it would be an ABI freeze
+  /// release.  `kernel_contract_run.cpp` installs them on the built model
+  /// instead, exactly like `body_wrench_point_local`.
+  const std::vector<double>& tire_masses() const { return tire_mass_; }
+  /// Per-tire inertia, laid out `tire * 9 + row * 3 + column`, in kg*m^2.
+  const std::vector<double>& tire_inertias() const { return tire_inertia_; }
+
   /// The document's length unit, in metres.
   ///
   /// The conversions the wire format needs are all powers of this number, so
@@ -245,6 +268,7 @@ class ContractModel {
   double force_per_length_scale() const { return 1.0 / length_scale_; }
   double inertia_scale() const { return length_scale_ * length_scale_; }
   double moment_scale() const { return length_scale_; }
+
 
  private:
   std::string name_;
@@ -351,6 +375,12 @@ class ContractModel {
   std::vector<double> tire_relaxation_longitudinal_;
   std::vector<double> tire_relaxation_lateral_;
   std::vector<double> tire_detached_relaxation_;
+  /// One entry per tire: the mass the tire itself owns, in kg.  Zero is the
+  /// dense spelling of "not declared", so the value vectors can be read by
+  /// index exactly like the arrays above.
+  std::vector<double> tire_mass_;
+  /// `tire_count * 9`, row-major, in kg*m^2.
+  std::vector<double> tire_inertia_;
 
   std::vector<int> anti_roll_body_a_;
   std::vector<int> anti_roll_body_b_;
@@ -456,6 +486,24 @@ struct ContractPlan {
   double increment_tolerance = 1e-8;
   std::vector<ContractCase> cases;
 };
+
+/// Install the tire-own mass and inertia a `multibody-model` document declared
+/// onto the tires `build_model` produced.
+///
+/// This is the one place the contract-level declaration reaches `Tire`.  It is a
+/// free function rather than a step buried inside the ABI entry point so that a
+/// test can drive it without running a case, and so the entry point stays a
+/// sequence of calls.
+///
+/// A document that declares neither field yields dense zero vectors, which is
+/// exactly what makes this call a no-op for every model written before the two
+/// fields existed: the wheel-end body keeps carrying the tire's inertia.
+///
+/// A declaration whose length does not match the built tires fails rather than
+/// truncating, because a partial install would leave some tires owning their
+/// inertia and others not, and the resulting mass error would not be
+/// attributable to this line.
+bool install_tire_mass(const ContractModel& model, Model& built, std::string& error);
 
 /// Expand `document` against `model`, reading the sample tables the document
 /// describes out of `blob`.  Only the families this build implements are

@@ -234,10 +234,11 @@ def _check(
         if isinstance(maximum_length, int) and len(value) > maximum_length:
             raise ContractError(f"{path}: allows at most {maximum_length} characters")
     elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        if schema.get("finite") is True and not math.isfinite(value):
+            raise ContractError(f"{path}: must be finite")
         minimum = schema.get("minimum")
         if isinstance(minimum, (int, float)) and value < minimum:
             raise ContractError(f"{path}: must be >= {minimum}")
-
 
 def validate(document: Mapping[str, Any], kind: str) -> None:
     """Validate ``document`` against the schema registered for ``kind``."""

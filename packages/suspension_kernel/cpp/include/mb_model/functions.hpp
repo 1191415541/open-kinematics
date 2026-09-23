@@ -71,4 +71,15 @@ void add_directional_torque( std::vector<Vec3>& torque, const Model& model, int 
 // solver-side `static_rotation_gauge_value` stays with the static solve.
 const StaticRotationGauge* static_rotation_gauge_for_pivot( const Model& model, int coordinate );
 
+// Effective body inertia, after any tire that declares its own mass.  These are
+// the accessors every consumer reads, so the fact "a tire owns part of the wheel"
+// is stated once instead of at each `body.mass` use.
+//
+// A model whose effective tables were never computed (or a body index outside
+// them) returns the body's own values: the historical answer, and the only
+// possible answer for a document that declares no tire mass.
+double body_effective_mass(const Model& model, int body);
+
+const Mat3& body_effective_inertia_body(const Model& model, int body);
+
 } // namespace axle_kernel

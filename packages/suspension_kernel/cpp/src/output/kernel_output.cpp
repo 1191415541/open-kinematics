@@ -245,8 +245,9 @@ double kinetic_energy(const Model& model, const State& state) {
     for (std::size_t i = 0; i < model.bodies.size(); ++i) {
         if (model.bodies[i].fixed) continue;
         const Mat3 rotation = qmat(state.q[i]);
-        const Mat3 inertia = rotation * model.bodies[i].inertia_body * transpose(rotation);
-        energy += 0.5 * model.bodies[i].mass * dot(state.v[i], state.v[i]);
+        const Mat3 inertia =
+            rotation * body_effective_inertia_body(model, i) * transpose(rotation);
+        energy += 0.5 * body_effective_mass(model, i) * dot(state.v[i], state.v[i]);
         energy += 0.5 * dot(state.omega[i], inertia * state.omega[i]);
     }
     return energy;

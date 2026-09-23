@@ -16,6 +16,7 @@
 #include "mb_tire/brush/functions.hpp"
 #include "mb_tire/pac2002/functions.hpp"
 #include "mb_tire_state/functions.hpp"
+#include "mb_model/functions.hpp"
 #include "mb_force/functions.hpp"
 
 namespace axle_kernel {
@@ -118,11 +119,12 @@ bool initialize_acceleration(
         const int bi = model.free_body[fi];
         const int offset = 6*fi;
         for (int axis = 0; axis < 3; ++axis) {
-            matrix[(offset+axis)*dimension+offset+axis] = model.bodies[bi].mass;
+            matrix[(offset+axis)*dimension+offset+axis] =
+                body_effective_mass(model, bi);
         }
         const Mat3 rotation = qmat(state.q[bi]);
         const Mat3 inertia =
-            rotation * model.bodies[bi].inertia_body * transpose(rotation);
+            rotation * body_effective_inertia_body(model, bi) * transpose(rotation);
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 3; ++col) {
                 matrix[(offset+3+row)*dimension+offset+3+col] = inertia.a[row][col];

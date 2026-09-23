@@ -412,7 +412,6 @@ bool mass_inverse_of_jt_mu(
     out.assign(static_cast<std::size_t>(n), 0.0);
     for (int fi = 0; fi < static_cast<int>(model.free_body.size()); ++fi) {
         const int bi = model.free_body[fi];
-        const Body& b = model.bodies[bi];
         double jt[6];
         for (int k = 0; k < 6; ++k) {
             double s = 0.0;
@@ -423,12 +422,12 @@ bool mass_inverse_of_jt_mu(
             }
             jt[k] = s;
         }
-        out[6*fi] = jt[0] / b.mass;
-        out[6*fi+1] = jt[1] / b.mass;
-        out[6*fi+2] = jt[2] / b.mass;
+        out[6*fi] = jt[0] / body_effective_mass(model, bi);
+        out[6*fi+1] = jt[1] / body_effective_mass(model, bi);
+        out[6*fi+2] = jt[2] / body_effective_mass(model, bi);
         const Mat3 rotation = qmat(state.q[bi]);
         const Mat3 world_inertia =
-            rotation * b.inertia_body * transpose(rotation);
+            rotation * body_effective_inertia_body(model, bi) * transpose(rotation);
         Mat3 inverse{};
         if (!inverse3(world_inertia, inverse)) return false;
         const Vec3 angular = inverse * Vec3{jt[3], jt[4], jt[5]};
@@ -513,14 +512,14 @@ bool mass_inverse_jt_mu_directional(
         const int bi = model.free_body[static_cast<std::size_t>(fi)];
         const Body& body = model.bodies[bi];
         const double* djt_body = djt.data()+6*fi;
-        derivative[6*fi] = djt_body[0]/body.mass;
-        derivative[6*fi+1] = djt_body[1]/body.mass;
-        derivative[6*fi+2] = djt_body[2]/body.mass;
+        derivative[6*fi] = djt_body[0]/body_effective_mass(model, bi);
+        derivative[6*fi+1] = djt_body[1]/body_effective_mass(model, bi);
+        derivative[6*fi+2] = djt_body[2]/body_effective_mass(model, bi);
 
         if (!directional_orientation_active(direction, bi)) {
             const Mat3 rotation = qmat(state.q[bi]);
             const Mat3 world_inertia =
-                rotation * body.inertia_body * transpose(rotation);
+                rotation * body_effective_inertia_body(model, bi) * transpose(rotation);
             Mat3 inverse{};
             if (!inverse3(world_inertia, inverse)) return false;
             const Vec3 dangular = inverse*Vec3{

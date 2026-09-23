@@ -59,10 +59,9 @@ void fill_analytic_jacobian_columns(
     // d(dynamics rows)/d(a_next) = (1-alpha_m) * M(evaluation)
     for (int fi = 0; fi < static_cast<int>(model.free_body.size()); ++fi) {
         const int bi = model.free_body[fi];
-        const Body& body = model.bodies[bi];
         const Mat3 rotation = qmat(evaluation.q[bi]);
         const Mat3 world_inertia =
-            rotation * body.inertia_body * transpose(rotation);
+            rotation * body_effective_inertia_body(model, bi) * transpose(rotation);
         for (int k = 0; k < 6; ++k) {
             const int column = 2*n + 6*fi + k;
             analytic_columns[static_cast<std::size_t>(column)] = 1;
@@ -71,7 +70,7 @@ void fill_analytic_jacobian_columns(
         }
         for (int k = 0; k < 3; ++k) {
             J[at(2*n + 6*fi + k, 2*n + 6*fi + k)] =
-                (1.0-ctx.alpha_m)*body.mass;
+                (1.0-ctx.alpha_m)*body_effective_mass(model, bi);
         }
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 3; ++col) {
@@ -109,13 +108,12 @@ void fill_analytic_jacobian_columns(
                 j3 == 0.0 && j4 == 0.0 && j5 == 0.0) {
                 continue;
             }
-            const Body& body = model.bodies[bi];
-            J[at(offset+0, column)] = -j0/body.mass;
-            J[at(offset+1, column)] = -j1/body.mass;
-            J[at(offset+2, column)] = -j2/body.mass;
+            J[at(offset+0, column)] = -j0/body_effective_mass(model, bi);
+            J[at(offset+1, column)] = -j1/body_effective_mass(model, bi);
+            J[at(offset+2, column)] = -j2/body_effective_mass(model, bi);
             const Mat3 rotation = qmat(next.q[bi]);
             const Mat3 world_inertia =
-                rotation * body.inertia_body * transpose(rotation);
+                rotation * body_effective_inertia_body(model, bi) * transpose(rotation);
             Mat3 inverse{};
             if (!inverse3(world_inertia, inverse)) continue;
             const Vec3 angular = inverse * Vec3{j3, j4, j5};

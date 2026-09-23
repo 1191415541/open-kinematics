@@ -411,7 +411,24 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   if (!error.empty()) {
     return fail(error_buffer, error_capacity, 2, "model build: " + error);
   }
-
+  // The tire's own mass and inertia are contract-level declarations, like the
+  // body-wrench points above: `build_model` cannot see them because they are
+  // deliberately not an `AxleInput` array (adding one to the frozen structure
+  // would be an ABI freeze release).  `ContractModel` read them out of the
+  // document, so they are installed here on the one model every case of this
+  // run shares.  Zero -- what a document that declares neither field gets --
+  // leaves the historical convention in place, where the wheel-end body owns
+  // the inertia.
+  if (!install_tire_mass(model, built, error)) {
+    return fail(error_buffer, error_capacity, 2, "tire mass: " + error);
+  }
+  // With the tires settled, the per-body inertia the solver reads is summed once,
+  // here.  Every consumer goes through `body_effective_mass` /
+  // `body_effective_inertia_body`, and a document that declares no tire mass gets
+  // its bodies' own values back unchanged.
+  if (!compute_effective_body_inertia(built, error)) {
+    return fail(error_buffer, error_capacity, 2, "tire inertia: " + error);
+  }
   // The registration order is the one the vehicle entry point established; the
   // stages whose counts are zero return immediately, so a family that does not
   // use tires or springs pays nothing for their presence here.

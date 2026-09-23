@@ -38,7 +38,6 @@ void assemble_directional_generalized_force(
         const int body_index = model.free_body[fi];
         const bool inertial_active =
             directional_inertial_active(direction, body_index);
-        const Body& body = model.bodies[body_index];
         generalized_force[6*fi] = force[body_index].x;
         generalized_force[6*fi+1] = force[body_index].y;
         generalized_force[6*fi+2] = force[body_index].z;
@@ -54,7 +53,8 @@ void assemble_directional_generalized_force(
         DMat3 inertia_body{};
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 3; ++col) {
-                inertia_body.a[row][col] = body.inertia_body.a[row][col];
+                inertia_body.a[row][col] =
+                    body_effective_inertia_body(model, body_index).a[row][col];
             }
         }
         const DMat3 inertia =

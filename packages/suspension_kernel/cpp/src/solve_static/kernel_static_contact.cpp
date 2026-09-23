@@ -50,7 +50,11 @@ bool static_global_contact_pretrim(
     };
     double total_mass = 0.0;
     double wheelbase = 1.0;
-    for (const Body& body : model.bodies) total_mass += body.mass;
+    // The effective mass is what the dynamics use, so the gravitational scaling
+    // here has to be the same number or the trim would disagree with the solve.
+    for (std::size_t i = 0; i < model.bodies.size(); ++i) {
+        total_mass += body_effective_mass(model, static_cast<int>(i));
+    }
     for (std::size_t i = 0; i < model.tires.size(); ++i) {
         const Tire& tire = model.tires[i];
         const Vec3 center = state_point(
