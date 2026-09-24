@@ -62,3 +62,14 @@ Generated analysis results, animations, and Adams evidence belong below
 `artifacts/` at the workspace root or package level. They are intentionally
 ignored and are not package source, release input, or a dependency of runtime
 code.
+
+## Composable Multibody Architecture Plan
+
+The target design is recorded in
+[EPIC.md](.codex-tasks/multibody-composable-architecture/EPIC.md) and
+[DESIGN.md](.codex-tasks/multibody-composable-architecture/DESIGN.md).
+This is a planning deliverable, not a statement that the migration is implemented.
+Implementation dependencies and acceptance criteria live in that directory's
+`SUBTASKS.csv` and `TASKS.md`; implementation has not started.
+The domain glossary is in
+[suspension_multibody/CONTEXT.md](packages/suspension_multibody/CONTEXT.md).

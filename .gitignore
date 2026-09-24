@@ -190,6 +190,8 @@ GEMINI.md
 !/.codex-tasks/20260921-architecture-deviation-closure/**
 !/.codex-tasks/20260922-suspension-template-architecture/
 !/.codex-tasks/20260922-suspension-template-architecture/**
+!/.codex-tasks/multibody-composable-architecture/
+!/.codex-tasks/multibody-composable-architecture/**
 /artifacts/
 /packages/*/artifacts/
 /packages/*/.codex-tasks/

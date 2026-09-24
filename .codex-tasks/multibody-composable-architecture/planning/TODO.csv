@@ -1,0 +1,4 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,核对旧方案与用户裁决,DONE,三个问题均有明确回答且与旧约束的差异已识别,人工核对本轮asktool回答与旧EPIC D5-D11,2026-09-24,0,只规划；允许合成测试拓扑；保留全局总成限制
+2,编写目标契约和实施任务,DONE,EPIC与DESIGN与TASKS及CSV覆盖原始需求并有可执行验收,运行scratch结构校验脚本并人工核对需求映射,2026-09-24,0,13项实施任务全TODO；依赖无环；命令与规格一致；9个目标及10项终验覆盖
+3,独立审查并验证方案,DONE,独立审查无未处理阻断且CSV依赖无环文档链接有效无本轮源码改动,独立code-reviewer审核与结构校验及git diff --check,2026-09-24,0,审查通过无阻断；3项意见均处理；最终结构和diff检查通过
