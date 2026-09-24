@@ -154,6 +154,32 @@ def resolve_combination(
     return compose(rig_spec, capabilities)
 
 
+def check_assembly(
+    assembly: str, rig: str, capabilities: AssemblyCapabilities | None
+) -> None:
+    """
+    Raise unless `rig` can run an assembly reporting these capabilities.
+
+    This lives here rather than in each family because the rule is the rig's own:
+    a bench that belongs to another kind of assembly is a registration error, and
+    a bench the assembly cannot supply a drive for is a capability error.  Both
+    arrive as `CompositionError`, which is a `ValueError`, so a family
+    preparation can let it through as its own refusal.
+
+    A capability-less assembly is accepted rather than refused: it was assembled
+    outside the subsystem path, and every reader of it -- `compose` included --
+    falls back to the full coordinate set.  Refusing it here would break that
+    documented fallback instead of catching anything.
+
+    Naming one bench at preparation time is the point: the alternative is a run
+    that builds a grid against a bench nobody asked about and reports it under
+    the wrong name.
+    """
+    if capabilities is None:
+        return
+    resolve_combination(assembly, rig, capabilities)
+
+
 #: Which rigs belong to which assembly.  A rig outside its own kind is a
 #: registration error, not a capability shortfall.
 _RIG_ASSEMBLIES: dict[str, str] = {

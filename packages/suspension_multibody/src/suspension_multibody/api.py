@@ -26,7 +26,7 @@ import uuid
 from datetime import datetime, timezone
 from itertools import product
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal
 
 import numpy as np
 
@@ -41,7 +41,7 @@ from . import __version__
 # constraint does not disappear with 08: the element package stays under A1,
 # because the native force-wrench channel cannot carry a fixed body's end
 # reactions, so the order below is still load-bearing.
-from .preparation.assembly import FrontAxleAssembly, build_front_axle  # isort: skip
+from .preparation.assembly import FrontAxleAssembly  # isort: skip
 
 from .axle_dynamics.schema import AxleSolverSettings
 from .cases.kc_quasi_static.contract import model_document, time_document
@@ -63,6 +63,7 @@ from .report.metrics import (
     compute_common_metrics,
 )
 from .results import TimeSeriesResult, TimeSeriesSample
+from .rigs import compose, get_rig
 from .schema import (
     BushingResult,
     CaseSpec,
@@ -112,7 +113,7 @@ def run_case(
     model: FrontAxleModel, case: CaseSpec, output_dir: str | Path | None = None
 ) -> ResultBundle:
     """Run one validated model/case and optionally write result files."""
-    assembly = build_front_axle(model, case.mode)
+    assembly = _kc_assembly(model, case.mode)
     model_hash = canonical_hash(model.model_dump(mode="json"))
     case_hash = canonical_hash(case.model_dump(mode="json"))
     solver_hash = canonical_hash({"package": __version__, "mode": case.mode})
@@ -199,7 +200,7 @@ def _run_axle_quasi_static(
     is a kinematic solution, it does not depend on the sample before it, and the
     kernel would have to be given a per-sample target table to do it in one call.
     """
-    assembly = build_front_axle(model, "K")
+    assembly = _kc_assembly(model, "K")
     document = model_document(assembly, name=f"{case.name}-k", drive_wheels=True)
     left = motion(case, "wheel_travel_left")
     right = motion(case, "wheel_travel_right")
@@ -340,15 +341,39 @@ _K_COORDINATES = {
 #: The two wheel coordinates the symmetric shorthand drives together.
 _K_WHEEL_COORDINATES = ("wheel_drive_L", "wheel_drive_R")
 
+#: The test bench the K/C family runs on.  Named once because the rig, and not
+#: this module, is what declares which coordinates a run drives.
+_KC_RIG = "kc_quasi_static"
+
+def _kc_assembly(model: FrontAxleModel, mode: Literal["K", "C"]) -> FrontAxleAssembly:
+    """
+    Return the assembly a K/C run is solved from, with its bench checked.
+
+    The construction belongs to the family preparation: it builds the assembly
+    through the study layer and resolves the bench against it.  This module
+    authors its own contract documents -- a split older than the study layer --
+    but the assembly those documents are written from has to be the one the study
+    layer builds, or the two readings drift apart and the rig is never consulted.
+    """
+    from .preparation.kc_quasi_static import assembly_for
+
+    return assembly_for(model, mode=mode, rig=_KC_RIG)
+
 
 def _k_drivable_coordinates(assembly: FrontAxleAssembly) -> frozenset[str]:
     """
-    Return the drive coordinates an assembly actually offers.
+    Return the drive coordinates the K/C bench can drive on this assembly.
 
-    The judgement is `AssemblyCapabilities.drive_coordinates` and nothing else.
-    An assembly without steering has no rack coordinate, so the rack axis and the
-    rack outputs disappear together -- a run that carried a rack axis of zeros
-    would look steered and not be.
+    The judgement is the bench's declaration shrunk to the assembly's
+    capabilities: `rigs.compose` keeps a drive only when the assembly offers its
+    coordinate, and the K/C bench asks for the wheel and rack coordinates this
+    module drives.  Reading the bench rather than
+    `AssemblyCapabilities.drive_coordinates` directly is what makes the rig the
+    one place "which coordinates a run drives" is stated; the two agree because
+    `rack_neutral` is the bench's own input and never a drive, so it does not
+    reach here either way.  An assembly without steering loses the rack axis and
+    its outputs together -- a run that carried a rack axis of zeros would look
+    steered and not be.
 
     A capabilities-less assembly (an older caller, or one built outside the
     subsystem path) falls back to the full set, which is what every such assembly
@@ -357,7 +382,8 @@ def _k_drivable_coordinates(assembly: FrontAxleAssembly) -> frozenset[str]:
     capabilities = getattr(assembly, "capabilities", None)
     if capabilities is None:
         return frozenset(_K_COORDINATES.values())
-    return frozenset(capabilities.drive_coordinates)
+    composition = compose(get_rig(_KC_RIG), capabilities)
+    return frozenset(drive.coordinate for drive in composition.drives)
 
 
 def _k_grid(

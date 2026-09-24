@@ -32,6 +32,7 @@ from ..axle_dynamics.schema import (
     AxleBushing,
     AxleDynamicsModel,
     AxleJoint,
+    AxleSpringDamper,
     AxleTire,
 )
 from ..preparation.assembly import FrontAxleAssembly
@@ -102,6 +103,20 @@ _JOINT_KINDS: tuple[tuple[type, JointKind], ...] = (
     (ConstantVelocityJoint, "constant_velocity"),
     (CylindricalJoint, "cylindrical"),
     (InPlaneJoint, "inplane"),
+)
+
+#: The element types that become one SI spring/damper entry.  A corner carries
+#: its spring and its damper on the same two points, and the schema has one entry
+#: for both, so the two are named together.
+_SPRING_DAMPER_ELEMENTS: frozenset[str] = frozenset(
+    {"LinearSpringElement", "StaticDamperElement"}
+)
+
+#: Every element type this bridge can read.  Anything outside this set is
+#: refused by name rather than dropped -- see `_refuse_unreadable_elements`.
+_READABLE_ELEMENTS: frozenset[str] = (
+    _SPRING_DAMPER_ELEMENTS
+    | {"BushingElement", "VerticalTireElement"}
 )
 
 
@@ -289,8 +304,15 @@ def axle_dynamics_model(
     Return the SI dynamic model of one study assembly.
 
     Everything comes from the assembly: its bodies, points, constraints and
-    elements.  The result is therefore a *reading* of the assembly, and a construct
-    this schema cannot express raises rather than disappearing.
+    elements.  The result is therefore a *reading* of the assembly, and a
+    construct this schema cannot express raises rather than disappearing.
+
+    That last sentence is load-bearing, and it was not true of the first
+    version: elements were selected by name and everything else was dropped
+    silently, so an assembly carrying springs produced a dynamic model without
+    them -- a model that solves and is wrong.  The element walk below therefore
+    accounts for every element the assembly can hold and refuses the ones this
+    schema has no field for.
     """
     assembly: FrontAxleAssembly = study_assembly.assembly
     bodies = tuple(_body(key, value) for key, value in assembly.bodies.items())
@@ -305,10 +327,95 @@ def axle_dynamics_model(
         for element in assembly.elements
         if type(element).__name__ == "VerticalTireElement"
     )
+    springs = tuple(
+        _spring(element)
+        for element in assembly.elements
+        if type(element).__name__ in _SPRING_DAMPER_ELEMENTS
+    )
+    _refuse_unreadable_elements(assembly)
     return AxleDynamicsModel(
         name=name,
         bodies=bodies,
         joints=joints,
         bushings=bushings,
         tires=tires,
+        springs=springs,
     )
+
+
+def _spring(element) -> AxleSpringDamper:
+    """
+    Convert a spring or a damper element to the SI spring/damper entry.
+
+    The two are separate entries even on the same two points: the schema carries
+    stiffness and damping in one record, but a spring contributes no damping and
+    a damper no stiffness, so listing both gives the same force sum a merged
+    record would.  What matters is that neither is dropped.
+
+    The free length needs care, because the two schemas state the offset
+    differently.  An assembly spring is `k * (length - reference) + preload`,
+    while the SI entry is `k * (length - free_length)`.  A preloaded or
+    reference-length spring therefore has to be shifted by `preload / k`: taking
+    the reference length as the free length would move the corner's resting
+    position and quietly change the wheel load.
+    """
+    if type(element).__name__ != "LinearSpringElement":
+        # A damper carries no elastic term, so its free length cannot affect a
+        # force and is given the schema's neutral value.
+        return AxleSpringDamper(
+            name=element.name,
+            body_a=element.body_a,
+            body_b=element.body_b,
+            point_a_m=_vec3(np.asarray(element.point_a) / MM),
+            point_b_m=_vec3(np.asarray(element.point_b) / MM),
+            stiffness_n_per_m=0.0,
+            compression_damping_n_s_per_m=float(element.viscous_damping),
+            rebound_damping_n_s_per_m=float(element.viscous_damping),
+            free_length_m=0.0,
+        )
+    reference = (
+        element.free_length
+        if element.free_length is not None
+        else element.reference_length
+    )
+    stiffness = float(element.stiffness)
+    # The shift is in the assembly's own millimetres, so only the result is
+    # converted to metres below.
+    free_length = float(reference) - float(element.preload) / stiffness
+    return AxleSpringDamper(
+        name=element.name,
+        body_a=element.body_a,
+        body_b=element.body_b,
+        point_a_m=_vec3(np.asarray(element.point_a) / MM),
+        point_b_m=_vec3(np.asarray(element.point_b) / MM),
+        stiffness_n_per_m=stiffness * MM,
+        compression_damping_n_s_per_m=0.0,
+        rebound_damping_n_s_per_m=0.0,
+        free_length_m=free_length / MM,
+    )
+
+
+def _refuse_unreadable_elements(assembly: FrontAxleAssembly) -> None:
+    """
+    Raise for any element this schema has no field for, naming it.
+
+    The alternative is what the first version did -- drop it -- and a dropped
+    element is the one failure mode a dynamic model cannot show: the run still
+    converges, the numbers still look plausible, and the missing spring is
+    invisible.  Naming the type and the element is what makes the gap fixable.
+    """
+    readable = _READABLE_ELEMENTS
+    unreadable = sorted(
+        {
+            f"{type(element).__name__} ({getattr(element, 'name', '<unnamed>')})"
+            for element in (*assembly.elements, *assembly.bushings)
+            if type(element).__name__ not in readable
+        }
+    )
+    if unreadable:
+        raise BridgeError(
+            "the dynamic schema has no reading for "
+            + ", ".join(unreadable)
+            + "; add the mapping rather than dropping the element, because a "
+            "model that solves without it is wrong rather than incomplete"
+        )

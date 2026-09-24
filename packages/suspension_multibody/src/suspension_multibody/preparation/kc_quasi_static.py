@@ -19,7 +19,7 @@ in, so nothing is converted here.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from ..axle_dynamics.schema import AxleSolverSettings
 from ..schema import FrontAxleModel
@@ -70,27 +70,39 @@ def _validate_identity(request: SimulationRequest) -> None:
         )
 
 
-def _assembly(model: Any, *, drive_wheels: bool) -> FrontAxleAssembly:
+def assembly_for(
+    model: Any, *, mode: Literal["K", "C"], rig: str
+) -> FrontAxleAssembly:
     """
-    Return the front-axle assembly the request describes.
+    Return the assembly this family runs, with its bench checked.
 
-    The assembly is built through the study layer rather than here, so a
-    quasi-static request and a dynamic one are configurations of one construction.
-    Building it locally would put a second assembly path back in place, which is
-    the thing this family and `axle_dynamic` were merged to remove.
+    Two jobs that belong together: the assembly is built through the study layer,
+    so a quasi-static request and a dynamic one are configurations of one
+    construction, and the bench the request names is resolved against it here
+    rather than assumed.  Keeping them in one entry is what makes "this run is
+    this assembly on this bench" checkable at the call site instead of a claim
+    about two modules agreeing.
+
+    `api` calls this directly.  It authors its own contract documents -- that
+    split is older than this function -- but the assembly those documents are
+    written from has to be the one the study layer builds, or the two readings
+    drift and the rig check never runs.
+
+    The mode is passed to the study layer rather than resolved here, so a C
+    assembly asked for the K reading is refused by the same check that guards
+    every other study entry.
     """
-    if isinstance(model, FrontAxleAssembly):
-        return model
-    if not isinstance(model, FrontAxleModel):
+    from ..rigs import check_assembly
+    from ..studies import QUASI_STATIC, build_study_assembly
+
+    if not isinstance(model, (FrontAxleAssembly, FrontAxleModel)):
         raise TypeError(
             "kc quasi-static preparation requires a FrontAxleAssembly or "
             f"FrontAxleModel, got {type(model).__name__}"
         )
-    from ..studies import QUASI_STATIC, build_study_assembly
-
-    return build_study_assembly(
-        model, study=QUASI_STATIC, mode="K" if drive_wheels else "C"
-    ).assembly
+    assembly = build_study_assembly(model, study=QUASI_STATIC, mode=mode).assembly
+    check_assembly(ASSEMBLY, rig, getattr(assembly, "capabilities", None))
+    return assembly
 
 
 def prepare_request(request: SimulationRequest) -> PreparedSimulation:
@@ -105,7 +117,8 @@ def prepare_request(request: SimulationRequest) -> PreparedSimulation:
     drive_wheels = (
         bool(case.wheel_values_mm) if case.drive_wheels is None else case.drive_wheels
     )
-    assembly = _assembly(request.model, drive_wheels=drive_wheels)
+    mode: Literal["K", "C"] = "K" if drive_wheels else "C"
+    assembly = assembly_for(request.model, mode=mode, rig=request.rig)
     name = request.name or case.name
 
     from ..cases.kc_quasi_static import case_document, model_document
@@ -146,6 +159,7 @@ def prepare_request(request: SimulationRequest) -> PreparedSimulation:
 
 __all__ = [
     "ASSEMBLY",
+    "assembly_for",
     "DEFAULT_TIMES_S",
     "FAMILY",
     "KcQuasiStaticCase",

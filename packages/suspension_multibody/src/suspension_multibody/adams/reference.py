@@ -10,7 +10,6 @@ import numpy as np
 from ..axle_dynamics import AxleSolverSettings
 from ..cases.kc_quasi_static.contract import case_document, model_document
 from ..cases.kc_quasi_static.convert import MM, NativeKcError, quaternion_to_rotation
-from ..preparation.assembly import build_front_axle
 from ..report.geometry import _wheel_geometry
 from ..schema import FrontAxleModel, MassSpec
 from ..simulation import SimulationRequest, run_request
@@ -66,7 +65,11 @@ def build_default_reference(profile: AdamsProfile) -> dict[str, dict[str, float]
         hardpoints=mapped,
         mass=MassSpec(sprung_mass=1200.0),
     )
-    assembly = build_front_axle(model, "K")
+    # The bench is named here rather than assumed: this is a K/C run, and the
+    # family entry checks it against the assembly it just built.
+    from ..preparation.kc_quasi_static import assembly_for
+
+    assembly = assembly_for(model, mode="K", rig="kc_quasi_static")
     states = {
         (float(state["wheel_travel_mm"]), float(state["rack_displacement_mm"])): state
         for state in _k_grid_states(

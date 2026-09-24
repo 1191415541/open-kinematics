@@ -27,7 +27,7 @@ import numpy as np
 from ..cases.kc_quasi_static.contract import case_document, model_document
 from ..cases.kc_quasi_static.convert import MM, NativeKcError, quaternion_to_rotation
 from ..cases.kc_quasi_static.load_paths import LoadPath
-from ..preparation.assembly import build_front_axle, side_hardpoints
+from ..preparation.assembly import side_hardpoints
 from ..preparation.geometry import (
     quaternion_conjugate,
     quaternion_multiply,
@@ -149,7 +149,9 @@ def run_suspension_multibody_strict_c(
     force paths sweep to 100 N and the moment paths to 10 000 N*mm, and a case
     document declares one maximum.
     """
-    assembly = build_front_axle(build_strict_c_model(profile), "C")
+    from ..preparation.kc_quasi_static import assembly_for
+
+    assembly = assembly_for(build_strict_c_model(profile), mode="C", rig="kc_quasi_static")
     states: list[dict[str, float | str]] = []
     for path in LOAD_PATHS:
         records = _c_path_records(assembly, path)

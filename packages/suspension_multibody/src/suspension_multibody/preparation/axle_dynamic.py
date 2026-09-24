@@ -49,13 +49,8 @@ def _validate_identity(request: SimulationRequest) -> None:
 def prepare_request(request: SimulationRequest) -> PreparedSimulation:
     """Prepare the model and case documents for one axle dynamic request."""
     _validate_identity(request)
-    model = request.model
     case = request.case
-    if not isinstance(model, AxleDynamicsModel):
-        raise TypeError(
-            "axle dynamic preparation requires an AxleDynamicsModel, got "
-            f"{type(model).__name__}"
-        )
+    model = _dynamic_model(request.model, request)
     if not isinstance(case, AxleDynamicsCase):
         raise TypeError(
             "axle dynamic preparation requires an AxleDynamicsCase, got "
@@ -77,6 +72,56 @@ def prepare_request(request: SimulationRequest) -> PreparedSimulation:
         value=prepared,
         context={PREPARED_KEY: prepared},
         metadata={"assembly": ASSEMBLY, "family": FAMILY},
+    )
+
+
+def _dynamic_model(
+    source: Any, request: SimulationRequest
+) -> AxleDynamicsModel:
+    """
+    Return the SI dynamic model one request's model resolves to.
+
+    A caller may hand this family either an SI model it authored -- the original
+    and still the only fully specifying input -- or an *already assembled* K/C
+    axle, which is the study merge's point: `kc_quasi_static` and `axle_dynamic`
+    are two readings of one assembly, so the same object must be able to feed
+    both.  The conversion goes through `studies.bridge`, the single place the
+    millimetre K/C assembly becomes an SI model, so this family adds an input
+    route rather than a second conversion.
+
+    The assembly's own mode is passed through rather than defaulted: mode belongs
+    to the assembly, and asking a C assembly for the K reading is a caller error
+    that must name itself here instead of silently producing the wrong model.
+
+    The bench is resolved against the assembly it will run on, so an assembly
+    handed to this family is subject to the same check as one handed to
+    `kc_quasi_static`.  An authored SI model carries no capabilities to check
+    against, and `check_assembly` accepts that case rather than inventing an
+    answer.
+
+    Driving and the case stay the caller's: an assembly carries bodies, joints,
+    bushings and tires, not a driven-coordinate table or a time history, so a
+    request built from one still authors its own driven coordinates.
+    """
+    from ..preparation.assembly import FrontAxleAssembly
+    from ..rigs import check_assembly
+    from ..studies import DYNAMIC, axle_dynamics_model, build_study_assembly
+
+    if isinstance(source, AxleDynamicsModel):
+        return source
+    if isinstance(source, FrontAxleAssembly):
+        study_assembly = build_study_assembly(
+            source, study=DYNAMIC, mode=source.mode
+        )
+        check_assembly(
+            ASSEMBLY,
+            request.rig,
+            getattr(study_assembly.assembly, "capabilities", None),
+        )
+        return axle_dynamics_model(study_assembly, name=request.name or "axle")
+    raise TypeError(
+        "axle dynamic preparation requires an AxleDynamicsModel or an "
+        f"assembled FrontAxleAssembly, got {type(source).__name__}"
     )
 
 

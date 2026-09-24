@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 from ..cases.kc_quasi_static.contract import case_document, model_document
-from ..preparation.assembly import build_front_axle
 from ..schema import FrontAxleModel, MassSpec
 from ..simulation import SimulationRequest, run_request
 from .adapter import SmokeResult, Tolerance
@@ -222,7 +221,9 @@ def run_suspension_multibody_pure_k(profile: AdamsProfile) -> list[dict[str, Any
         hardpoints=physical["hardpoints_mm"],
         mass=MassSpec(sprung_mass=1.0),
     )
-    assembly = build_front_axle(model, "K")
+    from ..preparation.kc_quasi_static import assembly_for
+
+    assembly = assembly_for(model, mode="K", rig="kc_quasi_static")
     model_doc = model_document(assembly, name="native-k", drive_wheels=True)
     case_doc = case_document(
         assembly,
