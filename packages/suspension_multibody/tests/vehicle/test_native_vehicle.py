@@ -436,7 +436,7 @@ def test_native_fixed_joint_shape_matches_the_registry() -> None:
     rotation.  The row count is what the contract advertises, so a report that
     reads constraint rows can rely on it.
     """
-    from suspension_multibody.preparation.assembly.types import WeldJoint
+    from suspension_multibody.modeling.primitives import WeldJoint
     from suspension_multibody.preparation.vehicle_dynamic import _build_joints
 
     model = _vehicle()

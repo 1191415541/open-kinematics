@@ -1,0 +1,9 @@
+step,title,status,evidence,notes
+1,记录工作区初始状态与源码指纹,DONE,tasks/01-baseline/BASELINE.json environment + PROGRESS.md 初始状态节,"HEAD ed63dc5；开工时 git status --porcelain 为空"
+2,记录原生库与构建元数据指纹,DONE,tasks/01-baseline/BASELINE.json native,"两份镜像内容一致 1fdd241d…；ABI 15/1/30"
+3,实跑公共命令集并记录退出码,DONE,tasks/01-baseline/COMMANDS.json,"16 条命令逐条实跑；multibody_tests 汇总行 1052 passed,1 skipped,1 xfailed"
+4,判定旧任务两个目标相关缺口,DONE,tasks/01-baseline/FINDINGS.json gaps,"GAP-1 准静态轮胎→07 仍存在；GAP-2 rack 未收缩→10 仍存在，首个失败点实测为 geometry.py:102 的 ValueError"
+5,登记非目标历史限制,DONE,tasks/01-baseline/FINDINGS.json non_goal_limits,"7 条，各带 classification"
+6,冻结 A1-A10 误差标准,DONE,tasks/01-baseline/TOLERANCES.json,"8 个权威来源覆盖 6 类量纲，全部 status=defined"
+7,实现 check_composable_baseline.py,DONE,packages/suspension_multibody/scripts/check_composable_baseline.py,"10 类弱证据均实测被拒；已分类非零退出码放行"
+8,主验收命令通过,DONE,PROGRESS.md 验证记录,"--check 退出码 0（ruff/ty 亦 0）"

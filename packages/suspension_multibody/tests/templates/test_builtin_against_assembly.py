@@ -8,13 +8,13 @@ checking the template against a copy of itself.
 
 from __future__ import annotations
 
-from suspension_multibody.preparation.assembly.front_axle import build_front_axle
-from suspension_multibody.preparation.assembly.types import (
+from suspension_multibody.modeling.primitives import (
     BallJoint,
     PrismaticJoint,
     RevoluteJoint,
     WeldJoint,
 )
+from suspension_multibody.preparation.assembly.front_axle import build_front_axle
 from suspension_multibody.templates import DOUBLE_WISHBONE
 from tests.benchmark_fixture import benchmark_model
 

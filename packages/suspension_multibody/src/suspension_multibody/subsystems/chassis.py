@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..preparation.assembly.types import RigidBody
-from ..preparation.geometry import SE3
+from ..modeling.primitives.joints import RigidBody
+from ..modeling.primitives.spatial import SE3
 from .types import SubsystemContext, SubsystemOutput
 
 __all__ = ["build", "role"]

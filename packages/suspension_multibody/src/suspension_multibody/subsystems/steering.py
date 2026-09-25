@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..preparation.assembly.types import (
+from ..modeling.primitives.joints import (
     BallJoint,
     Constraint,
     PrismaticJoint,

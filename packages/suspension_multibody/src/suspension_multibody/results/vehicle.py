@@ -16,9 +16,18 @@ from typing import Any
 import numpy as np
 
 from ..axle_dynamics.result import AxleDynamicsResult
-from ..preparation.vehicle_dynamic import _PRESCRIBED_STEERING_TYPES
+from ..axle_dynamics.schema import PRESCRIBED_STEERING_TYPES
 from .decoder import decode_result
 from .raw import RawContractResult
+
+#: The steering actuator kinds whose constraint row the kernel emits.
+#:
+#: Taken from the contract layer rather than from the authoring side: importing
+#: it from ``preparation`` made ``results`` depend on ``preparation``, which
+#: closed a real cycle (``preparation.vehicle_dynamic`` -> ``results`` ->
+#: ``preparation``).  The value belongs to the kernel contract, which both sides
+#: already depend on.
+_PRESCRIBED_STEERING_TYPES = PRESCRIBED_STEERING_TYPES
 
 
 @dataclass(frozen=True)

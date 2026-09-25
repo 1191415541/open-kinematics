@@ -10,7 +10,7 @@ Beware two sizes of the same name.  The *result-side* transform that exists
 today is ``wrench_global_to_local``, and the only live caller of it
 (``api.py``'s element report) reads the same function the input assembly uses.
 There is therefore one implementation, and it lives in
-``preparation/geometry.py``; duplicating it here just to fill a directory would
+``modeling/primitives/spatial.py``; duplicating it here just to fill a directory would
 be a second implementation of the same transform, which is exactly what the
 boundary forbids.  ``wrench_local_to_global``, the mirror-image transform, has
 no production caller at all: its only user was ``core/reactions.py``, which 08

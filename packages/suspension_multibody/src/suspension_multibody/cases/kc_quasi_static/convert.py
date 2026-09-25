@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...preparation.assembly.types import BallJoint, RevoluteJoint
+from ...modeling.primitives.joints import BallJoint, RevoluteJoint
 
 MM = 1e-3
 

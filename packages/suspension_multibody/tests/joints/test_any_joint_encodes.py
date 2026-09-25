@@ -14,14 +14,14 @@ import pytest
 
 from suspension_multibody.cases.kc_quasi_static.contract import model_document
 from suspension_multibody.joints import JointAvailabilityError, validate_joint_axes
-from suspension_multibody.preparation.assembly.front_axle import build_front_axle
-from suspension_multibody.preparation.assembly.types import (
+from suspension_multibody.modeling.primitives import (
     ConstantVelocityJoint,
     CylindricalJoint,
     InPlaneJoint,
     UniversalJoint,
     WeldJoint,
 )
+from suspension_multibody.preparation.assembly.front_axle import build_front_axle
 from suspension_multibody.schema import (
     FrontAxleModel,
     IdealJointSpec,

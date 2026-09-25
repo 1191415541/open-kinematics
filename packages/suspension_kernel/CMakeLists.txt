@@ -357,3 +357,36 @@ target_link_options(
     mb_contract_selftest PRIVATE -static -static-libgcc -static-libstdc++
 )
 target_link_libraries(mb_contract_selftest PRIVATE mb_contract)
+
+# The case layer's table is checked against the contract's registry by its own
+# executable: the two tables live in different modules and neither may import the
+# other, so the agreement has to be asserted from outside both.
+add_executable(mb_cases_selftest cpp/tests/case_registry_selftest.cpp)
+target_include_directories(
+    mb_cases_selftest PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/cpp/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cpp/src/cases"
+)
+target_compile_options(mb_cases_selftest PRIVATE ${KERNEL_COMPILE_OPTIONS})
+target_link_options(mb_cases_selftest PRIVATE -fopenmp)
+target_link_options(
+    mb_cases_selftest PRIVATE -static -static-libgcc -static-libstdc++
+)
+target_link_libraries(mb_cases_selftest PRIVATE mb_cases mb_contract mb_model mb_input mb_config mb_numeric)
+
+# The tire-state interface is verified the same way: the descriptor table and the
+# slot layout are structural facts that the byte-level numeric gates cannot name.
+add_executable(mb_tire_state_selftest cpp/tests/tire_state_selftest.cpp)
+target_include_directories(
+    mb_tire_state_selftest PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/cpp/include"
+)
+target_compile_options(mb_tire_state_selftest PRIVATE ${KERNEL_COMPILE_OPTIONS})
+target_link_options(mb_tire_state_selftest PRIVATE -fopenmp)
+target_link_options(
+    mb_tire_state_selftest PRIVATE -static -static-libgcc -static-libstdc++
+)
+target_link_libraries(
+    mb_tire_state_selftest PRIVATE
+    mb_tire_state mb_tire mb_tire_pac2002 mb_model mb_config mb_numeric
+)

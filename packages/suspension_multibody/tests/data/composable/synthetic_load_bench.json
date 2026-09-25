@@ -1,0 +1,79 @@
+{
+  "name": "synthetic_load_bench",
+  "_synthetic": true,
+  "description": "SYNTHETIC FIXTURE -- NOT AN ENGINEERING BENCH. A physical loading bench assembled only from physics the kernel already supports: a fixed frame body, a free loading carriage, a prismatic joint guiding the carriage, a displacement drive along it, and a spring plus a damper between the two. Its purpose is to prove that a new bench reaches the real native solve by contributing real entities, not by adding a registry name. Decision D2 authorises it for architecture and solve-path verification only; it is not a ride rig, a four-post rig or a K&C bench, and no engineering accuracy is claimed.",
+  "capability": "vehicle_loading",
+  "family": "kc_quasi_static",
+  "bodies": [
+    {
+      "name": "bench_frame",
+      "fixed": true,
+      "mass": 0.0,
+      "inertia": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+      "position_m": [0.0, 0.0, 0.0],
+      "quaternion": [1.0, 0.0, 0.0, 0.0]
+    },
+    {
+      "name": "load_carriage",
+      "fixed": false,
+      "mass": 40.0,
+      "inertia": [[3.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 3.0]],
+      "position_m": [0.0, 0.0, 0.4],
+      "quaternion": [1.0, 0.0, 0.0, 0.0]
+    }
+  ],
+  "joints": [
+    {
+      "name": "carriage_guide",
+      "kind": "prismatic",
+      "body_a": "bench_frame",
+      "body_b": "load_carriage",
+      "point_a_m": [0.0, 0.0, 0.4],
+      "point_b_m": [0.0, 0.0, 0.0],
+      "axis_a": [0.0, 0.0, 1.0],
+      "axis_b": [0.0, 0.0, 1.0]
+    }
+  ],
+  "forces": [
+    {
+      "name": "bench_spring",
+      "kind": "spring",
+      "body_a": "bench_frame",
+      "body_b": "load_carriage",
+      "point_a_m": [0.0, 0.0, 0.4],
+      "point_b_m": [0.0, 0.0, 0.0],
+      "stiffness_n_per_m": 25000.0,
+      "free_length_m": 0.4
+    },
+    {
+      "name": "bench_damper",
+      "kind": "damper",
+      "body_a": "bench_frame",
+      "body_b": "load_carriage",
+      "point_a_m": [0.0, 0.0, 0.4],
+      "point_b_m": [0.0, 0.0, 0.0],
+      "viscous_damping_n_s_per_m": 1200.0
+    }
+  ],
+  "drives": [
+    {
+      "name": "motion_load_travel",
+      "kind": "displacement",
+      "body": "load_carriage",
+      "coordinate": "load_travel",
+      "base": "bench_frame"
+    }
+  ],
+  "expected": {
+    "_note": "Independently derived facts the tests assert against, from the fixture's own numbers rather than from a solve.",
+    "contributes_bodies": ["bench_frame", "load_carriage"],
+    "contributes_joints": ["carriage_guide"],
+    "contributes_forces": ["bench_spring", "bench_damper"],
+    "contributes_drives": ["motion_load_travel"],
+    "contributes_tires": [],
+    "spring_force_at_10mm_n": 250.0,
+    "spring_force_derivation": "k * delta with k = 25000 N/m and delta = 10 mm = 0.01 m gives 250 N. Asserted through the solved spring wrench, not read back from the document.",
+    "carriage_dof": 1,
+    "carriage_dof_derivation": "One prismatic joint removes five of a free body's six degrees of freedom, leaving one: translation along the frame's Z axis."
+  }
+}

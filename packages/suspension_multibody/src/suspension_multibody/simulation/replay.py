@@ -20,7 +20,7 @@ import numpy as np
 
 from .. import __version__
 from ..io import canonical_hash
-from ..preparation.geometry import rotation_vector_to_quaternion
+from ..modeling.primitives.spatial import rotation_vector_to_quaternion
 from ..preparation.signals import loads_at_time, time_grid
 from ..results import TimeSeriesResult, TimeSeriesSample
 from ..results.timeseries import aggregate_replay_samples

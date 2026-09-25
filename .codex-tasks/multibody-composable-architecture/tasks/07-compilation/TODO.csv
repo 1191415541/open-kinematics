@@ -1,0 +1,11 @@
+id,task,status,evidence
+01,实测进入本任务时的现状,DONE,"simulation/ 862行 + studies/ 726行 + cases/kc_quasi_static/ 641行；compilation/ 目录不存在；request.py:61-69 rig与family互相补值并强制相等；api.py:335 _KC_RIG 硬编码；GAP-1 实测存在（K/C model_document 无 tires 键，_tire_compression 回显零）"
+02,请求独立提供 assembly/rig/study/case/outputs,DONE,"SimulationRequest 增 study/outputs 字段并取消 rig==family 强制；RigSpec 增 family 字段与 rig_family()；实测 rig=kc_quasi_static family=axle_dynamic 可构造"
+03,SolvePlan 承载 rig/study/mode/轮胎激活/采样,DONE,"compilation/plan.py：plan_for 从 bench 解析 family 与 study，drive_wheels 来自输入或 bench 能力而非 family 名；StudyError 拒绝矛盾的 study"
+04,ModelView 归一化两种装配形状,DONE,"compilation/model_view.py：FrontAxleAssembly 与 SimulationAssembly 读成同一视图；Assembly 增 physical 回指；view_of 拒绝无 build 的组合"
+05,契约编译器只读 SI 图与求解计划,DONE,"compilation/compile.py：EmitterRegistry 按 family 选 emitter，emitter 不读模板名/拓扑名；compile_plan 返回文档+payload+metadata"
+06,接通生产运行入口到同一流水线,DONE,"api._compile_plan_run 经 compile_plan + run_compiled；_run_k/_run_c 均切换；kc_parity 逐位不变、case_parity 8 families PASS"
+07,闭合 GAP-1：准静态垂向轮胎进入残差,DONE,"cases/kc_quasi_static/contract.py 增 _tire_entries；实测 k=200 -> Fn=8000 N，k=400 -> Fn=16000 N，k 与 Fn 成正比；model_document 的 tires 键随装配产出"
+08,消除 K/C 转动态生产桥接,DONE,"实测生产入口模块无一调用 axle_dynamics_model；唯一调用者为 preparation/axle_dynamic.py（输入适配器）"
+09,rig 不同于 family 可实跑,DONE,"test_orthogonal_requests.py 12 项 + test_no_production_bridge.py 4 项 + test_quasi_static_tire.py 9 项"
+10,主验收与补充门,DONE,"pytest tests/simulation tests/studies -q -> 111 passed；kc_parity OK；case_parity 8 families PASS；ruff/ty 全通过"

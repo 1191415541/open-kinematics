@@ -17,10 +17,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from suspension_multibody.modeling.primitives import RigidBodyState
 from suspension_multibody.outputs import BUILTIN, builtin
 from suspension_multibody.outputs.builtin import LEGACY_CLASSIFICATION
 from suspension_multibody.preparation.assembly import build_front_axle
-from suspension_multibody.preparation.assembly.types import RigidBodyState
 from suspension_multibody.report.metrics import (
     compute_axle_metrics,
     compute_common_metrics,

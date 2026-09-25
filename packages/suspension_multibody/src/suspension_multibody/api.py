@@ -29,32 +29,26 @@ from pathlib import Path
 from typing import Any, Iterable, Literal
 
 import numpy as np
+from suspension_contracts import pack_container
 
 from . import __version__
-
-# Imported before the rest of the module, out of alphabetical order, on
-# purpose: the authoring assembly has to be the package the import order
-# enters.  The legacy chain `elements -> core -> preparation.assembly.types`
-# runs this package's `__init__`, and `front_axle` needs the element classes --
-# if `cases`, `elements` or `results` is entered first, `elements` is still
-# half-built when `front_axle` asks for `AntiRollBarElement`.  The load-order
-# constraint does not disappear with 08: the element package stays under A1,
-# because the native force-wrench channel cannot carry a fixed body's end
-# reactions, so the order below is still load-bearing.
-from .preparation.assembly import FrontAxleAssembly  # isort: skip
-
 from .axle_dynamics.schema import AxleSolverSettings
-from .cases.kc_quasi_static.contract import model_document, time_document
+from .cases.kc_quasi_static.contract import (
+    has_rack,
+    model_document,
+    time_document,
+)
 from .cases.kc_quasi_static.convert import MM
 from .elements import BushingElement, evaluate_generalized_forces
 from .io import CheckpointStore, canonical_hash, write_artifact
 from .kernel.solver import solver_settings_document
-from .preparation.assembly.types import RigidBody, RigidBodyState
-from .preparation.geometry import (
+from .modeling.primitives.joints import RigidBodyState
+from .modeling.primitives.spatial import (
     SE3,
     quaternion_to_rotation_vector,
     wrench_global_to_local,
 )
+from .preparation.assembly import FrontAxleAssembly
 from .preparation.signals import loads_at_time, motion, time_grid, wrenches_at_time
 from .report.compliance import secant_compliance
 from .report.metrics import (
@@ -83,7 +77,7 @@ from .schema import (
     WheelResponse,
 )
 from .schema.case import DisplacementControl, LoadControl
-from .simulation import SimulationRequest, run_request
+from .simulation import CompiledSimulation, SimulationRequest, run_compiled, run_request
 from .simulation.replay import VehicleKCTimeDomainSolver
 
 #: The output grid a K/C case is solved on.  The kernel's case layer expands a
@@ -91,16 +85,10 @@ from .simulation.replay import VehicleKCTimeDomainSolver
 #: minimum, and a K/C state is time independent, so a short one is right.
 _TIMES_S = (0.0, 1e-3)
 
-#: The diagnostics columns the residual report reads.  The row is the kernel's
-#: own report for one sample; the columns around these are step-controller and
-#: contact counters, which the K/C result does not publish.
-_DIAGNOSTIC_POSITION_RESIDUAL = 7
-_DIAGNOSTIC_DYNAMICS_RESIDUAL = 9
-#: Rows one case reserves beyond its samples: the static trim solution and the
-#: state it started from.  A case's rows therefore begin at
-#: `sample_offset + 2 * case_index`, which is what the descriptor's
-#: `sample_count + 2 * case_count` layout implies.
-_DIAGNOSTIC_ROWS_PER_CASE = 2
+# The diagnostics column indices used to be declared here as well as in
+# `results.raw`, and nothing read this copy: the residual report goes through
+# `RawContractResult.case_residuals`.  A layout constant with two homes has none,
+# so the duplicate is gone and `results` is the only place that knows a column.
 
 #: The wheel-centre markers the two sides are loaded at.  A C case names them
 #: rather than deriving them, because the kernel must refuse a document that
@@ -113,7 +101,7 @@ def run_case(
     model: FrontAxleModel, case: CaseSpec, output_dir: str | Path | None = None
 ) -> ResultBundle:
     """Run one validated model/case and optionally write result files."""
-    assembly = _kc_assembly(model, case.mode)
+    assembly = _kc_assembly(model, case.mode, case.subsystems)
     model_hash = canonical_hash(model.model_dump(mode="json"))
     case_hash = canonical_hash(case.model_dump(mode="json"))
     solver_hash = canonical_hash({"package": __version__, "mode": case.mode})
@@ -200,6 +188,8 @@ def _run_axle_quasi_static(
     is a kinematic solution, it does not depend on the sample before it, and the
     kernel would have to be given a per-sample target table to do it in one call.
     """
+    # The replay path has no subsystem set of its own: a `DynamicCaseSpec`
+    # states motion, not assembly, so it runs the default axle.
     assembly = _kc_assembly(model, "K")
     document = model_document(assembly, name=f"{case.name}-k", drive_wheels=True)
     left = motion(case, "wheel_travel_left")
@@ -254,7 +244,11 @@ def _run_axle_quasi_static(
             {
                 "wheel_travel_left": left.value_at(time),
                 "wheel_travel_right": right.value_at(time),
-                "rack_displacement": rack.value_at(time),
+                **(
+                    {"rack_displacement": rack.value_at(time)}
+                    if has_rack(assembly)
+                    else {}
+                ),
                 "constraint_residual": 0.0,
                 "force_residual": 0.0,
                 "moment_residual": 0.0,
@@ -345,7 +339,11 @@ _K_WHEEL_COORDINATES = ("wheel_drive_L", "wheel_drive_R")
 #: this module, is what declares which coordinates a run drives.
 _KC_RIG = "kc_quasi_static"
 
-def _kc_assembly(model: FrontAxleModel, mode: Literal["K", "C"]) -> FrontAxleAssembly:
+def _kc_assembly(
+    model: FrontAxleModel,
+    mode: Literal["K", "C"],
+    subsystems: frozenset[str] | None = None,
+) -> FrontAxleAssembly:
     """
     Return the assembly a K/C run is solved from, with its bench checked.
 
@@ -354,10 +352,25 @@ def _kc_assembly(model: FrontAxleModel, mode: Literal["K", "C"]) -> FrontAxleAss
     authors its own contract documents -- a split older than the study layer --
     but the assembly those documents are written from has to be the one the study
     layer builds, or the two readings drift apart and the rig is never consulted.
+
+    ``subsystems`` is the run's own answer to "which subsystems does this
+    assembly carry", and it is what makes a *steering-less* single-axle run
+    reachable through the public entry.  A model with no steering has no rack
+    coordinate, and the run has to be able to say so; without this the only way
+    to ask was to build the assembly by hand and never reach `run_case` at all.
     """
     from .preparation.kc_quasi_static import assembly_for
 
-    return assembly_for(model, mode=mode, rig=_KC_RIG)
+    if subsystems is None:
+        return assembly_for(model, mode=mode, rig=_KC_RIG)
+    from .subsystems import AssemblyRequest
+
+    return assembly_for(
+        model,
+        mode=mode,
+        rig=_KC_RIG,
+        request=AssemblyRequest(mode=mode, subsystems=subsystems),
+    )
 
 
 def _k_drivable_coordinates(assembly: FrontAxleAssembly) -> frozenset[str]:
@@ -422,30 +435,49 @@ def _k_grid(
     # exist, a `[0.0]` means it exists and happens to sit at zero.  Only the latter
     # would make a run look steered when it is not.
     rack_present = drivable is None or _K_COORDINATES["rack"] in drivable
-    rack = named.get("rack", (0.0,)) if rack_present else ()
     if "right" not in named:
-        section: dict[str, object] = {
-            "wheel_values_mm": list(left),
-            "rack_values_mm": list(rack),
-            # The rack entry of the axis map is present only when the assembly
-            # has a rack to drive.  `next(...)` over the document's `rack_*` names
-            # is what the case layer used to do, and it raised `StopIteration` on
-            # a steered assembly -- a failure that said nothing about why.
-            "axis_map": {
-                "wheel": list(_K_WHEEL_COORDINATES),
-                **({"rack": _K_COORDINATES["rack"]} if rack_present else {}),
+        # The shorthand is the kernel's `wheel_values_mm` / `rack_values_mm` /
+        # `axis_map` spelling, and it needs a rack axis: its contract is "wheel
+        # travel plus rack".  An assembly with no rack coordinate therefore uses
+        # the *general* form, which names exactly the axes the grid moves.  Both
+        # reach the same kernel expansion; the difference is that the document
+        # keeps saying "there is no rack" instead of hiding it behind a zero that
+        # would make the run look steered.
+        #
+        # The one thing the general form has to reproduce is the *coupling*: the
+        # shorthand drives both wheels from one travel, so the general form names
+        # both wheel coordinates with the same values rather than naming the left
+        # one alone -- which would silently move half the axle.
+        if rack_present:
+            return (
+                {
+                    "wheel_values_mm": list(left),
+                    "rack_values_mm": list(named.get("rack", (0.0,))),
+                    "axis_map": {
+                        "wheel": list(_K_WHEEL_COORDINATES),
+                        "rack": _K_COORDINATES["rack"],
+                    },
+                    "left_right_mode": "symmetric",
+                },
+                [
+                    (travel, travel, position)
+                    for travel in left
+                    for position in named.get("rack", (0.0,))
+                ],
+            )
+        # The shorthand without its rack axis: the same wheel axis it always
+        # drove, and no rack key at all.  The kernel reads a missing
+        # `rack_values_mm` as "this model has no rack coordinate to sweep", which
+        # is exactly what the assembly says -- so the document keeps the shorthand
+        # (and its symmetric wheel coupling) without inventing a rack.
+        return (
+            {
+                "wheel_values_mm": list(left),
+                "axis_map": {"wheel": list(_K_WHEEL_COORDINATES)},
+                "left_right_mode": "symmetric",
             },
-            "left_right_mode": "symmetric",
-        }
-        # The rack is a real axis only when the assembly has one.  Iterating an
-        # empty axis would collapse the whole grid to zero states -- worse than
-        # padding with zeros, because the run would produce nothing at all -- so an
-        # absent axis is a dimension the grid simply does not have.
-        rack_axis = rack if rack_present else (0.0,)
-        combinations = [
-            (travel, travel, position) for travel in left for position in rack_axis
-        ]
-        return section, combinations
+            [(travel, travel, 0.0) for travel in left],
+        )
     order = [name for name in ("left", "right", "rack") if name in named]
     section = {
         "axes": [
@@ -461,6 +493,36 @@ def _k_grid(
         combinations.append((drives["left"], drives["right"], drives["rack"]))
     return section, combinations
 
+
+def _k_axes_section(
+    axes: list[tuple[str, tuple[float, ...]]],
+) -> tuple[dict[str, object], list[tuple[float, float, float]]]:
+    """
+    Build the general `k.axes` grid, and the drives of each case in its order.
+
+    The general form names the coordinates it moves one axis at a time, which is
+    how a run with fewer axes than the shorthand assumes is expressed.  Drives
+    come out in the order the product is taken in -- the last axis varying
+    fastest -- so the caller's index still lines up with the kernel's case index.
+    A coordinate the axes do not name stays at the value the model was assembled
+    with; the one coupling that matters here is the wheel set, which the
+    shorthand drives together and which this form therefore carries with it.
+    """
+    section: dict[str, object] = {
+        "axes": [
+            {"coordinate": _K_COORDINATES[name], "values_mm": list(values)}
+            for name, values in axes
+        ]
+    }
+    combinations: list[tuple[float, float, float]] = []
+    for values in product(*(values for _, values in axes)):
+        drives = {"left": 0.0, "right": 0.0, "rack": 0.0}
+        for (name, _), value in zip(axes, values):
+            drives[name] = value
+        if "right" not in (name for name, _ in axes):
+            drives["right"] = drives["left"]
+        combinations.append((drives["left"], drives["right"], drives["rack"]))
+    return section, combinations
 
 def _k_case_document(case: CaseSpec, section: dict[str, object]) -> dict[str, object]:
     section = dict(section)
@@ -486,6 +548,85 @@ def _case_envelope(name: str, sections: dict[str, object]) -> dict[str, object]:
     }
 
 
+def _k_drives(
+    assembly: FrontAxleAssembly,
+    *,
+    left: float,
+    right: float,
+    rack: float,
+) -> dict[str, float]:
+    """
+    Return the driven coordinates a K/C state reports, without a rack it has none of.
+
+    A channel that is always present is a channel a reader cannot tell from a real
+    zero: `{"rack_displacement": 0.0}` on a steering-less axle claims the run
+    steered and the rack sat at neutral, when in truth there is no rack.  The
+    rig's whole contract is that an absent coordinate disappears rather than being
+    filled; the result surface has to say the same thing or the shrink is only
+    half done.  The wheel channels stay, because a single-axle bench always drives
+    wheel travel.
+    """
+    from .cases.kc_quasi_static.contract import has_rack as _has_rack
+
+    drives = {"wheel_travel_left": left, "wheel_travel_right": right}
+    if _has_rack(assembly):
+        drives["rack_displacement"] = rack
+    return drives
+
+
+def _compile_plan_run(
+    *,
+    rig: str,
+    assembly: FrontAxleAssembly,
+    mode: Literal["K", "C"],
+    name: str,
+    drive_wheels: bool,
+    case_document: dict[str, object],
+):
+    """
+    Route one K/C run through the unified compile-and-submit pipeline.
+
+    The three steps used to be one: `api` wrote the model document itself and
+    handed it to the runner, which compiled it through the K/C family.  Now the
+    *plan* states what the run is and the compilation layer turns the plan and the
+    assembly into the pair of documents, so the K/C path is the same pipeline as
+    every other one rather than a route beside it.
+
+    The case document stays this module's: it is `api`'s own load-sweep and grid
+    spelling, and moving it would be a rewrite of the K/C input format rather than
+    a routing change.
+    """
+    from .compilation import KcStudyInputs, compile_plan, plan_for
+
+    plan = plan_for(
+        rig,
+        mode=mode,
+        inputs=KcStudyInputs(name=name),
+        times_s=_TIMES_S,
+        solver=AxleSolverSettings(),
+        drive_wheels=drive_wheels,
+    )
+    model_emitted, _, model_blob, _, metadata = compile_plan(plan, assembly)
+    compiled = CompiledSimulation(
+        request=SimulationRequest(
+            assembly="axle",
+            rig=rig,
+            family=plan.family,
+            study=plan.study,
+            model=assembly,
+            case=case_document,
+            name=name,
+        ),
+        model_document=model_emitted,
+        case_document=case_document,
+        model_payload=model_blob or pack_container(model_emitted),
+        case_payload=pack_container(case_document),
+        layout={"document_order": ["model", "case"], "payload_order": ["model", "case"]},
+        metadata=metadata,
+    )
+    return run_compiled(compiled).raw
+
+
 def _run_k(
     assembly: FrontAxleAssembly,
     case: CaseSpec,
@@ -496,15 +637,14 @@ def _run_k(
         control for control in case.controls if isinstance(control, DisplacementControl)
     ]
     section, combinations = _k_grid(controls, drivable=_k_drivable_coordinates(assembly))
-    model = model_document(assembly, name=f"{case.name}-k", drive_wheels=True)
-    run = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=_k_case_document(case, section),
-        )
-    ).raw
+    run = _compile_plan_run(
+        rig=_KC_RIG,
+        assembly=assembly,
+        mode="K",
+        name=f"{case.name}-k",
+        drive_wheels=True,
+        case_document=_k_case_document(case, section),
+    )
 
     states: list[StateResult] = []
     component_loads: list[ComponentLoad] = []
@@ -523,13 +663,9 @@ def _run_k(
             StateResult(
                 state_id=state_id,
                 mode="K",
-                drives={
-                    "wheel_travel_left": left,
-                    "wheel_travel_right": right,
-                    "rack_displacement": rack,
-                },
+                drives=_k_drives(assembly, left=left, right=right, rack=rack),
                 metrics=compute_case_metrics("kc_quasi_static", physical, assembly),
-                tire_compression=_tire_compression(case),
+                tire_compression=_tire_compression(run, index),
                 constraint_residual=constraint,
                 force_residual=force,
                 moment_residual=moment,
@@ -577,15 +713,14 @@ def _run_c(
 ) -> tuple[list[StateResult], list[ComponentLoad], list[BushingResult]]:
     controls = [control for control in case.controls if isinstance(control, LoadControl)]
     loads = _c_control_loads(controls, case.external_loads)
-    model = model_document(assembly, name=f"{case.name}-c", drive_wheels=False)
-    run = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=_c_case_document(case, loads),
-        )
-    ).raw
+    run = _compile_plan_run(
+        rig=_KC_RIG,
+        assembly=assembly,
+        mode="C",
+        name=f"{case.name}-c",
+        drive_wheels=False,
+        case_document=_c_case_document(case, loads),
+    )
 
     reference = _reference_state(assembly)
     reference_metrics = compute_case_metrics("kc_quasi_static", reference, assembly)
@@ -612,11 +747,7 @@ def _run_c(
             StateResult(
                 state_id=state_id,
                 mode="C",
-                drives={
-                    "wheel_travel_left": 0.0,
-                    "wheel_travel_right": 0.0,
-                    "rack_displacement": 0.0,
-                },
+                drives=_k_drives(assembly, left=0.0, right=0.0, rack=0.0),
                 external_loads=applied,
                 poses={
                     "upright_left": _schema_pose(physical.pose("upright_L")),
@@ -636,6 +767,7 @@ def _run_c(
                         secant_compliance(np.asarray(applied["right"].as_tuple()), right)
                     ),
                 ),
+                tire_compression=_tire_compression(run, index),
                 constraint_residual=constraint,
                 force_residual=force,
                 moment_residual=moment,
@@ -678,22 +810,18 @@ def _mirror_load(load: SixVector, side_mode: str) -> SixVector:
 def _rigid_state(
     assembly: FrontAxleAssembly, bodies: list[str], row: np.ndarray
 ) -> RigidBodyState:
-    """Rebuild the reporting state from one contract sample, metres to mm."""
-    updated: dict[str, RigidBody] = {}
-    for name, body in assembly.state.bodies.items():
-        entry = row[bodies.index(name)]
-        updated[name] = RigidBody(
-            name=name,
-            pose=SE3(
-                translation=np.asarray(entry[:3], dtype=float) / MM,
-                quaternion=np.asarray(entry[3:7], dtype=float),
-            ),
-            mass=body.mass,
-            inertia=body.inertia,
-            center_of_mass=body.center_of_mass,
-            fixed=body.fixed,
-        )
-    return RigidBodyState(updated)
+    """
+    Rebuild the reporting state from one contract sample, metres to mm.
+
+    The row's slices and the unit conversion belong to `results`, which owns the
+    column layout; this is the call site that says so.  ``row`` is the whole
+    sample slice -- one row per body, seven wide -- and it is reshaped here rather
+    than at the call site so every caller passes the same thing.
+    """
+    from .results.kc_state import rigid_state_from_row
+
+    names = list(bodies) or list(assembly.state.bodies)
+    return rigid_state_from_row(assembly, names, np.asarray(row, dtype=float))
 
 
 def _wheel_response(
@@ -746,21 +874,23 @@ def _convergence_note(state_id: str) -> tuple[Diagnostic, ...]:
                 "solved by the native kernel; the contract returns a result only "
                 "when every expanded case converged"
             ),
-            state_id=state_id,
         ),
     )
 
 
-def _tire_compression(case: CaseSpec) -> dict[str, float]:
+def _tire_compression(run, case_index: int = 0) -> dict[str, float]:
     """
-    Report zero compression.
+    Report the vertical tire compression the solve actually produced.
 
-    A `CaseSpec` carries no road height and no tire radius, so a K state is not
-    in contact with anything and there is nothing to compress.  The keys are
-    kept because they are part of the result schema.
+    This used to echo zeros with the reasoning that a `CaseSpec` carries no road
+    height and no tire radius.  That was true of the *input*, and it was the
+    wrong conclusion: the wheel load is a result of the solve, not of the input,
+    and the model the run is solved on does declare tires.  The column the
+    compression lives in is `results`' to know, so this reads through it.
     """
-    del case
-    return {"left": 0.0, "right": 0.0}
+    from .results.kc_state import tire_compression_from_run
+
+    return tire_compression_from_run(run, case_index)
 
 
 def _k_control_axis(target: str) -> str:

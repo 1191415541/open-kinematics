@@ -5,7 +5,7 @@ Three places used to spell out the joint types independently, and they could
 drift apart silently:
 
 * the kernel's `contract_registry.cpp`, which names each type and its row count;
-* `preparation/assembly/types.py`, which holds one dataclass per type;
+* `modeling/primitives/joints.py`, which holds one dataclass per type;
 * the authoring layer, which mapped a dataclass name to the document's `type`
   string -- and only did so for three of the eight real joints, rejecting the
   rest.

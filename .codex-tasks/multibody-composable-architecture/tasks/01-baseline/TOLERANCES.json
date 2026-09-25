@@ -1,0 +1,67 @@
+{
+  "note": "A1-A10 的量纲明确误差标准。原则：沿用仓库现有权威来源，不为本轮新造门限；缺项按现有独立可解夹具确定，且在修改实现之前写定。",
+  "authorities": [
+    {
+      "id": "kc_parity_tolerance",
+      "source": "packages/suspension_multibody/scripts/kc_parity_check.py:32",
+      "rule": "_tolerance(field, reference)：位移类（后缀 _mm）0.1 + 0.002*|ref|；角度类（后缀 _deg）0.02 + 0.005*|ref|；其余标量 1e-6 + 1e-4*|ref|",
+      "applies_to": "A4 几何/轴向与连接位置、A5 SI 模型几何、A8 无转向通道消失"
+    },
+    {
+      "id": "case_parity_tolerance",
+      "source": "packages/suspension_multibody/scripts/case_parity_check.py",
+      "rule": "kc_quasi_static 为容差比较（对冻结 Python 快照）；axle_dynamic / vehicle_dynamic 为精确比较（同一内核另一入口）。handling / ride_four_post / ride_random_road 要求与独立展开逐值 0.0e+00 一致",
+      "applies_to": "A6 同一总成两 Study、A9 全量回归"
+    },
+    {
+      "id": "dynamic_hash_tier",
+      "source": "packages/suspension_multibody/scripts/dynamic_hash_sentinel.py",
+      "rule": "动态路径产物按字节级 tier 比较：每个 case/variant 的 arrays.npz 字节哈希 + manifest.json 规范化视图（剔除 performance 与 native_build 等机器/计时相关键）的哈希，合并为单一 combined sha256",
+      "applies_to": "A6 模型指纹、A9 无未解释数值差异"
+    },
+    {
+      "id": "performance_budget",
+      "source": "packages/suspension_multibody/scripts/kc_perf_gate.py:43",
+      "rule": "BUDGET_FACTOR = 1.25，即实测 best 不得超过记录基线的 1.25 倍。基线文件 tests/data/kc_perf_baseline_native.json：k-100 min 0.7221209999997882 s、c-66 min 0.9958288999996512 s",
+      "applies_to": "A9 性能门"
+    },
+    {
+      "id": "axle_acceptance_gates",
+      "source": "packages/suspension_multibody/scripts/dynamic_hash_sentinel.py 文档 + docs/axle_dynamics_results.md",
+      "rule": "13 个工况的解算门与能量门；time_convergence 门门限为载荷 NRMSE 0.02、状态 NRMSE 0.01。9 个工况的 time_convergence 失败由 fixture.force_z 单项引起，属既有已记录状态",
+      "applies_to": "A9 已知失败分类"
+    },
+    {
+      "id": "adams_strict_tolerances",
+      "source": "packages/suspension_multibody/src/suspension_multibody/adams/strict_c.py:576",
+      "rule": "严格 Adams 通道门按 kind 给出 limit(target)；本项目不新增或放宽该门",
+      "applies_to": "A9 既有 Adams 相关测试；本轮不扩大 Adams 等价声明"
+    },
+    {
+      "id": "mass_conservation_exact",
+      "source": "packages/suspension_multibody/tests/tire_mass/test_mass_conservation.py（模块文档字符串原文：\"Agree\" here means *bit for bit*. ... A tolerance would hide exactly the mistake this test exists to catch, so there is none.）",
+      "rule": "质量/质心/惯量的重归属必须逐位一致：轮胎质量从车轮端刚体移到轮胎后，同一次求解的结果要求 before/after 的 max|diff| 严格为 0（二进制逐位），不使用任何容差。A5 新增的「总质量、质心、等效惯量守恒」沿用该判据",
+      "applies_to": "A5 质量归属与守恒、A8 轮胎质量只计一次"
+    },
+    {
+      "id": "tire_derivative_relative",
+      "source": "packages/suspension_kernel/cpp/src/tire/directional.cpp（内核既有的方向导数实现）",
+      "rule": "状态导数（标量导数与方向导数）与解析/中心差分参考比较，判据为相对误差 <= 1e-6，且要求所有分量有限（非 NaN/Inf）。该门限采用数值微分的标准中心差分一致性界；08/09 建立回归时不得放宽，若某通道因尺度病态必须放宽，须在改实现前单独登记并说明独立可解夹具来源",
+      "applies_to": "A7 三种现有轮胎与已支持状态模式的标量/方向导数回归"
+    }
+  ],
+  "planned_units": [
+    {"quantity": "几何/轴向", "unit": "mm 与无量纲方向", "authority": "kc_parity_tolerance", "status": "defined"},
+    {"quantity": "质量/质心/惯量", "unit": "kg / mm / kg·mm²", "authority": "mass_conservation_exact", "status": "defined"},
+    {"quantity": "约束/力/力矩残差", "unit": "与求解器同单位，取无量纲相对量", "authority": "axle_acceptance_gates", "status": "defined"},
+    {"quantity": "输出通道", "unit": "按通道声明单位", "authority": "dynamic_hash_tier", "status": "defined"},
+    {"quantity": "状态导数（标量/方向导数）", "unit": "力/力矩对状态的导数，按通道声明单位", "authority": "tire_derivative_relative", "status": "defined"},
+    {"quantity": "性能", "unit": "秒（wall clock，固定机器）", "authority": "performance_budget", "status": "defined"}
+  ],
+  "rules": [
+    "不得在运行后按结果调整容差。",
+    "不得重录任何基线（kc_baseline、dynamic_hash_baseline、kc_perf_baseline_native）。",
+    "新门限必须在改实现之前写定，并注明其独立可解夹具来源。",
+    "合成夹具（D2 授权）只验证架构与求解路径，不用于工程精度结论。"
+  ]
+}

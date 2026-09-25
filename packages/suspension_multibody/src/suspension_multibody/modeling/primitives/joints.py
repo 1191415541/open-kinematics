@@ -1,17 +1,20 @@
 """
-Author-side data objects: the joint declarations and rigid-body data an
-assembly is described with.
+Joint, drive and rigid-body declarations: the author-side data an assembly is
+described with.
 
 A declaration is data and nothing else.  A joint carries its two bodies, their
 points and its axes; a rigid body carries its pose and its mass properties.
 Neither carries a *residual*, a *Jacobian* or an *evaluate*: those are the
-solving side of the boundary, and the native kernel owns them now.  The
-residual/Jacobian implementation over these objects is the only thing left in
-``core/constraints.py``, which no production path calls any more.
+solving side of the boundary, and the native kernel owns them.
 
-The bodies were ``core/constraints.py`` and ``core/rigid_body.py`` data fields
-moved verbatim, with the pose algebra they need taken from
-``preparation/geometry.py``; 08 deletes the legacy modules.
+These lived in ``preparation/assembly/types.py``.  They moved into the low layer
+because a leaf module inside ``preparation/assembly`` could not be imported
+without executing that package's ``__init__``, which pulls in ``front_axle``,
+``elements`` and ``subsystems`` -- so a declaration could not be used without
+also loading the whole author-side chain.
+
+The pose algebra these need lives in ``spatial.py``; ``SE3`` is re-exported here
+because callers historically took it from this module.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..geometry import SE3, Array
+from .spatial import SE3, Array
 
 
 class Constraint(ABC):

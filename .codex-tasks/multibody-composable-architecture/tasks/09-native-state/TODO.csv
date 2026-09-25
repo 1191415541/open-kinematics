@@ -1,0 +1,13 @@
+step,title,status,evidence,notes
+1,核实求解器是否仍按模型枚举分支,DONE,solve_dynamic/kernel_integrator.cpp,"实测：已无 VehicleTireModelKind 比较，读 Tire 语义标志"
+2,核实描述表是否单一,DONE,mb_tire/model.hpp kTireModelDescriptors,"单表：kind+name+7 个语义标志"
+3,核实状态布局是否单点持有,DONE,mb_tire_state/tire_state.hpp kTireSlotDescriptors,"12 槽单表；宽度由 tire_block_width 从 Tire.state_slot_width 取"
+4,新建 C++ 状态接口自检,DONE,cpp/tests/tire_state_selftest.cpp,"123 checks OK"
+5,CMake 目标,DONE,CMakeLists.txt mb_tire_state_selftest,"仅链接既有模块，未新增依赖边"
+6,Python 侧接入自检,DONE,kernel/tests/test_registry_consistency.py,"新增 2 项（自检 + 求解器无模型枚举）"
+7,编译与镜像同步,DONE,PROGRESS.md 验证记录,"build_axle_native 退出码 0"
+8,数值门无漂移,DONE,PROGRESS.md 验证记录,"kc_parity/case_parity/动态哈希全通过，combined 仍 e7407656731e"
+9,性能预算保持,DONE,PROGRESS.md 验证记录,"k-100 x0.672、c-66 x0.653"
+10,分层门通过,DONE,PROGRESS.md 验证记录,"未新增依赖边"
+11,主验收通过,DONE,PROGRESS.md 验证记录,"kernel tests 32 passed"
+12,lint 与类型检查,DONE,PROGRESS.md 验证记录,"ruff 0 / ty 0"

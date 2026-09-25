@@ -1,0 +1,13 @@
+id,task,status,evidence
+01,运行器骨架与 native 前置,DONE,"probe/selection/cmd 三类检查；--strict 拒绝缺失前置与选择中的 skip；native 前置核对两镜像同哈希（9189e02c6181a7e0）"
+02,A1 导入顺序与分层,DONE,"4 种导入顺序 + 8 个低层模块单独导入均不触达上层；kernel_layering --strict --final 退出码 0"
+03,A2 新拓扑两读数,DONE,"2 约束 vs 13、kinds {RevoluteJoint}；准静态 3 states 收敛、与独立公式偏差 0.0218 mm；动态实际求解 1 case 3 samples 有限"
+04,A3 新试验台与扩展边界,DONE,"台 2 bodies/1 joint/2 forces；能力分支正确；台弹簧载荷 (0,0,1250,-750000,0,0)；9 个核心源文件哈希前后不变"
+05,A4 硬点与姿态扰动,DONE,"+20 mm 精确传导；扰动改变求解响应；端口位姿与独立合成一致 1e-9；solve_mount 接受独立位姿"
+06,A5 两 schema 一致与来源追溯,DONE,"10 bodies/13 joints/总质量 900.0 kg 一致；来源链逐层可追；指纹 a2f96c247eed58bb；brake/drive/跨类别台均点名拒绝"
+07,A6 两研究同一指纹与垂向轮胎,DONE,"同一指纹两种研究；激活 vertical_only/full；改名的台仍路由；法向力随刚度变化而驱动压缩量不变"
+08,A7 内核注册与处理器一致,DONE,"mb_contract 39 / mb_cases 41 / mb_tire 123 checks 实跑通过；已知未实现与未知两种拒绝分明"
+09,A8 可选分支收缩与全局规则,DONE,"无转向无 rack/拉杆、结果无 rack 通道（非填零）；有转向保留；台接口 dropped=['rack_drive']；brake/drive 点名拒绝"
+10,A9 公共入口与诊断,DONE,"K 写盘回读一致；C 收敛；接触点驱动仍拒绝；state 带诊断；dynamic_hash/kc_parity/case_parity/kc_perf 全部按冻结值通过"
+11,A10 打包隔离,DONE,"发布探针 4/4；3 wheel 构建+离线安装+源码路径外 native 收敛（残差 3.490e-07）"
+12,全量严格验收,DONE,"accept_composable_architecture.py --strict 退出码 0，29/29 通过；ruff/ty/两侧分层门均 0"

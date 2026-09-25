@@ -13,12 +13,10 @@ from suspension_multibody.elements import (
     StaticDamperElement,
     VerticalTireElement,
 )
-from suspension_multibody.preparation.assembly.types import (
+from suspension_multibody.modeling.primitives import (
+    SE3,
     RigidBody,
     RigidBodyState,
-)
-from suspension_multibody.preparation.geometry import (
-    SE3,
     quaternion_multiply,
     rotation_vector_to_quaternion,
 )

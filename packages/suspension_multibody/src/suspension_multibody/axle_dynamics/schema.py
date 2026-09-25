@@ -14,6 +14,15 @@ from ..schema.pac2002_scope import validate_pac2002_native_scope
 Vec3Tuple = tuple[float, float, float]
 QuaternionTuple = tuple[float, float, float, float]
 Matrix3Tuple = tuple[tuple[float, float, float], ...]
+
+#: The steering actuator kinds whose constraint row the kernel emits, so any
+#: reader of a result has to account for them when mapping rows back to names.
+#:
+#: Defined at the contract layer rather than in either consumer: the authoring
+#: side (``preparation``) and the decoding side (``results``) both need it, and
+#: having one of them own it made them import each other -- a real cycle, not a
+#: matter of taste.
+PRESCRIBED_STEERING_TYPES: tuple[int, ...] = (2, 3)
 Vector6Tuple = tuple[float, float, float, float, float, float]
 Matrix6Tuple = tuple[tuple[float, float, float, float, float, float], ...]
 

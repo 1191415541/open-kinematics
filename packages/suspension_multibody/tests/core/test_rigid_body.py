@@ -1,7 +1,7 @@
 """
 Rigid-body state tests: the data a body carries and its retraction.
 
-``RigidBody`` and ``RigidBodyState`` live in ``preparation/assembly/types.py``.
+``RigidBody`` and ``RigidBodyState`` live in ``modeling/primitives/joints.py``.
 The point-Jacobian assertion that used to sit here covered
 ``core/rigid_body.point_jacobian``, which subtask 08 deleted with the rest of
 ``core`` -- a point Jacobian is part of solving, and the native kernel owns it.
@@ -10,12 +10,10 @@ The retraction assertions stay, because retraction is state, not solving.
 
 import numpy as np
 
-from suspension_multibody.preparation.assembly.types import (
+from suspension_multibody.modeling.primitives import (
+    SE3,
     RigidBody,
     RigidBodyState,
-)
-from suspension_multibody.preparation.geometry import (
-    SE3,
     rotation_vector_to_quaternion,
 )
 

@@ -24,8 +24,8 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
-from ..preparation.assembly.types import Constraint, RigidBody
-from ..preparation.geometry import SE3
+from ..modeling.primitives.joints import Constraint, RigidBody
+from ..modeling.primitives.spatial import SE3
 from ..schema import Vec3
 from .geometry import local_point, local_pose, lookup_hardpoint, mirror_point
 

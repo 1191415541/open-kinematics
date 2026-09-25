@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from suspension_multibody.modeling.primitives import RigidBody
 from suspension_multibody.preparation.assembly import build_front_axle
-from suspension_multibody.preparation.assembly.types import RigidBody
 from suspension_multibody.preparation.kc_quasi_static import assembly_for
 from suspension_multibody.rigs import resolve_combination
 from suspension_multibody.schema import (
@@ -39,6 +39,7 @@ from suspension_multibody.studies import (
     DYNAMIC,
     QUASI_STATIC,
     BridgeError,
+    StudyError,
     axle_dynamics_model,
     build_study_assembly,
 )
@@ -106,17 +107,35 @@ def test_naming_only_the_family_still_resolves() -> None:
     assert request.family == "axle_dynamic"
 
 
-def test_a_rig_that_disagrees_with_the_family_is_refused() -> None:
-    """Both name the same bench, so a mismatch is a caller error, not a route."""
-    with pytest.raises(ValueError, match="must agree"):
-        SimulationRequest(
-            assembly="axle", rig="kc_quasi_static", family="axle_dynamic"
-        )
+def test_a_rig_may_route_a_family_other_than_its_own_name() -> None:
+    """
+    The bench and the family are separate axes, so a rig may route elsewhere.
+
+    This used to be a refusal -- both names had to spell the same bench -- and
+    that made a newly authored bench unable to run an existing reading unless it
+    was *renamed* to match the family.  G4 asks for the opposite: a bench is what
+    drives and measures, the family is which compiler and preparation the run
+    goes through, and naming both must be allowed to differ.
+    """
+    request = SimulationRequest(
+        assembly="axle", rig="kc_quasi_static", family="axle_dynamic"
+    )
+    assert request.rig == "kc_quasi_static"
+    assert request.family == "axle_dynamic"
 
 
-def test_a_request_with_neither_a_rig_nor_a_family_is_refused() -> None:
-    with pytest.raises(ValueError, match="needs a family or a rig"):
-        SimulationRequest(assembly="axle")
+def test_a_bench_that_does_not_route_to_the_named_family_is_refused() -> None:
+    """
+    Separating the axes does not make the pair unfalsifiable.
+
+    A bench declares the family it runs through, so a caller that names a
+    different one is asking for a bench that takes another reading.  The refusal
+    names both, because "name the bench you mean" is the fix.
+    """
+    from suspension_multibody.compilation import plan_for
+
+    with pytest.raises(StudyError, match="reads the model"):
+        plan_for("kc_quasi_static", study="dynamic")
 
 
 def test_a_registered_elsewhere_family_is_left_to_its_registry() -> None:

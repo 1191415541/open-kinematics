@@ -29,28 +29,67 @@ workloads against a recorded budget; the retired Python benchmarks covered 100 K
 states and 6600 C states, and that 6600-state C workload was a deliberately
 nonphysical proxy with no native analogue.
 
-## Python 模块结构（08 之后）
+## Python 模块结构（组合架构之后）
 
-08 删除了旧归属里**已无生产调用者**的部分，仍有现役生产调用的模块按 A1/A2 保留：
+模块按依赖方向分层，每层的边界由门禁检查而不是由约定维持：
 
 ```text
 src/suspension_multibody/
-  preparation/     作者层：几何、装配声明（assembly/）、工况与信号
-  schema/ results/ kernel/ simulation/ cases/  契约、结果解码与统一 runner
-  report/          报告层：指标、合规、几何与整车载荷汇总（不调用 native、不求解）
-  elements/        A1 保留：力元件本构（native 力旋量通道尚不能承载固定体端反力）
-  core/            A1 保留：spatial 代数、刚体数据与装配声明（elements/ 与作者层的依赖）
-  analysis/        A2 保留：compute_static_wheel_loads（native 无静力 ABI 入口）
+  modeling/        低层：稳定实体标识、端口值对象、ModelFragment、
+                   Assembly/SimulationAssembly、单位边界。
+                   modeling/primitives/ 是空间代数与关节/刚体声明的唯一实现。
+  templates/       模板：声明构件、连接、属性槽与输出，或命名一个 builder；
+                   两条作者路径都产出同一个 ModelFragment。
+  connections/     连接：端口匹配、歧义拒绝、自适应安装几何、全局 D3 规则。
+  rigs/            试验台：rig.py 声明驱动/研究/输出，bench.py 产出实体，
+                   compose.py 做“接口收缩到总成能力”。
+  subsystems/      六类子系统模板与 SI 总成（si_assembly.py、composition.py）。
+  compilation/     编译：plan.py 说这次运行是什么，model_view.py 说模型是什么，
+                   compile.py 说两者蕴含的文档；family 名只作为选 emitter 的注册键。
+  studies/         研究方式与输入适配（准静态网格 vs 时间历史）。
+  schema/ results/ outputs/ report/ io/
+                   契约、结果解码、衍生输出、报告与检查点。
+  simulation/      runner、request 与原生后端；api.py 只做薄编排。
+  cases/           各族契约文档的作者层。
+  preparation/     域输入适配（assembly/、axle_dynamic.py、vehicle_dynamic.py 等）。
+  elements/        A1 保留：力元件本构。
+  analysis/        A2 保留：compute_static_wheel_loads。
 ```
 
-已删除：`model/`（06 迁至 `preparation/assembly/`）、`metrics/`（07 迁至
-`report/metrics/`）、顶层 `pac2002_scope.py`（06 迁至 `schema/pac2002_scope.py` 与
-`kernel/capabilities.py`）、`analysis/` 的报告类模块（07 迁至 `report/`、
-`preparation/signals.py`、`simulation/replay.py`），以及 `core/rank.py` 与
-`core/reactions.py`（无生产调用者；其物理断言转为 `tests/axle_dynamics/test_solver_invariants.py`
-的 native 契约断言）。每个保留项的理由、阻断原因与解除条件记录在 08 的删除记录里：
-`.codex-tasks/20260921-architecture-deviation-closure/tasks/20260921-08-delete/raw/step3_deletion_record.md`。
+`modeling/` 不得反向依赖 `templates`、`subsystems`、`rigs`、`connections`、
+`preparation`、`simulation`、`kernel` 或 `report`；这条边界由
+`tests/architecture/test_import_boundaries.py` 在独立子进程里逐入口检查。
 
+已删除：`model/`（迁至 `preparation/assembly/`）、`metrics/`（迁至 `report/metrics/`）、
+`core/`（spatial 代数与关节/刚体数据迁至 `modeling/primitives/`；`rank.py` 与
+`reactions.py` 无生产调用者，其物理断言转为
+`tests/axle_dynamics/test_solver_invariants.py` 的 native 契约断言）、顶层
+`pac2002_scope.py`（迁至 `schema/pac2002_scope.py` 与 `kernel/capabilities.py`），
+以及 `analysis/` 的报告类模块（迁至 `report/`、`preparation/signals.py`、
+`simulation/replay.py`）。02 留在 `preparation/geometry.py` 与
+`preparation/assembly/types.py` 的两个转发壳也已删除，调用方直接导入
+`modeling/primitives/`。
+
+### 仍保留 elements/ 与 analysis/ 的理由
+
+两项都不是遗留物，而是**有现役生产调用、且 native 尚不能承载**的能力。它们的
+当前 import 点、阻断原因与解除条件如下；`legacy_surface_gate.py --final` 的对应
+发现已登记，`scripts/check_composable_release.py` 会核对登记表与实测发现一致，
+新增或消失都会失败。
+
+| 保留项 | 现役 import 点 | 阻断原因 | 解除条件 |
+|---|---|---|---|
+| `elements/`（A1） | `api.py`（`BushingElement`、`evaluate_generalized_forces`）、`preparation/assembly/front_axle.py`、`preparation/assembly/vehicle.py`、`preparation/vehicle_dynamic.py` | 作者层需要构造力元件；native `element_wrench` 通道目前对固定体端早退（`cpp/src/element/assembly_primitives.cpp`），无法承载固定端反力 | 固定端事实口径裁定 + K 模式力元件声明 + 力矩参考点契约落地后，作者层不再自建元件 |
+| `analysis/`（A2） | `vehicle/service.py`（`compute_static_wheel_loads`） | native ABI 只导出 `suspension_kernel_run`，没有静力求解入口，且导出面冻结 | 为静力求解扩展 ABI 导出面（需先确认） |
+
+`elements/` 的本构依赖已随 `core/` 一并切到 `modeling/primitives/`，所以删掉
+`core/` 并没有连带影响保留项。
+
+### 扩展示例
+
+`docs/composable_extension_examples.md` 给出「新增子系统模板 / 新增试验台 /
+硬点更新」三个示例，每个都可执行：`scripts/check_composable_release.py` 会抽出文
+档里的 `python runnable` 代码块，在独立解释器里逐块运行，跑不过即发布检查失败。
 
 ## Native 整车动力学
 

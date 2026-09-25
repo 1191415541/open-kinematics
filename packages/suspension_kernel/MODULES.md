@@ -45,7 +45,7 @@ uv run python packages/suspension_kernel/scripts/check_module_layering.py --stri
 | `mb_solve_static` | the static solve: `static_trim`, the projection and least-squares helpers, contact pretrimming.  Subtask 03: no implementation dependency on `mb_solve_dynamic`'s module headers; the shared input sampling lives in `mb_input`.  Subtask 04: `audit_constraint_system` moved to `mb_joint`, `static_rotation_gauge_for_pivot` to `mb_model`. | `mb_config`, `mb_dual`, `mb_numeric`, `mb_model`, `mb_joint`, `mb_force`, `mb_linear`, `mb_tire_common`, `mb_tire_state`, `mb_input`, `mb_solve_dynamic` |
 | `mb_output` | the measurement and result writers. | `mb_config`, `mb_dual`, `mb_numeric`, `mb_model`, `mb_joint`, `mb_force`, `mb_solve_dynamic`, `mb_energy`, `mb_input`, `mb_tire_state` |
 | `mb_contract` | the contract layer: canonical JSON, containers, SHA-256, and the four registries. | `mb_config` |
-| `mb_cases` | the case families: how a declarative case document expands into concrete runs. | `mb_config`, `mb_numeric`, `mb_contract`, `mb_input`, `mb_model` |
+| `mb_cases` | the case families: how a declarative case document expands into concrete runs.  Subtask 08: one static table (`family_table.hpp`, a `FamilyRow` per family) holds the family's name, whether the protocol knows it, and the expander that runs it, so the support query and the dispatch read the same row instead of three parallel lists that could disagree. | `mb_config`, `mb_numeric`, `mb_contract`, `mb_input`, `mb_model` |
 | `abi` | the entry points.  `suspension_kernel_run` parses two documents, builds the model, expands the cases and drives the solver. | everything above |
 
 `mb_vehicle` and `mb_suspension` no longer exist.  The registration, layout and
@@ -74,7 +74,10 @@ self-test (`mb_contract_selftest`):
 | case families | `contract_case_family_known(name)` | a family the case document may declare |
 
 Adding a case family is a new file in `mb_cases` plus a row in that table; it
-does not change the ABI, and it does not change the solver.  The three
+does not change the ABI, and it does not change the solver.  A name the table
+holds but whose expander is not implemented is *known and unimplemented*, which
+is a different refusal from a name the protocol has never heard of, and
+`mb_cases_selftest` asserts both directions.  The three
 capabilities the K/C family gained during the takeover -- a general
 driven-coordinate grid, an explicit load list with side modes, and constant body
 wrenches -- all arrived that way, through the case document and the model

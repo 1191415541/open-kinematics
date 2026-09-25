@@ -35,8 +35,7 @@ from ..axle_dynamics.schema import (
     AxleSpringDamper,
     AxleTire,
 )
-from ..preparation.assembly import FrontAxleAssembly
-from ..preparation.assembly.types import (
+from ..modeling.primitives.joints import (
     BallJoint,
     ConstantVelocityJoint,
     Constraint,
@@ -47,6 +46,7 @@ from ..preparation.assembly.types import (
     UniversalJoint,
     WeldJoint,
 )
+from ..preparation.assembly import FrontAxleAssembly
 
 __all__ = ["BridgeError", "MM", "axle_dynamics_model"]
 

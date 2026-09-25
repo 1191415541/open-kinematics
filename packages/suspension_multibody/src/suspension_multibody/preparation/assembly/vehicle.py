@@ -25,25 +25,25 @@ from ...elements import (
     StaticDamperElement,
     VerticalTireElement,
 )
+from ...modeling.primitives import (
+    SE3,
+    Constraint,
+    RevoluteJoint,
+    RigidBody,
+    RigidBodyState,
+    WeldJoint,
+)
 from ...schema import RigidBodySpec, VehicleModel, WheelSpec
 from ...subsystems import (
     DEFAULT_VEHICLE_SUBSYSTEMS,
     AssemblyCapabilities,
     capabilities_for,
 )
-from ..geometry import SE3
 from .front_axle import (
     Connection,
     FrontAxleAssembly,
     _local_point,
     build_front_axle,
-)
-from .types import (
-    Constraint,
-    RevoluteJoint,
-    RigidBody,
-    RigidBodyState,
-    WeldJoint,
 )
 
 

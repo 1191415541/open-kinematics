@@ -1,7 +1,7 @@
 """
 Spatial algebra invariants at their live home.
 
-``SE3`` and the wrench transform live in ``preparation/geometry.py`` -- the
+``SE3`` and the wrench transform live in ``modeling/primitives/spatial.py`` -- the
 authoring layer uses them, so that is where they belong and where they are
 tested now.  The twist and wrench-tangent assertions that used to sit here
 covered ``core/spatial.py`` symbols whose only callers were this test file;
@@ -11,7 +11,7 @@ production or authoring tree called them.
 
 import numpy as np
 
-from suspension_multibody.preparation.geometry import (
+from suspension_multibody.modeling.primitives import (
     SE3,
     rotation_vector_to_quaternion,
     wrench_global_to_local,

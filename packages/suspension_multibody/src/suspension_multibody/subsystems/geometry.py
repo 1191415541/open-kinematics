@@ -15,8 +15,8 @@ from typing import Literal
 
 import numpy as np
 
-from ..preparation.assembly.types import RigidBody
-from ..preparation.geometry import SE3
+from ..modeling.primitives.joints import RigidBody
+from ..modeling.primitives.spatial import SE3
 from ..schema import Pose, Vec3
 
 __all__ = [

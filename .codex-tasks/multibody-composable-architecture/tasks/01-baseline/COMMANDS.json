@@ -1,0 +1,128 @@
+{
+  "note": "实测记录：01 在 HEAD ed63dc5（工作区干净）下实跑 TASKS.md「基线与终局公共命令集」的结果。每条命令均为真实执行，退出码为实测值。",
+  "commands": [
+    {
+      "id": "build_axle_native",
+      "command": "uv run --no-sync python packages/suspension_multibody/scripts/build_axle_native.py",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "重建原生库并由 multibody 镜像同步 canonical kernel 副本；两份 suspension_kernel.dll 内容一致",
+      "notes": "首次执行时镜像被并发加载的测试进程锁定（WinError 32），并且 kernel 侧先被重写为新哈希而镜像仍是旧哈希，触发新鲜度门导致大量 NativeKernelUnavailableError。按错误信息指引重跑本命令后两份镜像一致（1fdd241d2265807d3a588ee8d84135c9b78835fdd5235b7cf067b4a32b99d092）。重编译后动态哈希与 K/C parity 逐位不变，即已受测路径未观察到行为变化。构建原生库时不得有测试进程并发加载它。"
+    },
+    {
+      "id": "kernel_layering",
+      "command": "uv run --no-sync python packages/suspension_kernel/scripts/check_module_layering.py --strict --final",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "final 模式：0 模块环、0 反向边、0 自包含头、0 legacy 模块、0 跨聚合包含；headers 56 / TU 75 / modules 23",
+      "notes": "OK: layering matches the recorded baseline"
+    },
+    {
+      "id": "kernel_tests",
+      "command": "uv run --no-sync pytest packages/suspension_kernel/tests -q",
+      "exit_code": 0,
+      "result": "pass",
+      "summary_line": "21 passed in 14.09s",
+      "observes": "内核测试全通过，无 skip/xfail"
+    },
+    {
+      "id": "contracts_tests",
+      "command": "uv run --no-sync pytest packages/suspension_contracts/tests -q",
+      "exit_code": 0,
+      "result": "pass",
+      "summary_line": "27 passed in 0.11s",
+      "observes": "契约测试全通过，无 skip/xfail"
+    },
+    {
+      "id": "multibody_tests",
+      "command": "uv run --no-sync pytest packages/suspension_multibody/tests -q",
+      "exit_code": 0,
+      "result": "pass",
+      "summary_line": "1052 passed, 1 skipped, 1 xfailed in 1150.85s (0:19:10)",
+      "observes": "全量多体测试通过；唯一耗时约 19 分钟的命令",
+      "notes": "本命令必须在 native 镜像已同步后执行；镜像不同步会以 NativeKernelUnavailableError 大面积报错，那是环境状态而非代码回归。"
+    },
+    {
+      "id": "dynamic_hash",
+      "command": "uv run --no-sync python packages/suspension_multibody/scripts/dynamic_hash_sentinel.py --check",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "27 个（基线记录 26 个 entry，另一为 acceptance_report.json）动态产物字节级一致；combined sha256 = e7407656731ed556efc28fb89d8fc69881725b3bfb2f39066eb898986389d48e；acceptance exit code 1 属既有已记录状态",
+      "notes": "脚本自身对 acceptance 非零退出码是预期设计，只在哈希漂移时失败。重编译原生库后该哈希不变。"
+    },
+    {
+      "id": "kc_parity",
+      "command": "uv run --no-sync python packages/suspension_multibody/scripts/kc_parity_check.py --check",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "K 9 状态 + C 66 状态对冻结 Python 快照在既有容差内一致",
+      "notes": "OK: candidate matches the frozen K/C snapshot within tolerance。该快照是 oracle，--record 已随 Python 求解器退役而移除，不得重录。"
+    },
+    {
+      "id": "case_parity",
+      "command": "uv run --no-sync python packages/suspension_multibody/scripts/case_parity_check.py",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "8 个 case family 全部 PASS（kc_quasi_static / axle_dynamic / vehicle_kc / vehicle_dynamic / handling / ride_four_post / ride_random_road / comparison）",
+      "notes": "axle_dynamic 与 vehicle_dynamic 为 bit-identical；kc_quasi_static 最差误差/容差 = 0.000186038。comparison 是 per-target gate，N/A 属正常。"
+    },
+    {
+      "id": "kc_perf",
+      "command": "uv run --no-sync python packages/suspension_multibody/scripts/kc_perf_gate.py",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "k-100 best 0.5822 s vs baseline 0.7221 s (x0.806)；c-66 best 0.9446 s vs baseline 0.9958 s (x0.949)",
+      "notes": "BUDGET_FACTOR = 1.25（packages/suspension_multibody/scripts/kc_perf_gate.py:43）。默认子命令即 --check，TASKS 命令集未带参数，实测一致。"
+    },
+    {
+      "id": "legacy_surface_gate",
+      "command": "uv run --no-sync python packages/suspension_multibody/tests/architecture/legacy_surface_gate.py --check",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "migration 模式：8 项 legacy_module_import 均已登记，无未登记的边界违规",
+      "notes": "TASKS 命令集用 --check（默认 migration 模式）。--final 模式当前失败（8 项 legacy 导入 + 5 个旧包仍在：analysis/core/elements/metrics/model），这正是 12 的清理目标，属目标内已知未完成，不是本轮回归。"
+    },
+    {
+      "id": "ruff",
+      "command": "uv run --no-sync ruff check .",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "All checks passed!"
+    },
+    {
+      "id": "ty",
+      "command": "uv run --no-sync ty check .",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "All checks passed!（含 ty pre-release 警告，非失败）"
+    },
+    {
+      "id": "build_contracts",
+      "command": "uv build --package suspension-contracts",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "sdist 与 wheel 均构建成功"
+    },
+    {
+      "id": "build_kernel",
+      "command": "uv build --package suspension-kernel",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "sdist 与 wheel 均构建成功"
+    },
+    {
+      "id": "build_multibody",
+      "command": "uv build --package suspension-multibody",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "sdist 与 wheel 均构建成功"
+    },
+    {
+      "id": "git_diff_check",
+      "command": "git diff --check",
+      "exit_code": 0,
+      "result": "pass",
+      "observes": "无空白错误"
+    }
+  ]
+}

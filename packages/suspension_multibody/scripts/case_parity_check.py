@@ -193,7 +193,7 @@ def _c_path_records(assembly, *, paths: tuple[str, ...]) -> list[dict[str, objec
         quaternion_multiply,
         wheel_center_world,
     )
-    from suspension_multibody.preparation.geometry import quaternion_to_rotation_vector
+    from suspension_multibody.modeling.primitives import quaternion_to_rotation_vector
     from suspension_multibody.simulation import SimulationRequest, run_request
 
     levels = 11
@@ -930,7 +930,7 @@ def check_vehicle_kc() -> tuple[bool, str]:
         vehicle_kc_case_document,
         vehicle_kc_model_document,
     )
-    from suspension_multibody.preparation.geometry import quaternion_to_matrix
+    from suspension_multibody.modeling.primitives import quaternion_to_matrix
     from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
     from suspension_multibody.simulation import SimulationRequest, run_request
 

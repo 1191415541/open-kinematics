@@ -110,6 +110,16 @@ class CaseSpec(StrictModel):
     controls: tuple[DisplacementControl | LoadControl, ...] = ()
     external_loads: dict[str, SixVector] = {}
     left_right_mode: Literal["single", "symmetric", "opposite"] = "symmetric"
+    #: Which subsystems the assembly this case runs carries.  `None` means the
+    #: default single-axle set, which is what every existing caller gets.
+    #:
+    #: It lives on the *case* rather than on the model because it is a property
+    #: of the run: a single-axle model may be run with or without its steering
+    #: subsystem (requirement 15), an assembly with no steering has no rack
+    #: coordinate, and a rig drives it without one rather than zero-filling it.
+    #: Making it a case input is what lets a caller ask for that run through the
+    #: public entry instead of only through the assembly constructor.
+    subsystems: frozenset[str] | None = None
     worker_count: int = Field(default=1, ge=1)
     checkpoint_path: str | None = None
 

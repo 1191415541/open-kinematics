@@ -1,0 +1,217 @@
+{
+  "name": "synthetic_trailing_arm_axle",
+  "_synthetic": true,
+  "description": "SYNTHETIC FIXTURE -- NOT AN ENGINEERING MODEL. A left/right trailing-arm single axle whose connection graph is deliberately unlike the built-in double wishbone: each side has ONE arm pivoting on a chassis revolute about the vehicle Y axis, with the wheel carried at the arm's outboard end. There are no upper/lower arms and no ball joints, so the constraint graph is a different graph and not a renamed one. Geometry, masses and units are chosen to be solvable and legible, not to represent a real vehicle. Decision D2 authorises synthetic fixtures for architecture and solve-path verification only; no engineering accuracy is claimed.",
+  "model": {
+    "schema_version": 1,
+    "name": "synthetic_trailing_arm_axle",
+    "units": "mm-N-N*mm-kg-deg",
+    "coordinate_system": "vehicle",
+    "side": "left",
+    "topology": "explicit",
+    "hardpoints": {
+      "ARM_PIVOT": {
+        "x": -350.0,
+        "y": -500.0,
+        "z": 250.0
+      },
+      "WHEEL_CENTER": {
+        "x": 0.0,
+        "y": -700.0,
+        "z": 300.0
+      },
+      "SPRING_CHASSIS": {
+        "x": -300.0,
+        "y": -520.0,
+        "z": 520.0
+      },
+      "SPRING_ARM": {
+        "x": -120.0,
+        "y": -640.0,
+        "z": 300.0
+      },
+      "WHEEL_CENTER__R": {
+        "x": 0.0,
+        "y": 700.0,
+        "z": 300.0
+      }
+    },
+    "mass": {
+      "sprung_mass": 600.0
+    },
+    "bodies": [
+      {
+        "name": "upright_L",
+        "mass": 25.0,
+        "inertia": [
+          [
+            2.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            2.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            2.0
+          ]
+        ]
+      },
+      {
+        "name": "upright_R",
+        "mass": 25.0,
+        "inertia": [
+          [
+            2.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            2.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            2.0
+          ]
+        ]
+      }
+    ],
+    "joints": [
+      {
+        "name": "arm_pivot_L",
+        "kind": "revolute",
+        "body_a": "chassis",
+        "body_b": "upright_L",
+        "point_a": {
+          "x": -350.0,
+          "y": -500.0,
+          "z": 250.0
+        },
+        "point_b": {
+          "x": -350.0,
+          "y": -500.0,
+          "z": 250.0
+        },
+        "axis_a": {
+          "x": 0.0,
+          "y": 1.0,
+          "z": 0.0
+        },
+        "axis_b": {
+          "x": 0.0,
+          "y": 1.0,
+          "z": 0.0
+        }
+      },
+      {
+        "name": "arm_pivot_R",
+        "kind": "revolute",
+        "body_a": "chassis",
+        "body_b": "upright_R",
+        "point_a": {
+          "x": -350.0,
+          "y": 500.0,
+          "z": 250.0
+        },
+        "point_b": {
+          "x": -350.0,
+          "y": 500.0,
+          "z": 250.0
+        },
+        "axis_a": {
+          "x": 0.0,
+          "y": 1.0,
+          "z": 0.0
+        },
+        "axis_b": {
+          "x": 0.0,
+          "y": 1.0,
+          "z": 0.0
+        }
+      }
+    ],
+    "springs": [
+      {
+        "name": "corner_spring",
+        "body_a": "chassis",
+        "body_b": "upright_L",
+        "point_a": {
+          "x": -300.0,
+          "y": -520.0,
+          "z": 520.0
+        },
+        "point_b": {
+          "x": -120.0,
+          "y": -640.0,
+          "z": 300.0
+        },
+        "stiffness": 60.0,
+        "free_length": 400.0
+      }
+    ],
+    "dampers": [
+      {
+        "name": "corner_damper",
+        "body_a": "chassis",
+        "body_b": "upright_L",
+        "point_a": {
+          "x": -300.0,
+          "y": -520.0,
+          "z": 520.0
+        },
+        "point_b": {
+          "x": -120.0,
+          "y": -640.0,
+          "z": 300.0
+        },
+        "viscous_damping": 4.0
+      }
+    ],
+    "tires": [],
+    "bushings": [],
+    "anti_roll_bars": [],
+    "stops": [],
+    "rack_axis": {
+      "x": 0.0,
+      "y": 1.0,
+      "z": 0.0
+    },
+    "rack_fixed_to_chassis": false
+  },
+  "expected": {
+    "_note": "Independently derived facts the tests assert against. They are properties of the fixture's own geometry, not measurements of a solve.",
+    "free_bodies": [
+      "upright_L",
+      "upright_R"
+    ],
+    "arm_pivot_axis": [
+      0.0,
+      1.0,
+      0.0
+    ],
+    "wheel_travel_mm": [
+      -10.0,
+      0.0,
+      10.0
+    ],
+    "degrees_of_freedom_per_side": 1,
+    "dof_derivation": "Each side is one free body (the arm) held to the fixed chassis by a single revolute joint. A revolute removes five of a free body's six degrees of freedom, so that side keeps exactly one: rotation about the pivot's Y axis. The wheel centre is a point rigidly attached to the arm, so its height is a function of that one rotation. This is a different *graph* from the built-in double wishbone: there the upright is held by two ball joints (the two inboard arm mounts) plus a tie rod, and the arms are separate bodies, so the constraint count and the connectivity both differ -- two revolute rows here versus thirteen rows there, and no path from any body to a rack.",
+    "wheel_centre_rise_derivation": "The wheel centre sits at a local offset of (dx, dy, dz) = (350, -200, 50) mm from the arm pivot, and the only joint is a revolute about the chassis Y axis. Rotating that body by theta about Y maps the offset to x' = dx*cos(theta) + dz*sin(theta), z' = -dx*sin(theta) + dz*cos(theta), so dz/dtheta at theta = 0 is -dx = -350 mm per radian. A 10 mm wheel-centre travel therefore needs theta = asin(10/350) = 0.0286 rad = 1.6372 deg. The arm is not a rigid vertical link, so this is a derived slope and not a linear spring rate; the tests assert the solved geometry against it.",
+    "constraint_count": 2,
+    "constraint_count_derivation": "Two revolute joints, one per side. No rack joint: the fixture declares no rack body, and the case names no rack coordinate.",
+    "wheel_centre_offset_from_pivot_mm": [
+      350.0,
+      -200.0,
+      50.0
+    ],
+    "wheel_centre_dz_per_radian_mm": -350.0,
+    "wheel_centre_unit_direction": "dz/dtheta is *negative*: rotating the arm about +Y by a positive angle moves the wheel centre downward, because the wheel centre lies forward of the pivot in +X and a positive Y rotation carries +X toward -Z."
+  }
+}

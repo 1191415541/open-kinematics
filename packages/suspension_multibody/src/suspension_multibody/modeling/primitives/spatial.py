@@ -1,5 +1,5 @@
 """
-Author-side spatial algebra: the coordinate and vector conversions preparation
+Spatial algebra: the coordinate and vector conversions the authoring layer
 performs on model data on its way into a contract document.
 
 This is the *input* side of the split the architecture draws: a hardpoint, a
@@ -8,9 +8,11 @@ nothing here reads a result.  The result side of the same conversions lives in
 ``results/geometry.py``, which is reserved for the report boundary; ``report``
 must consume decoded results and must never call back into this module.
 
-The bodies are the ones ``core/spatial.py`` carries today, moved verbatim so
-that preparation stops importing the retired ``core`` package; 08 deletes the
-legacy module together with the rest of ``core``.
+These bodies lived in ``preparation/geometry.py``.  They moved into the low
+layer because a leaf module inside ``preparation`` could not be imported
+without executing that package's ``__init__``, which drags in the whole
+author-side chain.  Units here are the project's internal SI convention;
+external millimetres are adapted once at the boundary, never in a Study.
 """
 
 from __future__ import annotations

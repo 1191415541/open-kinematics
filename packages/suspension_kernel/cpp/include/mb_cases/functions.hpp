@@ -516,6 +516,26 @@ bool contract_expand_case(const JsonValue& document, const std::string& blob,
 void contract_apply_solver(const ContractPlan& plan, AxleInput& input);
 
 /// The case families `contract_expand_case` currently accepts.
+///
+/// True only for a family this build has a handler for.  Answering false covers
+/// two different situations -- the protocol does not know the name, or it knows
+/// it and this build cannot run it -- and the predicate below is what lets a
+/// caller tell them apart.
 bool contract_case_supported(const std::string& family);
+
+/// Whether the *protocol* defines a case family, whether or not this build runs it.
+///
+/// The distinction matters to the error message: a typo and an unimplemented
+/// feature are not the same problem, and reporting both as "unsupported" sends the
+/// reader to the wrong place.
+bool contract_case_family_in_protocol(const std::string& family);
+
+/// Number of declared families, and their names by index, in table order.
+///
+/// Exposed so the consistency self-test can enumerate the table instead of
+/// hard-coding it: a test that lists the families itself would be one more copy of
+/// the list this table exists to collapse.
+int contract_case_family_count(bool supported_only);
+const char* contract_case_family_name(int index);
 
 }  // namespace axle_kernel

@@ -1,0 +1,9 @@
+id,task,status,evidence
+01,实测进入本任务时的现状,DONE,"api.py 963 行承担解码/本构/矩阵几何；_DIAGNOSTIC_*_RESIDUAL 常量在 api 与 results.raw 各一份且 api 那份无人读；outputs/ 包生产不可达（grep 无 src 内引用）；GAP-2 实测：_kc_assembly 恒用默认单轴集，无转向路径不可达；model_document 无条件发 rack 驱动坐标，无 rack 时报 KeyError('rack','center')"
+02,解码归属 results,DONE,"新增 results/kc_state.py：rigid_state_from_row（行切片+米转毫米）、body_state_vector、tire_compression_from_run（列名而非下标）；api._rigid_state/_tire_compression 改为调用它"
+03,清除 api 自有列布局常量,DONE,"删除 api 的 _DIAGNOSTIC_POSITION_RESIDUAL/_DIAGNOSTIC_DYNAMICS_RESIDUAL/_DIAGNOSTIC_ROWS_PER_CASE；列布局唯一归属 results"
+04,闭合 GAP-2：无转向 rack 通道消失,DONE,"CaseSpec 增 subsystems；api._kc_assembly 接受子系统集；contract.has_rack 判定；_driven_coordinates/axis_map/case_document 按 has_rack 收缩；api._k_drives 省略 rack_displacement。实测无转向运行 3 states，drives 仅 wheel_travel_*；有转向仍含 rack_displacement"
+05,内核 shorthand 接受无 rack 轴,DONE,"kc_quasi_static.cpp：rack_values_mm/axis_map.rack 改为可选，缺省时 racks 置 [0.0]；模型确有 rack 坐标而轴为空仍拒绝。重建 native 后 kc_parity 与 case_parity 均无漂移"
+06,公共入口可请求无转向,DONE,"api.run_case(无 rack_center 模型, CaseSpec(mode=K, subsystems=无 steering)) 实际求解；非单轴角色（如 brake）点名拒绝"
+07,兼容性保持,DONE,"CaseSpec.subsystems 默认 None=默认集，既有调用方不变；DynamicCaseSpec 无该字段，replay 路径沿用默认轴；returns 类型与历史读取未改"
+08,主验收与补充门,DONE,"tests/results+outputs+metrics+architecture 233 passed；tests/api 20 passed（新增 17 项）；kc_parity 无漂移；case_parity 8 families PASS；ruff/ty 通过"

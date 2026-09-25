@@ -56,4 +56,11 @@ bool contract_case_family_known(const std::string& name);
 /// Number of registered entries in each table (used by the self-test).
 int contract_registry_size(int table);
 
+/// The `index`-th name of a name-only table, or nullptr when out of range.
+///
+/// Table ids match `contract_registry_size`.  `kJoints` is not enumerable here:
+/// it carries row counts as well, and a caller reading its names from this
+/// function could pick up the count from the wrong place.
+const char* contract_registry_name(int table, int index);
+
 }  // namespace axle_kernel

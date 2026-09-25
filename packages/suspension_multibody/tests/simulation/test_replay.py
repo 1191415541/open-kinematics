@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from suspension_multibody import __version__
-from suspension_multibody.preparation.geometry import rotation_vector_to_quaternion
+from suspension_multibody.modeling.primitives import rotation_vector_to_quaternion
 from suspension_multibody.preparation.signals import time_grid
 from suspension_multibody.results import TimeSeriesResult, TimeSeriesSample
 from suspension_multibody.results.timeseries import aggregate_replay_samples

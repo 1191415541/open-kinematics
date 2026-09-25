@@ -3,7 +3,7 @@ The joint definition table itself.
 
 Row counts mirror `packages/suspension_kernel/cpp/src/contract/contract_registry.cpp`
 (which in turn mirrors `mb_joint/types.hpp`).  The authoring name is the dataclass
-name in `preparation/assembly/types.py`; the kernel name is what the contract
+name in `modeling/primitives/joints.py`; the kernel name is what the contract
 document writes into a joint's `type` field.
 
 `constant_velocity` is the one place the two names differ.  The document spelling
@@ -59,7 +59,7 @@ class JointDefinition:
     A joint is named twice in the authoring layer, and the table carries both so
     the translation lives in exactly one place:
 
-    * `authoring_name` -- the dataclass in `preparation/assembly/types.py`, used
+    * `authoring_name` -- the dataclass in `modeling/primitives/joints.py`, used
       by the kc authoring path;
     * `schema_kind` -- the `kind` literal in the axle/vehicle dynamic schemas,
       used by the dynamic authoring path.
@@ -76,7 +76,7 @@ class JointDefinition:
     here.
     """
 
-    #: The dataclass name in `preparation/assembly/types.py` (empty if none).
+    #: The dataclass name in `modeling/primitives/joints.py` (empty if none).
     authoring_name: str
     #: The `type` string the contract document carries.
     kernel_name: str

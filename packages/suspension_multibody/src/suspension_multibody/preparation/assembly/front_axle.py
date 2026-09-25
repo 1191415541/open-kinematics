@@ -26,7 +26,7 @@ caller builds what it built before.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Literal, cast
 
@@ -39,6 +39,20 @@ from ...elements import (
     LinearSpringElement,
     StaticDamperElement,
     VerticalTireElement,
+)
+from ...modeling.primitives import (
+    SE3,
+    BallJoint,
+    ConstantVelocityJoint,
+    Constraint,
+    CylindricalJoint,
+    InPlaneJoint,
+    PrismaticJoint,
+    RevoluteJoint,
+    RigidBody,
+    RigidBodyState,
+    UniversalJoint,
+    WeldJoint,
 )
 from ...schema import (
     AntiRollBar,
@@ -76,20 +90,6 @@ from ...subsystems.geometry import (
     side_hardpoints,
 )
 from ...subsystems.types import Connection, ResolvedElement
-from ..geometry import SE3
-from .types import (
-    BallJoint,
-    ConstantVelocityJoint,
-    Constraint,
-    CylindricalJoint,
-    InPlaneJoint,
-    PrismaticJoint,
-    RevoluteJoint,
-    RigidBody,
-    RigidBodyState,
-    UniversalJoint,
-    WeldJoint,
-)
 
 __all__ = [
     "AssemblyCapabilities",
@@ -435,11 +435,48 @@ def _build_explicit_axle(
         ideal_constraints=tuple(constraints),
         bushings=explicit_bushings if mode == "C" else (),
         elements=runtime_elements,
+        # The roles are derived from what this build actually produced, not
+        # asserted as a set.  An explicit source model that declares no rack body
+        # has no steering subsystem, and claiming one made the rig offer a rack
+        # coordinate the model does not declare -- the run then failed inside the
+        # kernel with "unknown coordinate rack_drive", which names the symptom and
+        # not the cause.
         capabilities=capabilities_for(
-            subsystems=frozenset({"chassis", "suspension", "steering", "wheel"}),
+            subsystems=_explicit_roles(bodies, constraints, points),
             body_names=frozenset(bodies),
         ),
     )
+
+
+def _explicit_roles(
+    bodies: dict[str, RigidBody],
+    constraints: Sequence[Constraint],
+    points: dict[tuple[str, str], np.ndarray],
+) -> frozenset[str]:
+    """
+    Return the subsystem roles an explicit build actually produced.
+
+    An explicit source model states its parts and joints directly, so there is no
+    request to read the roles off.  They are read off the *result* instead: a rack
+    body means steering, a wheel-carrying body means the wheel subsystem, and the
+    chassis is the fixed body the rest hangs from.  Suspension is present whenever
+    a non-chassis body is connected, which is what distinguishes a suspension
+    assembly from a bare chassis.
+
+    Reading the build rather than declaring the set is the same rule the
+    symmetric path follows from its request: the capability has to be a
+    consequence of the model, or a rig plans against a coordinate that does not
+    exist.
+    """
+    roles: set[str] = {"chassis"}
+    free = [name for name, body in bodies.items() if name != "chassis" and not body.fixed]
+    if free and constraints:
+        roles.add("suspension")
+    if "rack" in bodies or "rack_housing" in bodies:
+        roles.add("steering")
+    if any(label == "wheel_center" for _, label in points):
+        roles.add("wheel")
+    return frozenset(roles)
 
 
 def _spring(row: ResolvedElement, spec: LinearSpring) -> LinearSpringElement:

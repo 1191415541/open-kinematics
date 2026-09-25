@@ -38,7 +38,7 @@ from ...joints import (
     validate_joint_axes,
 )
 from ...kernel.solver import solver_settings_document as _solver_settings_document
-from ...preparation.assembly.types import (
+from ...modeling.primitives.joints import (
     ConstantVelocityJoint,
     CylindricalJoint,
     InPlaneJoint,
@@ -194,11 +194,11 @@ def model_document(assembly, *, name: str = "front-axle", drive_wheels: bool = T
     markers = [
         {
             "name": f"wheel_center_{side}",
-            "body": f"upright_{side}",
-            "point": _vec3(assembly.point(f"upright_{side}", "wheel_center")),
+            "body": body,
+            "point": _vec3(assembly.point(body, "wheel_center")),
         }
         for side in ("L", "R")
-        if f"upright_{side}" in assembly.bodies
+        if (body := wheel_centre_body(assembly, side)) is not None
     ]
 
     _, driven_joints = _driven_coordinates(assembly, drive_wheels=drive_wheels)
@@ -212,6 +212,7 @@ def model_document(assembly, *, name: str = "front-axle", drive_wheels: bool = T
         "bodies": bodies,
         "joints": joints + driven_joints,
         "elements": elements,
+        "tires": _tire_entries(assembly, markers),
         "markers": markers,
         # A `c` path loads the wheel centre, which is a point of the upright
         # rather than the upright's origin.  Naming the marker here is what
@@ -221,6 +222,84 @@ def model_document(assembly, *, name: str = "front-axle", drive_wheels: bool = T
         "body_wrench_markers": [marker["name"] for marker in markers],
     }
     return document
+
+
+#: The tire properties a vertical declaration does not carry.  The kernel
+#: requires each of them strictly positive even where a static solve uses only
+#: the vertical branch, so they are the *neutral* values rather than zeros:
+#: unit friction, unit brush stiffness, unit relaxation lengths.  They are not
+#: tuning knobs -- a K/C state has no slip for them to act on -- and writing a
+#: zero would be refused by the model reader rather than ignored by the solve.
+_TIRE_NEUTRAL_COEFFICIENTS: dict[str, float] = {
+    "longitudinal_friction_coefficient": 1.0,
+    "lateral_friction_coefficient": 1.0,
+    "longitudinal_brush_stiffness": 1.0,
+    "lateral_brush_stiffness": 1.0,
+    "longitudinal_relaxation_length": 1.0,
+    "lateral_relaxation_length": 1.0,
+    "detached_relaxation_s": 1.0,
+}
+
+
+def _tire_entries(
+    assembly, markers: list[dict[str, object]]
+) -> list[dict[str, object]]:
+    """
+    Describe the assembly's vertical tires as contract tire entries.
+
+    This is the K/C path's half of decision D1: a quasi-static state has no
+    slip, so the tire acts through its vertical branch alone, but it is *the
+    same law* the dynamic study uses rather than a second one.  Leaving the
+    tires out -- which is what this used to do -- meant the vertical response
+    never entered the residual at all, so changing the tire changed nothing and
+    the run looked right while carrying no wheel load.
+
+    The declaration is what the model has: a wheel body, a wheel-centre point, a
+    vertical stiffness and an unloaded radius.  Everything the vertical branch
+    cannot use is written as its neutral value and named above, so the entry
+    says "these are inert here" instead of leaving a reader to infer it from a
+    zero that the model reader would in fact refuse.
+
+    ``maximum_compression`` is half the radius, which is the bound the model's
+    own schema and the solver's contact loop both need to be physical.  The
+    declared tire has no compression limit of its own, so the value is stated
+    rather than invented per call.
+    """
+    entries: list[dict[str, object]] = []
+    centers = {str(marker["body"]): marker for marker in markers}
+    for element in getattr(assembly, "elements", ()):
+        if type(element).__name__ != "VerticalTireElement":
+            continue
+        body = str(element.wheel_body)
+        radius = float(element.unloaded_radius)
+        marker = centers.get(body)
+        center = (
+            marker["point"]
+            if marker is not None
+            else _vec3(element.wheel_center_local)
+        )
+        parameters: dict[str, object] = {
+            "center_local": [float(value) for value in center],
+            # The axis the vertical branch acts along.  The K/C model's up
+            # direction is +Z and its tires are declared upright, so this is
+            # the declaration rather than a measurement.
+            "spin_axis_local": [0.0, 1.0, 0.0],
+            "forward_axis_local": [1.0, 0.0, 0.0],
+            "unloaded_radius": radius,
+            "maximum_compression": radius * 0.5,
+            "vertical_stiffness": float(element.stiffness),
+            "vertical_damping": 0.0,
+            **_TIRE_NEUTRAL_COEFFICIENTS,
+        }
+        entries.append(
+            {
+                "name": str(element.name),
+                "model": "native_brush",
+                "body": body,
+                "parameters": parameters,
+            }
+        )
+    return entries
 
 
 def _bushing_element(bushing) -> dict[str, object]:
@@ -255,6 +334,13 @@ def _driven_coordinates(assembly, *, drive_wheels: bool):
     travel into the absolute separation the kernel's constraint row measures.
     The axis is written in the reaction body's frame because that is the frame
     the relative separation is measured in.
+
+    The rack row is emitted only when the assembly actually has a rack.  This is
+    the shrink the rig has always promised and the document did not deliver: a
+    single-axle assembly with no steering subsystem carries no `rack` body, so
+    asking it for one raised `KeyError: ('rack', 'center')` -- a run that failed
+    for a reason with no relation to what the caller asked.  "The assembly has no
+    rack axis" now means the axis is *absent*, not that it is neutral or zero.
     """
     coordinates: list[tuple[str, dict[str, object]]] = []
 
@@ -274,24 +360,94 @@ def _driven_coordinates(assembly, *, drive_wheels: bool):
 
     if drive_wheels:
         for side in ("L", "R"):
+            body = wheel_centre_body(assembly, side)
+            if body is None:
+                continue
             add(
                 f"wheel_drive_{side}",
                 "translation",
-                f"upright_{side}",
-                assembly.point(f"upright_{side}", "wheel_center"),
+                body,
+                assembly.point(body, "wheel_center"),
                 (0.0, 0.0, 1.0),
             )
         rack_name = "rack_drive"
     else:
         rack_name = "rack_neutral"
-    add(
-        rack_name,
-        "translation",
-        "rack",
-        assembly.point("rack", "center"),
-        (0.0, 1.0, 0.0),
-    )
+    if has_rack(assembly):
+        add(
+            rack_name,
+            "translation",
+            "rack",
+            assembly.point("rack", "center"),
+            (0.0, 1.0, 0.0),
+        )
     return coordinates, [entry for _, entry in coordinates]
+
+
+def has_rack(assembly) -> bool:
+    """
+    Return whether an assembly carries a rack body and a rack-centre point.
+
+    The question is asked of the *assembly*, not of a role name or a family: an
+    assembly builds its rack only when it carries the steering subsystem, and a
+    document that asked for the coordinate anyway would be asking for a body that
+    does not exist.  Both halves are required -- a body with no centre point has
+    no axis to drive along, which is the other half of the same mistake.
+    """
+    bodies = getattr(assembly, "bodies", {})
+    points = getattr(assembly, "points", {})
+    return "rack" in bodies and ("rack", "center") in points
+
+
+#: The body names a wheel centre is conventionally attached to, in the order the
+#: lookup tries them.  A model may name the wheel-carrying body anything; these
+#: are the spellings the built-in topologies use, and the *point* is what decides
+#: -- a body that declares no `wheel_center` is not the carrier, whatever it is
+#: called.
+_WHEEL_CENTRE_BODIES: tuple[str, ...] = ("upright", "knuckle", "hub_carrier", "trailing_arm")
+
+
+def wheel_centre_body(assembly, side: str) -> str | None:
+    """
+    Return the body that carries one side's wheel centre, whatever it is called.
+
+    This used to be spelled `f"upright_{side}"` at every call site, which is a
+    *template name*: a trailing-arm axle whose wheel-carrying body is
+    `trailing_arm_L` produced a document that asked for a body it did not have.
+    A compiler that knows a template's part names cannot compile a topology it has
+    not seen -- which is exactly what a fixed set of templates would have hidden.
+
+    The search is by *declaration*: a body carrying a `wheel_center` point is the
+    one the wheel centre belongs to.  The conventional names are tried first so
+    the answer for the built-in topologies is the same as it always was, and the
+    full body list is then searched so a novel name is found too.  Two candidates
+    are refused rather than guessed at: a model with two wheel-carrying bodies per
+    side is ambiguous, and picking one would silently attach the wheel to the
+    wrong part.
+    """
+    candidates = [f"{stem}_{side}" for stem in _WHEEL_CENTRE_BODIES]
+    decided = [name for name in candidates if _carries_wheel_centre(assembly, name)]
+    if not decided:
+        decided = sorted(
+            name
+            for name in getattr(assembly, "bodies", {})
+            if name.endswith(f"_{side}") and _carries_wheel_centre(assembly, name)
+        )
+    if len(decided) > 1:
+        raise NativeKcError(
+            f"side {side} declares more than one wheel centre ({', '.join(decided)}); "
+            "a wheel centre belongs to exactly one body, and picking one would "
+            "attach the wheel to the wrong part"
+        )
+    return decided[0] if decided else None
+
+
+def _carries_wheel_centre(assembly, body: str) -> bool:
+    """Return whether one body declares the wheel-centre point."""
+    return (
+        body in getattr(assembly, "bodies", {})
+        and ("wheel_center" in {label for _, label in assembly.points if _ == body})
+    )
 
 
 def solver_settings_document(settings, *, times_s=None) -> dict[str, object]:
@@ -348,19 +504,28 @@ def case_document(
     if settings is not None:
         document["solver"] = solver_settings_document(settings, times_s=times_s)
     if wheel_values_mm or rack_values_mm:
+        # The axis map names the driven coordinates the grid moves.  The rack
+        # entry appears only when the model actually declared a rack coordinate:
+        # `next(...)` over the names raised `StopIteration` on a steering-less
+        # assembly, which is a failure that says nothing about why, and the run
+        # that "succeeded" by padding the axis with zeros was worse -- it looked
+        # steered and was not.
+        axis_map: dict[str, object] = {
+            "wheel": [
+                value for value in driven_names if value.startswith("wheel_drive_")
+            ],
+        }
+        rack_name = next(
+            (value for value in driven_names if value.startswith("rack_")), None
+        )
+        if rack_name is not None:
+            axis_map["rack"] = rack_name
         document["k"] = {
             "wheel_values_mm": [float(v) for v in wheel_values_mm],
             "rack_values_mm": [float(v) for v in rack_values_mm],
             "drive": drive,
             "left_right_mode": left_right_mode,
-            "axis_map": {
-                "wheel": [
-                    value for value in driven_names if value.startswith("wheel_drive_")
-                ],
-                "rack": next(
-                    value for value in driven_names if value.startswith("rack_")
-                ),
-            },
+            "axis_map": axis_map,
         }
     if paths:
         document["c"] = {

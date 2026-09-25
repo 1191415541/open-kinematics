@@ -17,7 +17,7 @@ parts.  A template with zero parts and a template with four parts differ in thei
 
 from __future__ import annotations
 
-from ..preparation.assembly.types import RigidBody
+from ..modeling.primitives.joints import RigidBody
 from ..templates import SubsystemInstance
 from .geometry import body_from_spec, body_without_spec
 from .types import SubsystemContext, SubsystemOutput

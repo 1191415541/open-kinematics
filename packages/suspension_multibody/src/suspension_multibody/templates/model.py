@@ -15,18 +15,36 @@ and `MAJOR_ROLE` is a field inside it rather than a different kind of file.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from ..modeling.instance import ModelFragment
+from .ports import PortDeclaration, PortNeed
 from .roles import RoleSpec, get_role
 
 __all__ = [
+    "Builder",
     "ConnectionDefinition",
     "OutputDeclaration",
     "PartDefinition",
+    "PortDeclaration",
+    "PortNeed",
     "PropertySlot",
     "Template",
     "TemplateError",
+]
+
+#: A template's builder: called with resolved parameters, properties, the active
+#: mode and the ports bound so far, and returning the entities it contributes.
+#:
+#: It is a plain callable rather than a method so a template can be *authored* by
+#: filling in declarations, without any Python at all -- the two authoring routes
+#: then produce the same `ModelFragment` and go through the same validation.  The
+#: function itself is never serialised: a template that carries a builder writes
+#: only its name into the document, and the registry resolves it.
+Builder = Callable[
+    [Mapping[str, Any], Mapping[str, float], str, Mapping[str, Any]], ModelFragment
 ]
 
 
@@ -149,10 +167,21 @@ class Template:
     elastic_slots: tuple[str, ...] = ()
     property_slots: tuple[PropertySlot, ...] = ()
     outputs: tuple[OutputDeclaration, ...] = ()
+    #: Ports this template offers to its neighbours.
+    ports: tuple[PortDeclaration, ...] = ()
+    #: What this template needs from its neighbours.
+    needs: tuple[PortNeed, ...] = ()
     #: The template family, e.g. "double_wishbone".  Distinct from `role`.
     suspension_kind: str = ""
     #: Free-text description for the registry listing.
     description: str = ""
+    #: Name of the registered builder that produces this template's entities.
+    #:
+    #: A name rather than the callable itself, because a template must be
+    #: serialisable: writing a function into a document would make the round trip
+    #: lossy and would let a template carry executable behaviour into the model
+    #: contract.  The registry resolves the name at instantiation.
+    builder: str = ""
 
     @property
     def role_spec(self) -> RoleSpec:
@@ -226,6 +255,30 @@ class Template:
                 f"template {self.name!r} declares duplicate property slot(s) "
                 f"{duplicates}"
             )
+        port_names = [port.name for port in self.ports]
+        if len(set(port_names)) != len(port_names):
+            duplicates = sorted({n for n in port_names if port_names.count(n) > 1})
+            raise TemplateError(
+                f"template {self.name!r} declares duplicate port(s) {duplicates}"
+            )
+        # A port attached to a part that does not exist is a reference to nothing:
+        # it would be discovered at binding time, far from its cause.
+        part_names = set(names)
+        for port in self.ports:
+            if port.owner and port.owner not in part_names:
+                raise TemplateError(
+                    f"template {self.name!r} attaches port {port.name!r} to "
+                    f"{port.owner!r}, which is not one of its parts"
+                )
+        # A need may repeat a role (two wheels need the same thing), so needs are
+        # not required to be unique -- but an optional need must record what
+        # disappears with it, or a shrink silently orphans an output.
+        for need in self.needs:
+            if not need.required and not need.bound_outputs:
+                raise TemplateError(
+                    f"template {self.name!r} declares optional need {need.role!r} "
+                    "without bound_outputs; say which outputs disappear with it"
+                )
 
 
 def _parts_to_json(template: Template) -> list[dict[str, Any]]:
@@ -273,8 +326,36 @@ def template_to_json(template: Template) -> dict[str, Any]:
             {"name": output.name, "unit": output.unit, "source": output.source}
             for output in template.outputs
         ],
+        "ports": [
+            {
+                "name": port.name,
+                "role": port.role,
+                "owner": port.owner,
+                "kind": port.kind,
+                "capabilities": sorted(port.capabilities),
+                "labels": sorted(port.labels),
+                "cardinality": port.cardinality,
+                "family": port.family,
+                "units": port.units,
+                "direction": None if port.direction is None else list(port.direction),
+            }
+            for port in template.ports
+        ],
+        "needs": [
+            {
+                "role": need.role,
+                "requires_capabilities": sorted(need.requires_capabilities),
+                "match_labels": sorted(need.match_labels),
+                "count": need.count,
+                "required": need.required,
+                "bound_outputs": list(need.bound_outputs),
+                "note": need.note,
+            }
+            for need in template.needs
+        ],
         "suspension_kind": template.suspension_kind,
         "description": template.description,
+        "builder": template.builder,
     }
 
 
@@ -318,8 +399,40 @@ def template_from_json(payload: dict[str, Any]) -> Template:
             )
             for output in payload.get("outputs", ())
         ),
+        ports=tuple(
+            PortDeclaration(
+                name=str(port["name"]),
+                role=str(port["role"]),
+                owner=str(port.get("owner", "")),
+                kind=str(port.get("kind", "geometry")),
+                capabilities=frozenset(port.get("capabilities", ())),
+                labels=frozenset(port.get("labels", ())),
+                cardinality=str(port.get("cardinality", "one")),
+                family=str(port.get("family", "")),
+                units=str(port.get("units", "")),
+                direction=(
+                    None
+                    if port.get("direction") is None
+                    else tuple(float(v) for v in port["direction"])
+                ),
+            )
+            for port in payload.get("ports", ())
+        ),
+        needs=tuple(
+            PortNeed(
+                role=str(need["role"]),
+                requires_capabilities=frozenset(need.get("requires_capabilities", ())),
+                match_labels=frozenset(need.get("match_labels", ())),
+                count=int(need.get("count", 1)),
+                required=bool(need.get("required", True)),
+                bound_outputs=tuple(str(n) for n in need.get("bound_outputs", ())),
+                note=str(need.get("note", "")),
+            )
+            for need in payload.get("needs", ())
+        ),
         suspension_kind=str(payload.get("suspension_kind", "")),
         description=str(payload.get("description", "")),
+        builder=str(payload.get("builder", "")),
     )
 
 

@@ -27,12 +27,12 @@ import numpy as np
 from ..cases.kc_quasi_static.contract import case_document, model_document
 from ..cases.kc_quasi_static.convert import MM, NativeKcError, quaternion_to_rotation
 from ..cases.kc_quasi_static.load_paths import LoadPath
-from ..preparation.assembly import side_hardpoints
-from ..preparation.geometry import (
+from ..modeling.primitives.spatial import (
     quaternion_conjugate,
     quaternion_multiply,
     quaternion_to_rotation_vector,
 )
+from ..preparation.assembly import side_hardpoints
 from ..schema import Bushing6x6, FrontAxleModel, MassSpec, Pose, Vec3
 from ..simulation import SimulationRequest, run_request
 from .adapter import SmokeResult, Tolerance

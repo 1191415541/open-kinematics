@@ -32,6 +32,7 @@ __all__ = [
     "RigError",
     "RigSpec",
     "get_rig",
+    "rig_family",
     "rig_names",
 ]
 
@@ -82,7 +83,22 @@ class RigSpec:
     study: str | None = None
     #: Whether this bench supplies the wheels itself (a single-axle rig does).
     supplies_wheels: bool = False
+    #: The case family this bench runs through, when that differs from the
+    #: bench's own name.  Empty means the two coincide, which is how every
+    #: shipped bench has been named until now.
+    #:
+    #: The family is the *contract routing key*: it selects the compiler and the
+    #: preparation, and it is an internal compatibility axis rather than a bench
+    #: identity.  Keeping it a separate field is what lets a newly authored
+    #: bench run an existing family -- and lets either name change -- without
+    #: one having to be the other.
+    family: str = ""
     description: str = ""
+
+    @property
+    def route(self) -> str:
+        """Return the case family this bench routes to."""
+        return self.family or self.name
 
     def coordinate_names(self) -> tuple[str, ...]:
         """Return the coordinates this rig drives, in declaration order."""
@@ -188,3 +204,17 @@ def get_rig(name: str) -> RigSpec:
     except KeyError as error:
         known = ", ".join(RIG_NAMES)
         raise RigError(f"unknown rig {name!r}; the registered rigs are {known}") from error
+
+
+def rig_family(rig: str | RigSpec) -> str:
+    """
+    Return the case family a bench routes to.
+
+    The two axes are separate on purpose: a bench is what drives and measures,
+    a family is which compiler and preparation the contract runs through.
+    Reading the family off the bench is what lets a request name only the bench
+    it wants -- the bench picks the reading -- while a caller that knows the
+    family can still name it, and the two need not be spelled the same.
+    """
+    spec = rig if isinstance(rig, RigSpec) else get_rig(rig)
+    return spec.route

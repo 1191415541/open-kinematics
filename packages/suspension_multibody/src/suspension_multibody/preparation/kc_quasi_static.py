@@ -71,7 +71,11 @@ def _validate_identity(request: SimulationRequest) -> None:
 
 
 def assembly_for(
-    model: Any, *, mode: Literal["K", "C"], rig: str
+    model: Any,
+    *,
+    mode: Literal["K", "C"],
+    rig: str,
+    request: Any = None,
 ) -> FrontAxleAssembly:
     """
     Return the assembly this family runs, with its bench checked.
@@ -91,6 +95,12 @@ def assembly_for(
     The mode is passed to the study layer rather than resolved here, so a C
     assembly asked for the K reading is refused by the same check that guards
     every other study entry.
+
+    ``request`` carries the *subsystem set* when the caller wants something other
+    than the default axle, which is how a run can be asked for without steering.
+    It is an ``AssemblyRequest`` and it is passed straight through: the study
+    layer already decides the mode, and re-deriving it here would be a second
+    answer to a question this function has just been told.
     """
     from ..rigs import check_assembly
     from ..studies import QUASI_STATIC, build_study_assembly
@@ -100,7 +110,18 @@ def assembly_for(
             "kc quasi-static preparation requires a FrontAxleAssembly or "
             f"FrontAxleModel, got {type(model).__name__}"
         )
-    assembly = build_study_assembly(model, study=QUASI_STATIC, mode=mode).assembly
+    if request is not None:
+        # A caller that states the subsystem set owns the mode with it, so the
+        # two are checked for agreement rather than one silently winning.
+        stated = getattr(request, "mode", mode)
+        if stated != mode:
+            raise ValueError(
+                f"the run asks for mode {mode!r} and the assembly request says "
+                f"{stated!r}; pass one or the other"
+            )
+    assembly = build_study_assembly(
+        model, study=QUASI_STATIC, mode=mode, request=request
+    ).assembly
     check_assembly(ASSEMBLY, rig, getattr(assembly, "capabilities", None))
     return assembly
 

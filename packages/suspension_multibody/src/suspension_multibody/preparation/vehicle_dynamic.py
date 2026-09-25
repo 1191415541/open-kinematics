@@ -22,6 +22,7 @@ from typing import Any
 import numpy as np
 
 from ..axle_dynamics.schema import (
+    PRESCRIBED_STEERING_TYPES,
     AxleAerodynamicDrag,
     AxleAntiRollBar,
     AxleBody,
@@ -42,19 +43,7 @@ from ..elements import (
     StaticDamperElement,
     VerticalTireElement,
 )
-from ..schema import (
-    DynamicSolverSettings,
-    RoadSurfaceSpec,
-    SteeringSystemSpec,
-    UnitSystem,
-    VehicleDynamicCase,
-    VehicleModel,
-    WheelSpec,
-)
-from ..simulation.preparation import PreparedSimulation
-from ..simulation.request import SimulationRequest
-from .assembly import VehicleAssembly, build_vehicle
-from .assembly.types import (
+from ..modeling.primitives import (
     BallJoint,
     ConstantVelocityJoint,
     CoordinateDrive,
@@ -67,6 +56,18 @@ from .assembly.types import (
     UniversalJoint,
     WeldJoint,
 )
+from ..schema import (
+    DynamicSolverSettings,
+    RoadSurfaceSpec,
+    SteeringSystemSpec,
+    UnitSystem,
+    VehicleDynamicCase,
+    VehicleModel,
+    WheelSpec,
+)
+from ..simulation.preparation import PreparedSimulation
+from ..simulation.request import SimulationRequest
+from .assembly import VehicleAssembly, build_vehicle
 
 _WHEEL_NAMES = ("front_left", "front_right", "rear_left", "rear_right")
 _ROAD_KIND = {
@@ -307,7 +308,12 @@ def prepare_vehicle_run(
     )
 
 
-_PRESCRIBED_STEERING_TYPES = (2, 3)
+
+#: Re-exported from the contract layer, where the value belongs: both the
+#: authoring side and the decoding side need it, and having either own it made
+#: them import each other.  The name stays in ``__all__`` for callers that reach
+#: it through this module.
+_PRESCRIBED_STEERING_TYPES = PRESCRIBED_STEERING_TYPES
 
 
 def _length_scale(units: UnitSystem) -> float:

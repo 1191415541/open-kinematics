@@ -7,14 +7,7 @@ data they produce.  Nothing in this package solves, submits native or decodes a
 result: the assembly is authored here and solved in the kernel.
 """
 
-from .front_axle import (
-    Connection,
-    FrontAxleAssembly,
-    build_front_axle,
-    mirror_hardpoints,
-    side_hardpoints,
-)
-from .types import (
+from ...modeling.primitives import (
     BallJoint,
     ConstantVelocityJoint,
     Constraint,
@@ -29,6 +22,13 @@ from .types import (
     RigidBodyState,
     UniversalJoint,
     WeldJoint,
+)
+from .front_axle import (
+    Connection,
+    FrontAxleAssembly,
+    build_front_axle,
+    mirror_hardpoints,
+    side_hardpoints,
 )
 from .vehicle import VehicleAssembly, build_vehicle
 

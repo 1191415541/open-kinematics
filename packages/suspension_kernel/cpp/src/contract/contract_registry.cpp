@@ -83,4 +83,33 @@ int contract_registry_size(int table) {
   }
 }
 
+const char* contract_registry_name(int table, int index) {
+  // Only the name-only tables are enumerable this way.  `kJoints` carries row
+  // counts as well, so it is queried through `contract_joint_rows`; exposing its
+  // names here would invite a caller to read the count from the wrong place.
+  switch (table) {
+    case 1:
+      if (index < 0 ||
+          index >= static_cast<int>(sizeof(kElements) / sizeof(kElements[0]))) {
+        return nullptr;
+      }
+      return kElements[index];
+    case 2:
+      if (index < 0 ||
+          index >= static_cast<int>(sizeof(kTires) / sizeof(kTires[0]))) {
+        return nullptr;
+      }
+      return kTires[index];
+    case 3:
+      if (index < 0 ||
+          index >=
+              static_cast<int>(sizeof(kCaseFamilies) / sizeof(kCaseFamilies[0]))) {
+        return nullptr;
+      }
+      return kCaseFamilies[index];
+    default:
+      return nullptr;
+  }
+}
+
 }  // namespace axle_kernel

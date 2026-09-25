@@ -231,18 +231,27 @@ bool expand_k(const JsonValue& document, const ContractModel& model,
   }
 
   const JsonValue* wheels_json = k->find("wheel_values_mm");
-  const JsonValue* rack_json = k->find("rack_values_mm");
-  if (wheels_json == nullptr || rack_json == nullptr) {
-    return fail(error, "the k section needs wheel_values_mm and rack_values_mm");
+  if (wheels_json == nullptr) {
+    return fail(error, "the k section needs wheel_values_mm");
   }
   std::vector<double> wheels;
-  std::vector<double> racks;
-  if (!read_numbers(*wheels_json, wheels, "k.wheel_values_mm", error) ||
-      !read_numbers(*rack_json, racks, "k.rack_values_mm", error)) {
+  if (!read_numbers(*wheels_json, wheels, "k.wheel_values_mm", error)) {
     return false;
   }
-  if (wheels.empty() || racks.empty()) {
+  if (wheels.empty()) {
     return fail(error, "the k grid must not be empty");
+  }
+  // A rack axis is optional, and its absence is a *different statement* from a
+  // rack axis of zero: a single-axle model with no steering subsystem declares no
+  // rack coordinate at all, and a sweep that carried `rack_values_mm: [0.0]`
+  // would say the assembly has a rack sitting at neutral.  The document already
+  // distinguishes the two by omitting the key; refusing the omission here made
+  // the shorthand unable to express a run the model can legally declare.
+  const JsonValue* rack_json = k->find("rack_values_mm");
+  std::vector<double> racks;
+  if (rack_json != nullptr &&
+      !read_numbers(*rack_json, racks, "k.rack_values_mm", error)) {
+    return false;
   }
 
   // The grid axes name the driven coordinates they move.  Without this the
@@ -254,8 +263,8 @@ bool expand_k(const JsonValue& document, const ContractModel& model,
   }
   const JsonValue* wheel_names = axis_map->find("wheel");
   const std::string* rack_name = axis_map->find_string("rack");
-  if (wheel_names == nullptr || !wheel_names->is_array() || rack_name == nullptr) {
-    return fail(error, "k.axis_map needs a wheel list and a rack name");
+  if (wheel_names == nullptr || !wheel_names->is_array()) {
+    return fail(error, "k.axis_map needs a wheel list");
   }
 
   std::vector<std::size_t> wheel_indices;
@@ -271,7 +280,7 @@ bool expand_k(const JsonValue& document, const ContractModel& model,
     }
     wheel_indices.push_back(static_cast<std::size_t>(index));
   }
-  {
+  if (rack_name != nullptr) {
     const int index = model.driven_index(*rack_name);
     if (index < 0) {
       return fail(error, "k.axis_map.rack names unknown coordinate " + *rack_name);
@@ -280,6 +289,18 @@ bool expand_k(const JsonValue& document, const ContractModel& model,
   }
   if (wheel_indices.empty()) {
     return fail(error, "k.axis_map.wheel must name at least one coordinate");
+  }
+  // An empty rack axis with no rack coordinate in the model is the steering-less
+  // case, and it sweeps nothing in that dimension.  A rack axis that is empty
+  // while the model *does* declare the coordinate is still refused: it would
+  // silently hold the rack at the assembling value under a name that says it is
+  // swept.
+  if (racks.empty() && !rack_indices.empty()) {
+    return fail(error, "k.rack_values_mm must not be empty when the model "
+                       "declares a rack coordinate");
+  }
+  if (racks.empty()) {
+    racks.push_back(0.0);
   }
 
   // How the sweep is distributed across the wheels it names.  A symmetric bump

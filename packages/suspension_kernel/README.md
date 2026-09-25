@@ -28,8 +28,12 @@ through `suspension_kernel.binding`.
 
 An earlier version of this section said the kernel contains no element
 semantics. That was true of the kernel's first incarnation and has not been true
-since the takeover: `mb_suspension`, `mb_tire` and `mb_static` are the element
-and solver layers, and this file is the place that has to say so.
+since the takeover. The element and solver layers are `mb_element` (the force
+elements and their constitutive laws, scalar and directional together),
+`mb_tire`/`mb_tire_fiala`/`mb_tire_pac2002`/`mb_tire_brush` (the tire laws and
+their per-tire states), and `mb_solve_static`/`mb_solve_dynamic` (the solvers).
+The older names `mb_suspension`, `mb_static` and `mb_vehicle` no longer exist;
+`MODULES.md` records what each of them became.
 
 ## Build
 

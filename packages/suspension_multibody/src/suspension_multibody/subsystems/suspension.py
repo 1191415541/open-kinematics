@@ -26,13 +26,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..preparation.assembly.types import (
+from ..modeling.primitives.joints import (
     BallJoint,
     Constraint,
     RevoluteJoint,
     RigidBody,
 )
-from ..preparation.geometry import SE3
+from ..modeling.primitives.spatial import SE3
 from .geometry import body_from_spec, body_without_spec, resolve_body
 from .types import (
     Connection,

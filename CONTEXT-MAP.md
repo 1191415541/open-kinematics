@@ -14,12 +14,20 @@ The root `uv.lock` is the workspace's only tracked dependency lockfile.
 - `suspension_kinematics`: daily suspension geometry design and optimization.
 - `suspension_multibody`: high-fidelity quasi-static K&C, load analysis, the
   axle dynamics semantics layer over the native kernel, and optional Adams
-  validation. Its Python surface is the authoring layer (`preparation/`), the
-  contract, result and runner layers (`schema/`, `results/`, `kernel/`,
-  `simulation/`, `cases/`) and the reporting layer (`report/`); the `elements/`
-  (A1) and `analysis/` (A2) packages stay where they are, with the reason and
-  removal condition recorded per item in the deletion record of
-  `.codex-tasks/20260921-architecture-deviation-closure/tasks/20260921-08-delete/`.
+  validation. Its Python surface is layered by dependency direction: the low
+  layer (`modeling/`, with `modeling/primitives/` holding the spatial algebra and
+  the joint/body declarations), the authoring layer (`templates/`,
+  `connections/`, `rigs/`, `subsystems/`, `preparation/`, `cases/`), the
+  compilation layer (`compilation/`, `simulation/`, `studies/`), and the result
+  and reporting layer (`schema/`, `results/`, `outputs/`, `report/`, `io/`).
+  `modeling/` must not import any of the layers above it, and
+  `tests/architecture/test_import_boundaries.py` enforces that in a fresh
+  process per entry point. The `elements/` (A1) and `analysis/` (A2) packages
+  stay where they are; both have live production callers and a native
+  capability that does not exist yet, and the reason, blocking condition and
+  release condition for each are stated in
+  `packages/suspension_multibody/README.md` and checked against the boundary
+  gate by `packages/suspension_multibody/scripts/check_composable_release.py`.
 
 ## Native axle dynamics kernel
 
@@ -63,13 +71,18 @@ Generated analysis results, animations, and Adams evidence belong below
 ignored and are not package source, release input, or a dependency of runtime
 code.
 
-## Composable Multibody Architecture Plan
+## Composable multibody architecture
 
-The target design is recorded in
+The composable architecture is implemented, and the packages above describe the
+state it produced. The migration record -- what each subtask changed, and what it
+verified -- is in
 [EPIC.md](.codex-tasks/multibody-composable-architecture/EPIC.md) and
-[DESIGN.md](.codex-tasks/multibody-composable-architecture/DESIGN.md).
-This is a planning deliverable, not a statement that the migration is implemented.
-Implementation dependencies and acceptance criteria live in that directory's
-`SUBTASKS.csv` and `TASKS.md`; implementation has not started.
+[SUBTASKS.csv](.codex-tasks/multibody-composable-architecture/SUBTASKS.csv) with
+its per-task evidence under `tasks/`; the design rationale is in
+[DESIGN.md](.codex-tasks/multibody-composable-architecture/DESIGN.md). Those files
+record the plan and its history, so they are not the place to read what the code
+does now.
 The domain glossary is in
-[suspension_multibody/CONTEXT.md](packages/suspension_multibody/CONTEXT.md).
+[suspension_multibody/CONTEXT.md](packages/suspension_multibody/CONTEXT.md), and
+the executable extension examples are in
+[suspension_multibody/docs/composable_extension_examples.md](packages/suspension_multibody/docs/composable_extension_examples.md).

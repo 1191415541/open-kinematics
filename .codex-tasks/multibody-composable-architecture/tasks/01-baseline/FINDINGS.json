@@ -1,0 +1,87 @@
+{
+  "note": "旧任务登记的两个目标相关缺口是否存在，以及非目标历史限制的分类。判定依据为实测与代码取证，非文档转述。",
+  "gaps": [
+    {
+      "id": "GAP-1",
+      "title": "准静态路径的垂向轮胎未端到端消费",
+      "still_present": true,
+      "owner": "07",
+      "evidence": [
+        "packages/suspension_multibody/src/suspension_multibody/api.py:754 `_tire_compression(case)` 的文档字符串原文：\"Report zero compression. A CaseSpec carries no road height and no tire radius, so a K state is not in contact with anything and there is nothing to compress. The keys are kept because they are part of the result schema.\" 函数体 `del case; return {\"left\": 0.0, \"right\": 0.0}` —— 通道是输入回显，不是求解结果。",
+        "调用点 packages/suspension_multibody/src/suspension_multibody/api.py:532 无条件写入该常量。",
+        "准静态装配与 workflow 中不存在任何轮胎引用：`grep -n tire` 对 packages/suspension_multibody/src/suspension_multibody/preparation/kc_quasi_static.py 与 .../cases/kc_quasi_static/workflow.py 均无命中。",
+        "实测：run_case(K 模式) 返回的 StateResult 通道为 drives/external_loads/poses/metrics/c_response/tire_compression/constraint_residual/force_residual/moment_residual/converged/diagnostics；metrics 只含轮心坐标、外倾、前束、轮距，无任何垂向轮胎力或载荷项。"
+      ],
+      "consequence": "准静态垂向轮胎不进入残差，改变垂向轮胎属性不改变响应。EPIC A6 要求「准静态垂向轮胎真实进入残差，改变垂向属性改变响应」，因此这是 07 的阻断项，不是可豁免的历史限制。",
+      "acceptance": "07 的验收已含该条：`同一总成指纹跑两Study；准静态垂向轮胎进入残差且属性改变响应`。"
+    },
+    {
+      "id": "GAP-2",
+      "title": "无转向总成时 rack 接口未收缩，运行先以裸 ValueError 失败",
+      "still_present": true,
+      "owner": "10",
+      "evidence": [
+        "packages/suspension_multibody/src/suspension_multibody/cases/kc_quasi_static/contract.py:287-293：无条件对 \"rack\" 体调用 add(rack_name, \"translation\", \"rack\", assembly.point(\"rack\", \"center\"), (0.0, 1.0, 0.0))，即无论是否驱动车轮都建立 rack 平移驱动；:284/:286 只决定该驱动叫 rack_drive 还是 rack_neutral，不决定是否建立。",
+        "实测（决定性）：删去 rack_center 硬点后 FrontAxleModel 仍可构造，但 run_case(K) 失败于 packages/suspension_multibody/subsystems/geometry.py:102 的 ValueError: missing required front-axle hardpoint for rack_center（经 subsystems/types.py:237 的 mirror 调用）。即无转向时先在硬点查表处抛裸 ValueError，既不是接口收缩、也不是点名报错。",
+        "contract.py:359-361 的 \"rack\": next(value for value in driven_names if value.startswith(\"rack_\")) 只在硬点存在而 rack 驱动名缺失时才可达，并非当前无转向路径的首个失败点；旧任务把两者混为一处，01 实测更正。",
+        "实测：run_case(K 模式) 的 drives 键集恒定含 rack_displacement（['wheel_travel_left','wheel_travel_right','rack_displacement']），无收缩分支。",
+        "对照旧任务原文：.codex-tasks/20260922-suspension-template-architecture/PROGRESS.md 第 15 条核查结论称 contract.py:288-290 的 axis_map[\"rack\"] 用 next(...) 取第一个 rack_* 名字，总成无转向时会抛 StopIteration。该行号已漂移，且真正的首个失败点如上一行所述不同——结论（无转向不可运行、未收缩）不变，机制描述被 01 更正。"
+      ],
+      "consequence": "EPIC A8 要求「含/不含转向单轴都可运行，后者 rack 输入与结果通道消失而非填零」，当前无转向路径不存在，属 10 的阻断项。",
+      "acceptance": "10 的验收已含该条：`公共入口和历史结果兼容；无转向rack结果消失`，以及 `rig 名与旧 family 不同也能实际运行`。"
+    }
+  ],
+  "non_goal_limits": [
+    {
+      "id": "LIM-1",
+      "title": "9 个动态工况的 time_convergence 门失败（仅 fixture.force_z）",
+      "classification": "existing_recorded_not_regression",
+      "evidence": "packages/suspension_multibody/docs/axle_dynamics_results.md:37 原文记录：13 个工况中解算门与能量门全部通过，time_convergence 有工况不通过，且都只由 fixture.force_z 一项引起（载荷 NRMSE 0.036/0.078/0.432，门限 0.02；状态 NRMSE 均为 5e-4 量级，门限 0.01）。成因是 committed 5231fd6 把 fixture.* 从数值死通道改成动量平衡重建量。",
+      "policy": "记录如实、不修改工况、不掩盖。dynamic_hash_baseline.json 冻结的 failed_cases 为 9 项：combined_load, in_phase_road, large_amplitude_high_frequency, opposite_phase_road, road_pulse, road_sine, road_step_finite_rise, single_wheel_road, tire_liftoff_and_recontact。该清单不得增长。",
+      "note": "dynamic_hash_sentinel 文档同时说明 acceptance_exit_code = 1 是预期设计。"
+    },
+    {
+      "id": "LIM-2",
+      "title": "legacy_surface_gate --final 模式失败：5 个旧包仍在、8 项 legacy 导入",
+      "classification": "in_scope_work_owned_by_12",
+      "evidence": "实测 `legacy_surface_gate.py --check --final` 退出码 1，列出 8 项 legacy_module_import（api.py:49、preparation/assembly/front_axle.py:35、preparation/assembly/vehicle.py:21、preparation/vehicle_dynamic.py:37、vehicle/service.py:30 及 3 个测试文件）与 5 个仍存在的旧包：analysis、core、elements、metrics、model。",
+      "policy": "TASKS 命令集使用 --check（migration 模式），实测通过。--final 是 12 的目标状态，属目标内已知未完成。12 必须在 DONE 前使 --final 通过。",
+      "note": "CONTEXT-MAP.md:19-22 记录 elements(A1)/analysis(A2) 的移除条件在 .codex-tasks/20260921-architecture-deviation-closure 的删除记录中；12 需同步该文档。"
+    },
+    {
+      "id": "LIM-3",
+      "title": "Adams 相关测试在无本地 Adams 资源时 skip",
+      "classification": "environment_limit_unchanged",
+      "evidence": "tests/adams/ 下多处 pytest.mark.skipif，原因原文为 \"a local Adams Car installation is required\" 与 \"strict Adams source artifacts are unavailable\"、\"real Adams reference artifacts are unavailable\"。",
+      "policy": "保持 skip，不视为回归。EPIC Non-Goals 明确不扩大 Adams 数值等价声明、不启动许可服务。A1-A10 的核心场景不得借此类 skip 豁免。"
+    },
+    {
+      "id": "LIM-4",
+      "title": "制动力矩公式中常数 0.1 来源未核实",
+      "classification": "out_of_scope_physics",
+      "evidence": "旧任务取证：handling_step_steer_dynamic.adm:8875-8889 的 SFORCE/33 原文含常数 0.1，不等于 1/max_brake_value（0.01），在管路压力式中同样出现，来源待核实。",
+      "policy": "EPIC Non-Goals 不新增制动/液压物理。01 登记并保持明确限制，不虚称解决。"
+    },
+    {
+      "id": "LIM-5",
+      "title": "偏心轮胎质量等不支持的物理保持明确拒绝",
+      "classification": "out_of_scope_physics",
+      "evidence": "EPIC Non-Goals 原文：不新增轮胎力律、积分算法、控制系统、液压模型或偏心轮胎惯量物理；现有不支持的物理继续明确拒绝。",
+      "policy": "保持拒绝行为，不因本方案自动获得支持。"
+    },
+    {
+      "id": "LIM-6",
+      "title": "一个 degenerate 制动夹具的 xfail",
+      "classification": "existing_recorded_not_regression",
+      "evidence": "tests/vehicle/test_native_vehicle.py:1674 test_native_brake_opposes_the_instantaneous_wheel_spin，strict=True xfail。原因原文：夹具为纯理想副、无弹簧无衬套、gravity=0、轮胎无载荷、单步 1 ms 且不可细分；内核现按制动载荷转移在转向节上加卡钳反力偶，该夹具无法满足，需夹具重设计（加载轮胎和/或可细分求解器），不是微调。",
+      "policy": "保持 xfail strict=True。EPIC 要求核心场景不得用 xfail 豁免，该条不在 A1-A10 的核心场景内。"
+    },
+    {
+      "id": "LIM-7",
+      "title": "原生库镜像新鲜度门",
+      "classification": "environment_invariant_must_hold",
+      "evidence": "packages/suspension_multibody/src/suspension_multibody/kernel/native.py:84 require_fresh_mirror：当 canonical kernel 库比 multibody 镜像新且内容不同即拒绝加载，抛出 NativeKernelUnavailableError 并提示运行 build_axle_native。",
+      "policy": "这是必须维持的环境不变量，不是可豁免限制。两份 suspension_kernel.dll 必须内容一致。01 实测确认修复方法：`uv run python packages/suspension_multibody/scripts/build_axle_native.py`。recompile 后 kc_parity 与 dynamic_hash 逐位不变。"
+    }
+  ]
+}

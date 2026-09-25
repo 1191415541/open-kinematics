@@ -1,7 +1,7 @@
 """
 Joint-declaration tests: the data an assembly is described with.
 
-The joint *declarations* live in ``preparation/assembly/types.py`` -- the
+The joint *declarations* live in ``modeling/primitives/joints.py`` -- the
 authoring layer builds them, so this is their live home.  What used to sit
 beside them in ``core/constraints.py`` was the residual/Jacobian implementation
 and ``ConstraintSystem``; subtask 08 deleted both, because the native kernel
@@ -16,7 +16,7 @@ What remains here is what these declarations must carry on their own.
 
 import numpy as np
 
-from suspension_multibody.preparation.assembly.types import (
+from suspension_multibody.modeling.primitives import (
     BallJoint,
     ConstantVelocityJoint,
     Constraint,
