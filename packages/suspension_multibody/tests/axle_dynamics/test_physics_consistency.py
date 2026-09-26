@@ -6,12 +6,13 @@ import pytest
 from suspension_multibody.adams import load_axle_acceptance_contract
 from suspension_multibody.axle_dynamics import (
     AxleBody,
+    AxleDamper,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleDynamicsResult,
     AxleJoint,
     AxleSolverSettings,
-    AxleSpringDamper,
+    AxleSpring,
     run_axle_dynamics,
 )
 
@@ -116,18 +117,28 @@ def test_internal_forces_conserve_total_linear_momentum() -> None:
         ),
         joints=(),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="coupling",
                 body_a="left",
                 body_b="right",
                 point_a_m=(0.0, 0.0, 0.0),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=5_000.0,
-                compression_damping_n_s_per_m=40.0,
-                rebound_damping_n_s_per_m=40.0,
                 free_length_m=0.25,
             ),
         ),
+        dampers=(
+            AxleDamper(
+                name="coupling_damper",
+                body_a="left",
+                body_b="right",
+                point_a_m=(0.0, 0.0, 0.0),
+                point_b_m=(0.0, 0.0, 0.0),
+                compression_damping_n_s_per_m=40.0,
+                rebound_damping_n_s_per_m=40.0,
+            ),
+        ),
+        bump_stops=(),
     )
     result = run_axle_dynamics(
         model,

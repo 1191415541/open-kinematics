@@ -32,11 +32,13 @@ import numpy as np
 
 from ..axle_dynamics.schema import (
     AxleBody,
+    AxleBumpStop,
+    AxleDamper,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleHarmonicRoad,
     AxleJoint,
-    AxleSpringDamper,
+    AxleSpring,
     AxleTire,
 )
 from ..io import canonical_hash
@@ -482,30 +484,31 @@ class _DatasetBuilder:
         return i_marker, j_marker
 
     def _emit_springs(self) -> None:
-        if not self._model.springs:
+        groups = _axial_groups(self._model)
+        if not groups:
             return
         self._emit("!")
         self._emit("! axial spring, damper, and stop elements")
-        for index, spring in enumerate(self._model.springs, start=1):
+        for index, group in enumerate(groups, start=1):
             i_marker = self._marker(
-                f"spring:{spring.name}:i", spring.body_b, spring.point_b_m
+                f"spring:{group.name}:i", group.body_b, group.point_b_m
             )
             j_marker = self._marker(
-                f"spring:{spring.name}:j", spring.body_a, spring.point_a_m
+                f"spring:{group.name}:j", group.body_a, group.point_a_m
             )
-            self._entity_ids[f"spring:{spring.name}"] = index
-            self._emit(f"! spring-damper {spring.name}")
+            self._entity_ids[f"spring:{group.name}"] = index
+            self._emit(f"! spring-damper {group.name}")
             damper_curve_expression: str | None = None
-            if spring.damper_curve_velocity_m_per_s:
+            if group.damper is not None and group.damper.damper_curve_velocity_m_per_s:
                 rate = f"VR({i_marker}, {j_marker})"
                 curve_id = self._variable(
-                    f"spring:{spring.name}:damper_curve",
+                    f"spring:{group.name}:damper_curve",
                     _piecewise_linear_expression(
                         rate,
-                        spring.damper_curve_velocity_m_per_s,
-                        spring.damper_curve_force_n,
+                        group.damper.damper_curve_velocity_m_per_s,
+                        group.damper.damper_curve_force_n,
                     ),
-                    f"piecewise-linear damper curve for {spring.name}",
+                    f"piecewise-linear damper curve for {group.name}",
                 )
                 damper_curve_expression = f"VARVAL({curve_id})"
             # Adams expects the force kind on its own continuation line; on the
@@ -516,7 +519,7 @@ class _DatasetBuilder:
             self._emit(f", J = {j_marker}")
             for line in _continuation(
                 _spring_function(
-                    spring,
+                    group,
                     i_marker,
                     j_marker,
                     damper_curve_expression=damper_curve_expression,
@@ -925,25 +928,33 @@ class _DatasetBuilder:
                     (f"TZ({i_marker}, {j_marker}, 1)", "moment_z"),
                 ),
             )
-        for spring in self._model.springs:
-            i_marker = self._entity_ids[f"spring:{spring.name}:i"]
-            j_marker = self._entity_ids[f"spring:{spring.name}:j"]
-            identifier = self._entity_ids[f"spring:{spring.name}"]
+        for group in _axial_groups(self._model):
+            i_marker = self._entity_ids[f"spring:{group.name}:i"]
+            j_marker = self._entity_ids[f"spring:{group.name}:j"]
+            identifier = self._entity_ids[f"spring:{group.name}"]
             length = f"DM({i_marker}, {j_marker})"
             rate = f"VR({i_marker}, {j_marker})"
             self._request(
-                f"spring:{spring.name}:output",
+                f"spring:{group.name}:output",
                 (
                     (length, "length"),
                     (rate, "length_rate"),
-                    (_spring_elastic_term(spring, length), "elastic_force"),
-                    (_spring_damping_term(spring, rate), "damping_force"),
                     (
-                        _spring_compression_stop_elastic(spring, length),
+                        "0"
+                        if group.spring is None
+                        else _spring_elastic_term(group.spring, length),
+                        "elastic_force",
+                    ),
+                    (
+                        _spring_damping_term(group.damper, length, rate),
+                        "damping_force",
+                    ),
+                    (
+                        _compression_stop_elastic(group, length),
                         "compression_stop_elastic_force",
                     ),
                     (
-                        _spring_rebound_stop_elastic(spring, length),
+                        _rebound_stop_elastic(group, length),
                         "rebound_stop_elastic_force",
                     ),
                     (
@@ -1129,7 +1140,82 @@ _CONVENTIONS: Mapping[str, object] = {
 # -- expression helpers -----------------------------------------------------
 
 
-def _spring_elastic_term(spring: AxleSpringDamper, length: str) -> str:
+@dataclass(frozen=True)
+class _AxialGroup:
+    """
+    The three structures that act between one pair of attachment points.
+
+    The SI model keeps an elastic, a dissipative and a unilateral record, and a
+    corner declares whichever of them it has.  Adams has one force element per
+    attachment, so a group is what the exporter walks: it is the same physical
+    device the three records describe, and grouping by the attachment points
+    rather than by name is what keeps a corner whose records are named
+    differently from being exported as two.
+    """
+
+    name: str
+    body_a: str
+    body_b: str
+    point_a_m: tuple[float, float, float]
+    point_b_m: tuple[float, float, float]
+    spring: AxleSpring | None = None
+    damper: AxleDamper | None = None
+    bump_stops: tuple[AxleBumpStop, ...] = ()
+
+
+def _axial_groups(model) -> tuple[_AxialGroup, ...]:
+    """Group the model's axial records by attachment, in declaration order."""
+    order: list[tuple[str, str, tuple, tuple]] = []
+    springs: dict[tuple, AxleSpring] = {}
+    dampers: dict[tuple, AxleDamper] = {}
+    stops: dict[tuple, list[AxleBumpStop]] = {}
+    names: dict[tuple, str] = {}
+
+    def key_of(element) -> tuple:
+        return (
+            element.body_a,
+            element.body_b,
+            tuple(float(value) for value in element.point_a_m),
+            tuple(float(value) for value in element.point_b_m),
+        )
+
+    for spring in model.springs:
+        key = key_of(spring)
+        order.append(key)
+        springs[key] = spring
+        names.setdefault(key, spring.name)
+    for damper in model.dampers:
+        key = key_of(damper)
+        if key not in springs:
+            order.append(key)
+        dampers[key] = damper
+        names.setdefault(key, damper.name)
+    for stop in model.bump_stops:
+        key = key_of(stop)
+        if key not in springs and key not in dampers:
+            order.append(key)
+        stops.setdefault(key, []).append(stop)
+        names.setdefault(key, stop.name)
+
+    groups: list[_AxialGroup] = []
+    for key in order:
+        body_a, body_b, point_a, point_b = key
+        groups.append(
+            _AxialGroup(
+                name=names[key],
+                body_a=body_a,
+                body_b=body_b,
+                point_a_m=point_a,
+                point_b_m=point_b,
+                spring=springs.get(key),
+                damper=dampers.get(key),
+                bump_stops=tuple(stops.get(key, ())),
+            )
+        )
+    return tuple(groups)
+
+
+def _spring_elastic_term(spring: AxleSpring, length: str) -> str:
     return (
         f"{_number(spring.stiffness_n_per_m)}"
         f"*({_number(spring.free_length_m)} - {length})"
@@ -1137,86 +1223,124 @@ def _spring_elastic_term(spring: AxleSpringDamper, length: str) -> str:
 
 
 def _spring_damping_term(
-    spring: AxleSpringDamper,
+    damper: AxleDamper | None,
+    length: str,
     rate: str,
     *,
     damper_curve_expression: str | None = None,
 ) -> str:
+    """Return the dissipative structure's axial term, with its offsets."""
+    if damper is None:
+        return "0"
+    terms: list[str] = []
     if damper_curve_expression is not None:
-        return f"-({damper_curve_expression})"
+        terms.append(f"-({damper_curve_expression})")
+    else:
+        coefficient = (
+            f"IF({rate}: {_number(damper.compression_damping_n_s_per_m)}"
+            f", {_number(damper.rebound_damping_n_s_per_m)}"
+            f", {_number(damper.rebound_damping_n_s_per_m)})"
+        )
+        terms.append(f"-{coefficient}*{rate}")
+    # The velocity-independent offsets: a gas spring, a preload and a friction
+    # term.  Adams evaluates the same expression the kernel does, so a model
+    # carrying them exports them instead of losing them.
+    if damper.gas_reference_length_m is not None:
+        terms.append(
+            f"{_number(damper.gas_reference_force_n)}"
+            f" + {_number(damper.gas_stiffness_n_per_m)}"
+            f"*({length} - {_number(damper.gas_reference_length_m)})"
+        )
+    if damper.preload_n != 0.0:
+        terms.append(_number(damper.preload_n))
+    if damper.friction_n != 0.0:
+        sign = 1.0 if damper.extension_sign >= 0.0 else -1.0
+        terms.append(f"-({_number(sign * damper.friction_n)})")
+    return " + ".join(f"({term})" for term in terms)
+
+
+def _stop_elastic_term(stop: AxleBumpStop | None, length: str) -> str:
+    """One stop's elastic term, zero when the corner has no stop on that side."""
+    if stop is None:
+        return "0"
+    clearance = _number(stop.clearance_m)
+    magnitude = f"{_number(stop.stiffness_n_per_m)}"
+    if stop.direction < 0.0:
+        return (
+            f"IF({length} - {clearance}: 0, 0"
+            f", {magnitude}*({length} - {clearance}))"
+        )
     return (
-        f"-IF({rate}: {_number(spring.compression_damping_n_s_per_m)}"
-        f", {_number(spring.rebound_damping_n_s_per_m)}"
-        f", {_number(spring.rebound_damping_n_s_per_m)})*{rate}"
+        f"IF({length} - {clearance}: "
+        f"{magnitude}*({clearance} - {length}), 0, 0)"
     )
 
 
-def _spring_compression_stop_elastic(
-    spring: AxleSpringDamper, length: str
+def _compression_stop_elastic(
+    group: "_AxialGroup", length: str
 ) -> str:
-    if spring.minimum_length_m is None:
-        return "0"
-    minimum = _number(spring.minimum_length_m)
-    return (
-        f"IF({length} - {minimum}: "
-        f"{_number(spring.compression_stop_stiffness_n_per_m)}"
-        f"*({minimum} - {length}), 0, 0)"
-    )
+    """Return the elastic term of the below-clearance stop, if there is one."""
+    for stop in group.bump_stops:
+        if stop.direction >= 0.0:
+            return _stop_elastic_term(stop, length)
+    return "0"
 
 
-def _spring_rebound_stop_elastic(spring: AxleSpringDamper, length: str) -> str:
-    if spring.maximum_length_m is None:
-        return "0"
-    maximum = _number(spring.maximum_length_m)
-    return (
-        f"IF({length} - {maximum}: 0, 0"
-        f", -{_number(spring.rebound_stop_stiffness_n_per_m)}"
-        f"*({length} - {maximum}))"
-    )
+def _rebound_stop_elastic(group: "_AxialGroup", length: str) -> str:
+    """Return the elastic term of the above-clearance stop, if there is one."""
+    for stop in group.bump_stops:
+        if stop.direction < 0.0:
+            return _stop_elastic_term(stop, length)
+    return "0"
 
 
 def _spring_function(
-    spring: AxleSpringDamper,
+    group: "_AxialGroup",
     i_marker: int,
     j_marker: int,
     *,
     damper_curve_expression: str | None = None,
 ) -> str:
+    """
+    Return one corner's axial force as one Adams expression.
+
+    Three SI records describe one corner, and Adams has one force element per
+    attachment, so the three are summed here.  The terms are the same laws, in
+    the same order, that the three records state separately.
+    """
     length = f"DM({i_marker}, {j_marker})"
     rate = f"VR({i_marker}, {j_marker})"
-    terms = [
-        _spring_elastic_term(spring, length),
+    terms: list[str] = []
+    if group.spring is not None:
+        terms.append(_spring_elastic_term(group.spring, length))
+    terms.append(
         _spring_damping_term(
-            spring,
+            group.damper,
+            length,
             rate,
             damper_curve_expression=damper_curve_expression,
-        ),
-    ]
-    if spring.minimum_length_m is not None:
-        minimum = _number(spring.minimum_length_m)
-        stop = (
-            f"{_number(spring.compression_stop_stiffness_n_per_m)}"
-            f"*({minimum} - {length})"
         )
-        if spring.compression_stop_damping_n_s_per_m > 0.0:
-            stop += (
-                f" + IF({rate}: "
-                f"-{_number(spring.compression_stop_damping_n_s_per_m)}*{rate}"
-                ", 0, 0)"
-            )
-        terms.append(f"IF({length} - {minimum}: {stop}, 0, 0)")
-    if spring.maximum_length_m is not None:
-        maximum = _number(spring.maximum_length_m)
-        stop = (
-            f"-{_number(spring.rebound_stop_stiffness_n_per_m)}"
-            f"*({length} - {maximum})"
-        )
-        if spring.rebound_stop_damping_n_s_per_m > 0.0:
-            stop += (
-                f" + IF({rate}: 0, 0"
-                f", -{_number(spring.rebound_stop_damping_n_s_per_m)}*{rate})"
-            )
-        terms.append(f"IF({length} - {maximum}: 0, 0, {stop})")
+    )
+    for stop in group.bump_stops:
+        clearance = _number(stop.clearance_m)
+        elastic = _stop_elastic_term(stop, length)
+        if stop.damping_n_s_per_m > 0.0:
+            # The stop's damping only resists the motion closing it, which is
+            # the same sign rule the kernel applies.
+            if stop.direction >= 0.0:
+                elastic += (
+                    f" + IF({rate}: "
+                    f"-{_number(stop.damping_n_s_per_m)}*{rate}, 0, 0)"
+                )
+            else:
+                elastic += (
+                    f" + IF({rate}: 0, 0"
+                    f", -{_number(stop.damping_n_s_per_m)}*{rate})"
+                )
+        if stop.direction >= 0.0:
+            terms.append(f"IF({length} - {clearance}: {elastic}, 0, 0)")
+        else:
+            terms.append(f"IF({length} - {clearance}: 0, 0, {elastic})")
     return " + ".join(f"({term})" for term in terms)
 
 

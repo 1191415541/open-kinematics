@@ -52,8 +52,8 @@ src/suspension_multibody/
   simulation/      runner、request 与原生后端；api.py 只做薄编排。
   cases/           各族契约文档的作者层。
   preparation/     域输入适配（assembly/、axle_dynamic.py、vehicle_dynamic.py 等）。
-  elements/        A1 保留：力元件本构。
-  analysis/        A2 保留：compute_static_wheel_loads。
+  vehicle/         整车级服务与派生量（service.py、static_loads.py、roll_centers.py）。
+  elements/        A1 保留：仅剩 evaluate_generalized_forces（Python 侧力元求值）。
 ```
 
 `modeling/` 不得反向依赖 `templates`、`subsystems`、`rigs`、`connections`、
@@ -65,25 +65,35 @@ src/suspension_multibody/
 `reactions.py` 无生产调用者，其物理断言转为
 `tests/axle_dynamics/test_solver_invariants.py` 的 native 契约断言）、顶层
 `pac2002_scope.py`（迁至 `schema/pac2002_scope.py` 与 `kernel/capabilities.py`），
-以及 `analysis/` 的报告类模块（迁至 `report/`、`preparation/signals.py`、
-`simulation/replay.py`）。02 留在 `preparation/geometry.py` 与
+以及 `analysis/`（报告类模块迁至 `report/`、`preparation/signals.py`、
+`simulation/replay.py`；`compute_static_wheel_loads` 迁至
+`vehicle/static_loads.py`，`compute_vehicle_roll_centers` 迁至
+`vehicle/roll_centers.py`）。02 留在 `preparation/geometry.py` 与
 `preparation/assembly/types.py` 的两个转发壳也已删除，调用方直接导入
 `modeling/primitives/`。
 
-### 仍保留 elements/ 与 analysis/ 的理由
+### 仍保留 elements/ 的理由
 
-两项都不是遗留物，而是**有现役生产调用、且 native 尚不能承载**的能力。它们的
-当前 import 点、阻断原因与解除条件如下；`legacy_surface_gate.py --final` 的对应
-发现已登记，`scripts/check_composable_release.py` 会核对登记表与实测发现一致，
-新增或消失都会失败。
+它现在只剩一个函数 `evaluate_generalized_forces`，被 `api.py` 用来重算组件载荷与
+衬套结果——而同一批力元 native 已经算过。当前 import 点、阻断原因与解除条件如下；
+`legacy_surface_gate.py --final` 的对应发现已登记，
+`scripts/check_composable_release.py` 会核对登记表与实测发现一致，新增或消失都会
+失败。
 
 | 保留项 | 现役 import 点 | 阻断原因 | 解除条件 |
 |---|---|---|---|
-| `elements/`（A1） | `api.py`（`BushingElement`、`evaluate_generalized_forces`）、`preparation/assembly/front_axle.py`、`preparation/assembly/vehicle.py`、`preparation/vehicle_dynamic.py` | 作者层需要构造力元件；native `element_wrench` 通道目前对固定体端早退（`cpp/src/element/assembly_primitives.cpp`），无法承载固定端反力 | 固定端事实口径裁定 + K 模式力元件声明 + 力矩参考点契约落地后，作者层不再自建元件 |
-| `analysis/`（A2） | `vehicle/service.py`（`compute_static_wheel_loads`） | native ABI 只导出 `suspension_kernel_run`，没有静力求解入口，且导出面冻结 | 为静力求解扩展 ABI 导出面（需先确认） |
+| `elements/`（A1） | `api.py`（`evaluate_generalized_forces`） | 三条，第一条最重：① KC 契约只发出 bushing（`contract.py:190-192`，且仅 C 模式）与 tire（`_tire_entries`），**弹簧、减振器、横向稳定杆从不发出**，native 对它们没有任何事实——实测同一根轴上 K 模式 `api.py` 报 7 个力元而 native 只收到 2 个、C 模式报 17 个只收到 12 个，两种模式都缺同样 5 个；② 固定体端那一行被 `cpp/src/element/assembly_primitives.cpp:16` 的早退留在 NaN；③ 力矩参考点两侧不一致（native 对受力体原点，Python 对世界原点） | KC 契约扩出弹簧/减振器/稳定杆声明（K 模式为规定运动，声明力元不得进入残差）+ 固定端开始记录 + 力矩参考点口径对齐 + 通道默认状态（契约版本）确认后，`api.py` 改走 `results/element_wrench.py` 解码，本包随之删除 |
 
-`elements/` 的本构依赖已随 `core/` 一并切到 `modeling/primitives/`，所以删掉
-`core/` 并没有连带影响保留项。
+力元件的**声明**已经不在这里了：`LinearSpringElement` 等八个类连同
+`ForceEvaluation`、`ElementError` 迁至 `modeling/primitives/elements.py`，与关节和
+刚体声明并列，所以作者层（`preparation/`）不再 import 任何退役包。留在本包的只有
+Python 侧求值这一件事。
+
+原 `analysis/`（A2）已不再是保留项。它的两个构造都是整车级派生量而不是内核求解：
+静力轮荷是四个未知量对三个平衡方程的最小范数解，native 静力求解器只分解方阵，
+装不下这个欠定问题；侧倾中心是前视几何作图。两者都只读装配结果，因此迁入
+`vehicle/`（唯一允许依赖 `preparation/` 的整车层），算法逐字未改，也不需要原先
+登记的「扩 ABI 导出面」。
 
 ### 扩展示例
 

@@ -672,129 +672,181 @@ class AxleCoordinateCoupler(StrictModel):
         return self
 
 
-class AxleSpringDamper(StrictModel):
-    """Passive axial spring-damper between two body-local points."""
+def _force_curve_abscissa(values: tuple[float, ...]) -> tuple[float, ...]:
+    """Check one measured force curve's abscissa: finite, strictly increasing."""
+    points = tuple(float(item) for item in values)
+    _finite(points, "force curve abscissa")
+    if points and len(points) < 2:
+        raise ValueError("a force curve needs at least two points")
+    if any(b <= a for a, b in zip(points, points[1:])):
+        raise ValueError("force curve abscissas must strictly increase")
+    return points
+
+
+def _force_curve_ordinate(values: tuple[float, ...]) -> tuple[float, ...]:
+    """Check one measured force curve's ordinate: finite."""
+    return _finite(tuple(float(item) for item in values), "force curve force")
+
+
+def _force_curve_pairs(
+    abscissa: tuple[float, ...], ordinate: tuple[float, ...], label: str
+) -> None:
+    """Refuse a measured curve whose two columns do not describe the same points."""
+    if len(abscissa) != len(ordinate):
+        raise ValueError(f"{label} force curve arrays must pair up")
+    if abscissa and len(abscissa) < 2:
+        raise ValueError(f"{label} force curve needs at least two points")
+
+
+def _damper_curve(velocity: tuple[float, ...], force: tuple[float, ...]) -> None:
+    """Check a measured force-velocity curve: paired, and single-valued in velocity."""
+    if len(velocity) != len(force):
+        raise ValueError("damper curve velocity and force must pair up")
+    if not velocity:
+        return
+    if len(velocity) < 2:
+        raise ValueError("a damper curve needs at least two points")
+    _finite(velocity, "damper_curve_velocity_m_per_s")
+    _finite(force, "damper_curve_force_n")
+    if any(b <= a for a, b in zip(velocity, velocity[1:])):
+        raise ValueError("damper curve velocity must strictly increase")
+
+
+class AxleSpring(StrictModel):
+    """
+    Elastic axial element between two body-local points.
+
+    This mirrors the kernel's `Spring` structure field for field.  The kernel
+    keeps a separate `Damper` and `BumpStop` for the dissipative and unilateral
+    terms, so this record carries only the elastic law: the stiffness times the
+    compression `free_length - length`, or an optional measured curve that
+    replaces the constant stiffness.
+
+    `preload_n` is a constant axial offset.  The assembly bridges fold a spring
+    element's preload into `free_length_m` instead, which is what they did before
+    the split and keeps their numbers where they were; the field is here for
+    models authored directly against the schema.
+    """
 
     name: str = Field(min_length=1)
     body_a: str
     body_b: str
     point_a_m: Vec3Tuple
     point_b_m: Vec3Tuple
-    stiffness_n_per_m: float = Field(ge=0)
-    compression_damping_n_s_per_m: float = Field(ge=0)
-    rebound_damping_n_s_per_m: float = Field(ge=0)
-    free_length_m: float = Field(ge=0)
-    minimum_length_m: float | None = Field(default=None, ge=0)
-    maximum_length_m: float | None = Field(default=None, ge=0)
-    compression_stop_stiffness_n_per_m: float = Field(default=0.0, ge=0)
-    compression_stop_damping_n_s_per_m: float = Field(default=0.0, ge=0)
-    rebound_stop_stiffness_n_per_m: float = Field(default=0.0, ge=0)
-    rebound_stop_damping_n_s_per_m: float = Field(default=0.0, ge=0)
-    # Measured force-velocity curve. When given it replaces the two constant
-    # damping coefficients: a real shock is neither linear nor symmetric about
-    # zero velocity, so fitting one to two constants would not be the measured
-    # element. Positive force resists extension.
-    damper_curve_velocity_m_per_s: tuple[float, ...] = ()
-    damper_curve_force_n: tuple[float, ...] = ()
-    # 源力学曲线：弹性挠度在压缩时为正，限位块穿透量为正。
+    stiffness_n_per_m: float = Field(default=0.0, ge=0)
+    free_length_m: float = Field(default=0.0, ge=0)
+    preload_n: float = 0.0
+    # 源力学曲线：弹性挠度在压缩时为正。
     elastic_curve_deflection_m: tuple[float, ...] = ()
     elastic_curve_force_n: tuple[float, ...] = ()
-    compression_stop_curve_penetration_m: tuple[float, ...] = ()
-    compression_stop_curve_force_n: tuple[float, ...] = ()
-    rebound_stop_curve_penetration_m: tuple[float, ...] = ()
-    rebound_stop_curve_force_n: tuple[float, ...] = ()
+
+    @field_validator("elastic_curve_deflection_m")
+    @classmethod
+    def _valid_elastic_abscissa(cls, value: tuple[float, ...]) -> tuple[float, ...]:
+        return _force_curve_abscissa(value)
+
+    @field_validator("elastic_curve_force_n")
+    @classmethod
+    def _valid_elastic_ordinate(cls, value: tuple[float, ...]) -> tuple[float, ...]:
+        return _force_curve_ordinate(value)
 
     @model_validator(mode="after")
-    def _valid_damper_curve(self) -> AxleSpringDamper:
-        velocity = self.damper_curve_velocity_m_per_s
-        force = self.damper_curve_force_n
-        if len(velocity) != len(force):
-            raise ValueError("damper curve velocity and force must pair up")
-        if not velocity:
-            return self
-        if len(velocity) < 2:
-            raise ValueError("a damper curve needs at least two points")
-        _finite(velocity, "damper_curve_velocity_m_per_s")
-        _finite(force, "damper_curve_force_n")
-        if any(b <= a for a, b in zip(velocity, velocity[1:])):
-            raise ValueError("damper curve velocity must strictly increase")
-        return self
-
-    @field_validator(
-        "elastic_curve_deflection_m",
-        "compression_stop_curve_penetration_m",
-        "rebound_stop_curve_penetration_m",
-    )
-    @classmethod
-    def _valid_force_curve_abscissa(
-        cls, value: tuple[float, ...]
-    ) -> tuple[float, ...]:
-        values = tuple(float(item) for item in value)
-        _finite(values, "force curve abscissa")
-        if values and len(values) < 2:
-            raise ValueError("a force curve needs at least two points")
-        if any(b <= a for a, b in zip(values, values[1:])):
-            raise ValueError("force curve abscissas must strictly increase")
-        return values
-
-    @field_validator(
-        "elastic_curve_force_n",
-        "compression_stop_curve_force_n",
-        "rebound_stop_curve_force_n",
-    )
-    @classmethod
-    def _valid_force_curve_ordinate(
-        cls, value: tuple[float, ...]
-    ) -> tuple[float, ...]:
-        return _finite(
-            tuple(float(item) for item in value), "force curve force"
+    def _valid_elastic_curve(self) -> AxleSpring:
+        _force_curve_pairs(
+            self.elastic_curve_deflection_m, self.elastic_curve_force_n, "elastic"
         )
-
-    @model_validator(mode="after")
-    def _valid_force_curves(self) -> AxleSpringDamper:
-        for abscissa, ordinate, label in (
-            (
-                self.elastic_curve_deflection_m,
-                self.elastic_curve_force_n,
-                "elastic",
-            ),
-            (
-                self.compression_stop_curve_penetration_m,
-                self.compression_stop_curve_force_n,
-                "compression stop",
-            ),
-            (
-                self.rebound_stop_curve_penetration_m,
-                self.rebound_stop_curve_force_n,
-                "rebound stop",
-            ),
-        ):
-            if len(abscissa) != len(ordinate):
-                raise ValueError(f"{label} force curve arrays must pair up")
-            if abscissa and len(abscissa) < 2:
-                raise ValueError(f"{label} force curve needs at least two points")
         return self
 
+
+class AxleDamper(StrictModel):
+    """
+    Dissipative axial element between two body-local points.
+
+    This mirrors the kernel's `Damper` structure field for field.  The constant
+    coefficients apply when no measured curve is given; a measured curve replaces
+    them entirely, because a real shock is neither linear nor symmetric about zero
+    velocity, so fitting one to two constants would not be the measured element.
+    Positive force resists extension.
+    """
+
+    name: str = Field(min_length=1)
+    body_a: str
+    body_b: str
+    point_a_m: Vec3Tuple
+    point_b_m: Vec3Tuple
+    compression_damping_n_s_per_m: float = Field(default=0.0, ge=0)
+    rebound_damping_n_s_per_m: float = Field(default=0.0, ge=0)
+    # 气弹簧项：力为 gas_reference_force + gas_stiffness*(length - gas_reference_length)。
+    # gas_reference_length_m 为 None 表示没有气弹簧项。
+    gas_stiffness_n_per_m: float = Field(default=0.0, ge=0)
+    gas_reference_length_m: float | None = None
+    gas_reference_force_n: float = 0.0
+    preload_n: float = 0.0
+    friction_n: float = Field(default=0.0, ge=0)
+    extension_sign: float = 1.0
+    damper_curve_velocity_m_per_s: tuple[float, ...] = ()
+    damper_curve_force_n: tuple[float, ...] = ()
+
     @model_validator(mode="after")
-    def _valid_stops(self) -> AxleSpringDamper:
-        if (
-            self.minimum_length_m is not None
-            and self.maximum_length_m is not None
-            and self.minimum_length_m >= self.maximum_length_m
-        ):
-            raise ValueError("minimum_length_m must be below maximum_length_m")
-        if self.minimum_length_m is None and (
-            self.compression_stop_stiffness_n_per_m > 0
-            or self.compression_stop_damping_n_s_per_m > 0
-        ):
-            raise ValueError("compression stop parameters require minimum_length_m")
-        if self.maximum_length_m is None and (
-            self.rebound_stop_stiffness_n_per_m > 0
-            or self.rebound_stop_damping_n_s_per_m > 0
-        ):
-            raise ValueError("rebound stop parameters require maximum_length_m")
+    def _valid_damper(self) -> AxleDamper:
+        _damper_curve(
+            self.damper_curve_velocity_m_per_s, self.damper_curve_force_n
+        )
+        if self.gas_stiffness_n_per_m > 0.0 and self.gas_reference_length_m is None:
+            raise ValueError("a gas stiffness requires gas_reference_length_m")
         return self
 
+
+class AxleBumpStop(StrictModel):
+    """
+    Unilateral axial stop between two body-local points.
+
+    This mirrors the kernel's `BumpStop` structure field for field.  It is active
+    only while the length is below `clearance_m` (`direction = +1`) or above it
+    (`direction = -1`), and then applies the stiffness times the penetration, plus
+    optional damping and an optional measured curve.  Both directions are one
+    record: the kernel's two unilateral stops were the two halves of the same
+    fused record, and a stop that only ever pushes one way is one stop.
+    """
+
+    name: str = Field(min_length=1)
+    body_a: str
+    body_b: str
+    point_a_m: Vec3Tuple
+    point_b_m: Vec3Tuple
+    clearance_m: float = Field(ge=0)
+    stiffness_n_per_m: float = Field(default=0.0, ge=0)
+    direction: float = 1.0
+    damping_n_s_per_m: float = Field(default=0.0, ge=0)
+    # 源力学曲线：限位块穿透量为正。
+    stop_curve_penetration_m: tuple[float, ...] = ()
+    stop_curve_force_n: tuple[float, ...] = ()
+
+    @field_validator("direction")
+    @classmethod
+    def _valid_direction(cls, value: float) -> float:
+        if float(value) not in (1.0, -1.0):
+            raise ValueError(
+                "a bump stop direction is +1 (below clearance) or -1 (above)"
+            )
+        return float(value)
+
+    @field_validator("stop_curve_penetration_m")
+    @classmethod
+    def _valid_stop_abscissa(cls, value: tuple[float, ...]) -> tuple[float, ...]:
+        return _force_curve_abscissa(value)
+
+    @field_validator("stop_curve_force_n")
+    @classmethod
+    def _valid_stop_ordinate(cls, value: tuple[float, ...]) -> tuple[float, ...]:
+        return _force_curve_ordinate(value)
+
+    @model_validator(mode="after")
+    def _valid_stop_curve(self) -> AxleBumpStop:
+        _force_curve_pairs(
+            self.stop_curve_penetration_m, self.stop_curve_force_n, "bump stop"
+        )
+        return self
 
 class AxleBushing(StrictModel):
     """Passive six-axis bushing with optional SI force curves."""
@@ -1097,7 +1149,9 @@ class AxleDynamicsModel(StrictModel):
     )
     bodies: tuple[AxleBody, ...]
     joints: tuple[AxleJoint, ...]
-    springs: tuple[AxleSpringDamper, ...] = ()
+    springs: tuple[AxleSpring, ...] = ()
+    dampers: tuple[AxleDamper, ...] = ()
+    bump_stops: tuple[AxleBumpStop, ...] = ()
     bushings: tuple[AxleBushing, ...] = ()
     anti_roll_bars: tuple[AxleAntiRollBar, ...] = ()
     tires: tuple[AxleTire, ...] = ()
@@ -1119,6 +1173,8 @@ class AxleDynamicsModel(StrictModel):
         element_names = [
             *(joint.name for joint in self.joints),
             *(spring.name for spring in self.springs),
+            *(damper.name for damper in self.dampers),
+            *(stop.name for stop in self.bump_stops),
             *(bushing.name for bushing in self.bushings),
             *(bar.name for bar in self.anti_roll_bars),
             *(tire.name for tire in self.tires),
@@ -1131,6 +1187,12 @@ class AxleDynamicsModel(StrictModel):
         for spring in self.springs:
             if spring.body_a not in known or spring.body_b not in known:
                 raise ValueError(f"spring {spring.name!r} references an unknown body")
+        for damper in self.dampers:
+            if damper.body_a not in known or damper.body_b not in known:
+                raise ValueError(f"damper {damper.name!r} references an unknown body")
+        for stop in self.bump_stops:
+            if stop.body_a not in known or stop.body_b not in known:
+                raise ValueError(f"bump stop {stop.name!r} references an unknown body")
         for bushing in self.bushings:
             if bushing.body_a not in known or bushing.body_b not in known:
                 raise ValueError(f"bushing {bushing.name!r} references an unknown body")

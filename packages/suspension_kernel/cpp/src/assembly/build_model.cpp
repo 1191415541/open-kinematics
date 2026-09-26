@@ -209,19 +209,32 @@ Model build_model(
         s.pa={in.spring_point_a[i*3],in.spring_point_a[i*3+1],in.spring_point_a[i*3+2]};
         s.pb={in.spring_point_b[i*3],in.spring_point_b[i*3+1],in.spring_point_b[i*3+2]};
         s.k=in.spring_stiffness[i];
-        s.c_compression=in.spring_compression_damping[i];
-        s.c_rebound=in.spring_rebound_damping[i];
         s.free_length=in.spring_free_length[i];
-        s.minimum_length=in.spring_minimum_length[i];
-        s.maximum_length=in.spring_maximum_length[i];
-        s.compression_stop_k=in.spring_compression_stop_stiffness[i];
-        s.compression_stop_c=in.spring_compression_stop_damping[i];
-        s.rebound_stop_k=in.spring_rebound_stop_stiffness[i];
-        s.rebound_stop_c=in.spring_rebound_stop_damping[i];
-        if (in.spring_damper_curve_count && in.spring_damper_curve_offset &&
-            in.spring_damper_curve_velocity && in.spring_damper_curve_force) {
-            const int count = in.spring_damper_curve_count[i];
-            const int offset = in.spring_damper_curve_offset[i];
+        s.preload=in.spring_preload[i];
+        if(s.a<0||s.b<0||s.a>=static_cast<int>(in.body_count)||s.b>=static_cast<int>(in.body_count)||
+           s.k<0||s.free_length<0){
+            error="invalid spring parameters";
+            return m;
+        }
+        m.springs.push_back(s);
+    }
+    for(std::size_t i=0;i<in.damper_count;++i){
+        if (!only_when_no_blocks("damper")) return m;
+        Damper d; d.a=in.damper_body_a[i]; d.b=in.damper_body_b[i];
+        d.pa={in.damper_point_a[i*3],in.damper_point_a[i*3+1],in.damper_point_a[i*3+2]};
+        d.pb={in.damper_point_b[i*3],in.damper_point_b[i*3+1],in.damper_point_b[i*3+2]};
+        d.c_compression=in.damper_compression_damping[i];
+        d.c_rebound=in.damper_rebound_damping[i];
+        d.gas_stiffness=in.damper_gas_stiffness[i];
+        d.gas_reference_length=in.damper_gas_reference_length[i];
+        d.gas_reference_force=in.damper_gas_reference_force[i];
+        d.preload=in.damper_preload[i];
+        d.friction=in.damper_friction[i];
+        d.extension_sign=in.damper_extension_sign[i];
+        if (in.damper_curve_count && in.damper_curve_offset &&
+            in.damper_curve_velocity && in.damper_curve_force) {
+            const int count = in.damper_curve_count[i];
+            const int offset = in.damper_curve_offset[i];
             if (count < 0 || offset < 0) {
                 error="invalid damper curve range";
                 return m;
@@ -231,9 +244,8 @@ Model build_model(
                 return m;
             }
             for (int p = 0; p < count; ++p) {
-                const double velocity =
-                    in.spring_damper_curve_velocity[offset+p];
-                const double force = in.spring_damper_curve_force[offset+p];
+                const double velocity = in.damper_curve_velocity[offset+p];
+                const double force = in.damper_curve_force[offset+p];
                 if (!std::isfinite(velocity) || !std::isfinite(force)) {
                     error="damper curve must be finite";
                     return m;
@@ -241,25 +253,38 @@ Model build_model(
                 // Strictly increasing in velocity keeps the interpolation
                 // single-valued; a non-monotonic force is allowed because real
                 // shocks are not monotonic near the blow-off point.
-                if (p > 0 && velocity <= s.damper_velocity.back()) {
+                if (p > 0 && velocity <= d.velocity.back()) {
                     error="damper curve velocity must strictly increase";
                     return m;
                 }
-                s.damper_velocity.push_back(velocity);
-                s.damper_force.push_back(force);
+                d.velocity.push_back(velocity);
+                d.force.push_back(force);
             }
         }
-        if(s.a<0||s.b<0||s.a>=static_cast<int>(in.body_count)||s.b>=static_cast<int>(in.body_count)||
-           s.k<0||s.c_compression<0||s.c_rebound<0||s.free_length<0||
-           s.compression_stop_k<0||s.compression_stop_c<0||s.rebound_stop_k<0||s.rebound_stop_c<0||
-           (std::isfinite(s.minimum_length) && s.minimum_length<0)||
-           (std::isfinite(s.maximum_length) && s.maximum_length<0)||
-           (std::isfinite(s.minimum_length) && std::isfinite(s.maximum_length) &&
-            s.minimum_length>=s.maximum_length)){
-            error="invalid spring or stop parameters";
+        if(d.a<0||d.b<0||d.a>=static_cast<int>(in.body_count)||d.b>=static_cast<int>(in.body_count)||
+           d.c_compression<0||d.c_rebound<0||d.gas_stiffness<0||d.friction<0){
+            error="invalid damper parameters";
             return m;
         }
-        m.springs.push_back(s);
+        m.dampers.push_back(d);
+    }
+    for(std::size_t i=0;i<in.bump_stop_count;++i){
+        if (!only_when_no_blocks("bump_stop")) return m;
+        BumpStop b; b.a=in.bump_stop_body_a[i]; b.b=in.bump_stop_body_b[i];
+        b.pa={in.bump_stop_point_a[i*3],in.bump_stop_point_a[i*3+1],in.bump_stop_point_a[i*3+2]};
+        b.pb={in.bump_stop_point_b[i*3],in.bump_stop_point_b[i*3+1],in.bump_stop_point_b[i*3+2]};
+        b.clearance=in.bump_stop_clearance[i];
+        b.stiffness=in.bump_stop_stiffness[i];
+        b.direction=in.bump_stop_direction[i];
+        b.damping=in.bump_stop_damping[i];
+        if(b.a<0||b.b<0||b.a>=static_cast<int>(in.body_count)||b.b>=static_cast<int>(in.body_count)||
+           b.stiffness<0||b.damping<0||
+           (std::isfinite(b.clearance) && b.clearance<0)||
+           (b.direction!=1.0 && b.direction!=-1.0)){
+            error="invalid bump stop parameters";
+            return m;
+        }
+        m.bump_stops.push_back(b);
     }
     for(std::size_t i=0;i<in.bushing_count;++i){
         if (!only_when_no_blocks("bushing")) return m;

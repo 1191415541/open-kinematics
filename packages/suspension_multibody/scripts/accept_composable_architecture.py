@@ -1619,7 +1619,11 @@ def main(argv: list[str] | None = None) -> int:
         # failure.  Ordering them is cheaper than explaining that failure.
         outcomes.extend(run_scenarios(strict=args.strict))
         run_probes()
-    frozen_ids = {"dynamic_hash", "kc_parity", "case_parity", "kc_perf", "legacy_surface_gate",
+    # `kc_parity` is deliberately absent: without `--actual-dir` it compares the
+    # frozen snapshot against itself, so it is a tautology rather than evidence.
+    # The K/C equivalence it is meant to establish needs the probe scripts to run
+    # first, which is a separate, much longer check.
+    frozen_ids = {"dynamic_hash", "case_parity", "kc_perf", "legacy_surface_gate",
                   "kernel_layering", "ruff", "ty"}
     if not args.probes_only:
         for outcome in run_frozen(only=tuple(frozen_ids) if not args.probes_only else ()):

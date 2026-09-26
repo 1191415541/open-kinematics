@@ -13,26 +13,37 @@ Vec3 add_force_on_body(
     std::vector<Vec3>& force, std::vector<Vec3>& torque,
     const Model& model, const State& state, int body, const Vec3& point_local,
     const Vec3& f_world, ElementWrenchSink* sink) {
-    if (body < 0 || model.bodies[body].fixed) return {};
+    if (body < 0) return {};
+    const bool fixed = model.bodies[body].fixed;
     const Vec3 arm = rotate(state.q[body], point_local);
-    force[body] += f_world;
-    torque[body] += cross(arm, f_world);
+    // A fixed body carries no free degree of freedom -- `build_model` gives it
+    // no `body_to_free` slot and the residual never reads its accumulator -- so
+    // the accumulation stays suppressed exactly as before.  Whether the wrench
+    // is *recorded* is a separate question: what an element applied to a
+    // chassis or bench mount is a fact, and it is the reaction a load report
+    // asks for.  The row is already reserved (the caller opened it), so leaving
+    // it NaN loses a fact the solver had in hand.  Hence: the sink sees this
+    // end, the accumulators do not.
+    if (!fixed) {
+        force[body] += f_world;
+        torque[body] += cross(arm, f_world);
+    }
     // The optional channel records this call's wrench exactly as it was applied:
     // the lever is the one the accumulation above used, and the action point is
     // the marker's world position.  A null sink is the default path, and costs
     // one pointer test that changes no value.
     if (sink != nullptr) sink->add_force(f_world, arm, state.r[body]);
-    return f_world;
+    return fixed ? Vec3{} : f_world;
 }
 
 void add_torque_on_body(
     std::vector<Vec3>& torque, const Model& model, int body,
     const Vec3& tau_world, ElementWrenchSink* sink
 ) {
-    if (body < 0 || model.bodies[body].fixed) return;
-    torque[body] += tau_world;
+    if (body < 0) return;
+    if (!model.bodies[body].fixed) torque[body] += tau_world;
     // A pure moment has no application point, so the row keeps the point it was
-    // opened with.
+    // opened with.  The fixed end is recorded for the same reason the force is.
     if (sink != nullptr) sink->add_torque(tau_world);
 }
 

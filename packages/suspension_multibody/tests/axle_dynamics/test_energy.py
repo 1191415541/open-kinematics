@@ -4,10 +4,11 @@ import numpy as np
 
 from suspension_multibody.axle_dynamics import (
     AxleBody,
+    AxleDamper,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleSolverSettings,
-    AxleSpringDamper,
+    AxleSpring,
     AxleTire,
     run_axle_dynamics,
 )
@@ -36,18 +37,18 @@ def test_undamped_linear_oscillator_has_no_energy_drift() -> None:
         ),
         joints=(),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="spring",
                 body_a="fixture",
                 body_b="body",
                 point_a_m=(0.0, 0.0, 0.0),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=10_000.0,
-                compression_damping_n_s_per_m=0.0,
-                rebound_damping_n_s_per_m=0.0,
                 free_length_m=0.25,
             ),
         ),
+        dampers=(),
+        bump_stops=(),
     )
     times = np.linspace(0.0, 0.1, 101)
     result = run_axle_dynamics(
@@ -100,18 +101,28 @@ def test_damped_oscillator_reports_only_passive_damper_dissipation() -> None:
         ),
         joints=(),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="spring",
                 body_a="fixture",
                 body_b="body",
                 point_a_m=(0.0, 0.0, 0.0),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=10_000.0,
-                compression_damping_n_s_per_m=100.0,
-                rebound_damping_n_s_per_m=100.0,
                 free_length_m=0.25,
             ),
         ),
+        dampers=(
+            AxleDamper(
+                name="spring_damper",
+                body_a="fixture",
+                body_b="body",
+                point_a_m=(0.0, 0.0, 0.0),
+                point_b_m=(0.0, 0.0, 0.0),
+                compression_damping_n_s_per_m=100.0,
+                rebound_damping_n_s_per_m=100.0,
+            ),
+        ),
+        bump_stops=(),
     )
     times = np.linspace(0.0, 0.1, 101)
     result = run_axle_dynamics(

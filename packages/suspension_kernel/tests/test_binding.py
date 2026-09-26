@@ -37,8 +37,10 @@ CONTRACT_SYMBOLS = (
     "suspension_kernel_capabilities",
 )
 
-EXPECTED_ABI = 15
-EXPECTED_VEHICLE_ABI = 30
+# Bumped with the force-element split (2026-09-26): `AxleInput`'s fused spring
+# group became three, and `VehicleInput` embeds `AxleInput` by value.
+EXPECTED_ABI = 16
+EXPECTED_VEHICLE_ABI = 31
 
 
 def _exported_abi_versions() -> dict[str, int]:

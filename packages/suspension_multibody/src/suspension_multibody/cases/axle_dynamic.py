@@ -59,37 +59,85 @@ def _matrix(values) -> list[list[float]]:
 
 
 def _spring_element(spring) -> dict[str, Any]:
-    """One spring/damper, with its force-per-length coefficients in N/mm."""
+    """One elastic element, with its force-per-length coefficient in N/mm."""
     parameters: dict[str, Any] = {
         "point_a": _vec3_mm(spring.point_a_m),
         "point_b": _vec3_mm(spring.point_b_m),
         "stiffness": float(spring.stiffness_n_per_m) * _MM,
-        "compression_damping": float(spring.compression_damping_n_s_per_m) * _MM,
-        "rebound_damping": float(spring.rebound_damping_n_s_per_m) * _MM,
         "free_length": float(spring.free_length_m) * _INV_MM,
-        "compression_stop_stiffness": float(spring.compression_stop_stiffness_n_per_m) * _MM,
-        "compression_stop_damping": float(spring.compression_stop_damping_n_s_per_m) * _MM,
-        "rebound_stop_stiffness": float(spring.rebound_stop_stiffness_n_per_m) * _MM,
-        "rebound_stop_damping": float(spring.rebound_stop_damping_n_s_per_m) * _MM,
+        "preload": float(spring.preload_n),
     }
-    # A limit that is not set is genuinely absent, not zero: zero would clamp
-    # the spring solid.
-    if spring.minimum_length_m is not None:
-        parameters["minimum_length"] = float(spring.minimum_length_m) * _INV_MM
-    if spring.maximum_length_m is not None:
-        parameters["maximum_length"] = float(spring.maximum_length_m) * _INV_MM
-    if spring.damper_curve_velocity_m_per_s:
-        parameters["damper_curve"] = [
-            [float(velocity) * _INV_MM, float(force)]
-            for velocity, force in zip(
-                spring.damper_curve_velocity_m_per_s, spring.damper_curve_force_n
+    if spring.elastic_curve_deflection_m:
+        parameters["elastic_curve"] = [
+            [float(deflection), float(force)]
+            for deflection, force in zip(
+                spring.elastic_curve_deflection_m, spring.elastic_curve_force_n
             )
         ]
     return {
         "name": spring.name,
-        "type": "spring_damper",
+        "type": "spring",
         "body_a": spring.body_a,
         "body_b": spring.body_b,
+        "parameters": parameters,
+    }
+
+
+def _damper_element(damper) -> dict[str, Any]:
+    """One dissipative element, with its coefficients in N/mm."""
+    parameters: dict[str, Any] = {
+        "point_a": _vec3_mm(damper.point_a_m),
+        "point_b": _vec3_mm(damper.point_b_m),
+        "compression_damping": float(damper.compression_damping_n_s_per_m) * _MM,
+        "rebound_damping": float(damper.rebound_damping_n_s_per_m) * _MM,
+        "gas_stiffness": float(damper.gas_stiffness_n_per_m) * _MM,
+        "gas_reference_force": float(damper.gas_reference_force_n),
+        "preload": float(damper.preload_n),
+        "friction": float(damper.friction_n),
+        "extension_sign": float(damper.extension_sign),
+    }
+    if damper.gas_reference_length_m is not None:
+        parameters["gas_reference_length"] = (
+            float(damper.gas_reference_length_m) * _INV_MM
+        )
+    if damper.damper_curve_velocity_m_per_s:
+        parameters["damper_curve"] = [
+            [float(velocity) * _INV_MM, float(force)]
+            for velocity, force in zip(
+                damper.damper_curve_velocity_m_per_s, damper.damper_curve_force_n
+            )
+        ]
+    return {
+        "name": damper.name,
+        "type": "damper",
+        "body_a": damper.body_a,
+        "body_b": damper.body_b,
+        "parameters": parameters,
+    }
+
+
+def _bump_stop_element(stop) -> dict[str, Any]:
+    """One unilateral element, with its clearance in the document's length unit."""
+    parameters: dict[str, Any] = {
+        "point_a": _vec3_mm(stop.point_a_m),
+        "point_b": _vec3_mm(stop.point_b_m),
+        "clearance": float(stop.clearance_m) * _INV_MM,
+        "stiffness": float(stop.stiffness_n_per_m) * _MM,
+        "direction": float(stop.direction),
+        "damping": float(stop.damping_n_s_per_m) * _MM,
+    }
+    if stop.stop_curve_penetration_m:
+        parameters["stop_curve"] = [
+            [float(penetration) * _INV_MM, float(force)]
+            for penetration, force in zip(
+                stop.stop_curve_penetration_m, stop.stop_curve_force_n
+            )
+        ]
+    return {
+        "name": stop.name,
+        "type": "bump_stop",
+        "body_a": stop.body_a,
+        "body_b": stop.body_b,
         "parameters": parameters,
     }
 
@@ -338,6 +386,8 @@ def model_document(
             }
         )
     elements = [_spring_element(spring) for spring in model.springs]
+    elements += [_damper_element(damper) for damper in model.dampers]
+    elements += [_bump_stop_element(stop) for stop in model.bump_stops]
     elements.extend(_bushing_element(bushing) for bushing in model.bushings)
     elements.extend(_anti_roll_element(bar) for bar in model.anti_roll_bars)
     elements.extend(

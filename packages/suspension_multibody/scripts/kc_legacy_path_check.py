@@ -7,7 +7,7 @@ Two questions are answered separately:
 * does any *native* entry module (``preparation/vehicle_dynamic.py``,
   ``results/vehicle.py``, ``vehicle/service.py``, ``axle_dynamics/``) import or
   name the Python equilibrium solver?  Any hit is a failure.
-* how many *legacy* consumers (``api.py``, ``analysis/``, ``adams/``) still do?
+* how many *legacy* consumers (``api.py``, ``adams/``) still do?
   Non-zero is expected before the migration and becomes a failure under
   ``--strict``.
 
@@ -35,7 +35,7 @@ NATIVE_PATHS = (
     SOURCE / "results" / "vehicle.py",
     SOURCE / "axle_dynamics",
 )
-LEGACY_CONSUMERS = (SOURCE / "api.py", SOURCE / "analysis", SOURCE / "adams")
+LEGACY_CONSUMERS = (SOURCE / "api.py", SOURCE / "adams")
 SYMBOL = "EquilibriumSolver"
 
 

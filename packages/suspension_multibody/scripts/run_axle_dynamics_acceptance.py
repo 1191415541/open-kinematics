@@ -31,12 +31,14 @@ from suspension_multibody.adams import (
 )
 from suspension_multibody.axle_dynamics import (
     AxleBody,
+    AxleBumpStop,
     AxleBushing,
+    AxleDamper,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
-    AxleSpringDamper,
+    AxleSpring,
     AxleTire,
     NativeAxleError,
     native_build_metadata,
@@ -84,7 +86,9 @@ def build_axle_model() -> AxleDynamicsModel:
         ),
     ]
     joints: list[AxleJoint] = []
-    springs: list[AxleSpringDamper] = []
+    springs: list[AxleSpring] = []
+    dampers: list[AxleDamper] = []
+    bump_stops: list[AxleBumpStop] = []
     tires: list[AxleTire] = []
     for side, sign in (("l", -1.0), ("r", 1.0)):
         lateral = sign * _TRACK_HALF_M
@@ -128,27 +132,61 @@ def build_axle_model() -> AxleDynamicsModel:
                 axis_b=(0.0, 1.0, 0.0),
             )
         )
+        # One corner carries the three structures a strut is: an elastic
+        # member, a dissipative member, and a stop at each end of its travel.
+        # They act on the same two points, which is what makes one write-up per
+        # law a faithful description of the same physical corner.
+        attachment_a = (
+            0.0,
+            lateral,
+            _WHEEL_CENTER_Z_M - _SPRUNG_Z_M + 0.30,
+        )
         springs.append(
-            AxleSpringDamper(
+            AxleSpring(
                 name=f"spring_{side}",
                 body_a="sprung",
                 body_b=f"wheel_{side}",
-                point_a_m=(
-                    0.0,
-                    lateral,
-                    _WHEEL_CENTER_Z_M - _SPRUNG_Z_M + 0.30,
-                ),
+                point_a_m=attachment_a,
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=32_000.0,
+                free_length_m=0.40,
+            )
+        )
+        dampers.append(
+            AxleDamper(
+                name=f"damper_{side}",
+                body_a="sprung",
+                body_b=f"wheel_{side}",
+                point_a_m=attachment_a,
+                point_b_m=(0.0, 0.0, 0.0),
                 compression_damping_n_s_per_m=2600.0,
                 rebound_damping_n_s_per_m=3800.0,
-                free_length_m=0.40,
-                minimum_length_m=0.20,
-                maximum_length_m=0.42,
-                compression_stop_stiffness_n_per_m=400_000.0,
-                compression_stop_damping_n_s_per_m=2000.0,
-                rebound_stop_stiffness_n_per_m=300_000.0,
-                rebound_stop_damping_n_s_per_m=1500.0,
+            )
+        )
+        bump_stops.append(
+            AxleBumpStop(
+                name=f"bump_stop_compression_{side}",
+                body_a="sprung",
+                body_b=f"wheel_{side}",
+                point_a_m=attachment_a,
+                point_b_m=(0.0, 0.0, 0.0),
+                clearance_m=0.20,
+                stiffness_n_per_m=400_000.0,
+                direction=1.0,
+                damping_n_s_per_m=2000.0,
+            )
+        )
+        bump_stops.append(
+            AxleBumpStop(
+                name=f"bump_stop_rebound_{side}",
+                body_a="sprung",
+                body_b=f"wheel_{side}",
+                point_a_m=attachment_a,
+                point_b_m=(0.0, 0.0, 0.0),
+                clearance_m=0.42,
+                stiffness_n_per_m=300_000.0,
+                direction=-1.0,
+                damping_n_s_per_m=1500.0,
             )
         )
         tires.append(
@@ -186,6 +224,8 @@ def build_axle_model() -> AxleDynamicsModel:
         bodies=tuple(bodies),
         joints=tuple(joints),
         springs=tuple(springs),
+        dampers=tuple(dampers),
+        bump_stops=tuple(bump_stops),
         bushings=(restraint,),
         tires=tuple(tires),
     )

@@ -150,8 +150,10 @@ def test_imported_elements_are_used_unmodified() -> None:
         tire_stiffness_n_per_m=_ADAMS_TIRE_STIFFNESS_N_PER_M,
     )
 
+    # The elastic and dissipative members are separate records now, which is
+    # what the source declares them as.
     spring = next(s for s in model.springs if s.name == "spring_l")
-    damper = next(s for s in model.springs if s.name == "damper_l")
+    damper = next(d for d in model.dampers if d.name == "damper_l")
 
     assert spring.stiffness_n_per_m == pytest.approx(87_500.0)
     assert damper.damper_curve_velocity_m_per_s == (

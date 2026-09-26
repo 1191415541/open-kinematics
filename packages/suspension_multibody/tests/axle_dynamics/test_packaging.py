@@ -49,8 +49,8 @@ def test_wheel_contains_current_platform_native_kernel(tmp_path: Path) -> None:
         assert library_path in archive.namelist()
         assert metadata_path in archive.namelist()
         metadata = json.loads(archive.read(metadata_path))
-    assert metadata["abi_version"] == 15
-    assert metadata["vehicle_abi_version"] == 30
+    assert metadata["abi_version"] == 16
+    assert metadata["vehicle_abi_version"] == 31
     assert metadata["source"] == "cpp/axle_dynamics/axle_kernel.cpp"
 
 

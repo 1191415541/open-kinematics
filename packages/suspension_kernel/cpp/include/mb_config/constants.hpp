@@ -22,7 +22,17 @@ inline constexpr int kTireOutputWidth = 41;
 
 inline constexpr int kConstraintOutputWidth = 6;
 
-inline constexpr int kSpringOutputWidth = 7;
+// The three axial structures report one block each.  Splitting the fused
+// `Spring` record split its single 7-column ledger the same way: the elastic
+// block keeps the length, the rate, the elastic force and its preload, the
+// dissipative block reports the damping force and the power it removes, and the
+// unilateral block reports the penetration, the stop force and whether the stop
+// is engaged.  Together they carry every number the fused row carried.
+inline constexpr int kSpringOutputWidth = 4;
+
+inline constexpr int kDamperOutputWidth = 4;
+
+inline constexpr int kBumpStopOutputWidth = 5;
 
 inline constexpr int kBushingOutputWidth = 12;
 

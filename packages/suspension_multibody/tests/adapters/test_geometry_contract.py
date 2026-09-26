@@ -77,3 +77,56 @@ def test_front_axle_model_rejects_a_non_vehicle_frame() -> None:
             contract,
             mass=MassSpec(sprung_mass=1200.0),
         )
+
+
+def test_the_alias_table_resolves_every_role_the_assembly_asks_for() -> None:
+    """
+    Every role the assembly looks up must resolve from a contract-derived model.
+
+    The adapter emits the contract's role names and the assembly looks up its own
+    roles, through an alias table that normalises case and dashes.  A role whose
+    alias list does not cover the emitted spelling is a model that cannot be
+    assembled at all, which is exactly what the four missing entries broke, so the
+    check resolves each role through the same function the assembly uses rather
+    than comparing the tables by hand.
+    """
+    from suspension_multibody.subsystems.geometry import (
+        HARDPOINT_ALIASES,
+        lookup_hardpoint,
+    )
+
+    model = front_axle_model_from_contract(
+        _contract(),
+        mass=MassSpec(sprung_mass=1200.0),
+    )
+    hardpoints = dict(model.hardpoints)
+    unresolved = []
+    for role in sorted(HARDPOINT_ALIASES):
+        try:
+            lookup_hardpoint(hardpoints, role)
+        except ValueError:
+            unresolved.append(role)
+    assert not unresolved, (
+        "the alias table cannot resolve these roles from a contract-derived "
+        f"model: {unresolved}"
+    )
+
+
+def test_a_contract_derived_model_assembles_and_solves() -> None:
+    """
+    A contract-derived model builds an assembly and converges, not just resolves.
+
+    Resolving the hardpoints is necessary but not sufficient: the model also has
+    to build a front-axle assembly and reach a converged native solve.  That is
+    what the four missing aliases broke, and it is what this test would catch
+    again.
+    """
+    from suspension_multibody.api import run_case
+    from suspension_multibody.schema.case import CaseSpec
+
+    model = front_axle_model_from_contract(
+        _contract(),
+        mass=MassSpec(sprung_mass=1200.0),
+    )
+    bundle = run_case(model, CaseSpec(name="contract-axle", mode="K"))
+    assert bundle.states, "the contract-derived model produced no solved state"

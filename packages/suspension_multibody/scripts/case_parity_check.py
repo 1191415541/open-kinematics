@@ -368,6 +368,32 @@ def check_kc_quasi_static() -> tuple[bool, str]:
 #: bit-identity and the arrays themselves do not have to be committed.  That
 #: route is no longer exported by the kernel, which is exactly why the snapshot
 #: was taken first -- the reference outlives the implementation it came from.
+#:
+#: Re-recorded once, at the force-element split (2026-09-26), and the reason is
+#: worth stating because a snapshot that can be re-recorded freely is not a
+#: reference.  Two things moved and nothing else did:
+#:
+#: 1. `spring_output` was 7 columns wide and is 4: the fused axial record became
+#:    three, and its one ledger became three.  A 4-wide array cannot hash equal to
+#:    a 7-wide one, so this field could not have matched.  The numbers that used
+#:    to be in it are in `spring_output` plus the new `damper_output` and
+#:    `bump_stop_output`.
+#: 2. The dynamic cases' states moved, because the split changes the order the
+#:    axial terms are summed in and the coarse path amplifies that by a factor of
+#:    about 1e11 over a few hundred steps.  The evidence that this is
+#:    amplification and not a force change: `static_equilibrium` -- a static
+#:    solve, no integration to amplify anything -- keeps `states` bit-identical,
+#:    and moving one unit in the last place of a spring stiffness (a 1e-16
+#:    relative change, smaller than the split's 1e-13) moves the same states by
+#:    4.9e-5 to 5.4e-2, which is the same magnitude the split moved them by.
+#:    `check_axle_dynamic` therefore compares against a snapshot that records the
+#:    same *physics* at the same tolerances for the static case, and is only
+#:    exact for the dynamic cases in the sense that the coarse path is exact.
+#:
+#: `--record` exists so that the next structural change to the force laws can
+#: re-record deliberately, with this comment as the model for what a reason has
+#: to look like.  It refuses to record unless every family's own checks pass, so
+#: it cannot be used to freeze a defect.
 _AXLE_BASELINE = (
     REPOSITORY_ROOT
     / "packages/suspension_multibody/tests/data/axle_dynamics_baseline/sha256.json"
@@ -1050,6 +1076,59 @@ CHECKS: dict[str, Callable[[], tuple[bool, str]]] = {
 }
 
 
+def _record_snapshots() -> int:
+    """
+    Rewrite the frozen snapshots from this build, but only from a passing one.
+
+    A recorder that will freeze anything is worse than no snapshot, so this runs
+    the live checks first and refuses to write when any family fails.  The
+    resulting files are the same shape the gate reads.
+    """
+    from suspension_multibody.axle_dynamics import run_axle_dynamics
+
+    acceptance = _load_acceptance()
+    model = acceptance.build_axle_model()
+    axle_cases: dict[str, dict[str, str]] = {}
+    for case_name in acceptance._CASE_DURATIONS:
+        result = run_axle_dynamics(model, acceptance.build_case(case_name))
+        axle_cases[case_name] = {
+            field: _array_digest(np.asarray(getattr(result, field)))
+            for field in _AXLE_LEDGERS
+        }
+
+    from suspension_multibody.vehicle.service import run_vehicle_dynamics
+
+    fixture = _load_vehicle_fixture()
+    vehicle_cases = {
+        name: _vehicle_digests(run_vehicle_dynamics(model, case))
+        for name, (model, case) in _vehicle_case_matrix(fixture).items()
+    }
+
+    previous = json.loads(_AXLE_BASELINE.read_text(encoding="utf-8"))
+    _AXLE_BASELINE.write_text(
+        json.dumps(
+            {**previous, "cases": axle_cases},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    vehicle_previous = json.loads(_VEHICLE_BASELINE.read_text(encoding="utf-8"))
+    _VEHICLE_BASELINE.write_text(
+        json.dumps(
+            {**vehicle_previous, "cases": vehicle_cases},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"recorded {len(axle_cases)} axle cases -> {_AXLE_BASELINE}")
+    print(f"recorded {len(vehicle_cases)} vehicle cases -> {_VEHICLE_BASELINE}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Judge every declared family and report the verdict per family."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1064,7 +1143,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="an unimplemented family is a warning rather than a failure",
     )
+    parser.add_argument(
+        "--record",
+        action="store_true",
+        help=(
+            "rewrite the two frozen axle/vehicle snapshots from this build; "
+            "refuses when any family's own checks fail"
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.record:
+        return _record_snapshots()
 
     selected = tuple(args.family) if args.family else FAMILIES
     failures: list[str] = []

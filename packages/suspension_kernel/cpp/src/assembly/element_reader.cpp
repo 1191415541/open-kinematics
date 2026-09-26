@@ -91,6 +91,29 @@ bool read_element_blocks(
             }
         }
 
+        // One measured curve per family, in its primary slot.  Reading it is the
+        // same rule for all three: paired, finite, and at least two points.
+        const auto read_curve = [&slots, &error](
+            std::size_t slot, std::vector<double>& abscissa,
+            std::vector<double>& ordinate) -> bool {
+            const ElementCurveReference& curve = slots[slot];
+            if (curve.count == 1) {
+                error = "a measured curve needs at least two points";
+                return false;
+            }
+            for (std::size_t point = 0; point < curve.count; ++point) {
+                const double x = curve.values[2*point];
+                const double y = curve.values[2*point+1];
+                if (!std::isfinite(x) || !std::isfinite(y)) {
+                    error = "a measured curve must be finite";
+                    return false;
+                }
+                abscissa.push_back(x);
+                ordinate.push_back(y);
+            }
+            return true;
+        };
+
         if (block.kind == ELEMENT_SPRING) {
             Spring spring;
             spring.a = block.body_a;
@@ -102,32 +125,11 @@ bool read_element_blocks(
                 case SPRING_FIELD_K:
                     spring.k = source[0];
                     break;
-                case SPRING_FIELD_C_COMPRESSION:
-                    spring.c_compression = source[0];
-                    break;
-                case SPRING_FIELD_C_REBOUND:
-                    spring.c_rebound = source[0];
-                    break;
                 case SPRING_FIELD_FREE_LENGTH:
                     spring.free_length = source[0];
                     break;
-                case SPRING_FIELD_MINIMUM_LENGTH:
-                    spring.minimum_length = source[0];
-                    break;
-                case SPRING_FIELD_MAXIMUM_LENGTH:
-                    spring.maximum_length = source[0];
-                    break;
-                case SPRING_FIELD_COMPRESSION_STOP_K:
-                    spring.compression_stop_k = source[0];
-                    break;
-                case SPRING_FIELD_COMPRESSION_STOP_C:
-                    spring.compression_stop_c = source[0];
-                    break;
-                case SPRING_FIELD_REBOUND_STOP_K:
-                    spring.rebound_stop_k = source[0];
-                    break;
-                case SPRING_FIELD_REBOUND_STOP_C:
-                    spring.rebound_stop_c = source[0];
+                case SPRING_FIELD_PRELOAD:
+                    spring.preload = source[0];
                     break;
                 case SPRING_FIELD_POINT_A:
                     spring.pa = Vec3{source[0], source[1], source[2]};
@@ -139,40 +141,110 @@ bool read_element_blocks(
             }
             // Same validity rules as the parallel-array path, in the same order, so
             // a block-built spring is rejected for exactly the same reasons.
-            if (spring.k < 0.0 || spring.c_compression < 0.0 ||
-                spring.c_rebound < 0.0 || spring.free_length < 0.0 ||
-                spring.compression_stop_k < 0.0 || spring.compression_stop_c < 0.0 ||
-                spring.rebound_stop_k < 0.0 || spring.rebound_stop_c < 0.0 ||
-                (std::isfinite(spring.minimum_length) && spring.minimum_length < 0.0) ||
-                (std::isfinite(spring.maximum_length) && spring.maximum_length < 0.0) ||
-                (std::isfinite(spring.minimum_length) &&
-                 std::isfinite(spring.maximum_length) &&
-                 spring.minimum_length >= spring.maximum_length)) {
-                error = "invalid spring or stop parameters";
+            if (spring.k < 0.0 || spring.free_length < 0.0) {
+                error = "invalid spring parameters";
                 return false;
             }
-            // The damper curve lives in the second slot: a family declares a fixed
-            // number of slots and the spring has two.
-            const ElementCurveReference& damper = slots[1];
-            if (damper.count == 1) {
-                error = "a damper curve needs at least two points";
-                return false;
-            }
-            for (std::size_t point = 0; point < damper.count; ++point) {
-                const double velocity = damper.values[2*point];
-                const double force = damper.values[2*point+1];
-                if (!std::isfinite(velocity) || !std::isfinite(force)) {
-                    error = "damper curve must be finite";
-                    return false;
+            if (!read_curve(0, spring.deflection, spring.force)) return false;
+            model.springs.push_back(spring);
+            continue;
+        }
+
+        if (block.kind == ELEMENT_DAMPER) {
+            Damper damper;
+            damper.a = block.body_a;
+            damper.b = block.body_b;
+            for (std::size_t row = 0; row < kDamperFieldMapCount; ++row) {
+                const ElementFieldMap& entry = kDamperFieldMap[row];
+                const double* source = block.parameters + entry.element_offset;
+                switch (entry.field) {
+                case DAMPER_FIELD_C_COMPRESSION:
+                    damper.c_compression = source[0];
+                    break;
+                case DAMPER_FIELD_C_REBOUND:
+                    damper.c_rebound = source[0];
+                    break;
+                case DAMPER_FIELD_GAS_STIFFNESS:
+                    damper.gas_stiffness = source[0];
+                    break;
+                case DAMPER_FIELD_GAS_REFERENCE_LENGTH:
+                    damper.gas_reference_length = source[0];
+                    break;
+                case DAMPER_FIELD_GAS_REFERENCE_FORCE:
+                    damper.gas_reference_force = source[0];
+                    break;
+                case DAMPER_FIELD_PRELOAD:
+                    damper.preload = source[0];
+                    break;
+                case DAMPER_FIELD_FRICTION:
+                    damper.friction = source[0];
+                    break;
+                case DAMPER_FIELD_EXTENSION_SIGN:
+                    damper.extension_sign = source[0];
+                    break;
+                case DAMPER_FIELD_POINT_A:
+                    damper.pa = Vec3{source[0], source[1], source[2]};
+                    break;
+                case DAMPER_FIELD_POINT_B:
+                    damper.pb = Vec3{source[0], source[1], source[2]};
+                    break;
                 }
-                if (point > 0 && velocity <= spring.damper_velocity.back()) {
+            }
+            if (damper.c_compression < 0.0 || damper.c_rebound < 0.0 ||
+                damper.gas_stiffness < 0.0 || damper.friction < 0.0) {
+                error = "invalid damper parameters";
+                return false;
+            }
+            if (!read_curve(0, damper.velocity, damper.force)) return false;
+            // Strictly increasing in velocity keeps the interpolation
+            // single-valued; a non-monotonic force is allowed because real
+            // shocks are not monotonic near the blow-off point.
+            for (std::size_t point = 1; point < damper.velocity.size(); ++point) {
+                if (damper.velocity[point] <= damper.velocity[point-1]) {
                     error = "damper curve velocity must strictly increase";
                     return false;
                 }
-                spring.damper_velocity.push_back(velocity);
-                spring.damper_force.push_back(force);
             }
-            model.springs.push_back(spring);
+            model.dampers.push_back(damper);
+            continue;
+        }
+
+        if (block.kind == ELEMENT_BUMP_STOP) {
+            BumpStop stop;
+            stop.a = block.body_a;
+            stop.b = block.body_b;
+            for (std::size_t row = 0; row < kBumpStopFieldMapCount; ++row) {
+                const ElementFieldMap& entry = kBumpStopFieldMap[row];
+                const double* source = block.parameters + entry.element_offset;
+                switch (entry.field) {
+                case BUMP_STOP_FIELD_CLEARANCE:
+                    stop.clearance = source[0];
+                    break;
+                case BUMP_STOP_FIELD_STIFFNESS:
+                    stop.stiffness = source[0];
+                    break;
+                case BUMP_STOP_FIELD_DIRECTION:
+                    stop.direction = source[0];
+                    break;
+                case BUMP_STOP_FIELD_DAMPING:
+                    stop.damping = source[0];
+                    break;
+                case BUMP_STOP_FIELD_POINT_A:
+                    stop.pa = Vec3{source[0], source[1], source[2]};
+                    break;
+                case BUMP_STOP_FIELD_POINT_B:
+                    stop.pb = Vec3{source[0], source[1], source[2]};
+                    break;
+                }
+            }
+            if (stop.stiffness < 0.0 || stop.damping < 0.0 ||
+                (std::isfinite(stop.clearance) && stop.clearance < 0.0) ||
+                (stop.direction != 1.0 && stop.direction != -1.0)) {
+                error = "invalid bump stop parameters";
+                return false;
+            }
+            if (!read_curve(0, stop.penetration, stop.force)) return false;
+            model.bump_stops.push_back(stop);
             continue;
         }
 

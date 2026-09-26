@@ -8,12 +8,13 @@ import pytest
 from suspension_multibody.adams import load_axle_acceptance_contract
 from suspension_multibody.axle_dynamics import (
     AxleBody,
+    AxleDamper,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleDynamicsResult,
     AxleJoint,
     AxleSolverSettings,
-    AxleSpringDamper,
+    AxleSpring,
     AxleTire,
     run_axle_dynamics,
 )
@@ -368,18 +369,18 @@ def test_extreme_mass_stiffness_ratios_still_trim_and_integrate(
             ),
         ),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="spring",
                 body_a="fixture",
                 body_b="body",
                 point_a_m=(0.0, 0.0, 0.0),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=stiffness_n_per_m,
-                compression_damping_n_s_per_m=0.0,
-                rebound_damping_n_s_per_m=0.0,
                 free_length_m=free_length_m,
             ),
         ),
+        dampers=(),
+        bump_stops=(),
     )
     result = run_axle_dynamics(
         model,
@@ -403,8 +404,10 @@ def test_extreme_mass_stiffness_ratios_still_trim_and_integrate(
     # A trimmed state must be an exact equilibrium and must not drift.
     assert float(height[0]) == pytest.approx(expected, abs=1e-12)
     assert float(np.ptp(height)) <= 1e-9
+    # The elastic force is what holds the static load; the preload column is
+    # zero here because this fixture declares none.
     np.testing.assert_allclose(
-        result.spring_state("spring")[:, 6], weight_n, rtol=1e-9
+        result.spring_state("spring")[:, 2], weight_n, rtol=1e-9
     )
     assert float(np.max(result.diagnostics.position_residual)) <= float(
         gate["constraint_position_m"]
@@ -454,18 +457,28 @@ def _spin_axle(spin_kind: str) -> AxleDynamicsModel:
             ),
         ),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="spring",
                 body_a="fixture",
                 body_b="carrier",
                 point_a_m=(0.0, 0.0, 0.62),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=32_000.0,
-                compression_damping_n_s_per_m=2600.0,
-                rebound_damping_n_s_per_m=2600.0,
                 free_length_m=0.32,
             ),
         ),
+        dampers=(
+            AxleDamper(
+                name="spring_damper",
+                body_a="fixture",
+                body_b="carrier",
+                point_a_m=(0.0, 0.0, 0.62),
+                point_b_m=(0.0, 0.0, 0.0),
+                compression_damping_n_s_per_m=2600.0,
+                rebound_damping_n_s_per_m=2600.0,
+            ),
+        ),
+        bump_stops=(),
         tires=(
             AxleTire(
                 name="tire",
@@ -516,8 +529,10 @@ def test_free_wheel_spin_is_pinned_and_reported_without_changing_trim() -> None:
     )
     # The trimmed corner balances its weight plus the compressed spring load.
     weight_n = (18.0 + 22.0) * 9.80665
+    # The corner's own axial force holds the static load; the fixture declares
+    # no damper and no preload, so the elastic column is the whole of it.
     assert float(spinning.tire_state("tire")[0, 4]) == pytest.approx(
-        weight_n + float(spinning.spring_state("spring")[0, 6]), rel=1e-9
+        weight_n + float(spinning.spring_state("spring")[0, 2]), rel=1e-9
     )
     assert float(np.ptp(spinning.body_state("carrier")[:, 2])) <= 1e-9
 
@@ -553,21 +568,19 @@ def test_measured_damper_curve_is_reproduced_not_fitted() -> None:
                 axis_b=(0.0, 0.0, 1.0),
             ),
         ),
-        springs=(
-            AxleSpringDamper(
+        springs=(),
+        dampers=(
+            AxleDamper(
                 name="damper",
                 body_a="fixture",
                 body_b="body",
                 point_a_m=(0.0, 0.0, 0.0),
                 point_b_m=(0.0, 0.0, 0.0),
-                stiffness_n_per_m=0.0,
-                compression_damping_n_s_per_m=0.0,
-                rebound_damping_n_s_per_m=0.0,
-                free_length_m=0.30,
                 damper_curve_velocity_m_per_s=velocity,
                 damper_curve_force_n=force,
             ),
         ),
+        bump_stops=(),
     )
     result = run_axle_dynamics(
         model,
@@ -583,9 +596,11 @@ def test_measured_damper_curve_is_reproduced_not_fitted() -> None:
         ),
     )
 
-    output = result.spring_state("damper")
+    # The measured curve is the damper's law, so its force is the dissipative
+    # ledger's third column and its rate the second.
+    output = result.damper_state("damper")
     rate = output[:, 1]
-    reported = output[:, 3]
+    reported = output[:, 2]
 
     np.testing.assert_allclose(
         reported, -np.interp(rate, velocity, force), atol=0.0, rtol=0.0

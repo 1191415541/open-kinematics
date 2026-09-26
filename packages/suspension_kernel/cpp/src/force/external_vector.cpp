@@ -21,6 +21,8 @@ void external_force_vector(
     std::vector<double>& tire_output, double& potential, double& external_power,
     double& dissipation, std::vector<double>& generalized_force,
     std::vector<double>* spring_component_output,
+    std::vector<double>* damper_component_output,
+    std::vector<double>* bump_stop_component_output,
     std::vector<double>* bushing_component_output,
     std::vector<double>* anti_roll_component_output,
     const StaticContactOverride* static_contact,
@@ -75,11 +77,13 @@ void external_force_vector(
     }
     const int stride = reset_force_outputs(
         model, tire_forces, tire_state_derivatives, tire_relaxation_rates,
-        tire_output, spring_component_output, bushing_component_output,
+        tire_output, spring_component_output, damper_component_output,
+        bump_stop_component_output, bushing_component_output,
         anti_roll_component_output, record_output
     );
     assemble_spring_forces(
-        model, state, force, torque, spring_component_output, energy_rates,
+        model, state, force, torque, spring_component_output,
+        damper_component_output, bump_stop_component_output, energy_rates,
         energy_storage, record_energy, brush_only, internal_force_scale,
         dissipation, potential
     );

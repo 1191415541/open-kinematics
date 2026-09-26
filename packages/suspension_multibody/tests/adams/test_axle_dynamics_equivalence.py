@@ -37,13 +37,14 @@ from suspension_multibody.axle_dynamics import (
     AxleAntiRollBar,
     AxleBody,
     AxleBushing,
+    AxleDamper,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleDynamicsResult,
     AxleJoint,
     AxleRunDiagnostics,
     AxleSolverSettings,
-    AxleSpringDamper,
+    AxleSpring,
     AxleTire,
 )
 from suspension_multibody.io import canonical_hash
@@ -107,29 +108,46 @@ def _model() -> AxleDynamicsModel:
             ),
         ),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="spring_l",
                 body_a="fixture",
                 body_b="wheel_l",
                 point_a_m=(0.0, -0.7, 0.6),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=10_000.0,
-                compression_damping_n_s_per_m=100.0,
-                rebound_damping_n_s_per_m=100.0,
                 free_length_m=0.3,
             ),
-            AxleSpringDamper(
+            AxleSpring(
                 name="spring_r",
                 body_a="fixture",
                 body_b="wheel_r",
                 point_a_m=(0.0, 0.7, 0.6),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=10_000.0,
-                compression_damping_n_s_per_m=100.0,
-                rebound_damping_n_s_per_m=100.0,
                 free_length_m=0.3,
             ),
         ),
+        dampers=(
+            AxleDamper(
+                name="spring_l_damper",
+                body_a="fixture",
+                body_b="wheel_l",
+                point_a_m=(0.0, -0.7, 0.6),
+                point_b_m=(0.0, 0.0, 0.0),
+                compression_damping_n_s_per_m=100.0,
+                rebound_damping_n_s_per_m=100.0,
+            ),
+            AxleDamper(
+                name="spring_r_damper",
+                body_a="fixture",
+                body_b="wheel_r",
+                point_a_m=(0.0, 0.7, 0.6),
+                point_b_m=(0.0, 0.0, 0.0),
+                compression_damping_n_s_per_m=100.0,
+                rebound_damping_n_s_per_m=100.0,
+            ),
+        ),
+        bump_stops=(),
         tires=(
             _tire("tire_l", "wheel_l"),
             _tire("tire_r", "wheel_r"),
@@ -240,16 +258,26 @@ def _result() -> AxleDynamicsResult:
     constraint = np.zeros((3, 2, 6))
     constraint[:, 0, 2] = 100.0
     constraint[:, 1, 2] = 120.0
-    spring = np.zeros((3, 2, 7))
+    # The three axial ledgers, with the same numbers the fused 7-column row used
+    # to carry: length, rate, elastic force, preload for the spring; damping
+    # force and its power for the damper; penetration, stop force and the engaged
+    # flag for the stop.  The energies and forces the audit reads are unchanged.
+    spring = np.zeros((3, 2, 4))
     spring[:, :, 0] = 0.3
     spring[:, 0, 2] = 50.0
     spring[:, 1, 2] = 60.0
-    spring[:, 0, 3] = 5.0
-    spring[:, 1, 3] = 6.0
-    spring[:, 0, 4] = 2.0
-    spring[:, 1, 5] = -3.0
-    spring[:, 0, 6] = 57.0
-    spring[:, 1, 6] = 63.0
+    damper = np.zeros((3, 2, 4))
+    damper[:, :, 0] = 0.3
+    damper[:, 0, 2] = 5.0
+    damper[:, 1, 2] = 6.0
+    damper[:, :, 3] = 1.0
+    # The fused row's two stop columns collapse into one stop record, because a
+    # record carries one direction: the +2.0 was the compression stop and the
+    # -3.0 the rebound one, and each is a stop of its own now.
+    bump_stop = np.zeros((3, 2, 5))
+    bump_stop[:, :, 0] = 0.3
+    bump_stop[:, 0, 3] = 2.0
+    bump_stop[:, 1, 3] = -3.0
     tire = np.zeros((3, 2, 12))
     tire[:, :, 0] = 1.0
     tire[:, 0, 4:7] = (1000.0, 10.0, 20.0)
@@ -260,12 +288,16 @@ def _result() -> AxleDynamicsResult:
         body_names=("fixture", "sprung", "wheel_l", "wheel_r"),
         constraint_names=("spin_l", "spin_r"),
         spring_names=("spring_l", "spring_r"),
+        damper_names=("spring_l_damper", "spring_r_damper"),
+        bump_stop_names=(),
         bushing_names=(),
         anti_roll_bar_names=(),
         tire_names=("tire_l", "tire_r"),
         states=states,
         constraint_wrench=constraint,
         spring_output=spring,
+        damper_output=damper,
+        bump_stop_output=bump_stop,
         bushing_output=np.zeros((3, 0, 12)),
         anti_roll_output=np.zeros((3, 0, 3)),
         diagnostics=AxleRunDiagnostics(
@@ -437,7 +469,12 @@ def test_native_result_exports_all_frozen_physical_channels() -> None:
     assert history.channels["right.wheel_spin"] == pytest.approx(
         (-1.0, -2.0, -3.0)
     )
-    assert history.channels["left.spring_force"] == (52.0, 52.0, 52.0)
+    # The conservative force is the corner's elastic term plus any stop, and this
+    # model declares no stop, so it is the elastic force alone.  The fixture's
+    # fused row carried a stop column anyway; the split makes the model's own
+    # declarations the only source for the sum, so the reported force no longer
+    # includes a stop the model never had.
+    assert history.channels["left.spring_force"] == (50.0, 50.0, 50.0)
     assert history.channels["right.damper_force"] == (6.0, 6.0, 6.0)
 
 
@@ -847,7 +884,10 @@ def test_road_input_is_an_exact_piecewise_linear_ramp_sum() -> None:
 
 
 def test_measured_damper_curve_is_emitted_without_constant_fit() -> None:
-    spring = _model().springs[0].model_copy(
+    # The measured curve belongs to the dissipative record now -- it is a
+    # force-velocity law, so it lives with the damping rather than with the
+    # stiffness it used to be filed beside.
+    damper = _model().dampers[0].model_copy(
         update={
             "damper_curve_velocity_m_per_s": (-1.0, 0.0, 1.0),
             "damper_curve_force_n": (120.0, 10.0, -160.0),
@@ -856,7 +896,7 @@ def test_measured_damper_curve_is_emitted_without_constant_fit() -> None:
     curve_model = AxleDynamicsModel(
         **{
             **_model().model_dump(),
-            "springs": (spring, _model().springs[1]),
+            "dampers": (damper, _model().dampers[1]),
         }
     )
     manifest = create_dynamic_axle_manifest(
@@ -896,17 +936,17 @@ def test_measured_damper_curve_is_emitted_without_constant_fit() -> None:
         curve_line[len(", FUNCTION = ") :],
     )
     for velocity, force in zip(
-        spring.damper_curve_velocity_m_per_s,
-        spring.damper_curve_force_n,
+        damper.damper_curve_velocity_m_per_s,
+        damper.damper_curve_force_n,
     ):
         assert _evaluate_adams_expression(expression, velocity) == pytest.approx(
             force, abs=1e-9
         )
     assert _evaluate_adams_expression(expression, -2.0) == pytest.approx(
-        spring.damper_curve_force_n[0], abs=1e-9
+        damper.damper_curve_force_n[0], abs=1e-9
     )
     assert _evaluate_adams_expression(expression, 2.0) == pytest.approx(
-        spring.damper_curve_force_n[-1], abs=1e-9
+        damper.damper_curve_force_n[-1], abs=1e-9
     )
 
 

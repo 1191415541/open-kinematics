@@ -8,6 +8,18 @@ it -- that is the property this layer exists to provide, and
 ``tests/architecture/test_import_boundaries.py`` enforces it.
 """
 
+from .elements import (
+    AntiRollBarElement,
+    BumpStopElement,
+    BushingElement,
+    ElementError,
+    ForceEvaluation,
+    GravityElement,
+    LinearSpringElement,
+    PointWrenchElement,
+    StaticDamperElement,
+    VerticalTireElement,
+)
 from .joints import (
     SE3,
     Array,
@@ -39,6 +51,16 @@ from .spatial import (
 )
 
 __all__ = [
+    "AntiRollBarElement",
+    "BumpStopElement",
+    "BushingElement",
+    "ElementError",
+    "ForceEvaluation",
+    "GravityElement",
+    "LinearSpringElement",
+    "PointWrenchElement",
+    "StaticDamperElement",
+    "VerticalTireElement",
     "Array",
     "BallJoint",
     "ConstantVelocityJoint",

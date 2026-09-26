@@ -300,7 +300,7 @@ bool accumulate_energy_step(
         input.gravity_x, input.gravity_y, input.gravity_z,
         tire_forces, tire_derivatives, tire_output,
         potential, power, dissipation,
-        force, nullptr, nullptr, nullptr, nullptr, &rates
+        force, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &rates
     );
     if (!std::isfinite(power) || !std::isfinite(dissipation) ||
         dissipation < -1e-12) {
@@ -372,6 +372,8 @@ void write_physics_output(
     std::vector<double> tire_derivatives;
     std::vector<double> tire_output;
     std::vector<double> spring_output;
+    std::vector<double> damper_output;
+    std::vector<double> bump_stop_output;
     std::vector<double> bushing_output;
     std::vector<double> anti_roll_output;
     double potential = 0.0;
@@ -387,6 +389,8 @@ void write_physics_output(
     if (element_wrench != nullptr) {
         ElementWrenchCounts element_wrench_counts;
         element_wrench_counts.springs = model.springs.size();
+        element_wrench_counts.dampers = model.dampers.size();
+        element_wrench_counts.bump_stops = model.bump_stops.size();
         element_wrench_counts.bushings = model.bushings.size();
         element_wrench_counts.anti_rolls = model.anti_roll_bars.size();
         element_wrench_counts.steering = model.steering_actuators.size();
@@ -398,8 +402,8 @@ void write_physics_output(
     external_force_vector(
         model, state, sample_input, input.gravity_x, input.gravity_y, input.gravity_z,
         tire_forces, tire_derivatives, tire_output, potential, power, dissipation,
-        force, &spring_output, &bushing_output, &anti_roll_output,
-        nullptr, nullptr, &storage
+        force, &spring_output, &damper_output, &bump_stop_output,
+        &bushing_output, &anti_roll_output, nullptr, nullptr, &storage
     );
     if (element_wrench != nullptr) element_wrench->end_sample();
     const double kinetic = kinetic_energy(model, state);
@@ -444,6 +448,16 @@ void write_physics_output(
         output.spring_output[
             sample*model.springs.size()*kSpringOutputWidth+i
         ] = spring_output[i];
+    }
+    for (std::size_t i = 0; i < damper_output.size(); ++i) {
+        output.damper_output[
+            sample*model.dampers.size()*kDamperOutputWidth+i
+        ] = damper_output[i];
+    }
+    for (std::size_t i = 0; i < bump_stop_output.size(); ++i) {
+        output.bump_stop_output[
+            sample*model.bump_stops.size()*kBumpStopOutputWidth+i
+        ] = bump_stop_output[i];
     }
     for (std::size_t i = 0; i < bushing_output.size(); ++i) {
         output.bushing_output[

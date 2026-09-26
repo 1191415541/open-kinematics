@@ -23,12 +23,123 @@
 
 namespace axle_kernel {
 
+namespace {
+
+/// The elastic contribution: `k*(free_length - length) + preload`, or the
+/// measured curve on compression, which replaces the stiffness entirely.
+double spring_scalar(
+    const Spring& s,
+    double length,
+    double* elastic_force_out
+) {
+    const double compression = s.free_length - length;
+    const bool has_curve = !s.deflection.empty();
+    const double elastic_force = has_curve
+        ? interpolate_curve(s.deflection, s.force, compression)
+        : s.k*compression;
+    if (elastic_force_out != nullptr) *elastic_force_out = elastic_force;
+    return elastic_force + s.preload;
+}
+
+/// The dissipative contribution, including the constant offsets the Python side
+/// already modelled: a gas spring, a preload and a Coulomb friction term.
+///
+/// The offsets are velocity-independent, so they are not filtered by the sign of
+/// the rate the way the two damping coefficients are.  `friction` acts against
+/// the motion, and its sign is the extension sign the model declared.
+double damper_scalar(
+    const Damper& d,
+    double length,
+    double rate,
+    double* damping_force_out,
+    double* dissipation_out
+) {
+    const bool has_curve = !d.velocity.empty();
+    const double coefficient = rate < 0.0 ? d.c_compression : d.c_rebound;
+    double scalar = 0.0;
+    if (has_curve) {
+        const double damping_force = -interpolate_curve(d.velocity, d.force, rate);
+        // A measured curve carries a gas preload: a non-zero force at zero
+        // velocity that is conservative, not dissipative.  Splitting it off
+        // leaves the velocity-dependent remainder, whose power is what the
+        // damper actually removes from the system.  Charging the preload to
+        // dissipation would report energy input whenever the rod moves against
+        // it, which is a bookkeeping error rather than a physical one.  The
+        // split is *only* for that bookkeeping: the force the curve states at
+        // the current rate is already the whole dissipative term, so adding the
+        // preload back to it would apply the offset twice.
+        const double preload_force = -interpolate_curve(d.velocity, d.force, 0.0);
+        scalar = damping_force;
+        if (damping_force_out != nullptr) *damping_force_out = damping_force;
+        if (dissipation_out != nullptr) {
+            *dissipation_out = -(damping_force - preload_force)*rate;
+        }
+    } else {
+        scalar = -coefficient*rate;
+        if (damping_force_out != nullptr) *damping_force_out = scalar;
+        if (dissipation_out != nullptr) *dissipation_out = coefficient*rate*rate;
+    }
+    // The velocity-independent offsets.  Their sign is the fused record's: it
+    // folded all three into an equivalent free length, and the force that
+    // produced is `-(gas + preload + friction*sign)`.  Adding them with the
+    // opposite sign would invert the corner's static load, which is a physics
+    // change rather than a rename.
+    if (std::isfinite(d.gas_reference_length)) {
+        scalar -= d.gas_reference_force
+            + d.gas_stiffness*(length - d.gas_reference_length);
+    }
+    scalar -= d.preload;
+    scalar -= d.friction*std::copysign(1.0, d.extension_sign);
+    return scalar;
+}
+
+/// The unilateral contribution.  A stop is one of two directions and is inactive
+/// unless the length has crossed its clearance, so an inactive stop contributes
+/// exactly zero and leaves its reported force and penetration at zero.
+double bump_stop_scalar(
+    const BumpStop& b,
+    double length,
+    double rate,
+    double* stop_force_out,
+    double* penetration_out,
+    double* dissipation_out
+) {
+    double penetration = 0.0;
+    const bool below = b.direction >= 0.0;
+    const bool engaged = below ? length < b.clearance : length > b.clearance;
+    if (!std::isfinite(b.clearance) || !engaged) {
+        if (stop_force_out != nullptr) *stop_force_out = 0.0;
+        if (penetration_out != nullptr) *penetration_out = 0.0;
+        return 0.0;
+    }
+    penetration = below ? b.clearance - length : length - b.clearance;
+    const bool has_curve = !b.penetration.empty();
+    const double sign = below ? 1.0 : -1.0;
+    const double elastic = has_curve
+        ? interpolate_curve(b.penetration, b.force, penetration)
+        : b.stiffness*penetration;
+    double scalar = sign*elastic;
+    // Damping only resists the motion that is closing the stop.
+    const bool closing = below ? rate < 0.0 : rate > 0.0;
+    if (closing) {
+        scalar -= b.damping*rate;
+        if (dissipation_out != nullptr) *dissipation_out = b.damping*rate*rate;
+    }
+    if (stop_force_out != nullptr) *stop_force_out = sign*elastic;
+    if (penetration_out != nullptr) *penetration_out = penetration;
+    return scalar;
+}
+
+}  // namespace
+
 void assemble_spring_forces(
     const Model& model,
     const State& state,
     std::vector<Vec3>& force,
     std::vector<Vec3>& torque,
     std::vector<double>* spring_component_output,
+    std::vector<double>* damper_component_output,
+    std::vector<double>* bump_stop_component_output,
     EnergyRates* energy_rates,
     EnergyStorage* energy_storage,
     bool record_energy,
@@ -38,156 +149,150 @@ void assemble_spring_forces(
     double& potential
 ) {
     ElementWrenchSink* const sink = active_element_wrench_sink();
+
+    // The three structures are three element families, not three views of one
+    // record.  Each carries its own attachment points, which is what a real
+    // corner needs -- a suspension's spring seats and its damper mounts are
+    // different points -- so each is evaluated on its own points, in its own
+    // index space, and reported in its own ledger.  The fused record expressed
+    // all three laws on one point pair because it had one; what must not change
+    // is the *set* of wrenches that reaches the accumulators.
+
     for (std::size_t i = 0; i < model.springs.size() && !brush_only; ++i) {
         const Spring& s = model.springs[i];
+        if (s.a < 0 || s.b < 0) continue;
         const Vec3 pa = state_point(state, s.a, s.pa);
         const Vec3 pb = state_point(state, s.b, s.pb);
-        const Vec3 va = state_point_velocity(state, s.a, s.pa);
-        const Vec3 vb = state_point_velocity(state, s.b, s.pb);
-        const Vec3 d = pb-pa;
-        const double L = norm(d);
+        const Vec3 delta = pb-pa;
+        const double L = norm(delta);
         if (L < 1e-10) continue;
-        const Vec3 e = d/L;
-        const double dL = dot(vb-va, e);
-        const double compression = s.free_length - L;
-        const double damping = dL < 0.0 ? s.c_compression : s.c_rebound;
-        const bool has_elastic_curve = !s.elastic_deflection.empty();
-        const double elastic_force = has_elastic_curve
-            ? interpolate_curve(s.elastic_deflection, s.elastic_force, compression)
-            : s.k*compression;
-        // A measured curve gives the force directly; the constant-coefficient
-        // form is the special case used when no curve is supplied.
-        const bool has_curve = !s.damper_velocity.empty();
-        const double damping_force = has_curve
-            ? -interpolate_curve(s.damper_velocity, s.damper_force, dL)
-            : -damping*dL;
-        double compression_stop_elastic_force = 0.0;
-        double compression_stop_damping_force = 0.0;
-        double rebound_stop_elastic_force = 0.0;
-        double rebound_stop_damping_force = 0.0;
-        double fscalar = elastic_force + damping_force;
-        // A measured curve carries a gas preload: a non-zero force at zero
-        // velocity that is conservative, not dissipative.  Splitting it off
-        // leaves the velocity-dependent remainder, whose power is what the
-        // damper actually removes from the system.  Charging the preload to
-        // dissipation would report energy input whenever the rod moves against
-        // it, which is a bookkeeping error rather than a physical one.
-        const double preload_force = has_curve
-            ? -interpolate_curve(s.damper_velocity, s.damper_force, 0.0)
-            : 0.0;
+        const Vec3 e = delta/L;
+        double elastic_force = 0.0;
+        double fscalar = spring_scalar(s, L, &elastic_force);
         if (record_energy) {
-            const double damper_dissipation =
-                has_curve ? -(damping_force - preload_force)*dL : damping*dL*dL;
+            const double compression = s.free_length - L;
+            const double energy = s.deflection.empty()
+                ? 0.5*s.k*compression*compression
+                : integrate_curve_from_zero(s.deflection, s.force, compression);
+            potential += energy;
+            if (energy_storage) energy_storage->spring += energy;
+        }
+        fscalar *= internal_force_scale;
+        const Vec3 f = e*fscalar;
+        if (sink != nullptr) {
+            sink->open(kElementWrenchSpring, i, 0, s.a, s.b, s.b,
+                       pb.x, pb.y, pb.z);
+        }
+        add_force_on_body(force, torque, model, state, s.b, s.pb, f, sink);
+        if (sink != nullptr) {
+            sink->open(kElementWrenchSpring, i, 1, s.a, s.b, s.a,
+                       pa.x, pa.y, pa.z);
+        }
+        add_force_on_body(force, torque, model, state, s.a, s.pa, f*(-1.0), sink);
+        if (spring_component_output != nullptr) {
+            const std::size_t offset = i*kSpringOutputWidth;
+            (*spring_component_output)[offset] = L;
+            (*spring_component_output)[offset+1] = dot(
+                state_point_velocity(state, s.b, s.pb) -
+                state_point_velocity(state, s.a, s.pa), e);
+            (*spring_component_output)[offset+2] = elastic_force;
+            (*spring_component_output)[offset+3] = s.preload;
+        }
+    }
+
+    for (std::size_t i = 0; i < model.dampers.size() && !brush_only; ++i) {
+        const Damper& d = model.dampers[i];
+        if (d.a < 0 || d.b < 0) continue;
+        const Vec3 pa = state_point(state, d.a, d.pa);
+        const Vec3 pb = state_point(state, d.b, d.pb);
+        const Vec3 delta = pb-pa;
+        const double L = norm(delta);
+        if (L < 1e-10) continue;
+        const Vec3 e = delta/L;
+        const double dL = dot(
+            state_point_velocity(state, d.b, d.pb) -
+            state_point_velocity(state, d.a, d.pa), e);
+        double damping_force = 0.0;
+        double damper_dissipation = 0.0;
+        double fscalar = damper_scalar(d, L, dL, &damping_force,
+                                       &damper_dissipation);
+        if (record_energy) {
             dissipation += damper_dissipation;
             if (energy_rates) {
                 energy_rates->damper_dissipation += damper_dissipation;
             }
         }
-        if (std::isfinite(s.minimum_length) && L < s.minimum_length) {
-            const double penetration = s.minimum_length - L;
-            compression_stop_elastic_force = s.compression_stop_penetration.empty()
-                ? s.compression_stop_k * penetration
-                : interpolate_curve(
-                    s.compression_stop_penetration,
-                    s.compression_stop_force,
-                    penetration
-                );
-            if (dL < 0.0) {
-                compression_stop_damping_force =
-                    -s.compression_stop_c * dL;
-            }
-            fscalar += compression_stop_elastic_force
-                + compression_stop_damping_force;
-            if (record_energy && dL < 0.0) {
-                const double stop_dissipation =
-                    s.compression_stop_c*dL*dL;
-                dissipation += stop_dissipation;
-                if (energy_rates) {
-                    energy_rates->damper_dissipation += stop_dissipation;
-                }
-            }
-            if (record_energy) {
-                const double stop_energy =
-                    s.compression_stop_penetration.empty()
-                        ? 0.5*s.compression_stop_k*penetration*penetration
-                        : integrate_curve_from_zero(
-                            s.compression_stop_penetration,
-                            s.compression_stop_force,
-                            penetration
-                        );
-                potential += stop_energy;
-                if (energy_storage) energy_storage->stop += stop_energy;
+        fscalar *= internal_force_scale;
+        const Vec3 f = e*fscalar;
+        if (sink != nullptr) {
+            sink->open(kElementWrenchDamper, i, 0, d.a, d.b, d.b,
+                       pb.x, pb.y, pb.z);
+        }
+        add_force_on_body(force, torque, model, state, d.b, d.pb, f, sink);
+        if (sink != nullptr) {
+            sink->open(kElementWrenchDamper, i, 1, d.a, d.b, d.a,
+                       pa.x, pa.y, pa.z);
+        }
+        add_force_on_body(force, torque, model, state, d.a, d.pa, f*(-1.0), sink);
+        if (damper_component_output != nullptr) {
+            const std::size_t offset = i*kDamperOutputWidth;
+            (*damper_component_output)[offset] = L;
+            (*damper_component_output)[offset+1] = dL;
+            (*damper_component_output)[offset+2] = damping_force;
+            (*damper_component_output)[offset+3] = damper_dissipation;
+        }
+    }
+
+    for (std::size_t i = 0; i < model.bump_stops.size() && !brush_only; ++i) {
+        const BumpStop& b = model.bump_stops[i];
+        if (b.a < 0 || b.b < 0) continue;
+        const Vec3 pa = state_point(state, b.a, b.pa);
+        const Vec3 pb = state_point(state, b.b, b.pb);
+        const Vec3 delta = pb-pa;
+        const double L = norm(delta);
+        if (L < 1e-10) continue;
+        const Vec3 e = delta/L;
+        const double dL = dot(
+            state_point_velocity(state, b.b, b.pb) -
+            state_point_velocity(state, b.a, b.pa), e);
+        double stop_force = 0.0;
+        double penetration = 0.0;
+        double stop_dissipation = 0.0;
+        double fscalar = bump_stop_scalar(b, L, dL, &stop_force, &penetration,
+                                          &stop_dissipation);
+        if (record_energy && stop_dissipation != 0.0) {
+            dissipation += stop_dissipation;
+            if (energy_rates) {
+                energy_rates->damper_dissipation += stop_dissipation;
             }
         }
-        if (std::isfinite(s.maximum_length) && L > s.maximum_length) {
-            const double penetration = L - s.maximum_length;
-            rebound_stop_elastic_force = s.rebound_stop_penetration.empty()
-                ? -s.rebound_stop_k * penetration
-                : -interpolate_curve(
-                    s.rebound_stop_penetration,
-                    s.rebound_stop_force,
-                    penetration
-                );
-            if (dL > 0.0) {
-                rebound_stop_damping_force =
-                    -s.rebound_stop_c * dL;
-            }
-            fscalar += rebound_stop_elastic_force
-                + rebound_stop_damping_force;
-            if (record_energy && dL > 0.0) {
-                const double stop_dissipation =
-                    s.rebound_stop_c*dL*dL;
-                dissipation += stop_dissipation;
-                if (energy_rates) {
-                    energy_rates->damper_dissipation += stop_dissipation;
-                }
-            }
-            if (record_energy) {
-                const double stop_energy =
-                    s.rebound_stop_penetration.empty()
-                        ? 0.5*s.rebound_stop_k*penetration*penetration
-                        : integrate_curve_from_zero(
-                            s.rebound_stop_penetration,
-                            s.rebound_stop_force,
-                            penetration
-                        );
-                potential += stop_energy;
-                if (energy_storage) energy_storage->stop += stop_energy;
-            }
+        if (record_energy && penetration != 0.0) {
+            const double energy = b.penetration.empty()
+                ? 0.5*b.stiffness*penetration*penetration
+                : integrate_curve_from_zero(b.penetration, b.force, penetration);
+            potential += energy;
+            if (energy_storage) energy_storage->stop += energy;
         }
         fscalar *= internal_force_scale;
         const Vec3 f = e*fscalar;
-        // One row per end: the wrench the spring applied to b, then the equal
-        // and opposite one it applied to a.  The rows are addressed by element
-        // index, so an element that applies nothing leaves its own rows unset.
         if (sink != nullptr) {
-            sink->open(kElementWrenchSpring, i, 0, s.a, s.b, s.b, pb.x, pb.y, pb.z);
+            sink->open(kElementWrenchBumpStop, i, 0, b.a, b.b, b.b,
+                       pb.x, pb.y, pb.z);
         }
-        add_force_on_body(force, torque, model, state, s.b, s.pb, f, sink);
+        add_force_on_body(force, torque, model, state, b.b, b.pb, f, sink);
         if (sink != nullptr) {
-            sink->open(kElementWrenchSpring, i, 1, s.a, s.b, s.a, pa.x, pa.y, pa.z);
+            sink->open(kElementWrenchBumpStop, i, 1, b.a, b.b, b.a,
+                       pa.x, pa.y, pa.z);
         }
-        add_force_on_body(force, torque, model, state, s.a, s.pa, f*(-1.0), sink);
-        if (record_energy) {
-            const double spring_energy = has_elastic_curve
-                ? integrate_curve_from_zero(
-                    s.elastic_deflection, s.elastic_force, compression
-                )
-                : 0.5*s.k*compression*compression;
-            potential += spring_energy;
-            if (energy_storage) energy_storage->spring += spring_energy;
-        }
-        if (spring_component_output) {
-            const std::size_t offset = i*kSpringOutputWidth;
-            (*spring_component_output)[offset] = L;
-            (*spring_component_output)[offset+1] = dL;
-            (*spring_component_output)[offset+2] = elastic_force;
-            (*spring_component_output)[offset+3] = damping_force;
-            (*spring_component_output)[offset+4] =
-                compression_stop_elastic_force;
-            (*spring_component_output)[offset+5] =
-                rebound_stop_elastic_force;
-            (*spring_component_output)[offset+6] = fscalar;
+        add_force_on_body(force, torque, model, state, b.a, b.pa, f*(-1.0), sink);
+        if (bump_stop_component_output != nullptr) {
+            const std::size_t offset = i*kBumpStopOutputWidth;
+            (*bump_stop_component_output)[offset] = L;
+            (*bump_stop_component_output)[offset+1] = dL;
+            (*bump_stop_component_output)[offset+2] = penetration;
+            (*bump_stop_component_output)[offset+3] = stop_force;
+            (*bump_stop_component_output)[offset+4] =
+                penetration != 0.0 ? 1.0 : 0.0;
         }
     }
 }

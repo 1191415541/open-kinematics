@@ -419,22 +419,20 @@ def test_a_spring_and_a_damper_reach_the_dynamic_model() -> None:
 
     # The axle mirrors the left side, so each declared corner element appears
     # twice -- which is itself the evidence that the mapping ran rather than an
-    # entry being fabricated.
-    names = {entry.name for entry in model.springs}
-    assert names == {
-        "corner_spring_L",
-        "corner_spring_R",
-        "corner_damper_L",
-        "corner_damper_R",
-    }
+    # entry being fabricated.  The elastic and dissipative members are separate
+    # records now, so each set is checked separately: a damper that landed in
+    # `springs` would satisfy a union-of-names check while carrying the wrong law.
+    spring_names = {entry.name for entry in model.springs}
+    damper_names = {entry.name for entry in model.dampers}
+    assert spring_names == {"corner_spring_L", "corner_spring_R"}
+    assert damper_names == {"corner_damper_L", "corner_damper_R"}
     spring_entry = next(e for e in model.springs if e.name == "corner_spring_L")
-    damper_entry = next(e for e in model.springs if e.name == "corner_damper_L")
-    # N/mm to N/m, and the damper's rate is carried as damping rather than
-    # stiffness -- mixing them would be a silent physical error.
+    damper_entry = next(e for e in model.dampers if e.name == "corner_damper_L")
+    # N/mm to N/m on the elastic side, and the damper's rate arrives as damping
+    # rather than stiffness -- mixing them would be a silent physical error.
     assert spring_entry.stiffness_n_per_m == pytest.approx(200.0 * 1000.0)
-    assert spring_entry.compression_damping_n_s_per_m == 0.0
     assert damper_entry.compression_damping_n_s_per_m == pytest.approx(12.0)
-    assert damper_entry.stiffness_n_per_m == 0.0
+    assert damper_entry.rebound_damping_n_s_per_m == pytest.approx(12.0)
 
 
 def test_a_preloaded_spring_keeps_its_resting_length() -> None:
@@ -470,13 +468,16 @@ def test_a_preloaded_spring_keeps_its_resting_length() -> None:
     assert entry.stiffness_n_per_m == pytest.approx(200.0 * 1000.0)
 
 
-def test_a_bump_stop_with_no_dynamic_reading_is_named_not_dropped() -> None:
+def test_a_bump_stop_reaches_the_dynamic_model_as_a_unilateral_record() -> None:
     """
-    The bridge refuses what it cannot express, and says which element.
+    A bumper has a reading now, and it arrives as the unilateral record.
 
-    Silently omitting it is the one failure a solver cannot report: the run
-    still converges.  Naming the element is what makes the gap a task instead of
-    a mystery.
+    This used to be the test that a bumper was *refused* by name, because the
+    schema had no way to express a stop whose engaging length is a clearance
+    rather than a free length.  The split gave it one, so the assertion that
+    matters is the opposite one: the element reaches the model, as a stop, with
+    its clearance and its direction intact -- and not silently dropped, which
+    would leave a solver that converges on the wrong model.
     """
     assembly = build_front_axle(
         _model(
@@ -499,8 +500,20 @@ def test_a_bump_stop_with_no_dynamic_reading_is_named_not_dropped() -> None:
         pytest.skip("this assembly path does not carry the bump stop element")
 
     study_assembly = build_study_assembly(assembly, study=DYNAMIC, mode="K")
-    with pytest.raises(BridgeError, match="BumpStopElement"):
-        axle_dynamics_model(study_assembly, name="wired")
+    model = axle_dynamics_model(study_assembly, name="wired")
+
+    # The axle mirrors the left side, so the declared corner stop appears twice.
+    assert {entry.name for entry in model.bump_stops} == {"stop_L", "stop_R"}
+    entry = next(e for e in model.bump_stops if e.name == "stop_L")
+    # The schema states the clearance in millimetres and the SI record in metres,
+    # and the assembly's `bump` direction is the record's "+1 side".
+    assert entry.clearance_m == pytest.approx(20.0 / 1000.0)
+    assert entry.stiffness_n_per_m == pytest.approx(500.0 * 1000.0)
+    assert entry.direction == 1.0
+    # A bumper is not an elastic or a dissipative member, so it must not have
+    # been filed under either.
+    assert all("stop" not in spring.name for spring in model.springs)
+    assert all("stop" not in damper.name for damper in model.dampers)
 
 
 def test_an_anti_roll_bar_with_no_dynamic_reading_is_named_not_dropped() -> None:

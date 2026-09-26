@@ -1355,11 +1355,13 @@ def test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi() -> None:
     )
     assembly = build_vehicle(model, mode="K")
     _bodies, body_frames = _initial_body_state(assembly, _case(model), 1.0e-3)
-    springs, _bushings = _build_elements(assembly, body_frames, 1.0e-3)
+    springs, _dampers, bump_stops, _bushings = _build_elements(
+        assembly, body_frames, 1.0e-3
+    )
     mapped_spring = next(
         item for item in springs if item.name == "front_curve_spring_L"
     )
-    mapped_stop = next(item for item in springs if item.name == "front_curve_stop_L")
+    mapped_stop = next(item for item in bump_stops if item.name == "front_curve_stop_L")
 
     np.testing.assert_allclose(
         mapped_spring.elastic_curve_deflection_m,
@@ -1367,19 +1369,21 @@ def test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi() -> None:
     )
     np.testing.assert_allclose(mapped_spring.elastic_curve_force_n, (-350.0, -100.0, 0.0))
     np.testing.assert_allclose(
-        mapped_stop.compression_stop_curve_penetration_m,
+        mapped_stop.stop_curve_penetration_m,
         (0.0, 0.01, 0.02),
     )
     np.testing.assert_allclose(
-        mapped_stop.compression_stop_curve_force_n,
+        mapped_stop.stop_curve_force_n,
         (0.0, 100.0, 500.0),
     )
 
     result = run_vehicle_dynamics(model, _case(model))
 
     assert np.all(result.diagnostics.accepted)
-    assert result.spring_state("front_curve_spring_L").shape == (2, 7)
-    assert result.spring_state("front_curve_stop_L").shape == (2, 7)
+    # The elastic and unilateral ledgers are separate now, and each is as wide as
+    # the structure it reports.
+    assert result.spring_state("front_curve_spring_L").shape == (2, 4)
+    assert result.bump_stop_state("front_curve_stop_L").shape == (2, 5)
 
 
 def test_native_vehicle_passes_bushing_curves_and_coordinates_to_vehicle_abi() -> None:
@@ -1574,10 +1578,24 @@ def test_engineering_damper_preload_is_converted_before_si_scaling() -> None:
     assembly = build_vehicle(model, mode="C")
     bodies, shifts = _initial_body_state(assembly, _case(model), 1.0e-3)
     del bodies
-    springs, _bushings = _build_elements(assembly, shifts, 1.0e-3)
+    _springs, dampers, _stops, _bushings = _build_elements(assembly, shifts, 1.0e-3)
 
-    mapped = next(spring for spring in springs if spring.name == "front_gas_damper_L")
-    assert mapped.free_length_m == 0.0925
+    # The gas law, the preload and the friction are their own fields on the
+    # damper record now, so the record states the source model's declarations
+    # rather than an equivalent free length derived from them.  The old fold was
+    # `free_length = reference - offset/gas_k`; this asserts the record can be
+    # folded back to exactly that, which is what "no physics was lost" means.
+    mapped = next(damper for damper in dampers if damper.name == "front_gas_damper_L")
+    assert mapped.gas_reference_length_m == pytest.approx(0.1, abs=1e-12)
+    assert mapped.gas_stiffness_n_per_m == pytest.approx(10.0 * 1000.0)
+    assert mapped.gas_reference_force_n == pytest.approx(50.0)
+    assert mapped.preload_n == pytest.approx(20.0)
+    assert mapped.friction_n == pytest.approx(5.0)
+    offset = mapped.gas_reference_force_n + mapped.preload_n + mapped.friction_n
+    folded_free_length = (
+        mapped.gas_reference_length_m - offset / mapped.gas_stiffness_n_per_m
+    )
+    assert folded_free_length == pytest.approx(0.0925, abs=1e-12)
 
 
 def test_brake_signal_is_a_nonnegative_magnitude() -> None:

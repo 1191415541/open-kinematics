@@ -11,6 +11,12 @@ namespace axle_kernel {
 
 /// Axle (`AxleInput`/`AxleOutput`) ABI version.
 ///
+/// Bumped 15 -> 16 with the force-element split (2026-09-26): `AxleInput`'s
+/// single fused spring field group became three (`spring_*`, `damper_*`,
+/// `bump_stop_*`) and `AxleOutput` gained the matching damper and bump-stop
+/// ledgers.  `VehicleInput` embeds `AxleInput` by value, so its size moved with
+/// the axle structure's; `kVehicleKernelAbiVersion` moves with it.
+///
 /// Bumped 14 -> 15 at K7: the two structures gained the `struct_size` /
 /// `abi_version` / `reserved` extension header and the generic element surface
 /// (`element_count`/`elements`/`element_curves`/`topology_extension_count`/
@@ -18,14 +24,14 @@ namespace axle_kernel {
 /// pre-existing field kept its offset; the version still moves because the
 /// structure the caller must compile against is no longer the same size, and a
 /// caller built against 14 would be told so rather than read past its own end.
-inline constexpr int kAxleKernelAbiVersion = 15;
+inline constexpr int kAxleKernelAbiVersion = 16;
 
 /// Whole-vehicle (`VehicleInput`/`VehicleOutput`) ABI version.
 ///
 /// Bumped 29 -> 30 at K7 for the same reason: `VehicleInput` gained the same
 /// element surface, and it embeds `AxleInput` by value, so its own size moved
 /// with the axle structure's.
-inline constexpr int kVehicleKernelAbiVersion = 30;
+inline constexpr int kVehicleKernelAbiVersion = 31;
 
 /// Generic core (`mb_core_*`) ABI version.
 inline constexpr int kCoreKernelAbiVersion = 1;

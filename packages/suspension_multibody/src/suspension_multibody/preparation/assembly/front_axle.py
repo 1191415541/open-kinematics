@@ -15,7 +15,7 @@ built inline.  This module keeps three jobs a subsystem must not take:
   the document lists bodies, constraints and elements in the order they are
   appended, so the order lives here and the subsystems only decide content;
 * it re-exports the hardpoint helpers that used to live here, so existing
-  importers (``analysis/vehicle_physics.py``, ``adams/strict_c.py``) are
+  importers (``vehicle/roll_centers.py``, ``adams/strict_c.py``) are
   unchanged.
 
 ``build_front_axle(model, mode)`` keeps its signature and ``FrontAxleAssembly``
@@ -32,26 +32,24 @@ from typing import Literal, cast
 
 import numpy as np
 
-from ...elements import (
-    AntiRollBarElement,
-    BumpStopElement,
-    BushingElement,
-    LinearSpringElement,
-    StaticDamperElement,
-    VerticalTireElement,
-)
 from ...modeling.primitives import (
     SE3,
+    AntiRollBarElement,
     BallJoint,
+    BumpStopElement,
+    BushingElement,
     ConstantVelocityJoint,
     Constraint,
     CylindricalJoint,
     InPlaneJoint,
+    LinearSpringElement,
     PrismaticJoint,
     RevoluteJoint,
     RigidBody,
     RigidBodyState,
+    StaticDamperElement,
     UniversalJoint,
+    VerticalTireElement,
     WeldJoint,
 )
 from ...schema import (

@@ -32,6 +32,8 @@ FAMILIES = {
     "ANTI_ROLL": "ELEMENT_ANTI_ROLL",
     "TIRE": "ELEMENT_TIRE",
     "AERODYNAMIC_DRAG": "ELEMENT_AERODYNAMIC_DRAG",
+    "DAMPER": "ELEMENT_DAMPER",
+    "BUMP_STOP": "ELEMENT_BUMP_STOP",
 }
 
 #: The slot run each family declares, as `(first, last_exclusive)`.
@@ -41,12 +43,20 @@ FAMILIES = {
 #: the same enumerators would agree with itself no matter how the runs were placed.
 #: These are the runs the C++ `static_assert`s pin, and this repeats the check on
 #: the numbers a reader sees.
+# The force-element split appended two families after the aerodynamic run, because
+# every run above is pinned by a `static_assert` and the 176-slot block had one
+# slot left; `kElementBlockSize` grew to 216 to hold them.  The elastic
+# structure's preload reuses a retired damper slot inside the spring's own run, so
+# no family reaches past its neighbours.
 FAMILY_RUNS = {
     "SPRING": (0, 16),
     "BUSHING": (16, 144),
     "ANTI_ROLL": (144, 154),
     "TIRE": (154, 168),
-    "AERODYNAMIC_DRAG": (168, 176),}
+    "AERODYNAMIC_DRAG": (168, 176),
+    "DAMPER": (184, 198),
+    "BUMP_STOP": (200, 210),
+}
 
 
 def _integer_constants() -> dict[str, int]:

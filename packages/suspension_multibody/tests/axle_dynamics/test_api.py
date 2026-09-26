@@ -15,11 +15,12 @@ from suspension_multibody.axle_dynamics import (
     AxleAntiRollBar,
     AxleBody,
     AxleBushing,
+    AxleDamper,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
-    AxleSpringDamper,
+    AxleSpring,
     AxleTire,
     load_axle_dynamics_case,
     load_axle_dynamics_model,
@@ -111,18 +112,28 @@ def _vertical_slider_model() -> AxleDynamicsModel:
             ),
         ),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="spring",
                 body_a="ground",
                 body_b="slider",
                 point_a_m=(0.0, 0.0, 0.0),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=stiffness,
-                compression_damping_n_s_per_m=100.0,
-                rebound_damping_n_s_per_m=100.0,
                 free_length_m=0.25,
             ),
         ),
+        dampers=(
+            AxleDamper(
+                name="spring_damper",
+                body_a="ground",
+                body_b="slider",
+                point_a_m=(0.0, 0.0, 0.0),
+                point_b_m=(0.0, 0.0, 0.0),
+                compression_damping_n_s_per_m=100.0,
+                rebound_damping_n_s_per_m=100.0,
+            ),
+        ),
+        bump_stops=(),
     )
 
 
@@ -146,9 +157,14 @@ def test_native_solver_preserves_static_equilibrium() -> None:
     np.testing.assert_allclose(
         spring[:, 2], 10.0 * 9.80665, atol=1e-6, rtol=1e-10
     )
-    np.testing.assert_allclose(spring[:, 3:6], 0.0, atol=1e-9, rtol=0.0)
+    # The elastic ledger carries the preload as its fourth column; the
+    # dissipative and unilateral terms live in their own ledgers now, and at
+    # equilibrium the damper sits at rest so its force is zero too.
+    np.testing.assert_allclose(spring[:, 3], 0.0, atol=1e-9, rtol=0.0)
+    damper = result.damper_state("spring_damper")
+    np.testing.assert_allclose(damper[:, 2], 0.0, atol=1e-9, rtol=0.0)
     np.testing.assert_allclose(
-        spring[:, 6], 10.0 * 9.80665, atol=1e-6, rtol=1e-10
+        spring[:, 2] + spring[:, 3], 10.0 * 9.80665, atol=1e-6, rtol=1e-10
     )
     assert np.all(result.diagnostics.accepted)
     assert np.max(result.diagnostics.position_residual) <= 1e-8

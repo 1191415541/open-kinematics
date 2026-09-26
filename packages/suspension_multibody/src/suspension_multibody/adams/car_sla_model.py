@@ -15,9 +15,10 @@ import numpy as np
 from ..axle_dynamics.schema import (
     AxleBody,
     AxleBushing,
+    AxleDamper,
     AxleDynamicsModel,
     AxleJoint,
-    AxleSpringDamper,
+    AxleSpring,
     AxleTire,
 )
 from .car_import import AdamsSuspension, import_blockers
@@ -130,7 +131,8 @@ def build_sla_axle_model(
         ),
     ]
     joints: list[AxleJoint] = []
-    springs: list[AxleSpringDamper] = []
+    springs: list[AxleSpring] = []
+    dampers: list[AxleDamper] = []
     bushings: list[AxleBushing] = []
     tires: list[AxleTire] = []
 
@@ -352,34 +354,24 @@ def build_sla_axle_model(
             corner_load_n=corner_load_n,
         )
         springs.append(
-            AxleSpringDamper(
+            AxleSpring(
                 name=f"spring_{side}",
                 body_a="sprung",
                 body_b=lower_name,
                 point_a_m=local("sprung", spring_upper),
                 point_b_m=local(lower_name, spring_lower),
                 stiffness_n_per_m=suspension.spring_rate_n_per_m,
-                compression_damping_n_s_per_m=0.0,
-                rebound_damping_n_s_per_m=0.0,
                 free_length_m=installed_length_m
                 + spring_force_n / suspension.spring_rate_n_per_m,
             )
         )
-        springs.append(
-            AxleSpringDamper(
+        dampers.append(
+            AxleDamper(
                 name=f"damper_{side}",
                 body_a="sprung",
                 body_b=lower_name,
                 point_a_m=local("sprung", damper_upper),
                 point_b_m=local(lower_name, damper_lower),
-                stiffness_n_per_m=0.0,
-                compression_damping_n_s_per_m=0.0,
-                rebound_damping_n_s_per_m=0.0,
-                free_length_m=float(
-                    np.linalg.norm(
-                        np.asarray(damper_upper) - np.asarray(damper_lower)
-                    )
-                ),
                 damper_curve_velocity_m_per_s=(
                     suspension.damper_velocity_m_per_s
                 ),
@@ -515,6 +507,7 @@ def build_sla_axle_model(
         bodies=tuple(bodies),
         joints=tuple(joints),
         springs=tuple(springs),
+        dampers=tuple(dampers),
         bushings=tuple(bushings),
         tires=tuple(tires),
     )

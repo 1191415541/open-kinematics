@@ -42,6 +42,54 @@ test-multibody: build-axle-native
 
 test: test-contracts test-kinematics test-kernel test-multibody
 
+# --- fast iteration (see AGENTS.md) -----------------------------------------
+
+# Static gates, the architecture gate scripts, and the fast test set: the
+# daily loop, about one minute end to end.
+check-fast: lint type-check gate-architecture test-fast test-other
+
+# The architecture gate scripts.  They are the structural evidence for the
+# composable-architecture work, and each finishes in a couple of seconds: what
+# the tests/architecture directory checks, minus the ten-minute pairwise
+# process sweep that also lives there.
+gate-architecture:
+    uv run --package suspension-multibody python packages/suspension_multibody/tests/architecture/legacy_surface_gate.py --check
+    uv run python packages/suspension_kernel/scripts/check_module_layering.py --strict --final
+    uv run python packages/suspension_multibody/scripts/check_composable_release.py --skip-isolation
+
+# Every test directory except the three slow ones, about 25 s against roughly
+# 33 minutes for the whole package.  `--ignore` rather than a directory list, so
+# a newly added test directory is picked up by default instead of being
+# silently skipped.  The excluded three are Adams numerical equivalence,
+# the architecture sweep, and the full-vehicle K/C grid.
+test-fast:
+    uv run --package suspension-multibody pytest packages/suspension_multibody/tests --ignore=packages/suspension_multibody/tests/adams --ignore=packages/suspension_multibody/tests/architecture --ignore=packages/suspension_multibody/tests/cases -q -p no:cacheprovider
+
+# The other two packages.  A separate invocation on purpose: passing them to the
+# same pytest call moves the rootdir and breaks the multibody tests' own
+# `from tests.benchmark_fixture import ...`.
+test-other:
+    uv run --package suspension-kernel pytest packages/suspension_kernel/tests -q -p no:cacheprovider
+    uv run --package suspension-contracts pytest packages/suspension_contracts/tests -q -p no:cacheprovider
+
+# The frozen numerical gates.  Run these whenever a change touches the solve
+# path: they are the only evidence that the physics and the performance budget
+# did not move.  kc_parity is deliberately absent: without --actual-dir it
+# compares the frozen snapshot against itself, so it proves nothing.
+gate-numeric:
+    uv run python packages/suspension_multibody/scripts/dynamic_hash_sentinel.py --check
+    uv run python packages/suspension_multibody/scripts/case_parity_check.py
+    uv run python packages/suspension_multibody/scripts/kc_perf_gate.py
+
+# The slow directories, kept separate so they are run deliberately rather than
+# by default: Adams numerical equivalence, and the full-vehicle K/C grid.
+test-slow:
+    uv run --package suspension-multibody pytest packages/suspension_multibody/tests/adams packages/suspension_multibody/tests/cases -q -p no:cacheprovider
+
+# The whole multibody suite, slow directories included.  About 33 minutes.
+test-all:
+    uv run --package suspension-multibody pytest packages/suspension_multibody/tests -q -p no:cacheprovider
+
 # Static gates over the workspace-defined scope.
 lint:
     uv run --all-packages ruff check .

@@ -105,7 +105,7 @@ class _ElementBlock(ctypes.Structure):
         ("flags", ctypes.c_int),
         ("body_a", ctypes.c_int),
         ("body_b", ctypes.c_int),
-        ("parameters", ctypes.c_double * 176),
+        ("parameters", ctypes.c_double * 216),
         ("ints", ctypes.c_int * 16),
         ("cached_parameters", ctypes.c_void_p),
         ("cached_parameter_count", ctypes.c_size_t),

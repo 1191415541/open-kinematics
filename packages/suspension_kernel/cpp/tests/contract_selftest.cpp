@@ -126,12 +126,17 @@ int main() {
   check(contract_joint_rows("fixed") == 6, "fixed joint rows");
   check(contract_joint_rows("nope") == -1, "unknown joint reported as -1");
   check(contract_element_known("bushing"), "bushing element known");
+  check(contract_element_known("spring"), "elastic element known");
+  check(contract_element_known("damper"), "dissipative element known");
+  check(contract_element_known("bump_stop"), "unilateral element known");
+  // The fused name is gone, so a document that still uses it is refused.
+  check(!contract_element_known("spring_damper"), "fused element name rejected");
   check(!contract_element_known("sprocket"), "unknown element rejected");
   check(contract_tire_known("pac2002"), "pac2002 tire known");
   check(contract_case_family_known("ride_four_post"), "four-post case family known");
   check(!contract_case_family_known("rally"), "unknown case family rejected");
   check(contract_registry_size(0) == 10, "ten joint types registered");
-  check(contract_registry_size(1) == 9, "nine element types registered");
+  check(contract_registry_size(1) == 10, "ten element types registered");
   check(contract_registry_size(2) == 4, "four tire models registered");
   check(contract_registry_size(3) == 8, "eight case families registered");
 

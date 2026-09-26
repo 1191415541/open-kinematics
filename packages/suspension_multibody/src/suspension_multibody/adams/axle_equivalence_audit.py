@@ -550,14 +550,22 @@ def _audit_model_coverage(
         require(f"joint:{joint.name}")
         require(f"joint:{joint.name}:i")
         require(f"joint:{joint.name}:j")
+    # The three axial structures are grouped into one exported force element per
+    # attachment, so the entity ids are keyed on the corner the group is named
+    # after; the curve now belongs to the damper record, which is where the
+    # force-velocity law lives.
     for spring in model.springs:
         require(f"spring:{spring.name}")
         require(f"spring:{spring.name}:i")
         require(f"spring:{spring.name}:j")
-        if spring.damper_curve_velocity_m_per_s:
-            require(f"spring:{spring.name}:damper_curve")
+        covered.append(f"spring:{spring.name}:elastic")
+    for damper in model.dampers:
+        if damper.damper_curve_velocity_m_per_s:
+            require(f"spring:{damper.name}:damper_curve")
         else:
-            covered.append(f"spring:{spring.name}:constant_damping")
+            covered.append(f"spring:{damper.name}:constant_damping")
+    for stop in model.bump_stops:
+        covered.append(f"spring:{stop.name}:stop")
     for bushing in model.bushings:
         if _bushing_has_force_terms(bushing):
             blockers.append(

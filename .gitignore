@@ -175,7 +175,13 @@ CLAUDE.md
 codex.md
 CODEX.md
 .codex/
+# AGENTS.md is the one agent-facing file this repository *does* track: it holds
+# the validation contract (which gates to run daily, which are slow, and why),
+# so it has to travel with the code rather than live in one developer's
+# checkout.  The other tool files stay ignored.  The negation is anchored to the
+# root so a nested AGENTS.md in another tool's directory is still ignored.
 AGENTS.md
+!/AGENTS.md
 .gemini/
 GEMINI.md
 .ace-tool/

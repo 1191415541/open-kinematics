@@ -79,28 +79,22 @@ void external_force_spring_directional(
     std::vector<Vec3>& force,
     std::vector<Vec3>& torque,
     bool& smooth) {
+    // The three axial structures are evaluated in one pass, in the same order
+    // the fused record accumulated them, so the analytic Jacobian sees the same
+    // sum it always did.  Each structure's own non-smoothness is flagged where
+    // its own branch is decided.
+    // One Jacobian pass per structure, each on its own attachment points: the
+    // three are separate element families with their own indices and their own
+    // mounts.  The non-smoothness each law has is flagged where that law decides
+    // it, which is what the fused record did for the three of them at once.
     for (std::size_t i = 0; i < model.springs.size(); ++i) {
         const Spring& s = model.springs[i];
-        if (
-            !directional_body_active(direction, s.a) &&
-            !directional_body_active(direction, s.b)
-        ) {
+        if (!directional_body_active(direction, s.a) &&
+            !directional_body_active(direction, s.b)) {
             continue;
         }
-        const DVec3 pa = d_state_point(
-            state, direction.dr, direction.dtheta, s.a, s.pa
-        );
-        const DVec3 pb = d_state_point(
-            state, direction.dr, direction.dtheta, s.b, s.pb
-        );
-        const DVec3 va = d_state_point_velocity(
-            state, direction.dr, direction.dtheta, direction.dv,
-            direction.domega, s.a, s.pa
-        );
-        const DVec3 vb = d_state_point_velocity(
-            state, direction.dr, direction.dtheta, direction.dv,
-            direction.domega, s.b, s.pb
-        );
+        const DVec3 pa = d_state_point(state, direction.dr, direction.dtheta, s.a, s.pa);
+        const DVec3 pb = d_state_point(state, direction.dr, direction.dtheta, s.b, s.pb);
         const DVec3 d = pb-pa;
         const DirectionalScalar length = d_norm(d);
         if (length.value < 1e-10) {
@@ -108,86 +102,11 @@ void external_force_spring_directional(
             continue;
         }
         const DVec3 e = d/length;
-        const DirectionalScalar dlength = d_dot(vb-va, e);
-        // The compression/rebound damping branch is non-smooth at zero
-        // relative speed. Detect an actual crossing under the same
-        // perturbation used by the remaining finite-difference columns.
-        constexpr double kJacobianStep = 1e-7;
-        const double trial_dlength =
-            dlength.value + kJacobianStep*dlength.derivative;
-        if (
-            static_contact == nullptr &&
-            (std::abs(dlength.value) <= 1e-12 ||
-             dlength.value*trial_dlength <= 0.0)
-        ) smooth = false;
         const DirectionalScalar compression = s.free_length-length;
-        const double damping =
-            dlength.value < 0.0 ? s.c_compression : s.c_rebound;
-        const DirectionalScalar elastic_force = s.elastic_deflection.empty()
+        DirectionalScalar scalar_force = s.deflection.empty()
             ? s.k*compression
-            : interpolated_curve_directional(
-                s.elastic_deflection, s.elastic_force,
-                compression, smooth
-            );
-        const bool has_curve = !s.damper_velocity.empty();
-        const DirectionalScalar damping_force = has_curve
-            ? (static_contact != nullptr
-                ? -DirectionalScalar{
-                    interpolate_curve(
-                        s.damper_velocity, s.damper_force, dlength.value
-                    )
-                }
-                : -interpolated_curve_directional(
-                    s.damper_velocity, s.damper_force, dlength, smooth
-                ))
-            : -damping*dlength;
-        DirectionalScalar scalar_force = elastic_force+damping_force;
-        if (
-            std::isfinite(s.minimum_length) &&
-            length.value < s.minimum_length
-        ) {
-            const DirectionalScalar penetration =
-                s.minimum_length-length;
-            scalar_force += s.compression_stop_penetration.empty()
-                ? s.compression_stop_k*penetration
-                : interpolated_curve_directional(
-                    s.compression_stop_penetration,
-                    s.compression_stop_force,
-                    penetration,
-                    smooth
-                );
-            if (dlength.value < 0.0) {
-                scalar_force += -s.compression_stop_c*dlength;
-            }
-        } else if (
-            std::isfinite(s.minimum_length) &&
-            std::abs(length.value-s.minimum_length) <= 1e-12
-        ) {
-            smooth = false;
-        }
-        if (
-            std::isfinite(s.maximum_length) &&
-            length.value > s.maximum_length
-        ) {
-            const DirectionalScalar penetration =
-                length-s.maximum_length;
-            scalar_force += s.rebound_stop_penetration.empty()
-                ? -s.rebound_stop_k*penetration
-                : -interpolated_curve_directional(
-                    s.rebound_stop_penetration,
-                    s.rebound_stop_force,
-                    penetration,
-                    smooth
-                );
-            if (dlength.value > 0.0) {
-                scalar_force += -s.rebound_stop_c*dlength;
-            }
-        } else if (
-            std::isfinite(s.maximum_length) &&
-            std::abs(length.value-s.maximum_length) <= 1e-12
-        ) {
-            smooth = false;
-        }
+            : interpolated_curve_directional(s.deflection, s.force, compression, smooth);
+        scalar_force += DirectionalScalar{s.preload};
         scalar_force = internal_force_scale*scalar_force;
         const DVec3 f = e*scalar_force;
         add_directional_force_at_arm(
@@ -198,6 +117,133 @@ void external_force_spring_directional(
             force, torque, model, s.a,
             d_rotate(state.q[s.a], s.pa, direction.dtheta[s.a]), -f
         );
+    }
+
+    for (std::size_t i = 0; i < model.dampers.size(); ++i) {
+        const Damper& damper = model.dampers[i];
+        if (!directional_body_active(direction, damper.a) &&
+            !directional_body_active(direction, damper.b)) {
+            continue;
+        }
+        const DVec3 pa = d_state_point(state, direction.dr, direction.dtheta,
+                                       damper.a, damper.pa);
+        const DVec3 pb = d_state_point(state, direction.dr, direction.dtheta,
+                                       damper.b, damper.pb);
+        const DVec3 va = d_state_point_velocity(
+            state, direction.dr, direction.dtheta, direction.dv,
+            direction.domega, damper.a, damper.pa
+        );
+        const DVec3 vb = d_state_point_velocity(
+            state, direction.dr, direction.dtheta, direction.dv,
+            direction.domega, damper.b, damper.pb
+        );
+        const DVec3 d = pb-pa;
+        const DirectionalScalar length = d_norm(d);
+        if (length.value < 1e-10) {
+            smooth = false;
+            continue;
+        }
+        const DVec3 e = d/length;
+        const DirectionalScalar rate = d_dot(vb-va, e);
+        // The compression/rebound branch is non-smooth at zero relative speed.
+        // Detect an actual crossing under the same perturbation the remaining
+        // finite-difference columns use.
+        constexpr double kJacobianStep = 1e-7;
+        const double trial_rate = rate.value + kJacobianStep*rate.derivative;
+        if (
+            static_contact == nullptr &&
+            (std::abs(rate.value) <= 1e-12 || rate.value*trial_rate <= 0.0)
+        ) smooth = false;
+        const double coefficient =
+            rate.value < 0.0 ? damper.c_compression : damper.c_rebound;
+        const bool has_curve = !damper.velocity.empty();
+        DirectionalScalar scalar_force = has_curve
+            ? (static_contact != nullptr
+                ? -DirectionalScalar{
+                    interpolate_curve(damper.velocity, damper.force, rate.value)
+                }
+                : -interpolated_curve_directional(
+                    damper.velocity, damper.force, rate, smooth
+                ))
+            : -coefficient*rate;
+        // The velocity-independent offsets, with the sign the fused record's
+        // folding produced.
+        if (std::isfinite(damper.gas_reference_length)) {
+            scalar_force -= DirectionalScalar{
+                damper.gas_reference_force
+                + damper.gas_stiffness*(length.value - damper.gas_reference_length)
+            };
+        }
+        scalar_force -= DirectionalScalar{damper.preload};
+        scalar_force -= DirectionalScalar{
+            damper.friction*std::copysign(1.0, damper.extension_sign)
+        };
+        scalar_force = internal_force_scale*scalar_force;
+        const DVec3 f = e*scalar_force;
+        add_directional_force_at_arm(
+            force, torque, model, damper.b,
+            d_rotate(state.q[damper.b], damper.pb, direction.dtheta[damper.b]), f
+        );
+        add_directional_force_at_arm(
+            force, torque, model, damper.a,
+            d_rotate(state.q[damper.a], damper.pa, direction.dtheta[damper.a]), -f
+        );
+    }
+
+    for (std::size_t i = 0; i < model.bump_stops.size(); ++i) {
+        const BumpStop& stop = model.bump_stops[i];
+        if (!directional_body_active(direction, stop.a) &&
+            !directional_body_active(direction, stop.b)) {
+            continue;
+        }
+        const DVec3 pa = d_state_point(state, direction.dr, direction.dtheta,
+                                       stop.a, stop.pa);
+        const DVec3 pb = d_state_point(state, direction.dr, direction.dtheta,
+                                       stop.b, stop.pb);
+        const DVec3 va = d_state_point_velocity(
+            state, direction.dr, direction.dtheta, direction.dv,
+            direction.domega, stop.a, stop.pa
+        );
+        const DVec3 vb = d_state_point_velocity(
+            state, direction.dr, direction.dtheta, direction.dv,
+            direction.domega, stop.b, stop.pb
+        );
+        const DVec3 d = pb-pa;
+        const DirectionalScalar length = d_norm(d);
+        if (length.value < 1e-10) {
+            smooth = false;
+            continue;
+        }
+        const DVec3 e = d/length;
+        const DirectionalScalar rate = d_dot(vb-va, e);
+        const bool below = stop.direction >= 0.0;
+        const double gap = below ? length.value - stop.clearance
+                                 : stop.clearance - length.value;
+        if (gap < 0.0) {
+            const DirectionalScalar penetration = below
+                ? DirectionalScalar{stop.clearance} - length
+                : length - DirectionalScalar{stop.clearance};
+            const DirectionalScalar elastic = stop.penetration.empty()
+                ? stop.stiffness*penetration
+                : interpolated_curve_directional(
+                    stop.penetration, stop.force, penetration, smooth
+                );
+            DirectionalScalar scalar_force = below ? elastic : -elastic;
+            const bool closing = below ? rate.value < 0.0 : rate.value > 0.0;
+            if (closing) scalar_force += -stop.damping*rate;
+            scalar_force = internal_force_scale*scalar_force;
+            const DVec3 f = e*scalar_force;
+            add_directional_force_at_arm(
+                force, torque, model, stop.b,
+                d_rotate(state.q[stop.b], stop.pb, direction.dtheta[stop.b]), f
+            );
+            add_directional_force_at_arm(
+                force, torque, model, stop.a,
+                d_rotate(state.q[stop.a], stop.pa, direction.dtheta[stop.a]), -f
+            );
+        } else if (std::abs(gap) <= 1e-12) {
+            smooth = false;
+        }
     }
 }
 

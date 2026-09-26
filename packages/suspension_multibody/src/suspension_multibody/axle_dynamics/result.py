@@ -40,10 +40,20 @@ SPRING_OUTPUT_COLUMNS = (
     "length_m",
     "length_rate_m_per_s",
     "elastic_force_n",
+    "preload_n",
+)
+DAMPER_OUTPUT_COLUMNS = (
+    "length_m",
+    "length_rate_m_per_s",
     "damping_force_n",
-    "compression_stop_elastic_force_n",
-    "rebound_stop_elastic_force_n",
-    "total_axial_force_n",
+    "dissipation_rate_w",
+)
+BUMP_STOP_OUTPUT_COLUMNS = (
+    "length_m",
+    "length_rate_m_per_s",
+    "penetration_m",
+    "stop_force_n",
+    "active",
 )
 BUSHING_OUTPUT_COLUMNS = (
     "translation_x_m",
@@ -256,12 +266,16 @@ class AxleDynamicsResult:
     body_names: tuple[str, ...]
     constraint_names: tuple[str, ...]
     spring_names: tuple[str, ...]
+    damper_names: tuple[str, ...]
+    bump_stop_names: tuple[str, ...]
     bushing_names: tuple[str, ...]
     anti_roll_bar_names: tuple[str, ...]
     tire_names: tuple[str, ...]
     states: np.ndarray
     constraint_wrench: np.ndarray
     spring_output: np.ndarray
+    damper_output: np.ndarray
+    bump_stop_output: np.ndarray
     bushing_output: np.ndarray
     anti_roll_output: np.ndarray
     diagnostics: AxleRunDiagnostics
@@ -290,8 +304,16 @@ class AxleDynamicsResult:
         return self.constraint_wrench[:, self.constraint_names.index(joint), :]
 
     def spring_state(self, spring: str) -> np.ndarray:
-        """Return length, rate, force components, and total axial force."""
+        """Return the elastic ledger row: length, rate, elastic force, preload."""
         return self.spring_output[:, self.spring_names.index(spring), :]
+
+    def damper_state(self, damper: str) -> np.ndarray:
+        """Return the dissipative ledger row: length, rate, force, power."""
+        return self.damper_output[:, self.damper_names.index(damper), :]
+
+    def bump_stop_state(self, stop: str) -> np.ndarray:
+        """Return the unilateral ledger row: length, rate, penetration, force."""
+        return self.bump_stop_output[:, self.bump_stop_names.index(stop), :]
 
     def bushing_state(self, bushing: str) -> np.ndarray:
         """Return local deformation and local wrench on body_b."""

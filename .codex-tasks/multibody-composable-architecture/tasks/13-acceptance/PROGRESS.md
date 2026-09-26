@@ -61,9 +61,19 @@ OK: 29 acceptance items passed        （退出码 0）
 
 ## 未做的事（如实登记）
 
-- 未把 `legacy_surface_gate --final` 记为通过。它要求 `elements`/`analysis` 两个仍有现役生产调用、且 native 尚不能承载的包消失；理由与解除条件在 12 的现状文档里（`packages/suspension_multibody/README.md`）。
-- 未重录任何数值或性能基线。`dynamic_hash`/`kc_parity`/`case_parity`/`kc_perf` 全部按冻结值判定。
+- 未把 `legacy_surface_gate --final` 记为通过。它仍要求 `elements` 消失，而该包尚有一个现役 import（`api.py` 的 `evaluate_generalized_forces`）；理由与解除条件在 `packages/suspension_multibody/README.md`。
+- 未重录任何数值或性能基线。`dynamic_hash`/`case_parity`/`kc_perf` 全部按冻结值判定。
 - 未修改实现来让任何一项通过。
+
+## 后续变更（本任务验收之后，由 A1/A2 收尾带来）
+
+以下都不是本任务做的，是之后 A1/A2 迁移的结果；记在这里是为了让 13 的结论与实际树保持一致。
+
+- **`analysis/`（A2）已删除，其旧导入路径随之消失。** 两个构造迁到 `vehicle/static_loads.py` 与 `vehicle/roll_centers.py`（整车级派生量，只读装配，无需原先登记的扩 ABI）。`suspension_multibody.analysis` 从此 `ModuleNotFoundError`。
+- **用户已明确接受旧导入路径消失**（`suspension_multibody.analysis`，以及 `elements` 下的 `LinearSpringElement`/`BushingElement` 等类：这些类迁至 `modeling/primitives/elements.py`，`elements` 包只剩 `evaluate_generalized_forces` 一个函数）。决定在 2026-09-25 由用户作出，属于 EPIC 要求的「公开 API 变更须先确认」，已确认。
+- **A1 的固定体端阻塞点已处理**：`cpp/src/element/assembly_primitives.cpp` 不再对固定体早退，改为「求解累加器仍不写、但把该端记录进 element-wrench sink」。那是把事实记下来而不是改变求解，因此 `dynamic_hash` 重跑后仍逐位不变（`e7407656…`）。
+- **A1 尚未收尾**：`elements/` 仍在，因为 KC 契约从不发射弹簧/减振器/横向稳定杆，native 手里没有这些事实；现在解码会静默丢掉报告一直有的行。这是新功能（内核 + 契约），不是清理。
+- **`BASELINE.json` 已于本次重采**（内核 `.cpp` 改动 + native 重建所致）。`frozen_baselines` 七个键逐项相同，4 个冻结数值基线文件 `sha256sum -c` 全部 OK；只有 7 个描述性叶子键变化（库哈希/大小、内核源指纹、git status）。
 
 ## 验收中发现、但**不在本 EPIC 范围内**的一处缺陷（如实登记，未修）
 
@@ -93,3 +103,40 @@ ValueError: missing required front-axle hardpoint for upper_front
 建议的处置（留待用户裁决）：把 `_ROLE_TO_HARDPOINT` 的目标键改成别名表已接受的拼写
 （`uca_front` 等），或给别名表补 `UPPER_FRONT`/`LOWER_FRONT`/`TIEROD_INNER`/`TIEROD_OUTER`；
 并补一条「合约模型能装配并求解」的端到端测试，否则该适配器仍是一条无验收的死路。
+
+## 后续变更（力元件三拆之后）
+
+上面「适配器硬点别名缺口」一节的结论已过期：该缺口**已修复**，不再是遗留项。
+
+处置与证据：
+
+- `subsystems/geometry.py::HARDPOINT_ALIASES` 补入 `UPPER_FRONT`/`UPPER_REAR`/`LOWER_FRONT`/`LOWER_REAR`
+  四个拼写（纯新增，未改动任何既有拼写，也未改适配器的输出契约）。
+- 新增两条测试：`tests/adapters/test_geometry_contract.py::test_the_alias_table_resolves_every_role_the_assembly_asks_for`
+  与 `::test_a_contract_derived_model_assembles_and_solves`。后者是原先缺失的端到端验收：
+  合约模型 → 装配 → 原生求解。
+- 可证伪性已实测：撤掉那四个别名 → 两条测试失败（`missing required front-axle hardpoint for upper_front`）；
+  加回 → 4 passed。
+
+同一批「力元件三拆」改动带来的验收面变化，一并登记：
+
+| 项 | 变化 | 原因 |
+|---|---|---|
+| `kAxleKernelAbiVersion` | 15 → 16 | `AxleInput` 的融合弹簧字段组拆成三组 |
+| `kVehicleKernelAbiVersion` | 30 → 31 | `VehicleInput` 按值内嵌 `AxleInput` |
+| `kCoreKernelAbiVersion` | 1（不变） | 通用 core 面未触及 |
+| `AxleInput` 字段数 | 106 → 129 | 同上；`VehicleInput` 保持 97 |
+| `kElementBlockSize` | 176 → 216 | 追加 damper / bump_stop 两个家族 |
+| `spring_output` | 宽 7 → 宽 4 | 加上新的 `damper_output`(4) / `bump_stop_output`(5) |
+| `kElements` 表 | 9 → 10，去 `spring_damper` | `spring`/`damper`/`bump_stop` 三个名字 |
+| `dynamic_hash_baseline.json` | 重录一次 | 已授权的哈希重录；`frozen_baselines` 其余 6 项逐字不变 |
+| `case_parity` 快照 | 重录一次 | 同上；脚本新增 `--record`，且仅在全部家族通过时才写 |
+
+物理未被改动的证据（这是本批改动唯一需要证明的事）：
+
+1. `tests/axle_dynamics/test_three_laws_match_the_fused_record.py`（新增 4 条）把三条力律各自的
+   报告值与融合记录的公式逐项对齐，并断言三者之和等于滑动块的 `ma`。
+2. 静态算例 `static_equilibrium` 的 `states` 与冻结快照**逐位相同**（无积分放大环节）。
+3. 粗网格动态算例对**末位扰动**（弹簧刚度 +1 ulp，相对 1e-16，小于本次拆分的 1e-13）
+   的响应为 4.9e-5 ~ 5.4e-2，与拆分带来的位移同量级——即差异来自混沌放大而非力律改变。
+4. 细网格（`native_refined_result`）与既有产物最大差 4.06e-10。

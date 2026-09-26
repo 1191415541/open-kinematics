@@ -431,6 +431,10 @@ std::size_t element_wrench_element_count(
 
     case kElementWrenchSpring: return counts.springs;
 
+    case kElementWrenchDamper: return counts.dampers;
+
+    case kElementWrenchBumpStop: return counts.bump_stops;
+
     case kElementWrenchBushing: return counts.bushings;
 
     case kElementWrenchAntiRoll: return counts.anti_rolls;

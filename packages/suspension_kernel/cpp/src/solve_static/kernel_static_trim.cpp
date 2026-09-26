@@ -60,7 +60,8 @@ std::vector<double> static_residual(
     external_force_vector(
         model, candidate, sample, gravity_x, gravity_y, gravity_z, tire_forces,
         tire_state_derivatives, tire_output, potential, external_power,
-        dissipation, force, nullptr, nullptr, nullptr, &static_contact
+        dissipation, force, nullptr, nullptr, nullptr, nullptr, nullptr,
+        &static_contact
     );
     std::vector<double> out(
         static_cast<std::size_t>(n+m)+active_tires.size(), 0.0

@@ -38,7 +38,12 @@ extern "C" {
 // width.
 
 /// The uniform parameter run each family may use.  This is the ABI width.
-inline constexpr std::size_t kElementBlockSize = 176;
+// 216 rather than 176: the force-element split appended two families (damper,
+// bump stop) after the aerodynamic run, because every existing family's run is
+// pinned by a `static_assert` and the block had one slot left.  The elastic
+// structure's preload reuses a retired damper slot inside the spring's own run,
+// so it needed no room of its own.
+inline constexpr std::size_t kElementBlockSize = 216;
 
 /// Capacity of one element's parameter cache.
 ///
@@ -62,7 +67,12 @@ enum ElementKind {
     ELEMENT_BUSHING = 1,
     ELEMENT_ANTI_ROLL = 2,
     ELEMENT_TIRE = 3,
-    ELEMENT_AERODYNAMIC_DRAG = 4
+    ELEMENT_AERODYNAMIC_DRAG = 4,
+    // The two structures split out of the fused `ELEMENT_SPRING` family.  They
+    // are appended so no existing kind moved, and `ELEMENT_SPRING` keeps its
+    // value: it now describes the elastic structure only.
+    ELEMENT_DAMPER = 5,
+    ELEMENT_BUMP_STOP = 6
 };
 
 /// Curve slot roles a family may use, indexed within its own slot list.
@@ -181,15 +191,20 @@ inline constexpr int kUnusedParameter = -1;
 enum ElementParameter {
     // Spring: 0..15.  Points are three doubles each, so six slots per pair.
     ELEMENT_SPRING_STIFFNESS = 0,
-    ELEMENT_SPRING_COMPRESSION_DAMPING = 1,
-    ELEMENT_SPRING_REBOUND_DAMPING = 2,
+    // Slots 1, 2 and 4..9 were the fused record's damper coefficients and
+    // unilateral stops.  The split moved those fields into the `ELEMENT_DAMPER`
+    // and `ELEMENT_BUMP_STOP` runs below, so these slots are retired rather than
+    // reused: a block that still sets them is refused by name instead of being
+    // silently read as an elastic term.
+    ELEMENT_SPRING_RETIRED_DAMPER_COMPRESSION = 1,
+    ELEMENT_SPRING_PRELOAD = 2,
     ELEMENT_SPRING_FREE_LENGTH = 3,
-    ELEMENT_SPRING_MINIMUM_LENGTH = 4,
-    ELEMENT_SPRING_MAXIMUM_LENGTH = 5,
-    ELEMENT_SPRING_COMPRESSION_STOP_STIFFNESS = 6,
-    ELEMENT_SPRING_COMPRESSION_STOP_DAMPING = 7,
-    ELEMENT_SPRING_REBOUND_STOP_STIFFNESS = 8,
-    ELEMENT_SPRING_REBOUND_STOP_DAMPING = 9,
+    ELEMENT_SPRING_RETIRED_MINIMUM_LENGTH = 4,
+    ELEMENT_SPRING_RETIRED_MAXIMUM_LENGTH = 5,
+    ELEMENT_SPRING_RETIRED_COMPRESSION_STOP_STIFFNESS = 6,
+    ELEMENT_SPRING_RETIRED_COMPRESSION_STOP_DAMPING = 7,
+    ELEMENT_SPRING_RETIRED_REBOUND_STOP_STIFFNESS = 8,
+    ELEMENT_SPRING_RETIRED_REBOUND_STOP_DAMPING = 9,
     ELEMENT_SPRING_POINT_A = 10,
     ELEMENT_SPRING_POINT_B = 13,
 
@@ -229,7 +244,29 @@ enum ElementParameter {
     // its application point, its forward axis and the coefficient.
     ELEMENT_AERODYNAMIC_DRAG_APPLICATION_POINT = 168,
     ELEMENT_AERODYNAMIC_DRAG_FORWARD_AXIS = 171,
-    ELEMENT_AERODYNAMIC_DRAG_COEFFICIENT = 174
+    ELEMENT_AERODYNAMIC_DRAG_COEFFICIENT = 174,
+
+    // Damper: 184..197.  The dissipative structure, including the gas, preload
+    // and friction terms the fused record could not express.
+    ELEMENT_DAMPER_COMPRESSION_DAMPING = 184,
+    ELEMENT_DAMPER_REBOUND_DAMPING = 185,
+    ELEMENT_DAMPER_GAS_STIFFNESS = 186,
+    ELEMENT_DAMPER_GAS_REFERENCE_LENGTH = 187,
+    ELEMENT_DAMPER_GAS_REFERENCE_FORCE = 188,
+    ELEMENT_DAMPER_PRELOAD = 189,
+    ELEMENT_DAMPER_FRICTION = 190,
+    ELEMENT_DAMPER_EXTENSION_SIGN = 191,
+    ELEMENT_DAMPER_POINT_A = 192,
+    ELEMENT_DAMPER_POINT_B = 195,
+
+    // Bump stop: 200..209.  One direction per element, so `clearance` plus the
+    // sign replaces the fused record's minimum/maximum length pair.
+    ELEMENT_BUMP_STOP_CLEARANCE = 200,
+    ELEMENT_BUMP_STOP_STIFFNESS = 201,
+    ELEMENT_BUMP_STOP_DIRECTION = 202,
+    ELEMENT_BUMP_STOP_DAMPING = 203,
+    ELEMENT_BUMP_STOP_POINT_A = 204,
+    ELEMENT_BUMP_STOP_POINT_B = 207
 };
 
 /// Index into an element's integer block.
@@ -248,9 +285,16 @@ enum ElementInteger {
 /// a bushing's preload ends at index 93, so the block size cannot be reduced
 /// without moving that family.
 inline constexpr ElementLayout kElementLayouts[] = {
-    {ELEMENT_SPRING, ELEMENT_SPRING_STIFFNESS, ELEMENT_SPRING_COMPRESSION_DAMPING,
-     ELEMENT_SPRING_REBOUND_DAMPING, ELEMENT_SPRING_FREE_LENGTH,
-     /*curve_slots=*/2, /*int_count=*/0},
+    {ELEMENT_SPRING, ELEMENT_SPRING_STIFFNESS, ELEMENT_SPRING_FREE_LENGTH,
+     ELEMENT_SPRING_PRELOAD, ELEMENT_SPRING_POINT_A,
+     /*curve_slots=*/1, /*int_count=*/0},
+    {ELEMENT_DAMPER, ELEMENT_DAMPER_COMPRESSION_DAMPING,
+     ELEMENT_DAMPER_REBOUND_DAMPING, ELEMENT_DAMPER_GAS_STIFFNESS,
+     ELEMENT_DAMPER_POINT_A,
+     /*curve_slots=*/1, /*int_count=*/0},
+    {ELEMENT_BUMP_STOP, ELEMENT_BUMP_STOP_CLEARANCE, ELEMENT_BUMP_STOP_STIFFNESS,
+     ELEMENT_BUMP_STOP_DIRECTION, ELEMENT_BUMP_STOP_POINT_A,
+     /*curve_slots=*/1, /*int_count=*/0},
     {ELEMENT_BUSHING, ELEMENT_BUSHING_STIFFNESS_6X6, ELEMENT_BUSHING_DAMPING_6X6,
      ELEMENT_BUSHING_PRELOAD_6, ELEMENT_BUSHING_POINT_A,
      /*curve_slots=*/1, /*int_count=*/2},
@@ -283,39 +327,77 @@ struct ElementFieldMap {
     int width;
 };
 
-/// The spring fields a block slot may feed.
+/// The elastic fields a block slot may feed.
 enum SpringField {
     SPRING_FIELD_K = 0,
-    SPRING_FIELD_C_COMPRESSION,
-    SPRING_FIELD_C_REBOUND,
     SPRING_FIELD_FREE_LENGTH,
-    SPRING_FIELD_MINIMUM_LENGTH,
-    SPRING_FIELD_MAXIMUM_LENGTH,
-    SPRING_FIELD_COMPRESSION_STOP_K,
-    SPRING_FIELD_COMPRESSION_STOP_C,
-    SPRING_FIELD_REBOUND_STOP_K,
-    SPRING_FIELD_REBOUND_STOP_C,
+    SPRING_FIELD_PRELOAD,
     SPRING_FIELD_POINT_A,
     SPRING_FIELD_POINT_B
 };
 
 inline constexpr ElementFieldMap kSpringFieldMap[] = {
     {ELEMENT_SPRING_STIFFNESS, SPRING_FIELD_K, 1},
-    {ELEMENT_SPRING_COMPRESSION_DAMPING, SPRING_FIELD_C_COMPRESSION, 1},
-    {ELEMENT_SPRING_REBOUND_DAMPING, SPRING_FIELD_C_REBOUND, 1},
     {ELEMENT_SPRING_FREE_LENGTH, SPRING_FIELD_FREE_LENGTH, 1},
-    {ELEMENT_SPRING_MINIMUM_LENGTH, SPRING_FIELD_MINIMUM_LENGTH, 1},
-    {ELEMENT_SPRING_MAXIMUM_LENGTH, SPRING_FIELD_MAXIMUM_LENGTH, 1},
-    {ELEMENT_SPRING_COMPRESSION_STOP_STIFFNESS, SPRING_FIELD_COMPRESSION_STOP_K, 1},
-    {ELEMENT_SPRING_COMPRESSION_STOP_DAMPING, SPRING_FIELD_COMPRESSION_STOP_C, 1},
-    {ELEMENT_SPRING_REBOUND_STOP_STIFFNESS, SPRING_FIELD_REBOUND_STOP_K, 1},
-    {ELEMENT_SPRING_REBOUND_STOP_DAMPING, SPRING_FIELD_REBOUND_STOP_C, 1},
+    {ELEMENT_SPRING_PRELOAD, SPRING_FIELD_PRELOAD, 1},
     {ELEMENT_SPRING_POINT_A, SPRING_FIELD_POINT_A, 3},
     {ELEMENT_SPRING_POINT_B, SPRING_FIELD_POINT_B, 3},
 };
 
 inline constexpr std::size_t kSpringFieldMapCount =
     sizeof(kSpringFieldMap) / sizeof(kSpringFieldMap[0]);
+
+/// The dissipative fields a block slot may feed.
+enum DamperField {
+    DAMPER_FIELD_C_COMPRESSION = 0,
+    DAMPER_FIELD_C_REBOUND,
+    DAMPER_FIELD_GAS_STIFFNESS,
+    DAMPER_FIELD_GAS_REFERENCE_LENGTH,
+    DAMPER_FIELD_GAS_REFERENCE_FORCE,
+    DAMPER_FIELD_PRELOAD,
+    DAMPER_FIELD_FRICTION,
+    DAMPER_FIELD_EXTENSION_SIGN,
+    DAMPER_FIELD_POINT_A,
+    DAMPER_FIELD_POINT_B
+};
+
+inline constexpr ElementFieldMap kDamperFieldMap[] = {
+    {ELEMENT_DAMPER_COMPRESSION_DAMPING, DAMPER_FIELD_C_COMPRESSION, 1},
+    {ELEMENT_DAMPER_REBOUND_DAMPING, DAMPER_FIELD_C_REBOUND, 1},
+    {ELEMENT_DAMPER_GAS_STIFFNESS, DAMPER_FIELD_GAS_STIFFNESS, 1},
+    {ELEMENT_DAMPER_GAS_REFERENCE_LENGTH, DAMPER_FIELD_GAS_REFERENCE_LENGTH, 1},
+    {ELEMENT_DAMPER_GAS_REFERENCE_FORCE, DAMPER_FIELD_GAS_REFERENCE_FORCE, 1},
+    {ELEMENT_DAMPER_PRELOAD, DAMPER_FIELD_PRELOAD, 1},
+    {ELEMENT_DAMPER_FRICTION, DAMPER_FIELD_FRICTION, 1},
+    {ELEMENT_DAMPER_EXTENSION_SIGN, DAMPER_FIELD_EXTENSION_SIGN, 1},
+    {ELEMENT_DAMPER_POINT_A, DAMPER_FIELD_POINT_A, 3},
+    {ELEMENT_DAMPER_POINT_B, DAMPER_FIELD_POINT_B, 3},
+};
+
+inline constexpr std::size_t kDamperFieldMapCount =
+    sizeof(kDamperFieldMap) / sizeof(kDamperFieldMap[0]);
+
+/// The unilateral fields a block slot may feed.
+enum BumpStopField {
+    BUMP_STOP_FIELD_CLEARANCE = 0,
+    BUMP_STOP_FIELD_STIFFNESS,
+    BUMP_STOP_FIELD_DIRECTION,
+    BUMP_STOP_FIELD_DAMPING,
+    BUMP_STOP_FIELD_POINT_A,
+    BUMP_STOP_FIELD_POINT_B
+};
+
+inline constexpr ElementFieldMap kBumpStopFieldMap[] = {
+    {ELEMENT_BUMP_STOP_CLEARANCE, BUMP_STOP_FIELD_CLEARANCE, 1},
+    {ELEMENT_BUMP_STOP_STIFFNESS, BUMP_STOP_FIELD_STIFFNESS, 1},
+    {ELEMENT_BUMP_STOP_DIRECTION, BUMP_STOP_FIELD_DIRECTION, 1},
+    {ELEMENT_BUMP_STOP_DAMPING, BUMP_STOP_FIELD_DAMPING, 1},
+    {ELEMENT_BUMP_STOP_POINT_A, BUMP_STOP_FIELD_POINT_A, 3},
+    {ELEMENT_BUMP_STOP_POINT_B, BUMP_STOP_FIELD_POINT_B, 3},
+};
+
+inline constexpr std::size_t kBumpStopFieldMapCount =
+    sizeof(kBumpStopFieldMap) / sizeof(kBumpStopFieldMap[0]);
 
 /// The bushing fields a block slot may feed.
 enum BushingField {
@@ -383,6 +465,19 @@ static_assert(
     "the tire and aerodynamic runs must not overlap"
 );
 static_assert(
+    ELEMENT_SPRING_PRELOAD >= ELEMENT_SPRING_STIFFNESS &&
+    ELEMENT_SPRING_PRELOAD < ELEMENT_BUSHING_STIFFNESS_6X6,
+    "the elastic preload slot must stay inside the spring's own run"
+);
+static_assert(
+    ELEMENT_DAMPER_POINT_B + 3 <= ELEMENT_BUMP_STOP_CLEARANCE,
+    "the damper and bump-stop runs must not overlap"
+);
+static_assert(
+    ELEMENT_BUMP_STOP_POINT_B + 3 <= kElementBlockSize,
+    "the bump-stop run falls outside the uniform element block"
+);
+static_assert(
     ELEMENT_INT_DRIVE_TORQUE_REACTION_BODY < kElementIntBlockSize,
     "the element integer block is too small"
 );
@@ -412,29 +507,60 @@ struct AxleInput {
     const double* constraint_axis_a;
     const double* constraint_axis_b;
 
+    // The three axial structures, one field group each.  The fused group this
+    // replaced carried the elastic law, the dissipative law and both unilateral
+    // stops at once; each group below is one law, and entry `i` of each array
+    // still belongs to the same source element as entry `i` of the others.
     std::size_t spring_count;
     const int* spring_body_a;
     const int* spring_body_b;
     const double* spring_point_a;
     const double* spring_point_b;
     const double* spring_stiffness;
-    const double* spring_compression_damping;
-    const double* spring_rebound_damping;
     const double* spring_free_length;
-    const double* spring_minimum_length;
-    const double* spring_maximum_length;
-    const double* spring_compression_stop_stiffness;
-    const double* spring_compression_stop_damping;
-    const double* spring_rebound_stop_stiffness;
-    const double* spring_rebound_stop_damping;
-    // Optional measured force-velocity curves, concatenated across springs.
-    // `spring_damper_curve_count[i]` gives the number of points for spring i
-    // and `spring_damper_curve_offset[i]` where they start in the two value
-    // arrays.  A count of zero means the constant coefficients are used.
-    const int* spring_damper_curve_offset;
-    const int* spring_damper_curve_count;
-    const double* spring_damper_curve_velocity;
-    const double* spring_damper_curve_force;
+    const double* spring_preload;
+    // Optional measured elastic curve on compression, concatenated across
+    // springs.  A count of zero means the constant stiffness is used.
+    const int* spring_curve_offset;
+    const int* spring_curve_count;
+    const double* spring_curve_deflection;
+    const double* spring_curve_force;
+
+    std::size_t damper_count;
+    const int* damper_body_a;
+    const int* damper_body_b;
+    const double* damper_point_a;
+    const double* damper_point_b;
+    const double* damper_compression_damping;
+    const double* damper_rebound_damping;
+    const double* damper_gas_stiffness;
+    const double* damper_gas_reference_length;
+    const double* damper_gas_reference_force;
+    const double* damper_preload;
+    const double* damper_friction;
+    const double* damper_extension_sign;
+    // Optional measured force-velocity curve, strictly increasing in velocity,
+    // concatenated across dampers.  A count of zero means the constant
+    // coefficients are used.
+    const int* damper_curve_offset;
+    const int* damper_curve_count;
+    const double* damper_curve_velocity;
+    const double* damper_curve_force;
+
+    std::size_t bump_stop_count;
+    const int* bump_stop_body_a;
+    const int* bump_stop_body_b;
+    const double* bump_stop_point_a;
+    const double* bump_stop_point_b;
+    const double* bump_stop_clearance;
+    const double* bump_stop_stiffness;
+    const double* bump_stop_direction;
+    const double* bump_stop_damping;
+    // Optional measured curve on penetration, concatenated across stops.
+    const int* bump_stop_curve_offset;
+    const int* bump_stop_curve_count;
+    const double* bump_stop_curve_penetration;
+    const double* bump_stop_force;
 
     std::size_t bushing_count;
     const int* bushing_body_a;
@@ -537,12 +663,20 @@ struct AxleOutput {
     // body_b, with moment taken about the body_b joint marker.
     double* constraint_wrench;
     std::size_t constraint_wrench_capacity;
-    // Per spring: length, length rate, main elastic force, main damping force,
-    // compression-stop elastic force, rebound-stop elastic force, and total
-    // axial force. The difference between total and all elastic terms is the
-    // full dissipative force, including active stop damping.
+    // Per spring: length, length rate, elastic force, preload.  Adding the
+    // last two gives the elastic scalar; the dissipative and unilateral terms
+    // are the two ledgers below.
     double* spring_output;
     std::size_t spring_output_capacity;
+    // Per damper: length, length rate, damping force, and the power the damper
+    // removes from the system.
+    double* damper_output;
+    std::size_t damper_output_capacity;
+    // Per bump stop: length, length rate, penetration, stop force, and 1 while
+    // the stop is engaged.  A stop that is not engaged reports zero force and
+    // zero penetration, so the flag is what tells the two apart.
+    double* bump_stop_output;
+    std::size_t bump_stop_output_capacity;
     // Per bushing: deformation(6), local wrench on body_b(6).
     double* bushing_output;
     std::size_t bushing_output_capacity;

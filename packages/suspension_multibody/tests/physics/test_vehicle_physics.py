@@ -2,10 +2,8 @@
 
 import numpy as np
 
-from suspension_multibody.analysis import (
-    compute_static_wheel_loads,
-    compute_vehicle_roll_centers,
-)
+from suspension_multibody.vehicle.roll_centers import compute_vehicle_roll_centers
+from suspension_multibody.vehicle.static_loads import compute_static_wheel_loads
 
 
 def test_static_wheel_loads_balance_weight_and_moments(full_vehicle_model) -> None:

@@ -89,6 +89,14 @@ class VehicleDynamicsResult:
         """返回一个弹簧阻尼器的长度、速度和力分量."""
         return self.axle.spring_state(spring)
 
+    def damper_state(self, damper: str) -> np.ndarray:
+        """Return the dissipative ledger row for one damper."""
+        return self.axle.damper_state(damper)
+
+    def bump_stop_state(self, stop: str) -> np.ndarray:
+        """Return the unilateral ledger row for one bump stop."""
+        return self.axle.bump_stop_state(stop)
+
     def bushing_state(self, bushing: str) -> np.ndarray:
         """返回一个衬套的局部变形和力."""
         return self.axle.bushing_state(bushing)

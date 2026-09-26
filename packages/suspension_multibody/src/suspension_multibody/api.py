@@ -39,9 +39,10 @@ from .cases.kc_quasi_static.contract import (
     time_document,
 )
 from .cases.kc_quasi_static.convert import MM
-from .elements import BushingElement, evaluate_generalized_forces
+from .elements import evaluate_generalized_forces
 from .io import CheckpointStore, canonical_hash, write_artifact
 from .kernel.solver import solver_settings_document
+from .modeling.primitives.elements import BushingElement
 from .modeling.primitives.joints import RigidBodyState
 from .modeling.primitives.spatial import (
     SE3,

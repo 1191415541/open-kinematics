@@ -70,7 +70,6 @@ LOW_LAYER_MODULES = (
 PUBLIC_ENTRY_POINTS = (
     "suspension_multibody.adams",
     "suspension_multibody.adapters",
-    "suspension_multibody.analysis",
     "suspension_multibody.api",
     "suspension_multibody.axle_dynamics",
     "suspension_multibody.cases",

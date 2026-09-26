@@ -74,10 +74,6 @@ def axle_history_from_result(
 
     left_tire = result.tire_state(bindings.left_tire)
     right_tire = result.tire_state(bindings.right_tire)
-    left_spring = result.spring_state(bindings.left_spring)
-    right_spring = result.spring_state(bindings.right_spring)
-    left_damper = result.spring_state(bindings.left_damper)
-    right_damper = result.spring_state(bindings.right_damper)
     fixture_wrench = _fixture_wrench(model, result, bindings, case=case)
 
     channels: dict[str, tuple[float, ...]] = {
@@ -104,10 +100,18 @@ def axle_history_from_result(
         "right.tire_longitudinal_force": _tuple(right_tire[:, 5]),
         "left.tire_lateral_force": _tuple(left_tire[:, 6]),
         "right.tire_lateral_force": _tuple(right_tire[:, 6]),
-        "left.spring_force": _tuple(_conservative_axial_force(left_spring)),
-        "right.spring_force": _tuple(_conservative_axial_force(right_spring)),
-        "left.damper_force": _tuple(_dissipative_axial_force(left_damper)),
-        "right.damper_force": _tuple(_dissipative_axial_force(right_damper)),
+        "left.spring_force": _tuple(
+            _conservative_axial_force(model, result, bindings.left_spring)
+        ),
+        "right.spring_force": _tuple(
+            _conservative_axial_force(model, result, bindings.right_spring)
+        ),
+        "left.damper_force": _tuple(
+            _dissipative_axial_force(model, result, bindings.left_damper)
+        ),
+        "right.damper_force": _tuple(
+            _dissipative_axial_force(model, result, bindings.right_damper)
+        ),
         "left.wheel_spin": _tuple(
             _wheel_spin(
                 model,
@@ -154,6 +158,8 @@ def _validate_result_layout(
         "body": tuple(body.name for body in model.bodies),
         "constraint": tuple(joint.name for joint in model.joints),
         "spring": tuple(spring.name for spring in model.springs),
+        "damper": tuple(damper.name for damper in model.dampers),
+        "bump_stop": tuple(stop.name for stop in model.bump_stops),
         "bushing": tuple(bushing.name for bushing in model.bushings),
         "anti-roll bar": tuple(bar.name for bar in model.anti_roll_bars),
         "tire": tuple(tire.name for tire in model.tires),
@@ -162,6 +168,8 @@ def _validate_result_layout(
         "body": result.body_names,
         "constraint": result.constraint_names,
         "spring": result.spring_names,
+        "damper": result.damper_names,
+        "bump_stop": result.bump_stop_names,
         "bushing": result.bushing_names,
         "anti-roll bar": result.anti_roll_bar_names,
         "tire": result.tire_names,
@@ -237,12 +245,97 @@ def _wheel_spin(
     )
 
 
-def _conservative_axial_force(spring_state: np.ndarray) -> np.ndarray:
-    return spring_state[:, 2] + spring_state[:, 4] + spring_state[:, 5]
+def _corner_records(model: AxleDynamicsModel, name: str) -> tuple:
+    """
+    Return every axial record that acts on the same corner as ``name``.
+
+    A corner is identified by its two attachment points, not by its name: the
+    three structures a strut is made of are separately named, so matching on the
+    name would silently miss the damper and the stops and report a corner with
+    only its spring in it.
+    """
+    reference = None
+    for candidate in (*model.springs, *model.dampers, *model.bump_stops):
+        if candidate.name == name:
+            reference = candidate
+            break
+    if reference is None:
+        raise ValueError(f"no axial record is named {name!r}")
+    key = (
+        reference.body_a,
+        reference.body_b,
+        tuple(float(value) for value in reference.point_a_m),
+        tuple(float(value) for value in reference.point_b_m),
+    )
+
+    def same(element) -> bool:
+        return key == (
+            element.body_a,
+            element.body_b,
+            tuple(float(value) for value in element.point_a_m),
+            tuple(float(value) for value in element.point_b_m),
+        )
+
+    springs = tuple(spring for spring in model.springs if same(spring))
+    dampers = tuple(damper for damper in model.dampers if same(damper))
+    stops = tuple(stop for stop in model.bump_stops if same(stop))
+    return springs, dampers, stops
 
 
-def _dissipative_axial_force(spring_state: np.ndarray) -> np.ndarray:
-    return spring_state[:, 6] - _conservative_axial_force(spring_state)
+def _conservative_axial_force(
+    model: AxleDynamicsModel, result: AxleDynamicsResult, name: str
+) -> np.ndarray:
+    """Return the corner's elastic and unilateral force, without dissipation."""
+    springs, _, stops = _corner_records(model, name)
+    total: np.ndarray | None = None
+    for spring in springs:
+        elastic = result.spring_state(spring.name)[:, 2] + result.spring_state(
+            spring.name
+        )[:, 3]
+        total = elastic if total is None else total + elastic
+    for stop in stops:
+        stop_force = result.bump_stop_state(stop.name)[:, 3]
+        total = stop_force if total is None else total + stop_force
+    if total is None:
+        return np.zeros(len(result.times_s), dtype=float)
+    return total
+
+
+def _dissipative_axial_force(
+    model: AxleDynamicsModel, result: AxleDynamicsResult, name: str
+) -> np.ndarray:
+    """
+    Return the corner's dissipative force: the damper's, plus any stop's.
+
+    A stop's damping is not a column of its own ledger, so it is rebuilt from
+    the rate the ledger does carry and the coefficient the model declares.  The
+    closing-side rule is the one the law applies.
+    """
+    _, dampers, stops = _corner_records(model, name)
+    total: np.ndarray | None = None
+    for damper in dampers:
+        damping = result.damper_state(damper.name)[:, 2]
+        total = damping if total is None else total + damping
+    for stop in stops:
+        if stop.damping_n_s_per_m <= 0.0:
+            continue
+        state = result.bump_stop_state(stop.name)
+        rate = state[:, 1]
+        closing = rate < 0.0 if stop.direction >= 0.0 else rate > 0.0
+        stop_damping = np.where(closing, -stop.damping_n_s_per_m * rate, 0.0)
+        total = stop_damping if total is None else total + stop_damping
+    if total is None:
+        return np.zeros(len(result.times_s), dtype=float)
+    return total
+
+
+def _total_axial_force(
+    model: AxleDynamicsModel, result: AxleDynamicsResult, name: str
+) -> np.ndarray:
+    """Return the corner's whole axial force, which its reaction carries."""
+    return _conservative_axial_force(model, result, name) + _dissipative_axial_force(
+        model, result, name
+    )
 
 
 def _fixture_wrench(
@@ -295,24 +388,29 @@ def _fixture_wrench_from_constraint_multipliers(
             reference_position,
         )
 
-    for spring in model.springs:
-        if fixture_body not in {spring.body_a, spring.body_b}:
+    # Every law acting on the fixture has to be charged to it, not only the
+    # elastic one: the reaction a load report asks for is the sum of what the
+    # whole corner applied, and the damper and the stops apply force too.
+    for axial in (*model.springs, *model.dampers, *model.bump_stops):
+        if fixture_body not in {axial.body_a, axial.body_b}:
             continue
         point_a, _, _ = _marker_kinematics(
-            result.body_state(spring.body_a),
-            spring.point_a_m,
+            result.body_state(axial.body_a),
+            axial.point_a_m,
         )
         point_b, _, _ = _marker_kinematics(
-            result.body_state(spring.body_b),
-            spring.point_b_m,
+            result.body_state(axial.body_b),
+            axial.point_b_m,
         )
         delta = point_b - point_a
         length = np.linalg.norm(delta, axis=1)
         if np.any(length <= 1e-12):
-            raise ValueError(f"spring {spring.name!r} has zero endpoint distance")
+            raise ValueError(f"element {axial.name!r} has zero endpoint distance")
         direction = delta / length[:, None]
-        force_on_b = direction * result.spring_state(spring.name)[:, 6, None]
-        if spring.body_b == fixture_body:
+        force_on_b = direction * _total_axial_force(
+            model, result, axial.name
+        )[:, None]
+        if axial.body_b == fixture_body:
             force = force_on_b
             point = point_b
         else:

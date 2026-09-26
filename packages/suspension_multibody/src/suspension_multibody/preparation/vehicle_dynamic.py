@@ -15,7 +15,6 @@ without re-deriving anything.  Those references never reach the contract.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -26,34 +25,34 @@ from ..axle_dynamics.schema import (
     AxleAerodynamicDrag,
     AxleAntiRollBar,
     AxleBody,
+    AxleBumpStop,
     AxleBushing,
     AxleCoordinateCoupler,
+    AxleDamper,
     AxleDrivenCoordinate,
     AxleDynamicsCase,
     AxleJoint,
     AxleSolverSettings,
-    AxleSpringDamper,
+    AxleSpring,
     AxleTire,
 )
-from ..elements import (
+from ..modeling.primitives import (
     AntiRollBarElement,
+    BallJoint,
     BumpStopElement,
     BushingElement,
-    LinearSpringElement,
-    StaticDamperElement,
-    VerticalTireElement,
-)
-from ..modeling.primitives import (
-    BallJoint,
     ConstantVelocityJoint,
     CoordinateDrive,
     CylindricalJoint,
     DistanceConstraint,
     InPlaneJoint,
+    LinearSpringElement,
     PointCoincidence,
     PrismaticJoint,
     RevoluteJoint,
+    StaticDamperElement,
     UniversalJoint,
+    VerticalTireElement,
     WeldJoint,
 )
 from ..schema import (
@@ -121,7 +120,9 @@ class _NativeVehicleModel:
     bodies: tuple[AxleBody, ...]
     joints: tuple[AxleJoint, ...]
     coordinate_couplers: tuple[AxleCoordinateCoupler, ...]
-    springs: tuple[AxleSpringDamper, ...]
+    springs: tuple[AxleSpring, ...]
+    dampers: tuple[AxleDamper, ...]
+    bump_stops: tuple[AxleBumpStop, ...]
     bushings: tuple[AxleBushing, ...]
     anti_roll_bars: tuple[AxleAntiRollBar, ...]
     tires: tuple[AxleTire, ...]
@@ -243,7 +244,9 @@ def prepare_vehicle_run(
         model, case, times, length_scale
     )
     solver = _native_solver_settings(case.solver, case.static_equilibrium, length_scale)
-    springs, bushings = _build_elements(assembly, body_frames, length_scale)
+    springs, dampers, bump_stops, bushings = _build_elements(
+        assembly, body_frames, length_scale
+    )
     static_rotation_gauges = _build_static_rotation_gauges(model, assembly)
     gauge_active = (
         _uses_horizontal_static_gauge(case, road)
@@ -255,6 +258,8 @@ def prepare_vehicle_run(
         joints=_build_joints(assembly, body_frames, length_scale),
         coordinate_couplers=_build_coordinate_couplers(model, length_scale),
         springs=springs,
+        dampers=dampers,
+        bump_stops=bump_stops,
         bushings=bushings,
         anti_roll_bars=(),
         tires=_build_tires(
@@ -707,8 +712,24 @@ def _build_elements(
     assembly: VehicleAssembly,
     body_frames: dict[str, _BodyFrame],
     scale: float,
-) -> tuple[tuple[AxleSpringDamper, ...], tuple[AxleBushing, ...]]:
-    springs: list[AxleSpringDamper] = []
+) -> tuple[
+    tuple[AxleSpring, ...],
+    tuple[AxleDamper, ...],
+    tuple[AxleBumpStop, ...],
+    tuple[AxleBushing, ...],
+]:
+    """
+    Split the assembly's axial elements into the three SI structures.
+
+    The three are separate records because that is what the kernel models, and a
+    record is only emitted for the element that actually produced it: an elastic
+    member yields an `AxleSpring`, a viscous or gas member an `AxleDamper`, and a
+    bumper an `AxleBumpStop`.  The fused schema could only have expressed all
+    three at once, which is what made every reader ask which fields applied.
+    """
+    springs: list[AxleSpring] = []
+    dampers: list[AxleDamper] = []
+    bump_stops: list[AxleBumpStop] = []
     bushings: list[AxleBushing] = []
     force_scale = np.diag([1.0, 1.0, 1.0, scale, scale, scale])
     coordinate_inverse = np.diag([1.0 / scale, 1.0 / scale, 1.0 / scale, 1.0, 1.0, 1.0])
@@ -729,7 +750,7 @@ def _build_elements(
                 element.force_curve, scale
             )
             springs.append(
-                AxleSpringDamper(
+                AxleSpring(
                     name=element.name,
                     body_a=element.body_a,
                     body_b=element.body_b,
@@ -740,63 +761,54 @@ def _build_elements(
                         element.body_b, element.point_b, body_frames, scale
                     ),
                     stiffness_n_per_m=element.stiffness / scale,
-                    compression_damping_n_s_per_m=0.0,
-                    rebound_damping_n_s_per_m=0.0,
                     free_length_m=free_length * scale,
                     elastic_curve_deflection_m=elastic_curve_deflection,
                     elastic_curve_force_n=elastic_curve_force,
                 )
             )
         elif isinstance(element, StaticDamperElement):
+            # The gas law, the preload and the friction are their own fields on
+            # the damper record now.  They used to be folded into an equivalent
+            # stiffness and free length because the fused ABI had nowhere to put
+            # them; that fold is what the split removes.
             gas_stiffness = element.gas_stiffness / scale
-            offset = (
-                element.gas_reference_force
-                + element.preload
-                + element.friction * math.copysign(1.0, element.extension_sign)
-            )
-            if gas_stiffness > 0.0:
-                if element.gas_reference_length is None:
-                    raise ValueError(f"damper {element.name!r} has no gas reference length")
-                free_length = (
-                    element.gas_reference_length
-                    - offset / element.gas_stiffness
-                )
-                if free_length < 0.0:
-                    raise ValueError(f"damper {element.name!r} has a negative effective free length")
-            else:
-                if abs(offset) > 1e-12:
-                    raise ValueError(
-                        f"damper {element.name!r} has a constant axial load that the native ABI cannot represent"
-                    )
-                free_length = 0.0
+            if gas_stiffness > 0.0 and element.gas_reference_length is None:
+                raise ValueError(f"damper {element.name!r} has no gas reference length")
             curve_velocity, curve_force = _damper_curve(element.force_curve, scale)
-            springs.append(
-                AxleSpringDamper(
-                    name=element.name,
-                    body_a=element.body_a,
-                    body_b=element.body_b,
-                    point_a_m=_shift_point(
-                        element.body_a, element.point_a, body_frames, scale
-                    ),
-                    point_b_m=_shift_point(
-                        element.body_b, element.point_b, body_frames, scale
-                    ),
-                    stiffness_n_per_m=gas_stiffness,
-                    compression_damping_n_s_per_m=element.viscous_damping / scale,
-                    rebound_damping_n_s_per_m=element.viscous_damping / scale,
-                    free_length_m=free_length * scale,
-                    damper_curve_velocity_m_per_s=curve_velocity,
-                    damper_curve_force_n=curve_force,
-                )
+            damper = AxleDamper(
+                name=element.name,
+                body_a=element.body_a,
+                body_b=element.body_b,
+                point_a_m=_shift_point(
+                    element.body_a, element.point_a, body_frames, scale
+                ),
+                point_b_m=_shift_point(
+                    element.body_b, element.point_b, body_frames, scale
+                ),
+                compression_damping_n_s_per_m=element.viscous_damping / scale,
+                rebound_damping_n_s_per_m=element.viscous_damping / scale,
+                gas_stiffness_n_per_m=gas_stiffness,
+                gas_reference_length_m=(
+                    None
+                    if element.gas_reference_length is None
+                    else element.gas_reference_length * scale
+                ),
+                gas_reference_force_n=element.gas_reference_force,
+                preload_n=element.preload,
+                friction_n=element.friction,
+                extension_sign=element.extension_sign,
+                damper_curve_velocity_m_per_s=curve_velocity,
+                damper_curve_force_n=curve_force,
             )
+            dampers.append(damper)
         elif isinstance(element, BumpStopElement):
-            minimum = element.clearance * scale if element.direction == "bump" else None
-            maximum = element.clearance * scale if element.direction == "rebound" else None
+            # One record per bumper: its clearance is the length it engages at
+            # and its direction says which side of that is the engaged one.
             stop_curve_penetration, stop_curve_force = _length_force_curve(
                 element.force_curve, scale
             )
-            springs.append(
-                AxleSpringDamper(
+            bump_stops.append(
+                AxleBumpStop(
                     name=element.name,
                     body_a=element.body_a,
                     body_b=element.body_b,
@@ -806,34 +818,11 @@ def _build_elements(
                     point_b_m=_shift_point(
                         element.body_b, element.point_b, body_frames, scale
                     ),
-                    stiffness_n_per_m=0.0,
-                    compression_damping_n_s_per_m=0.0,
-                    rebound_damping_n_s_per_m=0.0,
-                    free_length_m=0.0,
-                    minimum_length_m=minimum,
-                    maximum_length_m=maximum,
-                    compression_stop_stiffness_n_per_m=(
-                        element.stiffness / scale if minimum is not None else 0.0
-                    ),
-                    rebound_stop_stiffness_n_per_m=(
-                        element.stiffness / scale if maximum is not None else 0.0
-                    ),
-                    compression_stop_curve_penetration_m=(
-                        stop_curve_penetration
-                        if minimum is not None
-                        else ()
-                    ),
-                    compression_stop_curve_force_n=(
-                        stop_curve_force if minimum is not None else ()
-                    ),
-                    rebound_stop_curve_penetration_m=(
-                        stop_curve_penetration
-                        if maximum is not None
-                        else ()
-                    ),
-                    rebound_stop_curve_force_n=(
-                        stop_curve_force if maximum is not None else ()
-                    ),
+                    clearance_m=element.clearance * scale,
+                    stiffness_n_per_m=element.stiffness / scale,
+                    direction=1.0 if element.direction == "bump" else -1.0,
+                    stop_curve_penetration_m=stop_curve_penetration,
+                    stop_curve_force_n=stop_curve_force,
                 )
             )
         elif isinstance(element, BushingElement):
@@ -884,7 +873,7 @@ def _build_elements(
             raise ValueError(
                 f"native vehicle dynamics does not support element {type(element).__name__}"
             )
-    return tuple(springs), tuple(bushings)
+    return tuple(springs), tuple(dampers), tuple(bump_stops), tuple(bushings)
 
 
 def _damper_curve(

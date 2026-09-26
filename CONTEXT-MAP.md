@@ -16,18 +16,22 @@ The root `uv.lock` is the workspace's only tracked dependency lockfile.
   axle dynamics semantics layer over the native kernel, and optional Adams
   validation. Its Python surface is layered by dependency direction: the low
   layer (`modeling/`, with `modeling/primitives/` holding the spatial algebra and
-  the joint/body declarations), the authoring layer (`templates/`,
-  `connections/`, `rigs/`, `subsystems/`, `preparation/`, `cases/`), the
-  compilation layer (`compilation/`, `simulation/`, `studies/`), and the result
-  and reporting layer (`schema/`, `results/`, `outputs/`, `report/`, `io/`).
-  `modeling/` must not import any of the layers above it, and
+  the joint, body and force-element declarations), the authoring layer
+  (`templates/`, `connections/`, `rigs/`, `subsystems/`, `preparation/`,
+  `cases/`), the compilation layer (`compilation/`, `simulation/`, `studies/`),
+  and the result and reporting layer (`schema/`, `results/`, `outputs/`,
+  `report/`, `io/`). `modeling/` must not import any of the layers above it, and
   `tests/architecture/test_import_boundaries.py` enforces that in a fresh
-  process per entry point. The `elements/` (A1) and `analysis/` (A2) packages
-  stay where they are; both have live production callers and a native
-  capability that does not exist yet, and the reason, blocking condition and
-  release condition for each are stated in
+  process per entry point. The `elements/` (A1) package is down to one thing:
+  `evaluate_generalized_forces`, which `api.py` calls to report component loads
+  by recomputing in Python a constitutive law the kernel already answered. Its
+  reason, blocking condition and release condition are stated in
   `packages/suspension_multibody/README.md` and checked against the boundary
   gate by `packages/suspension_multibody/scripts/check_composable_release.py`.
+  The former `analysis/` (A2) package is gone: its static wheel-load split and
+  roll-centre geometry are vehicle-level derived quantities rather than kernel
+  solves, so they moved unchanged into `vehicle/static_loads.py` and
+  `vehicle/roll_centers.py`.
 
 ## Native axle dynamics kernel
 

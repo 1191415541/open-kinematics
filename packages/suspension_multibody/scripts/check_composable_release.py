@@ -7,8 +7,9 @@ questions a tree-relative gate structurally cannot:
 
 1. **the migration list is complete.**  The Python boundary gate runs in its
    ``--final`` mode and its findings are reported with their release condition.
-   Two findings are expected and registered; a *new* one fails, and so does an
-   expected one that has quietly disappeared without the registry being updated.
+   The retained findings are registered below; a *new* one fails, and so does a
+   registered one that has quietly disappeared without the registry being
+   updated.
 2. **the documentation examples execute.**  The fenced ``python runnable`` blocks
    in ``docs/composable_extension_examples.md`` are extracted, written out and run
    in a fresh interpreter.  A doc block that no longer runs fails the release.
@@ -69,27 +70,28 @@ FENCE = "```python runnable"
 #: and also on a listed finding that has disappeared, so the list can only shrink
 #: -- the same discipline the migration-mode registry uses.
 EXPECTED_BOUNDARY_FINDINGS: tuple[tuple[str, str], ...] = (
-    # The A1 retention: the authoring layer still *constructs* the force elements.
-    # Release condition: a native element-wrench channel that can carry the
-    # fixed-body end reaction, and the K-mode element declaration that goes with it.
+    # The A1 retention, now down to its last import: ``api.py`` evaluates the
+    # force elements in Python to report component loads and bushing results.
+    # The declarations themselves are no longer here -- they moved to
+    # ``modeling/primitives/elements.py``, beside the joint and body
+    # declarations, so the authoring layer imports nothing retired.
+    # Release condition: the component-load reporting reads the native
+    # element-wrench channel instead.  That needs the KC contract to declare the
+    # springs, dampers and anti-roll bars it currently never emits (native holds
+    # no fact at all for them, so decoding today would silently drop rows the
+    # report has always carried), the fixed-body end recorded rather than left
+    # NaN, the moment reference point agreed, and the channel's default state
+    # settled.
     ("src/suspension_multibody/api.py", "elements"),
-    ("src/suspension_multibody/preparation/assembly/front_axle.py", "elements"),
-    ("src/suspension_multibody/preparation/assembly/vehicle.py", "elements"),
-    ("src/suspension_multibody/preparation/vehicle_dynamic.py", "elements"),
-    # The A2 retention: the native ABI exports no static-solve entry point, so the
-    # static wheel-load algorithm stays in Python.  Release condition: an ABI
-    # extension for the static solve (the exported surface is currently frozen).
-    ("src/suspension_multibody/vehicle/service.py", "analysis"),
-    # The tests that cover those two retained packages.  They go when the
-    # packages go, and not before -- deleting them first would remove the only
-    # coverage of behaviour that is still shipping.
-    ("tests/elements/test_elements.py", "elements"),
-    ("tests/model/test_force_assembly.py", "elements"),
-    ("tests/physics/test_vehicle_physics.py", "analysis"),
 )
 
 #: The retired package directories the final mode must not find.
-RETIRED_PACKAGES: tuple[str, ...] = ("core", "model", "metrics")
+#:
+#: ``analysis`` joined this list once its two constructions moved into
+#: ``vehicle/``: the static wheel-load split and the roll-centre geometry are
+#: vehicle-level derived quantities, not kernel solves, so neither ever needed
+#: the static-solve ABI entry the old release condition asked for.
+RETIRED_PACKAGES: tuple[str, ...] = ("core", "model", "metrics", "analysis")
 
 #: The live modules the current-state documentation claims, and that must exist.
 DOCUMENTED_PACKAGES: tuple[str, ...] = (
@@ -108,8 +110,8 @@ DOCUMENTED_PACKAGES: tuple[str, ...] = (
     "cases",
     "schema",
     "kernel",
+    "vehicle",
     "elements",
-    "analysis",
 )
 
 #: The wheels the release consists of, in build order.

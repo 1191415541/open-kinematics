@@ -1,4 +1,20 @@
-"""Linear springs, bushings, tires, stops, anti-roll bars and gravity."""
+"""
+Force-element declarations: springs, bushings, tires, stops, anti-roll bars and
+gravity.
+
+These are declarations, in the same sense as the joint and body declarations
+next to them: the authoring layer states *that* a vehicle has this spring
+between these two points with this rate, and the native kernel is what solves
+with it.  They live in the low layer so a declaration can be written without
+loading the authoring chain that assembles it.
+
+Each class still carries an ``evaluate`` method, and that method is *not* what
+the authoring layer or the kernel needs: it recomputes in Python a constitutive
+law the kernel has already answered, and its only remaining caller is the
+component-load reporting in ``api.py``.  It stays until that reporting reads the
+native element-wrench channel instead; the declarations are what the rest of the
+package depends on.
+"""
 
 from __future__ import annotations
 
@@ -7,14 +23,29 @@ from typing import Literal
 
 import numpy as np
 
-from ..modeling.primitives.joints import RigidBodyState
-from ..modeling.primitives.spatial import (
+from .joints import RigidBodyState
+from .spatial import (
     SE3,
     cross3,
     quaternion_to_matrix,
     quaternion_to_rotation_vector,
 )
-from .base import ElementError, ForceEvaluation
+
+
+@dataclass(frozen=True)
+class ForceEvaluation:
+    """Force-element output at one quasi-static state."""
+
+    name: str
+    energy: float
+    body_wrenches_global: dict[str, np.ndarray] = field(default_factory=dict)
+    active: bool = True
+    event: str | None = None
+    tangent: np.ndarray | None = None
+
+
+class ElementError(ValueError):
+    """Raised when a force element is singular or invalid."""
 
 
 def _curve_value(curve: tuple[tuple[float, float], ...], coordinate: float) -> float:

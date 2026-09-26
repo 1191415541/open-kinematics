@@ -530,7 +530,16 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
       if (element_name == nullptr || type_name == nullptr) {
         return fail(error, "an element entry is missing name/type");
       }
-      if (*type_name == "spring_damper") {
+      // The two bodies and the two attachment points are common to all three
+      // axial structures; only the coefficients differ.  Reading them once
+      // keeps the three branches from drifting apart on what "the same
+      // element" means.
+      const bool is_axial = *type_name == "spring" || *type_name == "damper" ||
+                            *type_name == "bump_stop";
+      if (is_axial) {
+        const std::string label = *type_name == "spring"
+            ? "spring"
+            : (*type_name == "damper" ? "damper" : "bump stop");
         double point_a[3];
         double point_b[3];
         const std::string* body_a = element.find_string("body_a");
@@ -538,92 +547,31 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
         const Json* parameters = element.find("parameters");
         if (body_a == nullptr || body_b == nullptr || parameters == nullptr ||
             !parameters->is_object()) {
-          return fail(error, "spring " + quote(*element_name) + " has no bodies or parameters");
+          return fail(error, label + " " + quote(*element_name) +
+                                  " has no bodies or parameters");
         }
         const auto index_a = body_lookup.find(*body_a);
         const auto index_b = body_lookup.find(*body_b);
         if (index_a == body_lookup.end() || index_b == body_lookup.end()) {
-          return fail(error, "spring " + quote(*element_name) + " names an unknown body");
+          return fail(error, label + " " + quote(*element_name) +
+                                  " names an unknown body");
         }
         double zero[3] = {0.0, 0.0, 0.0};
         if (!optional_vec3(*parameters, "point_a", zero, point_a) ||
             !optional_vec3(*parameters, "point_b", zero, point_b)) {
           return fail(error, "spring " + quote(*element_name) + " has a malformed point");
         }
-        // A spring's stiffness is a force per length, so it scales with the
+        // Every axial coefficient is a force per length, so it scales with the
         // document's length unit; the lengths themselves do not.
         const double force_per_length = force_per_length_scale();
-        double stiffness = 0.0;
-        double compression_damping = 0.0;
-        double rebound_damping = 0.0;
-        double free_length = 0.0;
-        double minimum_length = std::numeric_limits<double>::quiet_NaN();
-        double maximum_length = std::numeric_limits<double>::quiet_NaN();
-        double compression_stop_stiffness = 0.0;
-        double compression_stop_damping = 0.0;
-        double rebound_stop_stiffness = 0.0;
-        double rebound_stop_damping = 0.0;
-        if (!optional_number(*parameters, "stiffness", stiffness) ||
-            !optional_number(*parameters, "compression_damping", compression_damping) ||
-            !optional_number(*parameters, "rebound_damping", rebound_damping) ||
-            !optional_number(*parameters, "free_length", free_length) ||
-            !optional_number(*parameters, "minimum_length", minimum_length) ||
-            !optional_number(*parameters, "maximum_length", maximum_length) ||
-            !optional_number(*parameters, "compression_stop_stiffness",
-                             compression_stop_stiffness) ||
-            !optional_number(*parameters, "compression_stop_damping",
-                             compression_stop_damping) ||
-            !optional_number(*parameters, "rebound_stop_stiffness",
-                             rebound_stop_stiffness) ||
-            !optional_number(*parameters, "rebound_stop_damping",
-                             rebound_stop_damping)) {
-          return fail(error, "spring " + quote(*element_name) + " has a malformed parameter");
-        }
-        spring_body_a_.push_back(index_a->second);
-        spring_body_b_.push_back(index_b->second);
-        for (double value : point_a) spring_point_a_.push_back(value * length_scale_);
-        for (double value : point_b) spring_point_b_.push_back(value * length_scale_);
-        spring_stiffness_.push_back(stiffness * force_per_length);
-        spring_compression_damping_.push_back(compression_damping * force_per_length);
-        spring_rebound_damping_.push_back(rebound_damping * force_per_length);
-        spring_free_length_.push_back(free_length * length_scale_);
-        spring_minimum_length_.push_back(minimum_length * length_scale_);
-        spring_maximum_length_.push_back(maximum_length * length_scale_);
-        spring_compression_stop_stiffness_.push_back(
-            compression_stop_stiffness * force_per_length);
-        spring_compression_stop_damping_.push_back(
-            compression_stop_damping * force_per_length);
-        spring_rebound_stop_stiffness_.push_back(rebound_stop_stiffness * force_per_length);
-        spring_rebound_stop_damping_.push_back(rebound_stop_damping * force_per_length);
-
-        // The damper curve is a force against a velocity, so its abscissa
-        // scales with the length unit and its ordinate does not.
-        const Json* curve = parameters->find("damper_curve");
-        spring_damper_curve_offset_.push_back(
-            static_cast<int>(spring_damper_curve_velocity_.size()));
-        if (curve == nullptr) {
-          spring_damper_curve_count_.push_back(0);
-        } else {
-          if (!curve->is_array()) {
-            return fail(error, "spring " + quote(*element_name) +
-                                    " has a malformed damper_curve");
-          }
-          spring_damper_curve_count_.push_back(static_cast<int>(curve->items.size()));
-          for (const Json& point : curve->items) {
-            double pair[2] = {0.0, 0.0};
-            if (!pair_at(point, pair)) {
-              return fail(error, "spring " + quote(*element_name) +
-                                      " has a malformed damper_curve point");
-            }
-            spring_damper_curve_velocity_.push_back(pair[0] * length_scale_);
-            spring_damper_curve_force_.push_back(pair[1]);
-          }
-        }
-
-        const auto read_spring_curve = [this, &parameters, &element_name, &error](
+        // One curve, read for whichever structure this element turned out to
+        // be.  The ordinate is a force and does not scale; the abscissa is a
+        // length (deflection, penetration) or a rate, and scales with it.
+        const auto read_curve = [this, &parameters, &element_name, &error,
+                                 &label](
             const char* key, std::vector<int>& offsets,
             std::vector<int>& counts, std::vector<double>& abscissa,
-            std::vector<double>& force, const char* label) -> bool {
+            std::vector<double>& force) -> bool {
           offsets.push_back(static_cast<int>(abscissa.size()));
           const Json* table = parameters->find(key);
           if (table == nullptr) {
@@ -631,37 +579,117 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
             return true;
           }
           if (!table->is_array()) {
-            return fail(error, "spring " + quote(*element_name) +
-                                " has a malformed " + label);
+            return fail(error, label + " " + quote(*element_name) +
+                                    " has a malformed " + key);
           }
           counts.push_back(static_cast<int>(table->items.size()));
           for (const Json& point : table->items) {
             double pair[2] = {0.0, 0.0};
             if (!pair_at(point, pair)) {
-              return fail(error, "spring " + quote(*element_name) +
-                                  " has a malformed " + label + " point");
+              return fail(error, label + " " + quote(*element_name) +
+                                      " has a malformed " + key + " point");
             }
             abscissa.push_back(pair[0] * length_scale_);
             force.push_back(pair[1]);
           }
           return true;
         };
-        if (!read_spring_curve(
-                "elastic_curve", spring_elastic_curve_offset_,
-                spring_elastic_curve_count_, spring_elastic_curve_deflection_,
-                spring_elastic_curve_force_, "elastic_curve") ||
-            !read_spring_curve(
-                "compression_stop_curve", spring_compression_stop_curve_offset_,
-                spring_compression_stop_curve_count_,
-                spring_compression_stop_curve_penetration_,
-                spring_compression_stop_curve_force_,
-                "compression_stop_curve") ||
-            !read_spring_curve(
-                "rebound_stop_curve", spring_rebound_stop_curve_offset_,
-                spring_rebound_stop_curve_count_,
-                spring_rebound_stop_curve_penetration_,
-                spring_rebound_stop_curve_force_,
-                "rebound_stop_curve")) {
+
+        if (*type_name == "spring") {
+          double stiffness = 0.0;
+          double free_length = 0.0;
+          double preload = 0.0;
+          if (!optional_number(*parameters, "stiffness", stiffness) ||
+              !optional_number(*parameters, "free_length", free_length) ||
+              !optional_number(*parameters, "preload", preload)) {
+            return fail(error, "spring " + quote(*element_name) +
+                                    " has a malformed parameter");
+          }
+          spring_body_a_.push_back(index_a->second);
+          spring_body_b_.push_back(index_b->second);
+          for (double value : point_a) spring_point_a_.push_back(value * length_scale_);
+          for (double value : point_b) spring_point_b_.push_back(value * length_scale_);
+          spring_stiffness_.push_back(stiffness * force_per_length);
+          spring_free_length_.push_back(free_length * length_scale_);
+          spring_preload_.push_back(preload);
+          if (!read_curve("elastic_curve", spring_elastic_curve_offset_,
+                          spring_elastic_curve_count_,
+                          spring_elastic_curve_deflection_,
+                          spring_elastic_curve_force_)) {
+            return false;
+          }
+          continue;
+        }
+
+        if (*type_name == "damper") {
+          double compression_damping = 0.0;
+          double rebound_damping = 0.0;
+          double gas_stiffness = 0.0;
+          double gas_reference_length = std::numeric_limits<double>::quiet_NaN();
+          double gas_reference_force = 0.0;
+          double preload = 0.0;
+          double friction = 0.0;
+          double extension_sign = 1.0;
+          if (!optional_number(*parameters, "compression_damping", compression_damping) ||
+              !optional_number(*parameters, "rebound_damping", rebound_damping) ||
+              !optional_number(*parameters, "gas_stiffness", gas_stiffness) ||
+              !optional_number(*parameters, "gas_reference_length",
+                               gas_reference_length) ||
+              !optional_number(*parameters, "gas_reference_force", gas_reference_force) ||
+              !optional_number(*parameters, "preload", preload) ||
+              !optional_number(*parameters, "friction", friction) ||
+              !optional_number(*parameters, "extension_sign", extension_sign)) {
+            return fail(error, "damper " + quote(*element_name) +
+                                    " has a malformed parameter");
+          }
+          damper_body_a_.push_back(index_a->second);
+          damper_body_b_.push_back(index_b->second);
+          for (double value : point_a) damper_point_a_.push_back(value * length_scale_);
+          for (double value : point_b) damper_point_b_.push_back(value * length_scale_);
+          damper_compression_damping_.push_back(compression_damping * force_per_length);
+          damper_rebound_damping_.push_back(rebound_damping * force_per_length);
+          damper_gas_stiffness_.push_back(gas_stiffness * force_per_length);
+          damper_gas_reference_length_.push_back(gas_reference_length * length_scale_);
+          damper_gas_reference_force_.push_back(gas_reference_force);
+          damper_preload_.push_back(preload);
+          damper_friction_.push_back(friction);
+          damper_extension_sign_.push_back(extension_sign);
+          // The damper curve is a force against a velocity, so its abscissa
+          // scales with the length unit and its ordinate does not.
+          if (!read_curve("damper_curve", damper_curve_offset_,
+                          damper_curve_count_, damper_curve_velocity_,
+                          damper_curve_force_)) {
+            return false;
+          }
+          continue;
+        }
+
+        // The remaining axial structure is the bump stop.  `clearance` is the
+        // length at which the stop engages and `direction` says which side of it
+        // is the engaged one, so one record covers what the fused schema needed
+        // a minimum/maximum length pair for.
+        double clearance = std::numeric_limits<double>::quiet_NaN();
+        double stiffness = 0.0;
+        double direction = 1.0;
+        double damping = 0.0;
+        if (!optional_number(*parameters, "clearance", clearance) ||
+            !optional_number(*parameters, "stiffness", stiffness) ||
+            !optional_number(*parameters, "direction", direction) ||
+            !optional_number(*parameters, "damping", damping)) {
+          return fail(error, "bump stop " + quote(*element_name) +
+                                  " has a malformed parameter");
+        }
+        bump_stop_body_a_.push_back(index_a->second);
+        bump_stop_body_b_.push_back(index_b->second);
+        for (double value : point_a) bump_stop_point_a_.push_back(value * length_scale_);
+        for (double value : point_b) bump_stop_point_b_.push_back(value * length_scale_);
+        bump_stop_clearance_.push_back(clearance * length_scale_);
+        bump_stop_stiffness_.push_back(stiffness * force_per_length);
+        bump_stop_direction_.push_back(direction);
+        bump_stop_damping_.push_back(damping * force_per_length);
+        if (!read_curve("stop_curve", bump_stop_curve_offset_,
+                        bump_stop_curve_count_, bump_stop_curve_penetration_,
+                        bump_stop_force_)) {
           return false;
         }
         continue;
@@ -1502,39 +1530,78 @@ void ContractModel::fill(VehicleInput& input) const {
   input.constraint_axis_b_secondary = constraint_axis_b_secondary_.data();
   input.constraint_convel_angle_target = constraint_convel_angle_target_.data();
 
+  // One field group per axial structure.  A curve's offset/count tables are
+  // indexed per element, so they are always at least one entry long even when
+  // the model has no such element: the registration path tests the pointer, not
+  // the count, and a zero-length vector may legally have a null one.
   axle.spring_count = spring_body_a_.size();
-  // A spring's optional length limits and its damper curve are indexed per
-  // spring, so those tables are always at least one element long even when the
-  // model has no springs: the registration path tests the pointer, not the
-  // count, and a zero-length vector is allowed to have a null one.
   axle.spring_body_a = spring_body_a_.data();
   axle.spring_body_b = spring_body_b_.data();
   axle.spring_point_a = spring_point_a_.data();
   axle.spring_point_b = spring_point_b_.data();
   axle.spring_stiffness = spring_stiffness_.data();
-  axle.spring_compression_damping = spring_compression_damping_.data();
-  axle.spring_rebound_damping = spring_rebound_damping_.data();
   axle.spring_free_length = spring_free_length_.data();
-  axle.spring_minimum_length =
-      spring_body_a_.empty() ? spring_fallback_minimum_.data() : spring_minimum_length_.data();
-  axle.spring_maximum_length =
-      spring_body_a_.empty() ? spring_fallback_maximum_.data() : spring_maximum_length_.data();
-  axle.spring_compression_stop_stiffness = spring_compression_stop_stiffness_.data();
-  axle.spring_compression_stop_damping = spring_compression_stop_damping_.data();
-  axle.spring_rebound_stop_stiffness = spring_rebound_stop_stiffness_.data();
-  axle.spring_rebound_stop_damping = spring_rebound_stop_damping_.data();
-  axle.spring_damper_curve_offset =
+  axle.spring_preload = spring_preload_.data();
+  axle.spring_curve_offset =
       spring_body_a_.empty() ? spring_fallback_offset_.data()
-                             : spring_damper_curve_offset_.data();
-  axle.spring_damper_curve_count =
+                             : spring_elastic_curve_offset_.data();
+  axle.spring_curve_count =
       spring_body_a_.empty() ? spring_fallback_count_.data()
-                             : spring_damper_curve_count_.data();
-  axle.spring_damper_curve_velocity =
-      spring_damper_curve_velocity_.empty() ? spring_fallback_minimum_.data()
-                                            : spring_damper_curve_velocity_.data();
-  axle.spring_damper_curve_force =
-      spring_damper_curve_force_.empty() ? spring_fallback_minimum_.data()
-                                         : spring_damper_curve_force_.data();
+                             : spring_elastic_curve_count_.data();
+  axle.spring_curve_deflection =
+      spring_elastic_curve_deflection_.empty() ? spring_fallback_minimum_.data()
+                                               : spring_elastic_curve_deflection_.data();
+  axle.spring_curve_force =
+      spring_elastic_curve_force_.empty() ? spring_fallback_minimum_.data()
+                                          : spring_elastic_curve_force_.data();
+
+  axle.damper_count = damper_body_a_.size();
+  axle.damper_body_a = damper_body_a_.data();
+  axle.damper_body_b = damper_body_b_.data();
+  axle.damper_point_a = damper_point_a_.data();
+  axle.damper_point_b = damper_point_b_.data();
+  axle.damper_compression_damping = damper_compression_damping_.data();
+  axle.damper_rebound_damping = damper_rebound_damping_.data();
+  axle.damper_gas_stiffness = damper_gas_stiffness_.data();
+  axle.damper_gas_reference_length = damper_gas_reference_length_.data();
+  axle.damper_gas_reference_force = damper_gas_reference_force_.data();
+  axle.damper_preload = damper_preload_.data();
+  axle.damper_friction = damper_friction_.data();
+  axle.damper_extension_sign = damper_extension_sign_.data();
+  axle.damper_curve_offset =
+      damper_body_a_.empty() ? spring_fallback_offset_.data()
+                             : damper_curve_offset_.data();
+  axle.damper_curve_count =
+      damper_body_a_.empty() ? spring_fallback_count_.data()
+                             : damper_curve_count_.data();
+  axle.damper_curve_velocity =
+      damper_curve_velocity_.empty() ? spring_fallback_minimum_.data()
+                                     : damper_curve_velocity_.data();
+  axle.damper_curve_force =
+      damper_curve_force_.empty() ? spring_fallback_minimum_.data()
+                                  : damper_curve_force_.data();
+
+  axle.bump_stop_count = bump_stop_body_a_.size();
+  axle.bump_stop_body_a = bump_stop_body_a_.data();
+  axle.bump_stop_body_b = bump_stop_body_b_.data();
+  axle.bump_stop_point_a = bump_stop_point_a_.data();
+  axle.bump_stop_point_b = bump_stop_point_b_.data();
+  axle.bump_stop_clearance = bump_stop_clearance_.data();
+  axle.bump_stop_stiffness = bump_stop_stiffness_.data();
+  axle.bump_stop_direction = bump_stop_direction_.data();
+  axle.bump_stop_damping = bump_stop_damping_.data();
+  axle.bump_stop_curve_offset =
+      bump_stop_body_a_.empty() ? spring_fallback_offset_.data()
+                                : bump_stop_curve_offset_.data();
+  axle.bump_stop_curve_count =
+      bump_stop_body_a_.empty() ? spring_fallback_count_.data()
+                                : bump_stop_curve_count_.data();
+  axle.bump_stop_curve_penetration =
+      bump_stop_curve_penetration_.empty() ? spring_fallback_minimum_.data()
+                                           : bump_stop_curve_penetration_.data();
+  axle.bump_stop_force =
+      bump_stop_force_.empty() ? spring_fallback_minimum_.data()
+                               : bump_stop_force_.data();
 
   input.vehicle_spring_elastic_curve_offset =
       spring_elastic_curve_offset_.empty()
@@ -1552,38 +1619,9 @@ void ContractModel::fill(VehicleInput& input) const {
       spring_elastic_curve_force_.empty()
           ? spring_fallback_minimum_.data()
           : spring_elastic_curve_force_.data();
-  input.vehicle_spring_compression_stop_curve_offset =
-      spring_compression_stop_curve_offset_.empty()
-          ? spring_fallback_offset_.data()
-          : spring_compression_stop_curve_offset_.data();
-  input.vehicle_spring_compression_stop_curve_count =
-      spring_compression_stop_curve_count_.empty()
-          ? spring_fallback_count_.data()
-          : spring_compression_stop_curve_count_.data();
-  input.vehicle_spring_compression_stop_curve_penetration =
-      spring_compression_stop_curve_penetration_.empty()
-          ? spring_fallback_minimum_.data()
-          : spring_compression_stop_curve_penetration_.data();
-  input.vehicle_spring_compression_stop_curve_force =
-      spring_compression_stop_curve_force_.empty()
-          ? spring_fallback_minimum_.data()
-          : spring_compression_stop_curve_force_.data();
-  input.vehicle_spring_rebound_stop_curve_offset =
-      spring_rebound_stop_curve_offset_.empty()
-          ? spring_fallback_offset_.data()
-          : spring_rebound_stop_curve_offset_.data();
-  input.vehicle_spring_rebound_stop_curve_count =
-      spring_rebound_stop_curve_count_.empty()
-          ? spring_fallback_count_.data()
-          : spring_rebound_stop_curve_count_.data();
-  input.vehicle_spring_rebound_stop_curve_penetration =
-      spring_rebound_stop_curve_penetration_.empty()
-          ? spring_fallback_minimum_.data()
-          : spring_rebound_stop_curve_penetration_.data();
-  input.vehicle_spring_rebound_stop_curve_force =
-      spring_rebound_stop_curve_force_.empty()
-          ? spring_fallback_minimum_.data()
-          : spring_rebound_stop_curve_force_.data();
+  // The stop curves are no longer a vehicle-only extra: each bump stop
+  // declares its own curve on the axle's own bump-stop field group, so the
+  // vehicle surface carries the elastic curve alone.
 
   axle.tire_count = tire_names_.size();
   axle.tire_body = tire_body_.data();

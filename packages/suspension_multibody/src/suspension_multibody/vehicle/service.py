@@ -27,12 +27,12 @@ def run_vehicle_dynamics(
     """运行一个真实前后悬架、车身和轮端的 native 整车动力学算例."""
     from time import perf_counter
 
-    from ..analysis.vehicle_physics import compute_static_wheel_loads
     from ..axle_dynamics.contract_run import safe_failure_row
     from ..axle_dynamics.errors import NativeAxleError
     from ..kernel import KernelContractError
     from ..report.metrics import compute_case_metrics
     from ..results.decoder import decode_result
+    from .static_loads import compute_static_wheel_loads
 
     prepared = prepare_vehicle_run(model, case)
     static_wheel_loads: Mapping[str, float] | None = None

@@ -27,10 +27,16 @@ const JointEntry kJoints[] = {
     {"driven_rotation", 1},
 };
 
+// One name per element family.  The axial three are the structures the fused
+// `spring_damper` record was split into (2026-09-26): a model that wants an
+// elastic member, a dissipative one and a stop declares `spring`, `damper` and
+// `bump_stop`, and the fused name is gone rather than aliased, so a document
+// that still uses it is refused by name instead of being read as one of the
+// three.
 const char* const kElements[] = {
-    "spring_damper", "bushing",        "anti_roll_bar", "bump_stop",
-    "aerodynamic_drag", "steering_actuator", "wheel_torque", "point_wrench",
-    "gravity",
+    "spring",           "damper",          "bump_stop",       "bushing",
+    "anti_roll_bar",    "aerodynamic_drag", "steering_actuator", "wheel_torque",
+    "point_wrench",     "gravity",
 };
 
 const char* const kTires[] = {"vertical_linear", "fiala", "pac2002", "native_brush"};

@@ -32,7 +32,7 @@ void assemble_bushing_forces( const Model& model, const State& state, std::vecto
 
 void assemble_anti_roll_forces( const Model& model, const State& state, std::vector<Vec3>& torque, std::vector<double>* anti_roll_component_output, EnergyRates* energy_rates, EnergyStorage* energy_storage, bool record_energy, bool brush_only, double internal_force_scale, double& dissipation, double& potential );
 
-void assemble_spring_forces( const Model& model, const State& state, std::vector<Vec3>& force, std::vector<Vec3>& torque, std::vector<double>* spring_component_output, EnergyRates* energy_rates, EnergyStorage* energy_storage, bool record_energy, bool brush_only, double internal_force_scale, double& dissipation, double& potential );
+void assemble_spring_forces( const Model& model, const State& state, std::vector<Vec3>& force, std::vector<Vec3>& torque, std::vector<double>* spring_component_output, std::vector<double>* damper_component_output, std::vector<double>* bump_stop_component_output, EnergyRates* energy_rates, EnergyStorage* energy_storage, bool record_energy, bool brush_only, double internal_force_scale, double& dissipation, double& potential );
 
 void assemble_steering_forces( const Model& model, const State& state, const SampleInput& input, std::vector<Vec3>& force, std::vector<Vec3>& torque, EnergyRates* energy_rates, bool record_energy, bool brush_only, double& external_power );
 

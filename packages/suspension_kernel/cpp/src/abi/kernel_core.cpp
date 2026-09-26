@@ -264,6 +264,8 @@ extern "C" int mb_core_run(
     staged_output.constraint_wrench_capacity = output->joint_wrench_capacity;
     staged_output.spring_output = output->spring_output;
     staged_output.spring_output_capacity = output->spring_output_capacity;
+    // A core model has no axle axial elements, so the capacity the axle
+    // surface requires for the damper and bump-stop ledgers is zero here.
     staged_output.energy_output = output->energy_output;
     staged_output.energy_output_capacity = output->energy_output_capacity;
     staged_output.diagnostics = output->diagnostics;

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "mode": "migration",
-  "notes": "Exact registry for the migration mode: every production/script legacy import must appear here, and every entry must still match a live finding, so the registry can only shrink.  The final mode ignores it and refuses every legacy import and legacy package.  Owners come from the epic's Python migration matrix; findings in tests are not registered because 08 deletes them with the packages.  07 switched every report/metrics/replay caller to the new homes, so the metrics and analysis entries for api.py, axle_dynamics/contract_run.py, vehicle/service.py, adams/reference.py, cases/kc_quasi_static/workflow.py and the three benchmark-reading scripts are gone; what is left is the element construction of the authoring layer (A1) and the A2-retained compute_static_wheel_loads.",
+  "notes": "Exact registry for the migration mode: every production/script legacy import must appear here, and every entry must still match a live finding, so the registry can only shrink.  The final mode ignores it and refuses every legacy import and legacy package. Owners come from the epic's Python migration matrix; findings in tests are not registered because 08 deletes them with the packages.  What is left is the element construction of the authoring layer (A1) in api.py: the other four entries were retired when their callers moved to modeling/primitives and vehicle/.",
   "successors": {
     "core": {
       "target": "preparation/assembly/types.py",
@@ -32,42 +32,6 @@
       "symbol": "elements",
       "successor": "native facts decoded by results/, then report/",
       "owner": "05-native-facts + 07-report",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/preparation/assembly/front_axle.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "elements",
-      "successor": "native element facts decoded by results/, then report/; the authoring assembly still constructs the elements until the A1 channel switch",
-      "owner": "05-native-facts + 07-report (authoring-side element construction is tracked by 06 step 6)",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/preparation/assembly/vehicle.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "elements",
-      "successor": "native element facts decoded by results/, then report/; the authoring assembly still constructs the elements until the A1 channel switch",
-      "owner": "05-native-facts + 07-report (authoring-side element construction is tracked by 06 step 6)",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/preparation/vehicle_dynamic.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "elements",
-      "successor": "native facts decoded by results/, then report/",
-      "owner": "05-native-facts + 07-report",
-      "occurrences": 1
-    },
-    {
-      "path": "src/suspension_multibody/vehicle/service.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "analysis",
-      "successor": "report/metrics/ for the reporting calls; compute_static_wheel_loads stays registered in analysis/vehicle_physics.py under A2 (native has no static-solve ABI entry, and the ABI export surface is frozen)",
-      "owner": "07-report (reporting calls switched) + A2 retention for the static wheel-load algorithm",
       "occurrences": 1
     }
   ]

@@ -7,10 +7,12 @@ import pytest
 
 from suspension_multibody.axle_dynamics import (
     AxleBody,
+    AxleBumpStop,
+    AxleDamper,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleSolverSettings,
-    AxleSpringDamper,
+    AxleSpring,
     NativeAxleError,
     run_axle_dynamics,
 )
@@ -39,18 +41,28 @@ def _oscillator() -> AxleDynamicsModel:
         ),
         joints=(),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="spring",
                 body_a="fixture",
                 body_b="body",
                 point_a_m=(0.0, 0.0, 0.0),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=10_000.0,
-                compression_damping_n_s_per_m=100.0,
-                rebound_damping_n_s_per_m=100.0,
                 free_length_m=0.25,
             ),
         ),
+        dampers=(
+            AxleDamper(
+                name="spring_damper",
+                body_a="fixture",
+                body_b="body",
+                point_a_m=(0.0, 0.0, 0.0),
+                point_b_m=(0.0, 0.0, 0.0),
+                compression_damping_n_s_per_m=100.0,
+                rebound_damping_n_s_per_m=100.0,
+            ),
+        ),
+        bump_stops=(),
     )
 
 
@@ -142,19 +154,38 @@ def test_stop_output_separates_conservative_and_dissipative_force() -> None:
         ),
         joints=(),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="suspension",
                 body_a="fixture",
                 body_b="body",
                 point_a_m=(0.0, 0.0, 0.0),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=10_000.0,
+                free_length_m=0.25,
+            ),
+        ),
+        dampers=(
+            AxleDamper(
+                name="suspension_damper",
+                body_a="fixture",
+                body_b="body",
+                point_a_m=(0.0, 0.0, 0.0),
+                point_b_m=(0.0, 0.0, 0.0),
                 compression_damping_n_s_per_m=100.0,
                 rebound_damping_n_s_per_m=100.0,
-                free_length_m=0.25,
-                minimum_length_m=0.20,
-                compression_stop_stiffness_n_per_m=10_000.0,
-                compression_stop_damping_n_s_per_m=50.0,
+            ),
+        ),
+        bump_stops=(
+            AxleBumpStop(
+                name="suspension_stop",
+                body_a="fixture",
+                body_b="body",
+                point_a_m=(0.0, 0.0, 0.0),
+                point_b_m=(0.0, 0.0, 0.0),
+                clearance_m=0.20,
+                stiffness_n_per_m=10_000.0,
+                direction=1.0,
+                damping_n_s_per_m=50.0,
             ),
         ),
     )
@@ -171,17 +202,39 @@ def test_stop_output_separates_conservative_and_dissipative_force() -> None:
         ),
     )
 
-    output = result.spring_state("suspension")[0]
+    # The corner is three records now, so its decomposition is read from three
+    # ledgers instead of from the seven columns one row used to carry.  The
+    # quantities asserted are the same ones: the length and rate the corner is
+    # at, the elastic force the spring applies, the damping force the damper
+    # applies, and the stop's penetration and force.
+    spring = result.spring_state("suspension")[0]
+    damper = result.damper_state("suspension_damper")[0]
+    stop = result.bump_stop_state("suspension_stop")[0]
     np.testing.assert_allclose(
-        output,
-        (0.15, -0.1, 1000.0, 10.0, 500.0, 0.0, 1515.0),
+        (spring[0], spring[1], spring[2], spring[3]),
+        (0.15, -0.1, 1000.0, 0.0),
         atol=1e-10,
         rtol=0.0,
     )
-    conservative = output[2] + output[4] + output[5]
-    dissipative = output[6] - conservative
+    np.testing.assert_allclose(
+        (damper[0], damper[1], damper[2]),
+        (0.15, -0.1, 10.0),
+        atol=1e-10,
+        rtol=0.0,
+    )
+    np.testing.assert_allclose(
+        (stop[0], stop[1], stop[2], stop[3], stop[4]),
+        (0.15, -0.1, 0.05, 500.0, 1.0),
+        atol=1e-10,
+        rtol=0.0,
+    )
+    # The conservative part is the elastic law plus the stop; the dissipative
+    # part is the damper's, and the two together are the corner's whole force.
+    conservative = spring[2] + stop[3]
+    dissipative = damper[2]
     assert conservative == pytest.approx(1500.0)
-    assert dissipative == pytest.approx(15.0)
+    assert dissipative == pytest.approx(10.0)
+    assert conservative + dissipative == pytest.approx(1510.0)
 
 
 def test_failed_step_preserves_partial_result_and_failure_diagnostics() -> None:

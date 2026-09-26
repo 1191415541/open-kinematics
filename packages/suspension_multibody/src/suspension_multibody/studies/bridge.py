@@ -29,10 +29,12 @@ import numpy as np
 
 from ..axle_dynamics.schema import (
     AxleBody,
+    AxleBumpStop,
     AxleBushing,
+    AxleDamper,
     AxleDynamicsModel,
     AxleJoint,
-    AxleSpringDamper,
+    AxleSpring,
     AxleTire,
 )
 from ..modeling.primitives.joints import (
@@ -105,17 +107,21 @@ _JOINT_KINDS: tuple[tuple[type, JointKind], ...] = (
     (InPlaneJoint, "inplane"),
 )
 
-#: The element types that become one SI spring/damper entry.  A corner carries
-#: its spring and its damper on the same two points, and the schema has one entry
-#: for both, so the two are named together.
-_SPRING_DAMPER_ELEMENTS: frozenset[str] = frozenset(
-    {"LinearSpringElement", "StaticDamperElement"}
-)
+#: The element types that become an SI elastic entry.
+_SPRING_ELEMENTS: frozenset[str] = frozenset({"LinearSpringElement"})
+
+#: The element types that become an SI dissipative entry.
+_DAMPER_ELEMENTS: frozenset[str] = frozenset({"StaticDamperElement"})
+
+#: The element types that become an SI unilateral entry.
+_BUMP_STOP_ELEMENTS: frozenset[str] = frozenset({"BumpStopElement"})
 
 #: Every element type this bridge can read.  Anything outside this set is
 #: refused by name rather than dropped -- see `_refuse_unreadable_elements`.
 _READABLE_ELEMENTS: frozenset[str] = (
-    _SPRING_DAMPER_ELEMENTS
+    _SPRING_ELEMENTS
+    | _DAMPER_ELEMENTS
+    | _BUMP_STOP_ELEMENTS
     | {"BushingElement", "VerticalTireElement"}
 )
 
@@ -330,7 +336,17 @@ def axle_dynamics_model(
     springs = tuple(
         _spring(element)
         for element in assembly.elements
-        if type(element).__name__ in _SPRING_DAMPER_ELEMENTS
+        if type(element).__name__ in _SPRING_ELEMENTS
+    )
+    dampers = tuple(
+        _damper(element)
+        for element in assembly.elements
+        if type(element).__name__ in _DAMPER_ELEMENTS
+    )
+    bump_stops = tuple(
+        _bump_stop(element)
+        for element in assembly.elements
+        if type(element).__name__ in _BUMP_STOP_ELEMENTS
     )
     _refuse_unreadable_elements(assembly)
     return AxleDynamicsModel(
@@ -340,39 +356,33 @@ def axle_dynamics_model(
         bushings=bushings,
         tires=tires,
         springs=springs,
+        dampers=dampers,
+        bump_stops=bump_stops,
     )
 
 
-def _spring(element) -> AxleSpringDamper:
-    """
-    Convert a spring or a damper element to the SI spring/damper entry.
+def _endpoints(element) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Return the two body-local attachment points, converted to metres."""
+    return (
+        _vec3(np.asarray(element.point_a) / MM),
+        _vec3(np.asarray(element.point_b) / MM),
+    )
 
-    The two are separate entries even on the same two points: the schema carries
-    stiffness and damping in one record, but a spring contributes no damping and
-    a damper no stiffness, so listing both gives the same force sum a merged
-    record would.  What matters is that neither is dropped.
+
+def _spring(element) -> AxleSpring:
+    """
+    Convert an assembly spring to the SI elastic entry.
 
     The free length needs care, because the two schemas state the offset
     differently.  An assembly spring is `k * (length - reference) + preload`,
     while the SI entry is `k * (length - free_length)`.  A preloaded or
     reference-length spring therefore has to be shifted by `preload / k`: taking
     the reference length as the free length would move the corner's resting
-    position and quietly change the wheel load.
+    position and quietly change the wheel load.  The shift is folded into the
+    free length rather than declared as the schema's own `preload_n`, which is
+    what keeps the number this bridge produced before the split.
     """
-    if type(element).__name__ != "LinearSpringElement":
-        # A damper carries no elastic term, so its free length cannot affect a
-        # force and is given the schema's neutral value.
-        return AxleSpringDamper(
-            name=element.name,
-            body_a=element.body_a,
-            body_b=element.body_b,
-            point_a_m=_vec3(np.asarray(element.point_a) / MM),
-            point_b_m=_vec3(np.asarray(element.point_b) / MM),
-            stiffness_n_per_m=0.0,
-            compression_damping_n_s_per_m=float(element.viscous_damping),
-            rebound_damping_n_s_per_m=float(element.viscous_damping),
-            free_length_m=0.0,
-        )
+    point_a, point_b = _endpoints(element)
     reference = (
         element.free_length
         if element.free_length is not None
@@ -380,18 +390,62 @@ def _spring(element) -> AxleSpringDamper:
     )
     stiffness = float(element.stiffness)
     # The shift is in the assembly's own millimetres, so only the result is
-    # converted to metres below.
+    # converted to metres.
     free_length = float(reference) - float(element.preload) / stiffness
-    return AxleSpringDamper(
+    return AxleSpring(
         name=element.name,
         body_a=element.body_a,
         body_b=element.body_b,
-        point_a_m=_vec3(np.asarray(element.point_a) / MM),
-        point_b_m=_vec3(np.asarray(element.point_b) / MM),
+        point_a_m=point_a,
+        point_b_m=point_b,
         stiffness_n_per_m=stiffness * MM,
-        compression_damping_n_s_per_m=0.0,
-        rebound_damping_n_s_per_m=0.0,
         free_length_m=free_length / MM,
+    )
+
+
+def _damper(element) -> AxleDamper:
+    """
+    Convert an assembly damper to the SI dissipative entry.
+
+    The assembly states one viscous coefficient; the SI record keeps the
+    compression and rebound pair the kernel reads, so the single coefficient is
+    given to both.  A measured curve, when present, replaces them entirely.
+    """
+    point_a, point_b = _endpoints(element)
+    return AxleDamper(
+        name=element.name,
+        body_a=element.body_a,
+        body_b=element.body_b,
+        point_a_m=point_a,
+        point_b_m=point_b,
+        compression_damping_n_s_per_m=float(element.viscous_damping),
+        rebound_damping_n_s_per_m=float(element.viscous_damping),
+    )
+
+
+def _bump_stop(element) -> AxleBumpStop:
+    """
+    Convert an assembly bumper to the SI unilateral entry.
+
+    The assembly measures the gap as `length - clearance` and engages below it,
+    which is the SI record's `direction = +1`; a rebound bumper is the same law
+    with the opposite sign.  The clearance is in the assembly's millimetres and
+    becomes metres here, while the stiffness is already a force per millimetre.
+    """
+    point_a, point_b = _endpoints(element)
+    return AxleBumpStop(
+        name=element.name,
+        body_a=element.body_a,
+        body_b=element.body_b,
+        point_a_m=point_a,
+        point_b_m=point_b,
+        clearance_m=float(element.clearance) / MM,
+        stiffness_n_per_m=float(element.stiffness) * MM,
+        direction=1.0 if element.direction == "bump" else -1.0,
+        stop_curve_penetration_m=tuple(
+            float(penetration) / MM for penetration, _ in element.force_curve
+        ),
+        stop_curve_force_n=tuple(float(force) for _, force in element.force_curve),
     )
 
 

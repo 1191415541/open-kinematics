@@ -78,6 +78,8 @@ int reset_force_outputs(
     std::vector<double>* tire_relaxation_rates,
     std::vector<double>& tire_output,
     std::vector<double>* spring_component_output,
+    std::vector<double>* damper_component_output,
+    std::vector<double>* bump_stop_component_output,
     std::vector<double>* bushing_component_output,
     std::vector<double>* anti_roll_component_output,
     bool record_output
@@ -96,6 +98,16 @@ int reset_force_outputs(
     if (spring_component_output) {
         spring_component_output->assign(
             model.springs.size()*kSpringOutputWidth, 0.0
+        );
+    }
+    if (damper_component_output) {
+        damper_component_output->assign(
+            model.dampers.size()*kDamperOutputWidth, 0.0
+        );
+    }
+    if (bump_stop_component_output) {
+        bump_stop_component_output->assign(
+            model.bump_stops.size()*kBumpStopOutputWidth, 0.0
         );
     }
     if (bushing_component_output) {

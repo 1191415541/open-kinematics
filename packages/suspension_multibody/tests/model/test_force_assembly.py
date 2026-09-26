@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from suspension_multibody.elements import (
+from suspension_multibody.modeling.primitives import (
     BushingElement,
     LinearSpringElement,
     VerticalTireElement,

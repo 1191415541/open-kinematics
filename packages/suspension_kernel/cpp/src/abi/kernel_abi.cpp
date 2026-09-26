@@ -77,6 +77,10 @@ int run_model(
         input->sample_count*model.constraints.size()*kConstraintOutputWidth;
     const std::size_t spring_need=
         input->sample_count*model.springs.size()*kSpringOutputWidth;
+    const std::size_t damper_need=
+        input->sample_count*model.dampers.size()*kDamperOutputWidth;
+    const std::size_t bump_stop_need=
+        input->sample_count*model.bump_stops.size()*kBumpStopOutputWidth;
     const std::size_t bushing_need=
         input->sample_count*model.bushings.size()*kBushingOutputWidth;
     const std::size_t anti_roll_need=
@@ -88,6 +92,8 @@ int run_model(
     if(output->body_state_capacity<state_need||
        output->constraint_wrench_capacity<constraint_need||
        output->spring_output_capacity<spring_need||
+       output->damper_output_capacity<damper_need||
+       output->bump_stop_output_capacity<bump_stop_need||
        output->bushing_output_capacity<bushing_need||
        output->anti_roll_output_capacity<anti_roll_need||
        output->diagnostics_capacity<diag_need||
@@ -848,8 +854,8 @@ int run_model(
 // The check therefore fires on a one-sided bump: change one of the two and the
 // library stops compiling, instead of exporting a version symbol that
 // contradicts its own structure.
-constexpr int kAxleInputFieldAbiVersion = 15;
-constexpr int kVehicleInputFieldAbiVersion = 30;
+constexpr int kAxleInputFieldAbiVersion = 16;
+constexpr int kVehicleInputFieldAbiVersion = 31;
 static_assert(
     axle_kernel::kAxleKernelAbiVersion == kAxleInputFieldAbiVersion,
     "the axle constant in version.hpp and AxleInput::abi_version disagree"

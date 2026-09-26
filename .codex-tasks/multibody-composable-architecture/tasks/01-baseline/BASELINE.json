@@ -1,9 +1,9 @@
 {
   "environment": {
-    "git_head": "ed63dc5c0f0c4428b7b9f7fc96f656c67a35b28e",
-    "git_head_date": "2026-09-24T17:03:23+08:00",
-    "git_head_short": "ed63dc5",
-    "git_status_porcelain": "?? .codex-tasks/multibody-composable-architecture/tasks/\n?? packages/suspension_multibody/scripts/check_composable_baseline.py",
+    "git_head": "b00dcfa88f34a2f43264385e8ee014a46e8cd231",
+    "git_head_date": "2026-09-25T16:06:02+08:00",
+    "git_head_short": "b00dcfa",
+    "git_status_porcelain": "M .codex-tasks/multibody-composable-architecture/tasks/01-baseline/BASELINE.json\n M .codex-tasks/multibody-composable-architecture/tasks/12-release-docs/PROGRESS.md\n M .codex-tasks/multibody-composable-architecture/tasks/13-acceptance/PROGRESS.md\n M .gitignore\n M CONTEXT-MAP.md\n M justfile\n M packages/suspension_kernel/cpp/include/mb_cases/functions.hpp\n M packages/suspension_kernel/cpp/include/mb_config/constants.hpp\n M packages/suspension_kernel/cpp/include/mb_config/element_wrench.hpp\n M packages/suspension_kernel/cpp/include/mb_config/version.hpp\n M packages/suspension_kernel/cpp/include/mb_element/functions.hpp\n M packages/suspension_kernel/cpp/include/mb_force/functions.hpp\n M packages/suspension_kernel/cpp/include/mb_input/types.hpp\n M packages/suspension_kernel/cpp/include/mb_model/types.hpp\n M packages/suspension_kernel/cpp/src/abi/kernel_abi.cpp\n M packages/suspension_kernel/cpp/src/abi/kernel_contract_run.cpp\n M packages/suspension_kernel/cpp/src/abi/kernel_core.cpp\n M packages/suspension_kernel/cpp/src/assembly/build_model.cpp\n M packages/suspension_kernel/cpp/src/assembly/element_reader.cpp\n M packages/suspension_kernel/cpp/src/assembly/registration.cpp\n M packages/suspension_kernel/cpp/src/cases/contract_model.cpp\n M packages/suspension_kernel/cpp/src/config/kernel_config.cpp\n M packages/suspension_kernel/cpp/src/contract/contract_registry.cpp\n M packages/suspension_kernel/cpp/src/element/assembly_primitives.cpp\n M packages/suspension_kernel/cpp/src/element/directional.cpp\n M packages/suspension_kernel/cpp/src/element/spring.cpp\n M packages/suspension_kernel/cpp/src/force/external_vector.cpp\n M packages/suspension_kernel/cpp/src/force/layout.cpp\n M packages/suspension_kernel/cpp/src/output/kernel_output.cpp\n M packages/suspension_kernel/cpp/src/solve_dynamic/kernel_integrator.cpp\n M packages/suspension_kernel/cpp/src/solve_dynamic/kernel_integrator_residual.cpp\n M packages/suspension_kernel/cpp/src/solve_static/kernel_static_trim.cpp\n M packages/suspension_kernel/cpp/tests/contract_selftest.cpp\n M packages/suspension_kernel/tests/test_binding.py\n M packages/suspension_kernel/tests/test_tire_mass.py\n M packages/suspension_multibody/README.md\n M packages/suspension_multibody/scripts/accept_composable_architecture.py\n M packages/suspension_multibody/scripts/case_parity_check.py\n M packages/suspension_multibody/scripts/check_composable_release.py\n M packages/suspension_multibody/scripts/kc_legacy_path_check.py\n M packages/suspension_multibody/scripts/run_axle_dynamics_acceptance.py\n M packages/suspension_multibody/src/suspension_multibody/adams/axle_adams_model.py\n M packages/suspension_multibody/src/suspension_multibody/adams/axle_channels.py\n M packages/suspension_multibody/src/suspension_multibody/adams/axle_equivalence_audit.py\n M packages/suspension_multibody/src/suspension_multibody/adams/car_sla_model.py\nD  packages/suspension_multibody/src/suspension_multibody/analysis/__init__.py\nD  packages/suspension_multibody/src/suspension_multibody/analysis/vehicle_physics.py\n M packages/suspension_multibody/src/suspension_multibody/api.py\n M packages/suspension_multibody/src/suspension_multibody/axle_dynamics/__init__.py\n M packages/suspension_multibody/src/suspension_multibody/axle_dynamics/contract_run.py\n M packages/suspension_multibody/src/suspension_multibody/axle_dynamics/result.py\n M packages/suspension_multibody/src/suspension_multibody/axle_dynamics/schema.py\n M packages/suspension_multibody/src/suspension_multibody/cases/axle_dynamic.py\n M packages/suspension_multibody/src/suspension_multibody/cases/vehicle_dynamic.py\n M packages/suspension_multibody/src/suspension_multibody/elements/__init__.py\n M packages/suspension_multibody/src/suspension_multibody/elements/assembly.py\nD  packages/suspension_multibody/src/suspension_multibody/elements/base.py\n M packages/suspension_multibody/src/suspension_multibody/io/artifacts.py\n M packages/suspension_multibody/src/suspension_multibody/kernel/native.py\n M packages/suspension_multibody/src/suspension_multibody/modeling/primitives/__init__.py\nRM packages/suspension_multibody/src/suspension_multibody/elements/elastic.py -> packages/suspension_multibody/src/suspension_multibody/modeling/primitives/elements.py\n M packages/suspension_multibody/src/suspension_multibody/preparation/assembly/front_axle.py\n M packages/suspension_multibody/src/suspension_multibody/preparation/assembly/vehicle.py\n M packages/suspension_multibody/src/suspension_multibody/preparation/vehicle_dynamic.py\n M packages/suspension_multibody/src/suspension_multibody/report/wheel_loads.py\n M packages/suspension_multibody/src/suspension_multibody/results/element_wrench.py\n M packages/suspension_multibody/src/suspension_multibody/results/vehicle.py\n M packages/suspension_multibody/src/suspension_multibody/studies/bridge.py\n M packages/suspension_multibody/src/suspension_multibody/subsystems/geometry.py\n M packages/suspension_multibody/src/suspension_multibody/vehicle/service.py\n M packages/suspension_multibody/tests/adams/test_axle_dynamics_equivalence.py\n M packages/suspension_multibody/tests/adams/test_car_sla_correlation.py\n M packages/suspension_multibody/tests/adapters/test_geometry_contract.py\n M packages/suspension_multibody/tests/architecture/legacy_surface_registry.json\n M packages/suspension_multibody/tests/architecture/test_core_abi.py\n M packages/suspension_multibody/tests/architecture/test_element_block_layout.py\n M packages/suspension_multibody/tests/architecture/test_import_boundaries.py\n M packages/suspension_multibody/tests/axle_dynamics/test_api.py\n M packages/suspension_multibody/tests/axle_dynamics/test_energy.py\n M packages/suspension_multibody/tests/axle_dynamics/test_integrator.py\n M packages/suspension_multibody/tests/axle_dynamics/test_limit_cases.py\n M packages/suspension_multibody/tests/axle_dynamics/test_packaging.py\n M packages/suspension_multibody/tests/axle_dynamics/test_performance_metrics.py\n M packages/suspension_multibody/tests/axle_dynamics/test_physics_consistency.py\n M packages/suspension_multibody/tests/axle_dynamics/test_solver_invariants.py\n M packages/suspension_multibody/tests/data/axle_dynamics_baseline/sha256.json\n M packages/suspension_multibody/tests/data/dynamic_hash_baseline.json\n M packages/suspension_multibody/tests/elements/test_elements.py\n M packages/suspension_multibody/tests/io/test_artifacts_unified.py\n M packages/suspension_multibody/tests/model/test_force_assembly.py\n M packages/suspension_multibody/tests/physics/test_vehicle_physics.py\n M packages/suspension_multibody/tests/rigs/test_the_rig_reaches_the_product.py\n M packages/suspension_multibody/tests/vehicle/test_native_vehicle.py\n?? .codex-tasks/multibody-composable-architecture/INTERFACE-freeze-force-elements.md\n?? .pi/\n?? AGENTS.md\n?? packages/suspension_multibody/src/suspension_multibody/vehicle/roll_centers.py\n?? packages/suspension_multibody/src/suspension_multibody/vehicle/static_loads.py\n?? packages/suspension_multibody/tests/axle_dynamics/test_three_laws_match_the_fused_record.py",
     "platform": "Windows-11-10.0.26200-SP0",
     "processor": "AMD64 Family 25 Model 33 Stepping 0, AuthenticAMD",
     "python": "3.12.13"
@@ -27,188 +27,188 @@
         "tire_liftoff_and_recontact": "FAILED"
       },
       "artifact_count": 26,
-      "combined_sha256": "e7407656731ed556efc28fb89d8fc69881725b3bfb2f39066eb898986389d48e",
+      "combined_sha256": "fdfd5a6ba50970571ac31eb278cf5c713964a43ba77cd74fc1011ec8651eebc9",
       "entries": [
         {
-          "arrays_npz_sha256": "f382fc0fbefe113570b4618b1874846de2784352278c526546a7be90f8a896fe",
+          "arrays_npz_sha256": "599e0d1292baa148eaa09ebdc159e86987bc369317aa10654bd6bde36f219298",
           "artifact": "braking/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "8646fd5dc06d59a412fcf3c4eed931b5c463433204c40297ca70c878d484b50a",
+          "manifest_sha256": "73b818872d2f33f6e4c3282e57695f830576f95e3a10d774bbdd044a03e0b549",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "c476a90b776f84322a5570109ee2779bc8560408cd3520b91c3dac23d3d89bc6",
+          "arrays_npz_sha256": "3bdafb37d89e42d329e91052a92b5b0784265453faec291467ad55b6421e102e",
           "artifact": "braking/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "f8dddf09d396fcd1f6758546555f476b2d1281cfe4a029716f487346e4bf2e7e",
+          "manifest_sha256": "28f05997b102e25b56216b759b1a3de367c1409c19eb0a7a7f1088f622bb3733",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "772f357ab5de89462ca5baa6c4cc0268efe8e137d7350aea7ca0b8255e41b501",
+          "arrays_npz_sha256": "a3b20e39e6c75369cfd3a91208f26b5b1ff4cc3a6da952f3b6f32152a1fe60bd",
           "artifact": "combined_load/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "57972fdab4cbc398c375b200cf37b1b3354e7bf0ccc7bce94a01048ffd58db79",
+          "manifest_sha256": "c16cdaaab7497bc4554ecf5102bc1b680d0e7fc32c181b3e76f8da6985fe4516",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "f5d6f2256243b42f30fb0550aba33649bec940e31c75331cc63f6207b138009a",
+          "arrays_npz_sha256": "648a04df22f0b4bab0d696e50985181c2550c5a2cc7be7023b8b01d7f86c77d4",
           "artifact": "combined_load/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "551d169ec5c45634811b6f882d7542e213c28991536b75d258d47bd263ff8a11",
+          "manifest_sha256": "7393ad883d283a06f6230d2123fe78647c1dd44b409f3be338c1da46402d8bf0",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "cf1f880b6f6fffbe12ab320743ed2312fbf5f9e3bfd6f8f329b55541b65d0e19",
+          "arrays_npz_sha256": "43cb04a20688d071dcb4c1f793e5f85eb2cc9b261f1d7b3c8b28b0c4e7c96097",
           "artifact": "driving/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "ff9edd3b9fa2771a3536310ee9ad402443b0991fcc83ae10c80ec8156cb87eb9",
+          "manifest_sha256": "789436acd779ec91f1c342be4607bc99f08ce162cee52fa2a2420b11e9813cfa",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "3dbea1e905bd9a4e44f690ea5aa754966765c5167b04b48fcf65fa6e754f55f1",
+          "arrays_npz_sha256": "3c57bad21270c224e0facc37eda3f9e4e3dc666891fccb60bb44528726d330e9",
           "artifact": "driving/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "a2339c4e5f936fef2ee87a4b7a0e115ba4626465e09a3abe57de98f113dd9891",
+          "manifest_sha256": "f81f804fef1e3134d903edd3e97951ebb12b9e6366e48c9cbb2c2d2909c24f6a",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "f53d1bfe05f6f5c7a01a6155f0b6f6bba22f25d83cf6e688d37e1fdd9b9ae680",
+          "arrays_npz_sha256": "91bee1f2125d29bbdd75c7f9b9bfb41f7037fb3666cfe56b63aa70a6d8ebf7bf",
           "artifact": "in_phase_road/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "e30e5c7efb276ad34d71fc7f96afd9e3c23ebff4653adb4de4c6c92e601f4f85",
+          "manifest_sha256": "2e9ff28a4b291579a9e4faacc69f9135c9a82e8f65ce1ce818b060b27a074576",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "b347c0351d36fa4c3d641c9950173ec5654539d2e6a64ba8374cfd2bf4a1756e",
+          "arrays_npz_sha256": "0daed06b0d38fd896ecda81aaba4f0c4fed783b2eb7f4fab8c07c32eb0ddb721",
           "artifact": "in_phase_road/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "914e2c9cfd3c5865404abf48ae90866e9dfaa53e352019431afd9bdd613e4c6c",
+          "manifest_sha256": "7fae7f5a2afe4500e0895f18a9bbfe180c6ee64b8002c7516a6b92fdd62cbde2",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "c5ba6fbb33b839fd1b22429f249b73f4b584555eedd1e453e72594492e0c14ec",
+          "arrays_npz_sha256": "67befe762f257893760ca2cfbb0c8bc8a25948bd5136dd697672119beaab3108",
           "artifact": "large_amplitude_high_frequency/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "c66c67207edbde3e61e15ee472e81f4cc93511894a0760eef5401092e518773b",
+          "manifest_sha256": "62a230530578ef4acbf9665920f8bdb61c0fd847285282895021dd1a90ab018b",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "98fa2ba17cc899707e14f8d8f90db823da969224c0bc27c239c8dc3fcb54cfa0",
+          "arrays_npz_sha256": "346efbcfb3f27cdb3af2360fcccaf7bd9f5fc09f8442d0e952722a2183bdfd71",
           "artifact": "large_amplitude_high_frequency/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "19e0d3a35ef456853b8d11aae4976ed3fc2f270e9ae42f644a2be4b9fb53350e",
+          "manifest_sha256": "da671e7480cce847459a2393fe011f43faf533cdb93514973365b60581eefc55",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "f5f40b3c5fa7df4fd1721a3957f00e0c79b7de6985486a00fda51fb029b1d47a",
+          "arrays_npz_sha256": "273b29c60adc9f8691f621252f7d187184dd4e47a77b7b200021b393c1807ce0",
           "artifact": "lateral_or_steering/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "810be98ffeb8cdfeb1b14dc7404d7bb68749ec136ad0ac04581cbcfe720ea9d9",
+          "manifest_sha256": "01892a309acd9ae6a28555b4920712b5adcfff7679ebfb0558704b404e80b94b",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "8bbd8e442c15ba420d753521b064adb826f4dabe4b834e232b50fd7a21008e14",
+          "arrays_npz_sha256": "f6e7d7b74fd7ccc4fc73dfd7fa311e03fff5e1b56524a7ee32e217ccf40956fb",
           "artifact": "lateral_or_steering/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "70f741374cf82df0dbfbf8c179194be5efbf0454cbc7715c7fe651e5fe83eae6",
+          "manifest_sha256": "1d51860a9ee515d1ba83782ce35e2709aa5cceb5476e38334479d91a3ac00fbf",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "f731971acfc51e07a5d9926b118cceb3f797dca9a0948c8b7bbde3ebbcfb6bcd",
+          "arrays_npz_sha256": "177c806d7023ec386b764e54e5e98d3f2bfd242956308bb51d8a53c57695d07b",
           "artifact": "opposite_phase_road/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "7cd09e4839a969ac685f9b565b49ed92c56f2a3078d031859d02e40c0157de92",
+          "manifest_sha256": "c6ded3776bac97b221d188cfd88f75cb08b5fb8d9cd7a9c9635f4425675952b3",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "d7fc6eadc32aca4e9188165c3698277627bc3eea7b40ecc25d6b1cd8a2a3cfcf",
+          "arrays_npz_sha256": "ac55fd96b2b6ee6fed1a989c0a310bcb8bf4bef5448e1d6848c6d09d96fe1947",
           "artifact": "opposite_phase_road/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "27c520d09daaf882d065eaea2d8565e2bd3fdf47e00cbe76f893614e02d53111",
+          "manifest_sha256": "f046d4e06de748b950c9cbbd79b8e3ab28d3ad1c9dbb810a6650e5ccfa1e747a",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "cd4eaed12e2a347376b12c2a86b819d07905942269c46461dc72c1df044abf51",
+          "arrays_npz_sha256": "0ffeb03348b56502f12cbab895a9e4411e08b0dcdd2d195e038fe6487c29f6cf",
           "artifact": "road_pulse/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "67072890fb224efeec06f872907d93cc48b67d2020501697e10500bbe86e7bee",
+          "manifest_sha256": "acd632df5d9fe78cf4a8303e91e51c583a79d723cba67c77e7f563684e672dbc",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "05dd6d1f8073f86c1b3d08a43de25e41ffc1b610fc20a625efa1b0f5a5575b2d",
+          "arrays_npz_sha256": "dda7a99ed8431f54a982b461c64cb6843dd23ae9f6c463d7725ae401ee779c8d",
           "artifact": "road_pulse/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "c01b375a05b683bdb8652d46074de9a8d6aa014c7c35d8691d512a8bbca03fb3",
+          "manifest_sha256": "9731ca53ef7c25cbee7fac63195d78d4c1c36c4e5c3a21f860e4d8d9a9ff03e6",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "6cfd5904b262f9f835dffee4c22aceec28f63f25e97163dd87b21eb8eddd8a31",
+          "arrays_npz_sha256": "b43915ec545f4ea7695ebe88ecfcf39fde1ba65f613aa2ca62ed3080e35e4c03",
           "artifact": "road_sine/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "eee8de925086963e1b90f222018c61c027234421d60e3d4a7004c499d8753d98",
+          "manifest_sha256": "fb2fa050868936eb0415b2e07f77574ebe352c6a5c09f415bb3d206cb4d10267",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "68c08990b82b48d74f5ecb0616c7208f9677e755add0435006cb097f582efaf7",
+          "arrays_npz_sha256": "a74452da93ac089d52e34a14a0e6f8bfa6e438e30492a74499c8aa05b20bc968",
           "artifact": "road_sine/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "164907c6c820d0c988cd270020773ff4e2ac0780e9a87d98809383c58a3c5716",
+          "manifest_sha256": "40dff1b5931a62d9758a8578266fb7bf34810d08d25254b61935d90fdf2cf6d8",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "293052ebddc00a0f9a6b7cc2f9e68934dfd7a5eaaa67a11f0c1b8576e341ee29",
+          "arrays_npz_sha256": "21b008b9080cc385fb92e4bd6c407729e9da0621178e3feeac6c60e1a09bcd8e",
           "artifact": "road_step_finite_rise/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "d3e6b64a46110c878a9716a78e38e3b25126b0eae5a258b1caa92c401748b3d9",
+          "manifest_sha256": "b26f6f5953ec6ecf0121a46151708c07139564e3373e04541e53e0e4cff390a9",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "2de0d04fc9d3a8ccb71594d2bcf72f3d2d539b2ffebfad50856fece00fbc68cb",
+          "arrays_npz_sha256": "4ebb92eff1eed76bef652158a0f623f40d9e1ab9bf3648a3ee8e0a999e2a1445",
           "artifact": "road_step_finite_rise/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "5d14f5873efc6a70fafe98aaa424c7443ef73c5ea693d08ac412c3701e845542",
+          "manifest_sha256": "6e73d0791d2f765f8daaba50548060638bab849688a86a41b4d27a2f46b4e164",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "8569e3b7abd4995baaefa3acb53c5607a94887f4cd6a042c53bb4ec020f5da83",
+          "arrays_npz_sha256": "28dbd90c18274173faec32593d94e0e3d8b51dff30a5d55956b377039cd3d704",
           "artifact": "single_wheel_road/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "79f6374bbff071cc08cacf3eca17864e6efbd392320f5ffb115fa0aec11ea784",
+          "manifest_sha256": "985e1c087ac8db9ee7948c695e52be1042d3a6bbd07b1027da84173eaccaa4b1",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "f19283dc22342425bb77a143fb47bbb0f044f9054ce7626ee603892375a5fd58",
+          "arrays_npz_sha256": "8fc4d0bd6e66b43b7b1888bd6ee28216b305adbae715f9fb5887a35b7441ae47",
           "artifact": "single_wheel_road/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "452f2106b9496906a72a374da7e66be9dddc711732af2f71ebaec5657077e50c",
+          "manifest_sha256": "950b5177dd428d48bf0a18318e31263a38e75983dddffd1931c31c6b0b7df0a1",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "dea187e4c271d272edaded3e125891ace2d4cf5bf6f35d1af817c8b9d20a6ced",
+          "arrays_npz_sha256": "6b7929e05f2ab72c5586097402336490a25d253633564266d19ec85c13b2c07a",
           "artifact": "static_equilibrium/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "97311364093adc2080c5c858064c2493d0e9e673167ab7fcaab7c42665b96c32",
+          "manifest_sha256": "7668eeec17baf87fbd7879f61a1e3a880ba17687114fc059ddeeb12a0203e0af",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "500e14bc7b4a9548d229d86827e7c23bf6dd6aef12edf21acb95f1cf18863c24",
+          "arrays_npz_sha256": "12bdd4cc863ee0220fabc952c376603d773d711af6c2cae15e736beeb1a0914b",
           "artifact": "static_equilibrium/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "bfeada708de569b42de30ce34027f36be86ce0c80b76006066a7400199dd9fff",
+          "manifest_sha256": "ee21087302648f506e81f32b95f370a1044c715d179d27ed9ca616a3f25fb91f",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "4688a2e4ab58c6f35f19441edb07ebc65c0945762896df35557df6c88fee9482",
+          "arrays_npz_sha256": "a79386eb3f014d4786a806aef8bf5f0db99247ec283b0da013a1dbdba9a9d7c2",
           "artifact": "tire_liftoff_and_recontact/native/native_refined_result",
           "completed_samples": null,
-          "manifest_sha256": "dbf2485f1844d079503f4a1318a65e3cd8dab43ef078f4a0b8de63ee6ad51594",
+          "manifest_sha256": "394ea3776d33ef94b8742eeeddbdd7be36ecedf8762bf3188562134ebe17fa69",
           "status": "success"
         },
         {
-          "arrays_npz_sha256": "79ca1e0174d39178d9b083101bc5927cab83b1ef8e518e56e0612d82c14d861c",
+          "arrays_npz_sha256": "37fe94ee3811d91f09c0183f9258465d5c08cfb2c770f1b5a405c95dc9e50a07",
           "artifact": "tire_liftoff_and_recontact/native/native_result",
           "completed_samples": null,
-          "manifest_sha256": "c99b0a94d2df4517178c86999e5e48071dcbaad9cfe70b941f5fd1825f9537fe",
+          "manifest_sha256": "db544b77f0a2c8a650e74717a86a13692e9dc11aac63ce6734f3beeb316b9e10",
           "status": "success"
         }
       ],
@@ -224,7 +224,7 @@
         "tire_liftoff_and_recontact"
       ]
     },
-    "dynamic_hash_baseline_sha256": "c8dcc340f888ac0936964c93dfe551e4aedc940d3d60ca5e891deabef8b1b37f",
+    "dynamic_hash_baseline_sha256": "7f81076b011cb006a6f23fed9b0e75dc6ec6f34806725359214a3b483a49898b",
     "kc_perf_baseline_native": {
       "implementation": "native",
       "median_seconds": {
@@ -291,7 +291,7 @@
   },
   "native": {
     "build_metadata": {
-      "abi_version": 15,
+      "abi_version": 16,
       "architecture": "AMD64",
       "compiler": "C:\\Users\\zzy11\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\x86_64-w64-mingw32-g++.EXE",
       "compiler_version": "x86_64-w64-mingw32-g++.EXE (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r4) 16.1.0",
@@ -446,49 +446,49 @@
       "targets": [
         "suspension_kernel"
       ],
-      "vehicle_abi_version": 30
+      "vehicle_abi_version": 31
     },
     "canonical_library": {
       "path": "packages/suspension_kernel/src/suspension_kernel/native/suspension_kernel.dll",
-      "sha256": "1fdd241d2265807d3a588ee8d84135c9b78835fdd5235b7cf067b4a32b99d092",
-      "size": 2197089
+      "sha256": "b8ea6c6481521db4712365c367ac861c1fd7dde195a76b33f156a25a38b8c002",
+      "size": 2214083
     },
     "mirror_freshness_rule": "packages/suspension_multibody/src/suspension_multibody/kernel/native.py:84 require_fresh_mirror refuses to load a mirror that is older than and byte-different from the canonical kernel library; the repair is `uv run python packages/suspension_multibody/scripts/build_axle_native.py`",
     "mirror_library": {
       "path": "packages/suspension_multibody/src/suspension_multibody/native/suspension_kernel.dll",
-      "sha256": "1fdd241d2265807d3a588ee8d84135c9b78835fdd5235b7cf067b4a32b99d092",
-      "size": 2197089
+      "sha256": "b8ea6c6481521db4712365c367ac861c1fd7dde195a76b33f156a25a38b8c002",
+      "size": 2214083
     },
     "mirrors_identical": true
   },
   "sources": {
     "kernel_cpp": {
-      "combined_sha256": "f15a8718228e451b6876061c607d4bcf62a0dede7340cd31b111575cd9bd70e0",
-      "count": 132,
+      "combined_sha256": "9cd529623ad1e2efa6235f813bbd625ed70f0c990e64cee3a81a3d92dd841a3e",
+      "count": 134,
       "files": {
         "packages/suspension_kernel/cpp/axle_dynamics/axle_kernel.hpp": "dc5cd74e1ae7602f04610c71698b9114bfabf86f8b7e938521cfd646d300654d",
         "packages/suspension_kernel/cpp/axle_dynamics/core_abi.hpp": "7ca9dfd2e5be146e648d92692a5cac9c6ad31b22adb36d5f79b77e52b7b79ea7",
         "packages/suspension_kernel/cpp/include/abi/functions.hpp": "216cc71156755e3760f2bebedff6c6d526572b6f63e0a4facd5c15f4de590732",
         "packages/suspension_kernel/cpp/include/abi/version.hpp": "dd4b965270d5d536884508af4715d5289c60bc96267862d2781ac9718a85c8f0",
         "packages/suspension_kernel/cpp/include/mb_assembly/functions.hpp": "677e6a4c3d91b97af2c542c5b16a6b6ead8534d83ecea26d3ca89a56efae48ab",
-        "packages/suspension_kernel/cpp/include/mb_cases/functions.hpp": "b84c8d434a8e2fbd673b27e28b5f93c54a8a20401ffaa118427a89e39c3b4419",
-        "packages/suspension_kernel/cpp/include/mb_config/constants.hpp": "2094e9d25e4bfddd785354f0c2115911410776e45a7322c2e8db8f1692c16bbb",
+        "packages/suspension_kernel/cpp/include/mb_cases/functions.hpp": "61d4892cab98da25c11ff0c086eaea41cba1f5c136cf472139ab33377404b40f",
+        "packages/suspension_kernel/cpp/include/mb_config/constants.hpp": "a61d87af0be7665df04a610d10e1429d459667fc960cc41a6fc5f63079b7a3be",
         "packages/suspension_kernel/cpp/include/mb_config/diagnostics.hpp": "25ae98bde65ff9d4d96d7955be8495e2bd3acaf931ca166d822942e7e8db6df2",
-        "packages/suspension_kernel/cpp/include/mb_config/element_wrench.hpp": "3f684d80044c70467dcad7cdaed507e80a5d55ae93049b61ff01083ee249ff04",
+        "packages/suspension_kernel/cpp/include/mb_config/element_wrench.hpp": "657f6272ff39761d4ed942c09f646b544f3d2b44aa48465cfc983efdfe05e41d",
         "packages/suspension_kernel/cpp/include/mb_config/env.hpp": "b36d9ac71692aabb9c4f455d8be92a26fc07ff99647325f8f0b2de888b54ca5e",
         "packages/suspension_kernel/cpp/include/mb_config/functions.hpp": "1409dc3177d9eb82796bab4e951a05ecf28f8dd2235cd72ae241925b92b1b699",
         "packages/suspension_kernel/cpp/include/mb_config/prelude.hpp": "f5d2e0d6502181ec533ad6c626cab533a0284420584eecfe5fcb49f587fb068b",
-        "packages/suspension_kernel/cpp/include/mb_config/version.hpp": "29b6dcbf5bbe02e16150149afbd46e779669e8d403a77002c9dc4da93ffe4aaf",
-        "packages/suspension_kernel/cpp/include/mb_contract/functions.hpp": "6be0b9466b1bb0c2afa4eb2cee61bb6aa49946322d728c76094629eda1dc2449",
+        "packages/suspension_kernel/cpp/include/mb_config/version.hpp": "e1f5587aabde9458fab0f3cbbf0a3d92c942010485d403912fb17be5a36ef75e",
+        "packages/suspension_kernel/cpp/include/mb_contract/functions.hpp": "c259b18e5698ca1f32147cd7475dfc286a53734a58ce356eb0ca7ce3baf0995d",
         "packages/suspension_kernel/cpp/include/mb_contract/types.hpp": "9b2383e421a3d17157b845b4f210731336e1112c01ec0118ebdb99909860fd5f",
         "packages/suspension_kernel/cpp/include/mb_dual/dual.hpp": "4575f4c42590f2b5ea616ed84a4703e5615611ff8829efa8476ff921f776147c",
         "packages/suspension_kernel/cpp/include/mb_dual/dual_geometry.hpp": "6bdc435f735ca9642549ab5d383b89e0ddbc432757c2ee198912cfe0bff31b17",
         "packages/suspension_kernel/cpp/include/mb_dual/functions.hpp": "6f8d998c19919c51dbb085c2e6aadc03bf2766ed228e1508b09da22061234c9d",
-        "packages/suspension_kernel/cpp/include/mb_element/functions.hpp": "80e573abc474647915e06a346426bae3d4f7012c58162eeaa2aed45e2c3f08b2",
+        "packages/suspension_kernel/cpp/include/mb_element/functions.hpp": "bcac89d51157ac8b23ae40ff12e203923b1494d9f2f2d9e754bc6cb9a410dac2",
         "packages/suspension_kernel/cpp/include/mb_energy/types.hpp": "6b95e80c69e1c93be9b56f30afaf1689a8dde89cbafe06e9ddc7b0ad82c8093e",
-        "packages/suspension_kernel/cpp/include/mb_force/functions.hpp": "1d4401265a8e932585ebe893b769b9c55ebb746f6117a1a1ee4f4582740d6c41",
+        "packages/suspension_kernel/cpp/include/mb_force/functions.hpp": "d4656b3a082f1c156f5ba429d512fa00020ac65ac5da8cf8d4f586a08521d244",
         "packages/suspension_kernel/cpp/include/mb_input/functions.hpp": "6c9f850f7e4d06835d80170c479d3920d36abe15943a1f8b26785437586d8c29",
-        "packages/suspension_kernel/cpp/include/mb_input/types.hpp": "0305f44857dd514d007ba48af148945a84dc4296bb6ffab53915eaa29f3fe15c",
+        "packages/suspension_kernel/cpp/include/mb_input/types.hpp": "1397b23780a2e7018007f04df77678a6d2f7c223ac66c3300ded5353ff053bef",
         "packages/suspension_kernel/cpp/include/mb_joint/functions.hpp": "564ed914c17dd3b4ff2a1c7d2b88c1155248ef08fdbf005ce6ae9bf08f785fdc",
         "packages/suspension_kernel/cpp/include/mb_joint/registry.hpp": "c6027c10cbfdd041ec3179b13e9528ee14796de3fb1f091f7dd61e7ef2772fe7",
         "packages/suspension_kernel/cpp/include/mb_joint/types.hpp": "f0e47df5e7866670edf40bf8c8702ed9beb91196220be8924aaa796d6fb735be",
@@ -496,7 +496,7 @@
         "packages/suspension_kernel/cpp/include/mb_linear/functions.hpp": "ce24e34c7eb24f35cc925c68e370789964417f825482a8a1a683bcce41ea0548",
         "packages/suspension_kernel/cpp/include/mb_model/enums.hpp": "383ec782bb02ba90d44480d840917f6dd10a85d375b4375703c87e51e8a04c84",
         "packages/suspension_kernel/cpp/include/mb_model/functions.hpp": "7eccc882eacc67313c9eea3453405c8a1f1f4b9bfed92c06c030aad6ca71c353",
-        "packages/suspension_kernel/cpp/include/mb_model/types.hpp": "827cb7252555c135a23a29af26e34f90d76fc701b76145382db18b8b8d64728b",
+        "packages/suspension_kernel/cpp/include/mb_model/types.hpp": "1ff6a8972234acd4dad45414fe81613b8df794b75b9c943e9f27b960fe8800f4",
         "packages/suspension_kernel/cpp/include/mb_numeric/functions.hpp": "77a74a900ed886a0a9fd28a467d6affa52e585e8f6c1515feed5716bbafa1f64",
         "packages/suspension_kernel/cpp/include/mb_numeric/monotone_cubic.hpp": "aceddaa0eb7007ff6eb8c3955ca9a42cb53b04c59525128623429daccc432e31",
         "packages/suspension_kernel/cpp/include/mb_numeric/util.hpp": "95ce465b68835139154668c249ccf78b2012edab1a69f864d08237b22a100924",
@@ -521,41 +521,41 @@
         "packages/suspension_kernel/cpp/include/mb_tire/pac2002/turn_slip.hpp": "677c6a2cfb6f24ec9f1494c01119e4ce8ca02ef58b9c3432910c0287befdfb52",
         "packages/suspension_kernel/cpp/include/mb_tire_state/functions.hpp": "856254317523b3021570f7a48c042567f5d75b62632b4cb62d683c1ddfdbcbd5",
         "packages/suspension_kernel/cpp/include/mb_tire_state/tire_state.hpp": "1028fd21133134de5a89a3995f7740b18e1588e7b91efcc6d54982aa24b606cc",
-        "packages/suspension_kernel/cpp/src/abi/kernel_abi.cpp": "d03fcd912653a1fcfa89c0426b8f0aaf131371140a1351c9633b737d9507d0d0",
-        "packages/suspension_kernel/cpp/src/abi/kernel_contract_run.cpp": "e8bd605ae7a487412a59570c2bec1f7c0a7e71691c93fd961cbaaeb2cb48557f",
-        "packages/suspension_kernel/cpp/src/abi/kernel_core.cpp": "f80306709aeb552b91fb3d5da98afe3a5eec649e5f49d4819c7f59eebd1ca4a0",
-        "packages/suspension_kernel/cpp/src/assembly/build_model.cpp": "b0bc6511ed7e1988aed33206f969f9ca0d288099bc335452306891b2e6607276",
-        "packages/suspension_kernel/cpp/src/assembly/element_reader.cpp": "751a6abaa821a1792402d587bfb6d3fa61e83d73b88ce964a4841298dc18ba1f",
-        "packages/suspension_kernel/cpp/src/assembly/registration.cpp": "339925d3885eae5931782be34e9655963bd8f1b9887926428adb2a02eecd5a63",
+        "packages/suspension_kernel/cpp/src/abi/kernel_abi.cpp": "5a1ee248270994250686327cb6c978efdf2f03d8cecb7deace9b6640b1c73090",
+        "packages/suspension_kernel/cpp/src/abi/kernel_contract_run.cpp": "c5e8e097db0d5c10c317b0eacd0916b386e552421106618ab08f125c477aab87",
+        "packages/suspension_kernel/cpp/src/abi/kernel_core.cpp": "17079cc7cd8f3790d24a441176b7cd817436065e92a51184ae65e1f96973f535",
+        "packages/suspension_kernel/cpp/src/assembly/build_model.cpp": "e0845c285ff552354e0988c35b22e9482176d9a1e48b8a3b568ff745fe10999a",
+        "packages/suspension_kernel/cpp/src/assembly/element_reader.cpp": "648b80365d1d43506b48518df096e2c56d520b0288a59b8e1c3185b6f2193943",
+        "packages/suspension_kernel/cpp/src/assembly/registration.cpp": "b82a2e2b416b0dfa2dac96f77108774c1a82fe491f9b4eed8bd859c5b046d3ec",
         "packages/suspension_kernel/cpp/src/cases/axle_dynamic.cpp": "834788c6dd5c75bc0800a1d07a29008f5b63f8bcd4e0eba68afc558826554244",
         "packages/suspension_kernel/cpp/src/cases/case_common.hpp": "a16461f0ba7e519a9a45d602a0b47ca51240edacfe32eaf5d95d88eb67b220d8",
-        "packages/suspension_kernel/cpp/src/cases/case_dispatch.cpp": "f2a7a62167a31211b8ac5c62f174b3c27438bb84597f4b2db0df18fc120619f4",
-        "packages/suspension_kernel/cpp/src/cases/contract_model.cpp": "c5db570e6948944b0f67bda4618dc4040b29786fec249d86270028f1ec28cefd",
+        "packages/suspension_kernel/cpp/src/cases/case_dispatch.cpp": "10477aa8b57df4fd00c06f25fc46f75777313565bb84046ffb5e71a221a9a1e1",
+        "packages/suspension_kernel/cpp/src/cases/contract_model.cpp": "461710f891d528cc7660452ba7bd9b25ea8fd6c80f64c3bf0ddb06beeda2fae8",
         "packages/suspension_kernel/cpp/src/cases/handling.cpp": "065e828ffd2cc4fc5e698ee9b7dd895c2527832d063053443dc162a6524ee2df",
-        "packages/suspension_kernel/cpp/src/cases/kc_quasi_static.cpp": "afe46e6191d9259439f45221b94e1ea391037dfa05141f0dbe47a82d87773434",
+        "packages/suspension_kernel/cpp/src/cases/kc_quasi_static.cpp": "9075ce825e16ddffcd0a27ea0858ce3e93e07b65917cb61ddcbc4d86dca07d6b",
         "packages/suspension_kernel/cpp/src/cases/ride_four_post.cpp": "331c34f0561fe2c7462907ab9b1c8d877c382ee1c74f69aaf25e0736cf8219e5",
         "packages/suspension_kernel/cpp/src/cases/ride_random_road.cpp": "37c585c0154053252c48d1bb679944e05025d24124d09d7447a0057bb31cbed9",
         "packages/suspension_kernel/cpp/src/cases/vehicle_dynamic.cpp": "2cc0dc274d1cfef56eb73c1f6f7883880f1362343cfad68dfcdfd07b936a1c37",
         "packages/suspension_kernel/cpp/src/cases/vehicle_kc.cpp": "146efd35692e7b127295df95ebbf5213822512e9add7debc143c7138a54a6074",
-        "packages/suspension_kernel/cpp/src/config/kernel_config.cpp": "a04748a7637bd095d91ef4bca5f254681ca25fed310b1a9237cb3de5556a71d1",
+        "packages/suspension_kernel/cpp/src/config/kernel_config.cpp": "c965ee8b52d04f050fee5e5d9daabab97473ed00aa78af1509f5436390d53233",
         "packages/suspension_kernel/cpp/src/contract/contract_container.cpp": "29c1be8263a6512d9748e37e96703cfee4d51ac64c924d119d5d88ab593eb6ad",
         "packages/suspension_kernel/cpp/src/contract/contract_json.cpp": "d2056f38affa6a1891fbfcdae99560c84bd5d9829cee21a05c18dccbd5434744",
-        "packages/suspension_kernel/cpp/src/contract/contract_registry.cpp": "22f9143414652197b0deb1881efd31f09f463072359a4b6f0296794a19a46519",
+        "packages/suspension_kernel/cpp/src/contract/contract_registry.cpp": "99ebaf71329cb5bd9822fead136588d86f82c02679bc571ae55ef000696dcb17",
         "packages/suspension_kernel/cpp/src/contract/contract_sha256.cpp": "ec9110c33c5d8d4062ed7c7d7a5311d760b48e6f817f811ba71a6d2225198306",
         "packages/suspension_kernel/cpp/src/dual/curves.cpp": "a6cefad3e04236b095547980a120dd5589a545610693ff5f7f5b377ae801005d",
         "packages/suspension_kernel/cpp/src/dual/dual_geometry.cpp": "c6d84897384ab9617491161b1fadc284239dc481b94ba0c279029a8bddf98171",
         "packages/suspension_kernel/cpp/src/dual/kernel_dual_algebra.cpp": "226103a6f68803bd1366758b31ed9308ca64d4b36730f6605c860f3436dc688a",
         "packages/suspension_kernel/cpp/src/element/anti_roll.cpp": "baf67f03530f4c0d1dbf38d9df8e8033b317a2b1371936d41b2214b0e2693069",
-        "packages/suspension_kernel/cpp/src/element/assembly_primitives.cpp": "5a8a4e014aa2ebe265647789ed88f4548f477ac9af78bc7c93f69d5650508ef7",
+        "packages/suspension_kernel/cpp/src/element/assembly_primitives.cpp": "a57fb536f6fc588bad119917f3f6a6bf1a0f1e46b511683ba0d92ee6703adb5d",
         "packages/suspension_kernel/cpp/src/element/bushing.cpp": "d79a73626df85bf2288c5d58d33ad70f859cbb1048693d1d9030e933869fe2d7",
         "packages/suspension_kernel/cpp/src/element/curves.cpp": "5ecbb4d2ac2f92dccb4194e9ebe05f5679911058206357b3e6f04f956833bbcd",
-        "packages/suspension_kernel/cpp/src/element/directional.cpp": "21bb3b00114a286d7e1b8896721fcad60aae082fb9260317d871a400280388a8",
+        "packages/suspension_kernel/cpp/src/element/directional.cpp": "3136d931959f9b61a633fd025b1fe2bb2a89c043b7e29ced5d592f23757db303",
         "packages/suspension_kernel/cpp/src/element/drive_brake.cpp": "bf2a877ac630af196b259639bb521ec8f532009af82119cd6708168ab752bd12",
-        "packages/suspension_kernel/cpp/src/element/spring.cpp": "a4724e5cec0829547e30983822f4d7fa33e208ded22af21d6b33d9b158bfcb38",
+        "packages/suspension_kernel/cpp/src/element/spring.cpp": "faf2f7f71d5e290ffcec0c03c48a99dd6e9b6f3b4fa8532318b231843167c7e7",
         "packages/suspension_kernel/cpp/src/element/steering.cpp": "50b55784cbd28d86316fe3c8eebd4daa4aa82b85d1a2d37e2d075292c2ef8a8d",
         "packages/suspension_kernel/cpp/src/force/directional.cpp": "11647c0f9909a8b16fdd6866be89c16899a16fb5a53d89a2f97585b25fdac496",
-        "packages/suspension_kernel/cpp/src/force/external_vector.cpp": "d3ca1089b5e729b625d81ea649caacb86a0e5fc12e535c8d7289674eab37015c",
-        "packages/suspension_kernel/cpp/src/force/layout.cpp": "f829b6b25bef8740b6c058317c92a3e98bb9e1108e55dd0341f3d4f66d7fe443",
+        "packages/suspension_kernel/cpp/src/force/external_vector.cpp": "8ad6bc9acc1a871aa9a8833e89e71386c78f0d361d0cc1feb1e120a07a133378",
+        "packages/suspension_kernel/cpp/src/force/layout.cpp": "7e8758bc31f2b4a74ad19e6fa52b4088da5fcb0219b24e7295e169e8b06774b5",
         "packages/suspension_kernel/cpp/src/input/kernel_input.cpp": "aeb4524cb971bd2c5688c1af91792f7c69366a93f892510e8779efd0a5ea624e",
         "packages/suspension_kernel/cpp/src/joint/kernel_directional_constraint.cpp": "b1a380470b5a1af3308423bac56967d48f1a624f7bf58d0e66cf40df9f99dba5",
         "packages/suspension_kernel/cpp/src/joint/kernel_model_constraint.cpp": "f28e68ba1ca779e64681d6106a2c19444163b05a0f6ee55e741d6c91093af10f",
@@ -567,16 +567,16 @@
         "packages/suspension_kernel/cpp/src/model/road.cpp": "f6f18b7fc9a740df0b1fc6df9df96bf20abe65b6120495b9ab8239bf976ce003",
         "packages/suspension_kernel/cpp/src/numeric/angles.cpp": "80be2f02ebf08fbe1ab1b2d1d76b3f9b3558582589e4fe320caa55d7733faf5e",
         "packages/suspension_kernel/cpp/src/numeric/kernel_numeric.cpp": "77d2eea130bb6a5164ba29fc1d77ab31220b4355b2b449c98bcc46b667c16693",
-        "packages/suspension_kernel/cpp/src/output/kernel_output.cpp": "a0ba87809bf952c3cf2ebba9a911c8b44f0f9b53cb22a3915ed8e982f46ad5e1",
+        "packages/suspension_kernel/cpp/src/output/kernel_output.cpp": "1e0ac2d7e7cb2a9869c9fe230449da11fbfbff5d04185e65f108e0f24d7d0a0d",
         "packages/suspension_kernel/cpp/src/solve_dynamic/kernel_events.cpp": "597f6226c9def59cebfc32e1c72921d75489ab25d5dd67387b31de8c0e774b34",
-        "packages/suspension_kernel/cpp/src/solve_dynamic/kernel_integrator.cpp": "163f25a64c4f8f60ddfd35cb9be466244aae9e112aa1d786c2a646b26f0e82be",
+        "packages/suspension_kernel/cpp/src/solve_dynamic/kernel_integrator.cpp": "6006d114527504c8d88ad0cb1756d78b653d4f03e239587298eae4eb54adaad9",
         "packages/suspension_kernel/cpp/src/solve_dynamic/kernel_integrator_newton.cpp": "2e0febf9f324507dfb367b9197cd5e8290bfe2e9acc7bcd0c8c20da4422ed6b3",
-        "packages/suspension_kernel/cpp/src/solve_dynamic/kernel_integrator_residual.cpp": "233307f1867f6aedcc4f54a095baf9ed04cc22b83baff7fe0b761a54c8538736",
+        "packages/suspension_kernel/cpp/src/solve_dynamic/kernel_integrator_residual.cpp": "9daf3666e5a5d03e3551393089b351fc3fbf85b6fc05e155ae3e8e6279c2f2b4",
         "packages/suspension_kernel/cpp/src/solve_dynamic/kernel_integrator_state.cpp": "34c08c98836267328efc4dbdf1d7cca09ab64242e1e27c680425fe1bc21dc413",
         "packages/suspension_kernel/cpp/src/solve_dynamic/kernel_integrator_step.cpp": "91cb576f57582a5c932cc7f1c3520a7bcd58b9220fc7cc0cec0b77d664c2865a",
         "packages/suspension_kernel/cpp/src/solve_static/kernel_static_contact.cpp": "e7c0147090e2c2f1ee9d06bb6e24be111a506195c5635375d2cae42a0a7fca51",
         "packages/suspension_kernel/cpp/src/solve_static/kernel_static_projection.cpp": "72454b7499c41a353b1f930c50e620c4bfb421816c28e23a3793219abcab7c9b",
-        "packages/suspension_kernel/cpp/src/solve_static/kernel_static_trim.cpp": "e4452297ae8f1288e22f2ca225f0a19ea916890f8199e5322f42ccea56c5c053",
+        "packages/suspension_kernel/cpp/src/solve_static/kernel_static_trim.cpp": "8388ff2772a779620be015c75de50c6aa0a3489e2e331a607ad1baad9ff2ab12",
         "packages/suspension_kernel/cpp/src/tire/assemble.cpp": "ee22afc7bb16e9741dbcd22f6fc083662f83d4c63c932579eae921341edb594d",
         "packages/suspension_kernel/cpp/src/tire/brush/model.cpp": "f7f05eba34c3a8cf7782a89364aa751ac233c2f8a8edf76a2affdceb84c62a54",
         "packages/suspension_kernel/cpp/src/tire/common/kinematics.cpp": "416b4850f0975296c8ba551084e064da98b947f85dc4487052fd94d0ea695e52",
@@ -597,7 +597,9 @@
         "packages/suspension_kernel/cpp/src/tire/pac2002/turn_slip.cpp": "9f9b471e923c2e405c1a0bfc282387c00a4560c648c81a2b92252c58d62145a1",
         "packages/suspension_kernel/cpp/src/tire/pac2002/vertical.cpp": "f8ea98e003a885a03611214adc9b65601251de1a222e6b40e8e322f2ee274ff7",
         "packages/suspension_kernel/cpp/src/tire_state/kernel_tire_state.cpp": "bd3375768648da6509afc07a6e1c65cb769c6146097850c3cbee1b4b5a5436bb",
-        "packages/suspension_kernel/cpp/tests/contract_selftest.cpp": "372b6ee7bb524c8c0f89c6b0eeac85e9b8cee390c86f6ba08adb04f2499c5b43"
+        "packages/suspension_kernel/cpp/tests/case_registry_selftest.cpp": "d1b2df419251fa91cbd2729df31f36fb13d994c7932b0727680bff446ecacd97",
+        "packages/suspension_kernel/cpp/tests/contract_selftest.cpp": "fb299cef0f3312e3aec3167212d7cf72cf35e0ae8bd8a2f0365bb0caf72fa442",
+        "packages/suspension_kernel/cpp/tests/tire_state_selftest.cpp": "ef6b53a94fbad1d9387b2f8ede5204d8b6b789485ab7b7daa23201244e9b0e92"
       }
     }
   }

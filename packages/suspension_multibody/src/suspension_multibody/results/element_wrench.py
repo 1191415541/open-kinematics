@@ -87,6 +87,11 @@ _ELEMENT_WRENCH_TYPES: tuple[tuple[int, str, int], ...] = (
     (5, "drive_brake", 4),
     (6, "tire", 1),
     (7, "external", 1),
+    # The two laws split out of the fused spring record.  Appended so no existing
+    # code moved; code 1 keeps its meaning and now counts the elastic structure
+    # only.  Both apply a wrench on each end, like the spring does.
+    (8, "damper", 2),
+    (9, "bump_stop", 2),
 )
 
 ELEMENT_WRENCH_TYPE_NAMES: Mapping[int, str] = MappingProxyType(

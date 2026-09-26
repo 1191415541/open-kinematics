@@ -366,7 +366,8 @@ void residual(
             ctx.input->gravity_z, internal_tire_forces, internal_tire_derivatives,
             internal_tire_output, internal_potential, internal_external_power,
             internal_dissipation, workspace.generalized_force,
-            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr,
             /*brush_only=*/true,
             &workspace.body_force, &workspace.body_torque,
             /*dynamics_only=*/true, &internal_tire_relaxation_rates
@@ -432,7 +433,8 @@ void residual(
             model, evaluation, sample, ctx.input->gravity_x, ctx.input->gravity_y,
             ctx.input->gravity_z, tire_forces, tire_state_derivatives, tire_output,
             potential, external_power, dissipation, force,
-            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, false,
+            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, false,
             &workspace.body_force, &workspace.body_torque, true
         );
         if (residual_trace) {

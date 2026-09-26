@@ -320,20 +320,40 @@ class ContractModel {
   std::vector<double> bushing_force_curve_force_;
   std::vector<int> bushing_rotation_coordinate_;
 
+  // The elastic structure.
   std::vector<int> spring_body_a_;
   std::vector<int> spring_body_b_;
   std::vector<double> spring_point_a_;
   std::vector<double> spring_point_b_;
   std::vector<double> spring_stiffness_;
-  std::vector<double> spring_compression_damping_;
-  std::vector<double> spring_rebound_damping_;
   std::vector<double> spring_free_length_;
-  std::vector<double> spring_minimum_length_;
-  std::vector<double> spring_maximum_length_;
-  std::vector<double> spring_compression_stop_stiffness_;
-  std::vector<double> spring_compression_stop_damping_;
-  std::vector<double> spring_rebound_stop_stiffness_;
-  std::vector<double> spring_rebound_stop_damping_;
+  std::vector<double> spring_preload_;
+
+  // The dissipative structure, including the gas, preload and friction terms
+  // the fused record could not express.
+  std::vector<int> damper_body_a_;
+  std::vector<int> damper_body_b_;
+  std::vector<double> damper_point_a_;
+  std::vector<double> damper_point_b_;
+  std::vector<double> damper_compression_damping_;
+  std::vector<double> damper_rebound_damping_;
+  std::vector<double> damper_gas_stiffness_;
+  std::vector<double> damper_gas_reference_length_;
+  std::vector<double> damper_gas_reference_force_;
+  std::vector<double> damper_preload_;
+  std::vector<double> damper_friction_;
+  std::vector<double> damper_extension_sign_;
+
+  // The unilateral structure.
+  std::vector<int> bump_stop_body_a_;
+  std::vector<int> bump_stop_body_b_;
+  std::vector<double> bump_stop_point_a_;
+  std::vector<double> bump_stop_point_b_;
+  std::vector<double> bump_stop_clearance_;
+  std::vector<double> bump_stop_stiffness_;
+  std::vector<double> bump_stop_direction_;
+  std::vector<double> bump_stop_damping_;
+
   // Zero-length vectors may legally be null, and the registration path tests
   // pointers rather than counts, so the fallback tables keep a valid address.
   mutable std::vector<double> spring_fallback_minimum_;
@@ -341,23 +361,21 @@ class ContractModel {
   mutable std::vector<int> spring_fallback_offset_;
   mutable std::vector<int> spring_fallback_count_;
 
-  std::vector<int> spring_damper_curve_offset_;
-  std::vector<int> spring_damper_curve_count_;
-  std::vector<double> spring_damper_curve_velocity_;
-  std::vector<double> spring_damper_curve_force_;
+  // One measured curve per structure.
+  std::vector<int> damper_curve_offset_;
+  std::vector<int> damper_curve_count_;
+  std::vector<double> damper_curve_velocity_;
+  std::vector<double> damper_curve_force_;
 
   std::vector<int> spring_elastic_curve_offset_;
   std::vector<int> spring_elastic_curve_count_;
   std::vector<double> spring_elastic_curve_deflection_;
   std::vector<double> spring_elastic_curve_force_;
-  std::vector<int> spring_compression_stop_curve_offset_;
-  std::vector<int> spring_compression_stop_curve_count_;
-  std::vector<double> spring_compression_stop_curve_penetration_;
-  std::vector<double> spring_compression_stop_curve_force_;
-  std::vector<int> spring_rebound_stop_curve_offset_;
-  std::vector<int> spring_rebound_stop_curve_count_;
-  std::vector<double> spring_rebound_stop_curve_penetration_;
-  std::vector<double> spring_rebound_stop_curve_force_;
+
+  std::vector<int> bump_stop_curve_offset_;
+  std::vector<int> bump_stop_curve_count_;
+  std::vector<double> bump_stop_curve_penetration_;
+  std::vector<double> bump_stop_force_;
 
   std::vector<std::string> tire_names_;
   std::vector<int> tire_body_;

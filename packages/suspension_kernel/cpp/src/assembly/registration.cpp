@@ -769,6 +769,11 @@ bool add_vehicle_spring_curves(
         return true;
     };
 
+    // The elastic curve is the only one this table still carries: the vehicle
+    // surface declares each axial structure's curve on its own field group, and
+    // the damper and bump-stop curves arrive with theirs.  The fused record's
+    // compression and rebound stop curves were the two halves of one stop, and
+    // a model that declares them now declares two bump stops.
     for (std::size_t i = 0; i < model.springs.size(); ++i) {
         Spring& spring = model.springs[i];
         if (!copy_curve(
@@ -776,27 +781,7 @@ bool add_vehicle_spring_curves(
                 input.vehicle_spring_elastic_curve_count[i],
                 input.vehicle_spring_elastic_curve_deflection,
                 input.vehicle_spring_elastic_curve_force,
-                spring.elastic_deflection, spring.elastic_force, "elastic")) {
-            return false;
-        }
-        if (!copy_curve(
-                input.vehicle_spring_compression_stop_curve_offset[i],
-                input.vehicle_spring_compression_stop_curve_count[i],
-                input.vehicle_spring_compression_stop_curve_penetration,
-                input.vehicle_spring_compression_stop_curve_force,
-                spring.compression_stop_penetration,
-                spring.compression_stop_force,
-                "compression stop")) {
-            return false;
-        }
-        if (!copy_curve(
-                input.vehicle_spring_rebound_stop_curve_offset[i],
-                input.vehicle_spring_rebound_stop_curve_count[i],
-                input.vehicle_spring_rebound_stop_curve_penetration,
-                input.vehicle_spring_rebound_stop_curve_force,
-                spring.rebound_stop_penetration,
-                spring.rebound_stop_force,
-                "rebound stop")) {
+                spring.deflection, spring.force, "elastic")) {
             return false;
         }
     }

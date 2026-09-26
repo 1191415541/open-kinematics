@@ -561,6 +561,8 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   // that ABI alive.  Each is one block per sample in element order, sized for
   // the whole run so a multi-case plan can offset into it like `body_state`.
   const std::size_t spring_count = built.springs.size();
+  const std::size_t damper_count = built.dampers.size();
+  const std::size_t bump_stop_count = built.bump_stops.size();
   const std::size_t bushing_count = built.bushings.size();
   const std::size_t anti_roll_count = built.anti_roll_bars.size();
   const double kNan = std::numeric_limits<double>::quiet_NaN();
@@ -568,6 +570,9 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   std::vector<double> steering_block(
       total_samples * actuator_count * kSteeringOutputWidth, kNan);
   std::vector<double> spring_block(total_samples * spring_count * kSpringOutputWidth, kNan);
+  std::vector<double> damper_block(total_samples * damper_count * kDamperOutputWidth, kNan);
+  std::vector<double> bump_stop_block(
+      total_samples * bump_stop_count * kBumpStopOutputWidth, kNan);
   std::vector<double> bushing_block(total_samples * bushing_count * kBushingOutputWidth, kNan);
   std::vector<double> anti_roll_block(total_samples * anti_roll_count * kAntiRollOutputWidth, kNan);
   std::vector<double> tire_block(total_samples * tire_count * kTireOutputWidth, kNan);
@@ -579,6 +584,8 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   // set; the sink owns the row layout so the element laws do not have to.
   ElementWrenchCounts element_wrench_counts;
   element_wrench_counts.springs = spring_count;
+  element_wrench_counts.dampers = damper_count;
+  element_wrench_counts.bump_stops = bump_stop_count;
   element_wrench_counts.bushings = bushing_count;
   element_wrench_counts.anti_rolls = anti_roll_count;
   element_wrench_counts.steering = built.steering_actuators.size();
@@ -707,6 +714,15 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
         block_slot(spring_block, spring_count * kSpringOutputWidth, sample_offset);
     axle_output.spring_output_capacity =
         run.sample_count * spring_count * kSpringOutputWidth;
+    axle_output.damper_output =
+        block_slot(damper_block, damper_count * kDamperOutputWidth, sample_offset);
+    axle_output.damper_output_capacity =
+        run.sample_count * damper_count * kDamperOutputWidth;
+    axle_output.bump_stop_output =
+        block_slot(bump_stop_block, bump_stop_count * kBumpStopOutputWidth,
+                   sample_offset);
+    axle_output.bump_stop_output_capacity =
+        run.sample_count * bump_stop_count * kBumpStopOutputWidth;
     axle_output.bushing_output =
         block_slot(bushing_block, bushing_count * kBushingOutputWidth, sample_offset);
     axle_output.bushing_output_capacity =
@@ -861,6 +877,10 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
                {total_samples, actuator_count, kSteeringOutputWidth});
     push_block("tire_output", tire_block, {total_samples, tire_count, kTireOutputWidth});
     push_block("spring_output", spring_block, {total_samples, spring_count, kSpringOutputWidth});
+    push_block("damper_output", damper_block,
+               {total_samples, damper_count, kDamperOutputWidth});
+    push_block("bump_stop_output", bump_stop_block,
+               {total_samples, bump_stop_count, kBumpStopOutputWidth});
     push_block("bushing_output", bushing_block,
                {total_samples, bushing_count, kBushingOutputWidth});
     push_block("anti_roll_output", anti_roll_block,
@@ -913,6 +933,8 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   append_doubles(steering_block.data(), steering_block.size(), blob);
   append_doubles(tire_block.data(), tire_block.size(), blob);
   append_doubles(spring_block.data(), spring_block.size(), blob);
+  append_doubles(damper_block.data(), damper_block.size(), blob);
+  append_doubles(bump_stop_block.data(), bump_stop_block.size(), blob);
   append_doubles(bushing_block.data(), bushing_block.size(), blob);
   append_doubles(anti_roll_block.data(), anti_roll_block.size(), blob);
   append_doubles(element_wrench_block.data(), element_wrench_block.size(), blob);

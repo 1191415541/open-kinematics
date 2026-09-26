@@ -241,7 +241,8 @@ std::vector<double> initial_step_unknown(
             model, state, sample, input.gravity_x, input.gravity_y,
             input.gravity_z, tire_forces, start_tire_derivatives, tire_output,
             potential, external_power, dissipation, force,
-            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, true,
+            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, true,
             nullptr, nullptr, true, &start_tire_rates
         );
     }
@@ -332,7 +333,8 @@ bool initialize_internal_derivatives(
             model, state, sample, input.gravity_x, input.gravity_y,
             input.gravity_z, tire_forces, tire_derivatives, tire_output,
             potential, power, dissipation, force,
-            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, true,
+            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, true,
             nullptr, nullptr, false, nullptr, &tire_deflections
         );
         return finite_vec(tire_derivatives);
@@ -605,7 +607,8 @@ bool apply_brush_return_mapping(
     external_force_vector(
         model, state, sample, input.gravity_x, input.gravity_y, input.gravity_z,
         tire_forces, tire_derivatives, tire_output, potential, power, dissipation,
-        force, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, true,
+        force, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, true,
         nullptr, nullptr, false, nullptr, &tire_deflections
     );
     state.tire_sx_dot.resize(model.tires.size(), 0.0);

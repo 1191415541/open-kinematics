@@ -6,11 +6,12 @@ import numpy as np
 
 from suspension_multibody.axle_dynamics import (
     AxleBody,
+    AxleDamper,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
-    AxleSpringDamper,
+    AxleSpring,
     AxleTire,
     native_build_metadata,
     run_axle_dynamics,
@@ -52,18 +53,28 @@ def _model() -> AxleDynamicsModel:
             ),
         ),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="spring",
                 body_a="ground",
                 body_b="slider",
                 point_a_m=(0.0, 0.0, 0.0),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=stiffness,
-                compression_damping_n_s_per_m=100.0,
-                rebound_damping_n_s_per_m=100.0,
                 free_length_m=0.25,
             ),
         ),
+        dampers=(
+            AxleDamper(
+                name="spring_damper",
+                body_a="ground",
+                body_b="slider",
+                point_a_m=(0.0, 0.0, 0.0),
+                point_b_m=(0.0, 0.0, 0.0),
+                compression_damping_n_s_per_m=100.0,
+                rebound_damping_n_s_per_m=100.0,
+            ),
+        ),
+        bump_stops=(),
     )
 
 
@@ -154,8 +165,8 @@ def test_native_build_metadata_keeps_safe_optimization_flags() -> None:
     metadata = native_build_metadata()
     flags = tuple(str(flag) for flag in metadata["flags"])
 
-    assert metadata["abi_version"] == 15
-    assert metadata["vehicle_abi_version"] == 30
+    assert metadata["abi_version"] == 16
+    assert metadata["vehicle_abi_version"] == 31
     assert metadata["configuration"] == "Release"
     assert "-ffast-math" not in flags
     assert "-fno-fast-math" in flags

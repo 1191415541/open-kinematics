@@ -18,19 +18,17 @@ from typing import Any, Literal
 
 import numpy as np
 
-from ...elements import (
-    BumpStopElement,
-    BushingElement,
-    LinearSpringElement,
-    StaticDamperElement,
-    VerticalTireElement,
-)
 from ...modeling.primitives import (
     SE3,
+    BumpStopElement,
+    BushingElement,
     Constraint,
+    LinearSpringElement,
     RevoluteJoint,
     RigidBody,
     RigidBodyState,
+    StaticDamperElement,
+    VerticalTireElement,
     WeldJoint,
 )
 from ...schema import RigidBodySpec, VehicleModel, WheelSpec

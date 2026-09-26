@@ -87,18 +87,23 @@ FROZEN_TIRE_OFFSETS = {
 APPENDED_TIRE_OFFSETS = {"mass": 2096, "inertia": 2104}
 FROZEN_TIRE_SIZE = 2176
 
-#: The frozen ABI version constants.  Subtask 08 changes neither: it appends to
-#: an internal structure and adds no field to ``AxleInput``/``VehicleInput``.
+#: The frozen ABI version constants.  The force-element split moves the axle and
+#: vehicle versions together, because ``VehicleInput`` embeds ``AxleInput`` by
+#: value; the generic core surface is untouched, which is why it stays at 1.
 FROZEN_ABI_VERSIONS = {
-    "kAxleKernelAbiVersion": 15,
-    "kVehicleKernelAbiVersion": 30,
+    "kAxleKernelAbiVersion": 16,
+    "kVehicleKernelAbiVersion": 31,
     "kCoreKernelAbiVersion": 1,
 }
 
 #: ``AxleInput`` / ``VehicleInput`` field counts recorded after subtask 08.  A new
 #: per-tire array on either structure would move one of these numbers, so this is
 #: where such an addition has to be noticed rather than shipped.
-AXLE_INPUT_FIELDS = 106
+# The force-element split replaced the fused spring field group with three
+# (`spring_*`, `damper_*`, `bump_stop_*`), so the axle structure's field
+# count moved with it.  The vehicle structure is unchanged: its spring curves
+# are its own group and the split did not touch them.
+AXLE_INPUT_FIELDS = 129
 VEHICLE_INPUT_FIELDS = 97
 
 

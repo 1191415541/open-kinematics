@@ -33,11 +33,12 @@ import pytest
 from suspension_multibody.axle_dynamics import (
     AxleAntiRollBar,
     AxleBody,
+    AxleDamper,
     AxleDynamicsCase,
     AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
-    AxleSpringDamper,
+    AxleSpring,
     NativeAxleError,
     run_axle_dynamics,
 )
@@ -92,18 +93,28 @@ def _vertical_slider() -> AxleDynamicsModel:
             ),
         ),
         springs=(
-            AxleSpringDamper(
+            AxleSpring(
                 name="spring",
                 body_a="ground",
                 body_b="slider",
                 point_a_m=(0.0, 0.0, 0.0),
                 point_b_m=(0.0, 0.0, 0.0),
                 stiffness_n_per_m=stiffness,
-                compression_damping_n_s_per_m=100.0,
-                rebound_damping_n_s_per_m=100.0,
                 free_length_m=0.25,
             ),
         ),
+        dampers=(
+            AxleDamper(
+                name="spring_damper",
+                body_a="ground",
+                body_b="slider",
+                point_a_m=(0.0, 0.0, 0.0),
+                point_b_m=(0.0, 0.0, 0.0),
+                compression_damping_n_s_per_m=100.0,
+                rebound_damping_n_s_per_m=100.0,
+            ),
+        ),
+        bump_stops=(),
     )
 
 

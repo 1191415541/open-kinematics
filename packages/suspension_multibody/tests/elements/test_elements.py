@@ -3,20 +3,18 @@
 import numpy as np
 import pytest
 
-from suspension_multibody.elements import (
+from suspension_multibody.modeling.primitives import (
+    SE3,
     AntiRollBarElement,
     BumpStopElement,
     BushingElement,
     ElementError,
     GravityElement,
     LinearSpringElement,
-    StaticDamperElement,
-    VerticalTireElement,
-)
-from suspension_multibody.modeling.primitives import (
-    SE3,
     RigidBody,
     RigidBodyState,
+    StaticDamperElement,
+    VerticalTireElement,
     quaternion_multiply,
     rotation_vector_to_quaternion,
 )

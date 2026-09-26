@@ -34,17 +34,27 @@ __all__ = [
 ]
 
 HARDPOINT_ALIASES: dict[str, tuple[str, ...]] = {
+    # `upper_front`/`upper_rear`/`lower_front`/`lower_rear` also accept the
+    # role's own name.  The Geometry Contract adapter emits the role as the
+    # hardpoint key, and without this entry a contract-derived model cannot be
+    # assembled at all -- the lookup fails with "missing required front-axle
+    # hardpoint for upper_front".  Widening the list here rather than changing
+    # the adapter's emitted keys leaves the adapter's public output untouched,
+    # and a widened alias list removes no spelling.  The other six roles need
+    # nothing: their adapters already emit a spelling the table accepts.
     "upper_front": (
         "UPPER_INBOARD_FRONT",
         "UPPER_INNER_FRONT",
         "UCA_FRONT",
         "UCA_INNER_FRONT",
+        "UPPER_FRONT",
     ),
     "upper_rear": (
         "UPPER_INBOARD_REAR",
         "UPPER_INNER_REAR",
         "UCA_REAR",
         "UCA_INNER_REAR",
+        "UPPER_REAR",
     ),
     "upper_outer": ("UPPER_OUTBOARD", "UPPER_OUTER", "UCA_OUTER"),
     "lower_front": (
@@ -52,12 +62,14 @@ HARDPOINT_ALIASES: dict[str, tuple[str, ...]] = {
         "LOWER_INNER_FRONT",
         "LCA_FRONT",
         "LCA_INNER_FRONT",
+        "LOWER_FRONT",
     ),
     "lower_rear": (
         "LOWER_INBOARD_REAR",
         "LOWER_INNER_REAR",
         "LCA_REAR",
         "LCA_INNER_REAR",
+        "LOWER_REAR",
     ),
     "lower_outer": ("LOWER_OUTBOARD", "LOWER_OUTER", "LCA_OUTER"),
     "tie_inner": ("TIE_ROD_INBOARD", "TIE_ROD_INNER", "TIEROD_INNER", "RACK_TIE_ROD"),

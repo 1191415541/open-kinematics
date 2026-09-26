@@ -55,27 +55,74 @@ struct CoordinateCoupler {
     int row{0};
 };
 
+/// Elastic axial element.
+///
+/// Split out of the fused record the kernel used to carry (2026-09-26): a shock
+/// absorber is an elastic member, a dissipative member and one or two unilateral
+/// stops, and carrying all three laws in one record meant every reader had to
+/// know which fields belonged to which law.  One structure each is what the
+/// Python side already modelled.
+///
+/// The elastic law is `k * (free_length - length) + preload`, so compression is
+/// positive.  A measured curve, given on compression, replaces the constant
+/// stiffness entirely.
 struct Spring {
     int a{-1}, b{-1};
     Vec3 pa{}, pb{};
-    double k{0.0}, c_compression{0.0}, c_rebound{0.0}, free_length{0.0};
-    double minimum_length{std::numeric_limits<double>::quiet_NaN()};
-    double maximum_length{std::numeric_limits<double>::quiet_NaN()};
-    double compression_stop_k{0.0}, compression_stop_c{0.0};
-    double rebound_stop_k{0.0}, rebound_stop_c{0.0};
-    // Optional measured damper curve, strictly increasing in velocity.  When
-    // present it replaces the two constant coefficients entirely; a real shock
-    // is neither linear nor symmetric about zero velocity, so approximating one
-    // by a pair of constants would be a fit rather than the measured element.
-    std::vector<double> damper_velocity;
-    std::vector<double> damper_force;
-    // 可选源曲线：弹簧使用压缩挠度，限位块使用穿透量。
-    std::vector<double> elastic_deflection;
-    std::vector<double> elastic_force;
-    std::vector<double> compression_stop_penetration;
-    std::vector<double> compression_stop_force;
-    std::vector<double> rebound_stop_penetration;
-    std::vector<double> rebound_stop_force;
+    double k{0.0};
+    double free_length{0.0};
+    double preload{0.0};
+    std::vector<double> deflection;
+    std::vector<double> force;
+};
+
+/// Dissipative axial element.
+///
+/// The two constant coefficients apply when no measured curve is given; a
+/// measured curve replaces them entirely, because a real shock is neither linear
+/// nor symmetric about zero velocity, so approximating one by a pair of constants
+/// would be a fit rather than the measured element.
+///
+/// The gas, preload and friction terms carry what the Python side already
+/// modelled and the fused kernel record did not; they are folded into this
+/// structure's scalar force, which is what makes them velocity-independent
+/// offsets rather than separate laws.
+struct Damper {
+    int a{-1}, b{-1};
+    Vec3 pa{}, pb{};
+    double c_compression{0.0}, c_rebound{0.0};
+    /// Gas-spring terms: the force is
+    /// `gas_reference_force + gas_stiffness*(length - gas_reference_length)`.
+    /// A NaN `gas_reference_length` means "no gas term".
+    double gas_stiffness{0.0};
+    double gas_reference_length{std::numeric_limits<double>::quiet_NaN()};
+    double gas_reference_force{0.0};
+    double preload{0.0};
+    double friction{0.0};
+    double extension_sign{1.0};
+    std::vector<double> velocity;
+    std::vector<double> force;
+};
+
+/// Unilateral axial stop.
+///
+/// Active only while the length is below `clearance` (`direction == +1`) or above
+/// it (`direction == -1`), and then applying `stiffness * penetration` plus
+/// optional damping and an optional measured curve on penetration.
+///
+/// The fused record carried the two directions as two separate field groups
+/// (`minimum_length` with its compression-stop pair, `maximum_length` with the
+/// rebound one).  One structure with a direction is the same two laws without the
+/// duplication, and it is what makes a stop something a model can add one of.
+struct BumpStop {
+    int a{-1}, b{-1};
+    Vec3 pa{}, pb{};
+    double clearance{std::numeric_limits<double>::quiet_NaN()};
+    double stiffness{0.0};
+    double direction{1.0};
+    double damping{0.0};
+    std::vector<double> penetration;
+    std::vector<double> force;
 };
 
 struct Bushing {
@@ -266,6 +313,8 @@ struct Model {
     std::vector<Constraint> constraints;
     std::vector<CoordinateCoupler> coordinate_couplers;
     std::vector<Spring> springs;
+    std::vector<Damper> dampers;
+    std::vector<BumpStop> bump_stops;
     std::vector<Bushing> bushings;
     std::vector<AntiRollBar> anti_roll_bars;
     std::vector<Tire> tires;

@@ -41,6 +41,11 @@ enum ElementWrenchType {
   kElementWrenchDriveBrake = 5,
   kElementWrenchTire = 6,
   kElementWrenchExternal = 7,
+  // The two structures split out of the fused `Spring` record.  Appended rather
+  // than inserted so no existing code moved, and `kElementWrenchSpring` keeps
+  // its meaning: it now counts only the elastic structure.
+  kElementWrenchDamper = 8,
+  kElementWrenchBumpStop = 9,
 };
 
 /// The element counts a sample's rows are laid out from.  They are the counts
@@ -49,6 +54,8 @@ enum ElementWrenchType {
 /// numbers.
 struct ElementWrenchCounts {
   std::size_t springs = 0;
+  std::size_t dampers = 0;
+  std::size_t bump_stops = 0;
   std::size_t bushings = 0;
   std::size_t anti_rolls = 0;
   std::size_t steering = 0;
