@@ -27,7 +27,10 @@ from suspension_multibody.results import (
     element_wrench_block,
     element_wrench_enabled,
 )
-from suspension_multibody.results.element_wrench import rows_per_element
+from suspension_multibody.results.element_wrench import (
+    ELEMENT_WRENCH_TYPE_NAMES,
+    rows_per_element,
+)
 from suspension_multibody.schema import Bushing6x6, FrontAxleModel, Pose, Vec3
 from suspension_multibody.simulation import SimulationRequest, run_request
 from tests.benchmark_fixture import benchmark_model
@@ -168,15 +171,35 @@ def test_a_pure_torque_row_is_a_record_and_keeps_its_nan_force() -> None:
     assert record.moment == (10.0, -20.0, 30.0)
     assert all(np.isnan(value) for value in record.force)
 def test_rows_per_element_is_the_row_stride_of_the_frozen_layout() -> None:
-    assert rows_per_element(1) == 2
-    assert rows_per_element(2) == 2
-    assert rows_per_element(3) == 2
-    assert rows_per_element(4) == 2
-    assert rows_per_element(5) == 4
-    assert rows_per_element(6) == 1
-    assert rows_per_element(7) == 1
+    assert rows_per_element(1) == 2  # spring: one row per end
+    assert rows_per_element(2) == 2  # bushing
+    assert rows_per_element(3) == 2  # anti-roll
+    assert rows_per_element(4) == 2  # steering
+    assert rows_per_element(5) == 4  # drive/brake: drive, reaction, brake, reaction
+    assert rows_per_element(6) == 1  # tire: one contact wrench
+    assert rows_per_element(7) == 1  # external
+    # The two laws split out of the fused spring record apply a wrench on each
+    # end, like the spring they came from, so they reserve two rows each.
+    assert rows_per_element(8) == 2  # damper
+    assert rows_per_element(9) == 2  # bump stop
     with pytest.raises(ValueError, match="99"):
         rows_per_element(99)
+
+
+def test_the_split_codes_are_named_and_appended() -> None:
+    """
+    The two new codes keep code 1's meaning and do not renumber the old ones.
+
+    The channel's type codes are frozen: a stored artifact's rows carry them, so
+    inserting a code would silently relabel every row after it.  The split added
+    its two laws at 8 and 9 for that reason, and `spring` now counts only the
+    elastic structure.
+    """
+    assert ELEMENT_WRENCH_TYPE_NAMES[1] == "spring"
+    assert ELEMENT_WRENCH_TYPE_NAMES[8] == "damper"
+    assert ELEMENT_WRENCH_TYPE_NAMES[9] == "bump_stop"
+    # Every frozen code keeps its name and its position.
+    assert tuple(sorted(ELEMENT_WRENCH_TYPE_NAMES)) == (1, 2, 3, 4, 5, 6, 7, 8, 9)
 
 
 def test_a_missing_block_is_the_off_channel_and_not_an_error(monkeypatch) -> None:

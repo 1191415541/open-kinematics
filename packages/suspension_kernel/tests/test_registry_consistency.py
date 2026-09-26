@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -268,3 +269,43 @@ def test_the_solver_does_not_dispatch_on_a_tire_model_kind() -> None:
     assert not offenders, (
         "the solver dispatches on a tire model kind again: " + ", ".join(offenders)
     )
+
+
+def test_the_element_names_match_the_published_contract_schema() -> None:
+    """
+    The kernel's element table and the contracts schema name the same elements.
+
+    The two tables are the same fact stated twice -- what an element `type` may
+    be -- and they are what makes a document readable by one side and not the
+    other.  They are edited in different packages for different reasons, so when
+    the force-element split renamed the fused `spring_damper` into `spring` and
+    `damper`, the kernel moved and the schema did not: the kernel then refused
+    every document the product emits while the schema still accepted the retired
+    name.  Nothing caught it, because no test compared them.  This is that test.
+
+    Both sides are read from their own source of truth: the kernel from its
+    compiled registry (through the self-test, so the table as built is what is
+    compared) and the schema from the JSON shipped in the wheel.
+    """
+    from suspension_contracts.multibody import load_schema
+
+    schema = load_schema("model")
+    schema_names = set(schema["$defs"]["element"]["properties"]["type"]["enum"])
+
+    # The kernel's own enumeration, from the self-test that asserts the table.
+    source = (
+        ROOT / "packages/suspension_kernel/cpp/src/contract/contract_registry.cpp"
+    ).read_text(encoding="utf-8")
+    table = source.split("const char* const kElements[] = {", 1)[1].split("};", 1)[0]
+    kernel_names = set(re.findall(r'"([a-z_]+)"', table))
+
+    assert kernel_names == schema_names, (
+        "the kernel's element table and the published contract schema disagree; "
+        f"only in the kernel: {sorted(kernel_names - schema_names)}; "
+        f"only in the schema: {sorted(schema_names - kernel_names)}"
+    )
+    # The retired fused name must be gone from both, not merely unused: an
+    # accepted-but-unimplemented name is a document that validates and then
+    # fails at the kernel.
+    assert "spring_damper" not in kernel_names
+    assert "spring_damper" not in schema_names

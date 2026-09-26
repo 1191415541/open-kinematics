@@ -133,6 +133,44 @@ def test_the_model_document_declares_the_vehicle_path(fixture) -> None:
     assert len(model_blob) == 4 * 226 * 8
 
 
+def test_an_axial_corner_is_emitted_as_the_three_element_types(fixture) -> None:
+    """
+    A corner's spring, damper and stop leave as three named elements.
+
+    The contract document is what the kernel reads, so the names in it are the
+    interface.  This asserts them by name rather than by count: a rename that
+    kept the count would still be a document the kernel cannot read.
+    """
+    from suspension_multibody.cases.vehicle_dynamic import model_document
+    from suspension_multibody.schema import StaticDamper
+
+    model = fixture._positioned_vehicle(
+        fixture._vehicle(
+            front_dampers=(
+                StaticDamper(
+                    name="gas_damper",
+                    body_a="chassis",
+                    body_b="lower_arm",
+                    point_a=fixture.Vec3(x=0, y=-500, z=100),
+                    point_b=fixture.Vec3(x=0, y=-700, z=100),
+                    viscous_damping=12.0,
+                ),
+            )
+        )
+    )
+    prepared = prepare_vehicle_run(model, fixture._case(model))
+    document, _ = model_document(model, prepared)
+    kinds = {element["type"] for element in document["elements"]}
+
+    # This fixture's axle declares dampers and no springs, so `damper` is the
+    # name that must appear -- it proves the record left as its own element type
+    # rather than being folded into a spring's parameters.  The retired fused
+    # name must not appear.
+    assert "damper" in kinds, sorted(kinds)
+    assert "spring" not in kinds, sorted(kinds)
+    assert "spring_damper" not in kinds
+
+
 def test_the_case_document_carries_the_road_and_the_steering(fixture) -> None:
     from suspension_multibody.cases.vehicle_dynamic import case_document
     from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
