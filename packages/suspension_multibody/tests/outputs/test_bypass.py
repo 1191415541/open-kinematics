@@ -44,8 +44,12 @@ _FORBIDDEN_CALLS = (
     "run_vehicle_dynamics",
     "solve",
     "submit",
-    "build_front_axle",
-    "build_vehicle",
+    # The composition entries: they *build* a model, which is authoring rather than
+    # reporting.  The retired names they replaced were listed here too, so the guard
+    # keeps its subject rather than losing it with the old path.
+    "compose_axle",
+    "compose_vehicle",
+    "compose_vehicle_runtime",
     "compute_axle_metrics",
     "compute_vehicle_metrics",
     "run_contract",

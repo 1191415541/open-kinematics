@@ -292,7 +292,6 @@ def probe_a2() -> Outcome:
         AxleSolverSettings,
     )
     from suspension_multibody.compilation import KcStudyInputs, compile_plan, plan_for
-    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.schema import (
         CaseSpec,
         DisplacementControl,
@@ -308,6 +307,7 @@ def probe_a2() -> Outcome:
         axle_dynamics_model,
         build_study_assembly,
     )
+    from suspension_multibody.subsystems.entry import compose_axle
 
     fixture = json.loads(
         (PACKAGE_ROOT / "tests" / "data" / "composable"
@@ -319,8 +319,8 @@ def probe_a2() -> Outcome:
     wishbone = _benchmark_model()
 
     # The graph difference, asserted rather than assumed.
-    synthetic_assembly = build_front_axle(synthetic, "K")
-    wishbone_assembly = build_front_axle(wishbone, "K")
+    synthetic_assembly = compose_axle(synthetic, "K")
+    wishbone_assembly = compose_axle(wishbone, "K")
     synthetic_count = len(synthetic_assembly.constraints)
     wishbone_count = len(wishbone_assembly.constraints)
     kinds = {type(c).__name__ for c in synthetic_assembly.constraints}
@@ -589,13 +589,13 @@ def probe_a4() -> Outcome:
         SE3,
         rotation_vector_to_quaternion,
     )
-    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.schema import (
         CaseSpec,
         DisplacementControl,
         FrontAxleModel,
         MassSpec,
     )
+    from suspension_multibody.subsystems.entry import compose_axle
 
     hardpoints = {
         "uca_front": [-100.0, -500.0, 400.0], "uca_rear": [100.0, -500.0, 400.0],
@@ -617,8 +617,8 @@ def probe_a4() -> Outcome:
 
     moved = dict(hardpoints)
     moved["uca_outer"] = [0.0, -700.0, 470.0]
-    before = build_front_axle(model(hardpoints), "K")
-    after = build_front_axle(model(moved), "K")
+    before = compose_axle(model(hardpoints), "K")
+    after = compose_axle(model(moved), "K")
     key = ("upright_L", "upper_arm_L_outer")
     if float(before.points[key][2]) != 450.0 or float(after.points[key][2]) != 470.0:
         outcome.problems.append(
@@ -703,7 +703,6 @@ def probe_a5() -> Outcome:
     be traced back to the template that produced them.
     """
     outcome = Outcome("A5", "two schemas, one SI model, traceable entities")
-    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.schema import FrontAxleModel
     from suspension_multibody.studies import (
         DYNAMIC,
@@ -711,10 +710,11 @@ def probe_a5() -> Outcome:
         build_study_assembly,
     )
     from suspension_multibody.subsystems import AssemblyRequest
+    from suspension_multibody.subsystems.entry import compose_axle
     from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
 
-    kinematic = build_front_axle(_benchmark_model(), "K")
-    massed = build_front_axle(_benchmark_model(massed=True), "K")
+    kinematic = compose_axle(_benchmark_model(), "K")
+    massed = compose_axle(_benchmark_model(massed=True), "K")
     study_assembly = build_study_assembly(massed, study=DYNAMIC, mode="K")
     dynamic = axle_dynamics_model(study_assembly, name="acceptance")
 
@@ -784,7 +784,7 @@ def probe_a5() -> Outcome:
     from suspension_multibody.rigs import CompositionError, resolve_combination
 
     try:
-        build_front_axle(
+        compose_axle(
             _benchmark_model(),
             "K",
             AssemblyRequest(mode="K", subsystems=frozenset({"chassis", "suspension", "brake"})),
@@ -797,7 +797,7 @@ def probe_a5() -> Outcome:
             outcome.evidence.append("a single axle refuses a brake subsystem by name")
 
     try:
-        build_front_axle(
+        compose_axle(
             _benchmark_model(),
             "K",
             AssemblyRequest(mode="K", subsystems=frozenset({"chassis", "suspension", "drive"})),
@@ -931,12 +931,12 @@ def probe_a6() -> Outcome:
     # The quasi-static vertical tire really enters the residual: two stiffnesses
     # over the same travel must report two different forces.
     from suspension_multibody.cases.kc_quasi_static import model_document
-    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.schema import (
         Vec3,
         VerticalTire,
     )
     from suspension_multibody.simulation import SimulationRequest, run_request
+    from suspension_multibody.subsystems.entry import compose_axle
 
     def tire_state(stiffness: float) -> tuple[float, float]:
         """
@@ -957,7 +957,7 @@ def probe_a6() -> Outcome:
             local_axis=Vec3(x=0.0, y=0.0, z=1.0),
         )
         model = _benchmark_model().model_copy(update={"tires": (tire,)})
-        assembly = build_front_axle(model, "K")
+        assembly = compose_axle(model, "K")
         document = model_document(assembly, name="tire-probe", drive_wheels=True)
         run = run_request(
             SimulationRequest(
@@ -1067,17 +1067,17 @@ def probe_a7() -> Outcome:
 
     from suspension_multibody.cases.kc_quasi_static import model_document
     from suspension_multibody.kernel import KernelContractError
-    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.schema import VerticalTire
     from suspension_multibody.simulation import run_compiled
     from suspension_multibody.simulation.request import (
         CompiledSimulation,
         SimulationRequest,
     )
+    from suspension_multibody.subsystems.entry import compose_axle
 
     # A real model document, authored by the production authoring layer, so the
     # refusal being tested is the family's and not the model reader's.
-    assembly = build_front_axle(_benchmark_model(), "K")
+    assembly = compose_axle(_benchmark_model(), "K")
     model = model_document(assembly, name="acceptance")
     del VerticalTire
 
@@ -1153,13 +1153,13 @@ def probe_a8() -> Outcome:
     outcome = Outcome("A8", "an absent branch disappears, and the global rules hold")
     from suspension_multibody import api
     from suspension_multibody.cases.kc_quasi_static.contract import has_rack
-    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.rigs import resolve_combination
     from suspension_multibody.schema import CaseSpec, DisplacementControl
     from suspension_multibody.subsystems import AssemblyRequest
+    from suspension_multibody.subsystems.entry import compose_axle
 
-    with_rack = build_front_axle(_benchmark_model(), "K")
-    without = build_front_axle(
+    with_rack = compose_axle(_benchmark_model(), "K")
+    without = compose_axle(
         _benchmark_model(),
         "K",
         AssemblyRequest(
@@ -1221,7 +1221,7 @@ def probe_a8() -> Outcome:
     # refused by name rather than silently dropped.
     for role in ("brake", "drive"):
         try:
-            build_front_axle(
+            compose_axle(
                 _benchmark_model(),
                 "K",
                 AssemblyRequest(

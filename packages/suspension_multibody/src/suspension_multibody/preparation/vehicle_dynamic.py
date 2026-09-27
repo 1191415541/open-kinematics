@@ -16,7 +16,7 @@ without re-deriving anything.  Those references never reach the contract.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -66,7 +66,7 @@ from ..schema import (
 )
 from ..simulation.preparation import PreparedSimulation
 from ..simulation.request import SimulationRequest
-from .assembly import VehicleAssembly, build_vehicle
+from ..subsystems.vehicle_assembly import VehicleRuntime, compose_vehicle_runtime
 
 _WHEEL_NAMES = ("front_left", "front_right", "rear_left", "rear_right")
 _ROAD_KIND = {
@@ -221,7 +221,13 @@ def prepare_vehicle_run(
     _validate_units(model, case)
     _validate_steering_topology(model)
     assembly_mode = _select_assembly_mode(model, case.suspension_mode)
-    assembly = build_vehicle(model, mode=assembly_mode)  # type: ignore[arg-type]
+    # The composed runtime, which is what every other reader builds from.  Its
+    # fields are the historical assembly's, in the same order and with the same
+    # meaning (that is deliberate), so this module's readers work unchanged.
+    assembly_mode_literal: Literal["K", "C"] = (
+        "K" if assembly_mode == "K" else "C"
+    )
+    assembly = compose_vehicle_runtime(model, mode=assembly_mode_literal)
     times = _output_times(case.solver)
     body_state, body_frames = _initial_body_state(assembly, case, length_scale)
     body_names = tuple(assembly.bodies)
@@ -338,7 +344,7 @@ def _validate_units(model: VehicleModel, case: VehicleDynamicCase) -> None:
 
 
 def _build_static_rotation_gauges(
-    model: VehicleModel, assembly: VehicleAssembly
+    model: VehicleModel, assembly: VehicleRuntime
 ) -> tuple[tuple[str, tuple[float, float, float]], ...]:
     """Map declared static-only axes to the composed vehicle body names."""
     gauges: list[tuple[str, tuple[float, float, float]]] = []
@@ -401,7 +407,7 @@ def _output_times(settings: DynamicSolverSettings) -> np.ndarray:
 
 
 def _initial_body_state(
-    assembly: VehicleAssembly,
+    assembly: VehicleRuntime,
     case: VehicleDynamicCase,
     length_scale: float,
 ) -> tuple[tuple[AxleBody, ...], dict[str, _BodyFrame]]:
@@ -599,7 +605,7 @@ def _shift_point(
 
 def _build_aerodynamic_drags(
     model: VehicleModel,
-    assembly: VehicleAssembly,
+    assembly: VehicleRuntime,
     body_frames: dict[str, _BodyFrame],
     scale: float,
 ) -> tuple[AxleAerodynamicDrag, ...]:
@@ -629,7 +635,7 @@ def _build_aerodynamic_drags(
 
 
 def _build_joints(
-    assembly: VehicleAssembly,
+    assembly: VehicleRuntime,
     body_frames: dict[str, _BodyFrame],
     scale: float,
 ) -> tuple[AxleJoint, ...]:
@@ -709,7 +715,7 @@ def _build_coordinate_couplers(
 
 
 def _build_elements(
-    assembly: VehicleAssembly,
+    assembly: VehicleRuntime,
     body_frames: dict[str, _BodyFrame],
     scale: float,
 ) -> tuple[
@@ -968,7 +974,7 @@ def _wheel_forward_local(
 
 def _build_tires(
     wheels: tuple[WheelSpec, ...],
-    assembly: VehicleAssembly,
+    assembly: VehicleRuntime,
     body_frames: dict[str, _BodyFrame],
     scale: float,
     road_friction: float,
@@ -1166,7 +1172,7 @@ def _build_steering(
     steering_spec: SteeringSystemSpec,
     steering_input,
     model: VehicleModel,
-    assembly: VehicleAssembly,
+    assembly: VehicleRuntime,
     initial_bodies: tuple[AxleBody, ...],
     body_index: dict[str, int],
     body_frames: dict[str, _BodyFrame],

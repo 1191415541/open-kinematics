@@ -24,7 +24,13 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .model import ConnectionDefinition, Template, TemplateError
+from .model import (
+    ACTIVATED_MODES,
+    MODES,
+    ConnectionDefinition,
+    Template,
+    TemplateError,
+)
 
 __all__ = [
     "ACTIVATED_MODES",
@@ -35,35 +41,25 @@ __all__ = [
     "resolve_properties",
 ]
 
-#: The two modes a template can be instantiated for.
-MODES: tuple[str, str] = ("K", "C")
-
-#: Which column each mode activates, for a connection that declares both.
-ACTIVATED_MODES: dict[str, str] = {"K": "joint", "C": "bushing"}
-
 
 def activated_column(connection: ConnectionDefinition, mode: str) -> str | None:
     """
     Return the column `mode` activates at `connection`, or `None` for neither.
 
-    The rule, stated once:
+    Delegates to the connection's own declaration, which says which modes activate
+    each column.  The rule it encodes, stated once:
 
-    * both columns declared -- the mode chooses (`joint` in K, `bushing` in C);
-    * only one column declared -- that column, in *both* modes;
-    * neither -- the point locates geometry and carries no constraint.
-
-    The second bullet is the one that is easy to get wrong.  A tie rod end has no
-    bushing column, so it is a joint even in C mode; discarding it would drop four
-    of the nine joints the C-mode axle actually has.
+    * both columns declared and both active -- the mode chooses (`joint` in K,
+      `bushing` in C);
+    * one column declared and active in this mode -- that column (the arm outer
+      points and tie rod ends stay joints in C mode; discarding them would drop
+      four of the nine joints the C-mode axle actually has);
+    * neither active in this mode -- the point locates geometry and constrains
+      nothing.  That is a real state, not an omission: in K mode the arm pivots on
+      a single revolute whose axis runs to the inboard rear point, so the rear
+      point carries no row of its own.
     """
-    if mode not in MODES:
-        raise TemplateError(f"unknown mode {mode!r}; modes are K and C")
-    columns = connection.columns()
-    if not columns:
-        return None
-    if len(columns) == 1:
-        return columns[0]
-    return ACTIVATED_MODES[mode]
+    return connection.active_column(mode)
 
 
 @dataclass(frozen=True)

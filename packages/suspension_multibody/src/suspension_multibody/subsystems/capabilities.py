@@ -27,8 +27,10 @@ __all__ = [
     "ALL_SUBSYSTEMS",
     "AssemblyCapabilities",
     "DRIVE_COORDINATE_NAMES",
+    "KERNEL_AXIS_GROUPS",
     "RACK_COORDINATES",
     "WHEEL_COORDINATES",
+    "kernel_axis",
 ]
 
 #: The six subsystem role names an assembly may carry.  Deliberately `wheel`
@@ -46,6 +48,29 @@ RACK_COORDINATES: frozenset[str] = frozenset({"rack_drive", "rack_neutral"})
 
 #: Every drive coordinate name the axle families use, in the document's spelling.
 DRIVE_COORDINATE_NAMES: frozenset[str] = WHEEL_COORDINATES | RACK_COORDINATES
+
+#: Which kernel `axis_map` group each document coordinate belongs to.
+#:
+#: The kernel names the groups -- `axis_map.wheel` is a list, `axis_map.rack` a
+#: single name -- and this table is the one place a coordinate is mapped to its
+#: group.  The case layer used to decide the group by searching for a name prefix
+#: (`value.startswith("wheel_drive_")`), which made the mapping a property of the
+#: spelling: a coordinate renamed or added to the rig would silently fall out of
+#: the map and the grid would lose an axis without saying so.
+KERNEL_AXIS_GROUPS: dict[str, str] = {
+    **{name: "wheel" for name in sorted(WHEEL_COORDINATES)},
+    **{name: "rack" for name in sorted(RACK_COORDINATES)},
+}
+
+
+def kernel_axis(coordinate: str) -> str | None:
+    """
+    Return the kernel `axis_map` group a drive coordinate belongs to.
+
+    ``None`` means the coordinate has no group, which is how "this drive is not a
+    swept axis" is stated rather than guessed at by prefix.
+    """
+    return KERNEL_AXIS_GROUPS.get(coordinate)
 
 
 @dataclass(frozen=True)

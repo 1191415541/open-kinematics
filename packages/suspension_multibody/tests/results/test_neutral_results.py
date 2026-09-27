@@ -9,18 +9,18 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
     DEFAULT_TIMES,
 )
 from suspension_multibody.kernel import ContractRun, KernelContractError
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.results import (
     ChannelRegistry,
     CommonResult,
     decode_result,
 )
 from suspension_multibody.simulation import SimulationRequest, run_request
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 
 def _run():
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     model = model_document(assembly, name="result-test", drive_wheels=True)
     case = case_document(
         assembly,

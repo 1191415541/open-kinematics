@@ -31,7 +31,6 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
     DEFAULT_TIMES,
 )
 from suspension_multibody.kernel import contract_version
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.preparation.kc_quasi_static import (
     KcQuasiStaticCase,
     KcQuasiStaticPrepared,
@@ -45,6 +44,7 @@ from suspension_multibody.simulation import (
     prepare_request,
     run_request,
 )
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 from .kc_fixtures import _c_tolerance, _compliant_model, _k_tolerance, _snapshot
@@ -81,7 +81,7 @@ def test_contract_entry_point_reports_its_version() -> None:
 
 
 def test_k_grid_through_the_contract_boundary_matches_the_snapshot() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     expected = _snapshot("k_states.json")
     produced = _k_grid_states(
         assembly,
@@ -103,7 +103,7 @@ def test_k_grid_through_the_contract_boundary_matches_the_snapshot() -> None:
 
 
 def test_c_paths_through_the_contract_boundary_match_the_snapshot() -> None:
-    assembly = build_front_axle(_compliant_model(), "C")
+    assembly = compose_axle(_compliant_model(), "C")
     expected = _snapshot("c_states.json")
     produced = [
         record
@@ -130,7 +130,7 @@ def test_c_paths_through_the_contract_boundary_match_the_snapshot() -> None:
 
 
 def test_result_document_satisfies_the_result_schema() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     model = model_document(assembly, name="schema-k", drive_wheels=True)
     case = case_document(
         assembly,
@@ -153,7 +153,7 @@ def test_result_document_satisfies_the_result_schema() -> None:
 
 
 def test_an_unimplemented_family_fails_closed() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     model = model_document(assembly, name="closed", drive_wheels=True)
     case = case_document(
         assembly,
@@ -189,7 +189,7 @@ def test_an_unimplemented_family_fails_closed() -> None:
 
 
 def test_the_case_layer_expands_the_grid_and_the_load_paths() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     model = model_document(assembly, name="expand", drive_wheels=True)
     case = case_document(
         assembly,
@@ -211,7 +211,7 @@ def test_the_case_layer_expands_the_grid_and_the_load_paths() -> None:
 
 def test_the_family_prepares_the_k_documents_through_the_default_registry() -> None:
     """The domain path: an assembly and a K case, prepared and then compiled."""
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     request = SimulationRequest(
         assembly="axle",
         family="kc_quasi_static",
@@ -251,7 +251,7 @@ def test_a_document_request_bypasses_preparation_and_still_validates_the_contrac
 ) -> None:
     from suspension_multibody.preparation import kc_quasi_static as kc_preparation
 
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     model = model_document(assembly, name="bypass", drive_wheels=True)
     case = case_document(
         assembly,

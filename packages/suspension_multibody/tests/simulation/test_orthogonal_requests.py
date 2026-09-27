@@ -36,7 +36,6 @@ from suspension_multibody.compilation import (
     plan_for,
     view_of,
 )
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import FrontAxleModel
 from suspension_multibody.simulation import SimulationRequest
 from suspension_multibody.studies import (
@@ -46,6 +45,7 @@ from suspension_multibody.studies import (
     axle_dynamics_model,
     build_study_assembly,
 )
+from suspension_multibody.subsystems.entry import compose_axle
 
 FIXTURE = (
     "packages/suspension_multibody/tests/data/benchmark_axle.json"
@@ -226,18 +226,26 @@ def test_an_unknown_family_is_refused_by_the_emitter_registry() -> None:
 
 def test_the_view_of_an_assembly_and_of_its_composition_agree() -> None:
     """
-    One set of facts, two spellings of the assembly that carries them.
+    One set of facts, one spelling of the assembly that carries them.
 
-    The composed SI assembly carries identity and ports; the historical build
-    carries the entities.  A document must not depend on which one the caller
-    happened to hold, so the view is where the two are made to agree -- and this
-    is the assertion that keeps them agreeing.
+    The composed SI assembly carries identity and ports; the view normalises it into
+    the same shape a bare runtime has.  A document must not depend on which one the
+    caller happened to hold, so the view is where the two are made to agree -- and
+    this is the assertion that keeps them agreeing.
+
+    The two used to be *different types* (a composition and a hand-built assembly),
+    and the assertion here was that the view of a composition did not reach back for
+    the historical type.  That check is now stronger rather than weaker: the
+    historical type is gone, both sides are :class:`SubsystemRuntime`, and the
+    remaining distinction is the composition's fingerprint, which an assembly the
+    caller assembled bare does not have.
     """
     from suspension_multibody.subsystems import AssemblyRequest
+    from suspension_multibody.subsystems.runtime import SubsystemRuntime
     from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
 
     model = _model()
-    historical = build_front_axle(model, "K")
+    historical = compose_axle(model, "K")
     composed = si_assembly_for_axle(model, request=AssemblyRequest(mode="K"))
 
     from_assembly = view_of(historical)
@@ -246,15 +254,19 @@ def test_the_view_of_an_assembly_and_of_its_composition_agree() -> None:
     assert list(from_assembly.bodies) == list(from_composition.bodies)
     assert set(from_assembly.points) == set(from_composition.points)
     assert from_assembly.joint_types() == from_composition.joint_types()
-    assert from_assembly.physical is historical
-    # The fingerprint is the composition's own; an assembly that has none reports
-    # none rather than an empty string that could be mistaken for a value.
+    # Both sides are the one runtime type: there is no second assembly shape left
+    # for a view to reach back for.
+    assert isinstance(from_composition.physical, SubsystemRuntime)
+    assert isinstance(from_assembly.physical, SubsystemRuntime)
+    assert type(from_composition.physical) is type(from_assembly.physical)
+    # The fingerprint is the composition's own; an assembly built bare has none, and
+    # says so rather than reporting an empty string that could be mistaken for one.
     assert from_composition.fingerprint == composed.fingerprint
     assert from_assembly.fingerprint == ""
 
 
-def test_the_view_refuses_a_composition_that_kept_no_build() -> None:
-    """A composition without its build cannot be authored into a document."""
+def test_the_view_refuses_a_composition_that_kept_no_runtime() -> None:
+    """A composition without its runtime cannot be authored into a document."""
     from dataclasses import replace
 
     from suspension_multibody.modeling.assembly import SimulationAssembly
@@ -272,7 +284,7 @@ def test_the_view_refuses_a_composition_that_kept_no_build() -> None:
     )
     from suspension_multibody.compilation import ViewError
 
-    with pytest.raises(ViewError, match="physical build"):
+    with pytest.raises(ViewError, match="runtime"):
         view_of(stripped)
 
 

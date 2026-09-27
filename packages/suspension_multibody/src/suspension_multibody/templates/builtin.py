@@ -3,7 +3,7 @@ The built-in double-wishbone template.
 
 This is the existing `symmetric_proxy` topology written down as data.  It is the
 reference the rest of the architecture is checked against, so the K/C mapping is
-transcribed from what `build_front_axle` actually does rather than from what the
+transcribed from what the composition entry actually does rather than from what the
 requirement's prose says it should do.
 
 The one difference worth stating plainly, because a reader who trusts the prose
@@ -72,35 +72,239 @@ _PARTS: tuple[PartDefinition, ...] = (
 #: column *and* a bushing column, which is the K/C choice the user described; the
 #: outer points and the tie rod ends carry only a joint column, and so are joints
 #: in both modes.
+#:
+#: Two facts are stated per connection that a single `joint` field cannot carry,
+#: and both are transcribed from what the assembly produces rather than from what
+#: the prose suggests:
+#:
+#: * the inboard **rear** arm point carries nothing in K mode -- the arm pivots on
+#:   one revolute at the front point whose axis runs to the rear one -- so its
+#:   bushing column is active in C only, and its joint column exists for C's ideal
+#:   set alone;
+#: * the inboard **front** point is a revolute in K and a ball joint in C, which
+#:   is why the joint type is declared per mode.
+#:
+#: `owner` / `label` name where each point sits, and `fixed_owner` /
+#: `fixed_label` name the far end of a two-ended mount.  Stating them is what lets
+#: the assembly resolve a declared connection against a real hardpoint instead of
+#: inferring the attachment from the connection's own name.
+def _mount(
+    name: str,
+    role: str,
+    *,
+    owner: str,
+    label: str,
+    joint: str | None,
+    bushing: str | None,
+    joint_modes: tuple[str, ...] = ("K", "C"),
+    bushing_modes: tuple[str, ...] = ("K", "C"),
+    joint_kind_by_mode: tuple[tuple[str, str], ...] = (),
+    axis_reference_role: str = "",
+) -> ConnectionDefinition:
+    """
+    Build one two-ended inboard mount: the arm's point plus the chassis's.
+
+    The chassis-side label is the one the assembly records, derived from the arm
+    the mount belongs to and the side it is on.  Deriving it here rather than
+    letting a builder guess keeps the two ends of one mount in agreement.
+    """
+    side = owner.rsplit("_", 1)[-1]
+    stem = "uca" if owner.startswith("upper") else "lca"
+    return ConnectionDefinition(
+        name=name,
+        role=role,
+        joint=joint,
+        bushing=bushing,
+        owner=owner,
+        label=label,
+        joint_modes=joint_modes,
+        bushing_modes=bushing_modes,
+        joint_kind_by_mode=joint_kind_by_mode,
+        far_owner="chassis",
+        far_label=f"{stem}_{side}_{label}",
+        axis_reference_role=axis_reference_role,
+    )
+
+
 _CONNECTIONS: tuple[ConnectionDefinition, ...] = (
-    # Left side.
-    ConnectionDefinition("uca_mount_L_inner_front", "upper_front", "revolute", "uca_bushing_L_inner_front"),
-    ConnectionDefinition("uca_mount_L_inner_rear", "upper_rear", None, "uca_bushing_L_inner_rear"),
-    ConnectionDefinition("lca_mount_L_inner_front", "lower_front", "revolute", "lca_bushing_L_inner_front"),
-    ConnectionDefinition("lca_mount_L_inner_rear", "lower_rear", None, "lca_bushing_L_inner_rear"),
-    ConnectionDefinition("upper_arm_L_outer_joint", "upper_outer", "spherical"),
-    ConnectionDefinition("lower_arm_L_outer_joint", "lower_outer", "spherical"),
-    ConnectionDefinition("rack_tie_joint_L", "tie_inner", "spherical"),
-    ConnectionDefinition("tie_upright_joint_L", "tie_outer", "spherical"),
+    # Left side.  The inboard mounts are two-ended; the outer joints and tie rod
+    # ends are one-ended, because the subsystem that owns them already places the
+    # far end on the other arm or on the rack.
+    _mount(
+        "uca_mount_L_inner_front",
+        "upper_front",
+        owner="upper_arm_L",
+        label="inner_front",
+        joint="revolute",
+        bushing="uca_bushing_L_inner_front",
+        joint_kind_by_mode=(("C", "spherical"),),
+        axis_reference_role="upper_rear",
+    ),
+    _mount(
+        "uca_mount_L_inner_rear",
+        "upper_rear",
+        owner="upper_arm_L",
+        label="inner_rear",
+        joint="spherical",
+        bushing="uca_bushing_L_inner_rear",
+        joint_modes=("C",),
+        bushing_modes=("C",),
+    ),
+    _mount(
+        "lca_mount_L_inner_front",
+        "lower_front",
+        owner="lower_arm_L",
+        label="inner_front",
+        joint="revolute",
+        bushing="lca_bushing_L_inner_front",
+        joint_kind_by_mode=(("C", "spherical"),),
+        axis_reference_role="lower_rear",
+    ),
+    _mount(
+        "lca_mount_L_inner_rear",
+        "lower_rear",
+        owner="lower_arm_L",
+        label="inner_rear",
+        joint="spherical",
+        bushing="lca_bushing_L_inner_rear",
+        joint_modes=("C",),
+        bushing_modes=("C",),
+    ),
+    ConnectionDefinition(
+        "upper_arm_L_outer_joint",
+        "upper_outer",
+        "spherical",
+        owner="upper_arm_L",
+        label="outer",
+        far_owner="upright_L",
+        far_label="upper_arm_L_outer",
+    ),
+    ConnectionDefinition(
+        "lower_arm_L_outer_joint",
+        "lower_outer",
+        "spherical",
+        owner="lower_arm_L",
+        label="outer",
+        far_owner="upright_L",
+        far_label="lower_arm_L_outer",
+    ),
+    ConnectionDefinition(
+        "rack_tie_joint_L",
+        "tie_inner",
+        "spherical",
+        owner="tie_rod_L",
+        label="inner",
+        far_owner="rack",
+        far_label="tie_L",
+    ),
+    ConnectionDefinition(
+        "tie_upright_joint_L",
+        "tie_outer",
+        "spherical",
+        owner="tie_rod_L",
+        label="outer",
+        far_owner="upright_L",
+        far_label="tie_outer",
+    ),
     # Right side: the same structure, mirrored.
-    ConnectionDefinition("uca_mount_R_inner_front", "upper_front", "revolute", "uca_bushing_R_inner_front"),
-    ConnectionDefinition("uca_mount_R_inner_rear", "upper_rear", None, "uca_bushing_R_inner_rear"),
-    ConnectionDefinition("lca_mount_R_inner_front", "lower_front", "revolute", "lca_bushing_R_inner_front"),
-    ConnectionDefinition("lca_mount_R_inner_rear", "lower_rear", None, "lca_bushing_R_inner_rear"),
-    ConnectionDefinition("upper_arm_R_outer_joint", "upper_outer", "spherical"),
-    ConnectionDefinition("lower_arm_R_outer_joint", "lower_outer", "spherical"),
-    ConnectionDefinition("rack_tie_joint_R", "tie_inner", "spherical"),
-    ConnectionDefinition("tie_upright_joint_R", "tie_outer", "spherical"),
+    _mount(
+        "uca_mount_R_inner_front",
+        "upper_front",
+        owner="upper_arm_R",
+        label="inner_front",
+        joint="revolute",
+        bushing="uca_bushing_R_inner_front",
+        joint_kind_by_mode=(("C", "spherical"),),
+        axis_reference_role="upper_rear",
+    ),
+    _mount(
+        "uca_mount_R_inner_rear",
+        "upper_rear",
+        owner="upper_arm_R",
+        label="inner_rear",
+        joint="spherical",
+        bushing="uca_bushing_R_inner_rear",
+        joint_modes=("C",),
+        bushing_modes=("C",),
+    ),
+    _mount(
+        "lca_mount_R_inner_front",
+        "lower_front",
+        owner="lower_arm_R",
+        label="inner_front",
+        joint="revolute",
+        bushing="lca_bushing_R_inner_front",
+        joint_kind_by_mode=(("C", "spherical"),),
+        axis_reference_role="lower_rear",
+    ),
+    _mount(
+        "lca_mount_R_inner_rear",
+        "lower_rear",
+        owner="lower_arm_R",
+        label="inner_rear",
+        joint="spherical",
+        bushing="lca_bushing_R_inner_rear",
+        joint_modes=("C",),
+        bushing_modes=("C",),
+    ),
+    ConnectionDefinition(
+        "upper_arm_R_outer_joint",
+        "upper_outer",
+        "spherical",
+        owner="upper_arm_R",
+        label="outer",
+        far_owner="upright_R",
+        far_label="upper_arm_R_outer",
+    ),
+    ConnectionDefinition(
+        "lower_arm_R_outer_joint",
+        "lower_outer",
+        "spherical",
+        owner="lower_arm_R",
+        label="outer",
+        far_owner="upright_R",
+        far_label="lower_arm_R_outer",
+    ),
+    ConnectionDefinition(
+        "rack_tie_joint_R",
+        "tie_inner",
+        "spherical",
+        owner="tie_rod_R",
+        label="inner",
+        far_owner="rack",
+        far_label="tie_R",
+    ),
+    ConnectionDefinition(
+        "tie_upright_joint_R",
+        "tie_outer",
+        "spherical",
+        owner="tie_rod_R",
+        label="outer",
+        far_owner="upright_R",
+        far_label="tie_outer",
+    ),
     # The wheel centre is an attachment point with no constraint of its own: it
     # locates the wheel and is what the drive coordinates measure against, so the
     # wheel role requires it as a mount while neither column applies.
-    ConnectionDefinition("wheel_center_L", "wheel_center"),
-    ConnectionDefinition("wheel_center_R", "wheel_center"),
+    ConnectionDefinition(
+        "wheel_center_L", "wheel_center", owner="upright_L", label="wheel_center"
+    ),
+    ConnectionDefinition(
+        "wheel_center_R", "wheel_center", owner="upright_R", label="wheel_center"
+    ),
 )
 
 #: The rack guide is a separate connection: it attaches the rack to the chassis
 #: and is a joint in both modes.  Its point is the rack centre.
-_RACK_GUIDE = ConnectionDefinition("rack_guide", "rack_center", "prismatic")
+_RACK_GUIDE = ConnectionDefinition(
+    "rack_guide",
+    "rack_center",
+    "prismatic",
+    owner="rack",
+    label="center",
+    far_owner="chassis",
+    far_label="rack_center",
+)
 
 #: Property slots the template asks a properties file to fill.  The defaults are
 #: the simplified template's own numbers: a template may carry its values

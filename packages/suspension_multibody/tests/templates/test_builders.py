@@ -5,7 +5,7 @@ The weak version of "templates are extensible" is a registry that accepts a name
 and returns nothing.  These tests hold the stronger version: building a template
 yields a :class:`ModelFragment` whose entity counts match what the assembly
 actually constructs -- 13 joints in K mode and 9 in C mode for the built-in
-double wishbone, which is the recorded behaviour of ``build_front_axle``, not a
+double wishbone, which is the recorded behaviour of the composition entry, not a
 number chosen here.
 
 The equality of the two routes is the other half.  A template may be written as
@@ -52,15 +52,20 @@ def test_a_declared_template_really_produces_entities() -> None:
 
 def test_k_and_c_modes_activate_the_columns_they_should() -> None:
     """
-    The recorded constraint counts: K has 13 joints and 4 bushings, C has 9 and 8.
+    The recorded constraint counts: K has 13 joints and **no** forces, C has 9 and 8.
 
-    These are the numbers ``build_front_axle`` actually produces.  C mode is not
-    "K with the joints removed": the tie rod ends and the arm outer points have
-    no bushing column, so they stay joints.
+    These are the numbers the composition entry actually produces, checked against
+    a dump of the historical assembly rather than against the requirement's prose.
+    K mode carries no compliance element at all: its inboard rear points are
+    inactive, not merely joint-free, so the earlier reading of "4 bushings in K"
+    described rows the assembly has never had.
+
+    C mode is not "K with the joints removed": the tie rod ends and the arm outer
+    points have no bushing column, so they stay joints.
     """
     k = build_fragment(DOUBLE_WISHBONE, mode="K", properties={}, instance=("axle",))
     c = build_fragment(DOUBLE_WISHBONE, mode="C", properties={}, instance=("axle",))
-    assert (len(k.joints), len(k.forces)) == (13, 4)
+    assert (len(k.joints), len(k.forces)) == (13, 0)
     assert (len(c.joints), len(c.forces)) == (9, 8)
 
 

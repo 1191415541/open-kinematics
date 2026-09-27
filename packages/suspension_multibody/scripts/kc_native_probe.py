@@ -23,9 +23,9 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
     DEFAULT_TIMES,
     _side_fields,
 )
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import FrontAxleModel
 from suspension_multibody.simulation import SimulationRequest, run_request
+from suspension_multibody.subsystems.entry import compose_axle
 
 BASELINE = Path("packages/suspension_multibody/tests/data/kc_baseline")
 OUT = Path("artifacts/kc-native-probe")
@@ -107,7 +107,7 @@ def k_grid_states(assembly) -> list[dict[str, object]]:
 
 def main() -> int:
     """Run the K grid natively and score it against the frozen snapshot."""
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     produced = k_grid_states(assembly)
     frozen = json.loads((BASELINE / "k_states.json").read_text(encoding="utf-8"))
     expected = {state["case_id"]: state for state in frozen}

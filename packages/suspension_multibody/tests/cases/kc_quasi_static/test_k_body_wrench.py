@@ -18,8 +18,8 @@ import pytest
 from suspension_contracts import validate_case
 
 from suspension_multibody.cases.kc_quasi_static import model_document
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.simulation import SimulationRequest, run_request
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 _TIMES = {"start_s": 0.0, "end_s": 1e-3, "step_s": 1e-3}
@@ -56,7 +56,7 @@ def _run(model: dict, case: dict):
 
 
 def test_a_body_wrench_moves_the_reactions_and_not_the_kinematics() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     model = model_document(assembly, name="k-body-wrench", drive_wheels=True)
     loaded_case = _case(body_wrench=[{"body": "upright_L", "wrench": [100.0, 0.0, 0.0, 0.0, 5000.0, 0.0]}])
     validate_case(loaded_case)
@@ -79,7 +79,7 @@ def test_a_body_wrench_moves_the_reactions_and_not_the_kinematics() -> None:
 
 
 def test_an_unknown_body_in_a_body_wrench_is_refused() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     model = model_document(assembly, name="k-body-wrench", drive_wheels=True)
     case = _case(body_wrench=[{"body": "no_such_body", "wrench": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]}])
     with pytest.raises(Exception, match="no_such_body"):

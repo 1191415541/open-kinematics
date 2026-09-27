@@ -102,6 +102,15 @@ class SolvePlan:
     tire_activation: str = "full"
     #: Whether the wheel centres are the driven coordinates.
     drive_wheels: bool = True
+    #: How much of the assembly's mechanics the document carries.
+    #:
+    #: ``None`` means "let the legacy boolean decide", through the single mapping in
+    #: `schema.case.drive_mode_for`, so `drive_wheels=True/False` and the three-way field
+    #: cannot drift apart.  Stated as a three-way name rather than a second boolean because
+    #: the readings differ in kind, not in degree: `kinematics` solves the constraints
+    #: alone, `force_balance` balances the elastic elements, and `pad` lets the tires carry
+    #: a wheel the ground moves under.
+    drive_mode: str | None = None
     #: The output grid.
     times_s: tuple[float, ...] = DEFAULT_TIMES_S
     #: The solver settings the case document states.
@@ -169,6 +178,7 @@ def plan_for(
     tire_model: str = "native_brush",
     outputs: tuple[str, ...] = (),
     drive_wheels: bool | None = None,
+    drive_mode: str | None = None,
     dynamic_model: Any = None,
     dynamic_case: Any = None,
     note: str = "",
@@ -211,6 +221,7 @@ def plan_for(
         mode=mode,
         tire_activation=activation,
         drive_wheels=bool(drive_wheels),
+        drive_mode=drive_mode,
         times_s=active_times,
         solver=solver if solver is not None else AxleSolverSettings(),
         inputs=resolved_inputs,

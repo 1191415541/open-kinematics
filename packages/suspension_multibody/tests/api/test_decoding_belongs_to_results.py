@@ -128,10 +128,10 @@ def test_the_reported_tire_compression_is_the_kernel_s_own_number() -> None:
     import json
 
     from suspension_multibody.cases.kc_quasi_static import model_document
-    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.results.kc_state import tire_compression_from_run
     from suspension_multibody.schema import FrontAxleModel
     from suspension_multibody.simulation import SimulationRequest, run_request
+    from suspension_multibody.subsystems.entry import compose_axle
 
     payload = json.loads(
         (Path(__file__).parents[1] / "data" / "benchmark_axle.json").read_text(
@@ -147,8 +147,10 @@ def test_the_reported_tire_compression_is_the_kernel_s_own_number() -> None:
             "local_axis": {"x": 0.0, "y": 0.0, "z": 1.0},
         }
     ]
-    assembly = build_front_axle(FrontAxleModel.model_validate(raw), "K")
-    document = model_document(assembly, name="probe", drive_wheels=True)
+    assembly = compose_axle(FrontAxleModel.model_validate(raw), "K")
+    # The pad reading is the one that declares tires.  A wheel-centre-driven reading
+    # *places* the wheel, so a tire there would compete with the prescribed travel.
+    document = model_document(assembly, name="probe", drive_wheels=True, drive_mode="pad")
     case = {
         "contract": "multibody-case",
         "contract_version": 1,

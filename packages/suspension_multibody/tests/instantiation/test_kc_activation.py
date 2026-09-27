@@ -14,8 +14,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.subsystems import DEFAULT_AXLE_SUBSYSTEMS, AssemblyRequest
+from suspension_multibody.subsystems.entry import compose_axle
 from suspension_multibody.templates import (
     ACTIVATED_MODES,
     DEFAULT_MOUNT_STIFFNESS,
@@ -39,9 +39,18 @@ def _instance(mode: str, **properties: float):
 
 
 def test_the_builtin_template_carries_the_recorded_column_counts() -> None:
+    """
+    The counts the composition entry produces: K 13/0, C 9/8.
+
+    Checked against a dump of the historical assembly.  K mode carries **no**
+    bushing at all: its inboard rear points are inactive, because in K the arm
+    pivots on one revolute at the front point whose axis runs to the rear one, so
+    the rear point constrains nothing.  Reading that point as "a bushing in both
+    modes" described four rows the assembly has never had.
+    """
     k = _instance("K")
     c = _instance("C")
-    assert (len(k.joints), len(k.bushings)) == (13, 4)
+    assert (len(k.joints), len(k.bushings)) == (13, 0)
     assert (len(c.joints), len(c.bushings)) == (9, 8)
 
 
@@ -51,12 +60,27 @@ def test_only_the_activated_columns_differ_between_modes() -> None:
 
     This is the assertion behind "switching K/C changes no geometry": the
     placement is a property of the template, not of the mode.
+
+    What the mode *does* change is which columns are active, and that includes
+    points that are active in one mode and idle in the other: the inboard rear
+    arm points are bushings in C and constrain nothing in K.  Their identity and
+    order are unchanged either way, which is what this test is about.
     """
     k = _instance("K")
     c = _instance("C")
     assert k.bodies == c.bodies
     assert k.points == c.points
-    assert k.inert == c.inert
+    # `inert` is the complement of the active columns, so it differs by exactly
+    # the points whose *activation* differs -- and only those.  The four inboard
+    # rear points are active in C and idle in K; the four inboard front points are
+    # active in both (as different columns), so they are inert in neither.
+    assert set(k.inert) - set(c.inert) == {
+        "uca_mount_L_inner_rear",
+        "lca_mount_L_inner_rear",
+        "uca_mount_R_inner_rear",
+        "lca_mount_R_inner_rear",
+    }
+    assert not (set(c.inert) - set(k.inert))
     assert set(k.joints) & set(c.joints) == {
         "upper_arm_L_outer_joint",
         "lower_arm_L_outer_joint",
@@ -69,9 +93,9 @@ def test_only_the_activated_columns_differ_between_modes() -> None:
         "rack_guide",
     }
     # The four inboard *front* points are the K/C choice: a revolute in K, a
-    # bushing in C.  The four inboard *rear* points carry no joint column at all
-    # (in K the front revolute's axis already passes through them), so they are
-    # bushings in both modes -- which is why K has four bushings and not zero.
+    # bushing in C.  In K the front revolute's axis already passes through the
+    # rear point, so the rear point carries no row there -- which is why K has no
+    # bushing at all rather than four.
     assert set(k.joints) - set(c.joints) == {
         "uca_mount_L_inner_front",
         "lca_mount_L_inner_front",
@@ -83,8 +107,15 @@ def test_only_the_activated_columns_differ_between_modes() -> None:
         "lca_mount_L_inner_front",
         "uca_mount_R_inner_front",
         "lca_mount_R_inner_front",
+        "uca_mount_L_inner_rear",
+        "lca_mount_L_inner_rear",
+        "uca_mount_R_inner_rear",
+        "lca_mount_R_inner_rear",
     }
-    assert set(k.bushings) == {
+    assert k.bushings == ()
+    # The rear points are inactive in K, not bushings: `inert` is what records
+    # "this point locates geometry and constrains nothing".
+    assert set(k.inert) - set(c.inert) == {
         "uca_mount_L_inner_rear",
         "lca_mount_L_inner_rear",
         "uca_mount_R_inner_rear",
@@ -130,7 +161,7 @@ def test_with_mode_is_idempotent() -> None:
 
 def test_k_activation_reproduces_the_k_assembly() -> None:
     """K is the frozen `k_states.json` baseline's mode, so it must not move."""
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     instance = _instance("K")
     assembly_names = [c.name for c in assembly.constraints]
     assert len(assembly_names) == len(instance.joints) == 13
@@ -143,7 +174,7 @@ def test_k_activation_reproduces_the_k_assembly() -> None:
 
 
 def test_c_activation_keeps_the_nine_joints_the_assembly_has() -> None:
-    assembly = build_front_axle(benchmark_model(), "C")
+    assembly = compose_axle(benchmark_model(), "C")
     instance = _instance("C")
     assert len(assembly.constraints) == 9
     assert sorted(c.name for c in assembly.constraints) == sorted(instance.joints)
@@ -151,7 +182,7 @@ def test_c_activation_keeps_the_nine_joints_the_assembly_has() -> None:
 
 @pytest.mark.parametrize("mode", ["K", "C"])
 def test_capabilities_agree_with_the_template_activation(mode: str) -> None:
-    assembly = build_front_axle(benchmark_model(), mode)
+    assembly = compose_axle(benchmark_model(), mode)
     assert assembly.capabilities is not None
     assert assembly.capabilities.subsystems == DEFAULT_AXLE_SUBSYSTEMS
 
@@ -175,7 +206,7 @@ def test_mount_stiffness_comes_from_the_template_not_a_constant() -> None:
             if element.name.endswith(("inner_front", "inner_rear"))
         }
 
-    default = build_front_axle(model, "C")
+    default = compose_axle(model, "C")
     assert slot_stiffness_norms(default) == {0.0}
 
     supplied = instantiate(
@@ -183,7 +214,7 @@ def test_mount_stiffness_comes_from_the_template_not_a_constant() -> None:
         mode="C",
         properties={**_MODEL_OWNED, "bushing": 25_000.0},
     )
-    stiffened = build_front_axle(
+    stiffened = compose_axle(
         model,
         "C",
         AssemblyRequest(

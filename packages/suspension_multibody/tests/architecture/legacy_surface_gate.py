@@ -80,8 +80,11 @@ PREPARE_NAMES = (
     "prepare",
     "prepare_request",
     "prepare_vehicle_run",
-    "build_front_axle",
-    "build_vehicle",
+    # The composition entries: authoring, not reporting.  The retired names they
+    # replaced were listed here too, so the guard keeps its subject.
+    "compose_axle",
+    "compose_vehicle",
+    "compose_vehicle_runtime",
     "time_grid",
     "loads_at_time",
     "wrenches_at_time",

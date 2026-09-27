@@ -101,10 +101,11 @@ def test_the_input_adapter_still_converts_an_assembled_axle() -> None:
     """
     import json
 
-    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.preparation.axle_dynamic import _dynamic_model
     from suspension_multibody.schema import FrontAxleModel
     from suspension_multibody.simulation import SimulationRequest
+    from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
+    from suspension_multibody.subsystems.types import AssemblyRequest
 
     payload = json.loads(
         (Path(__file__).parents[1] / "data" / "benchmark_axle.json").read_text(
@@ -130,7 +131,10 @@ def test_the_input_adapter_still_converts_an_assembled_axle() -> None:
             "tie_rod_R",
         )
     ]
-    assembly = build_front_axle(FrontAxleModel.model_validate(raw), "K")
+    assembly = si_assembly_for_axle(
+        FrontAxleModel.model_validate(raw),
+        request=AssemblyRequest(mode="K"),
+    ).assembly.physical
     request = SimulationRequest(
         assembly="axle", rig="axle_dynamic", family="axle_dynamic", model=assembly
     )
@@ -152,18 +156,22 @@ def test_an_axle_declaring_no_inertia_is_refused_rather_than_advanced() -> None:
 
     import pytest
 
-    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.preparation.axle_dynamic import _dynamic_model
     from suspension_multibody.schema import FrontAxleModel
     from suspension_multibody.simulation import SimulationRequest
     from suspension_multibody.studies import BridgeError
+    from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
+    from suspension_multibody.subsystems.types import AssemblyRequest
 
     payload = json.loads(
         (Path(__file__).parents[1] / "data" / "benchmark_axle.json").read_text(
             encoding="utf-8"
         )
     )
-    assembly = build_front_axle(FrontAxleModel.model_validate(payload["model"]), "K")
+    assembly = si_assembly_for_axle(
+        FrontAxleModel.model_validate(payload["model"]),
+        request=AssemblyRequest(mode="K"),
+    ).assembly.physical
     request = SimulationRequest(
         assembly="axle", rig="axle_dynamic", family="axle_dynamic", model=assembly
     )

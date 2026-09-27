@@ -12,10 +12,10 @@ the boundary that there was nothing to drive.
 from __future__ import annotations
 
 from suspension_multibody.api import _k_drivable_coordinates, _k_grid
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.rigs import resolve_combination
 from suspension_multibody.schema import DisplacementControl
 from suspension_multibody.subsystems import DEFAULT_AXLE_SUBSYSTEMS, AssemblyRequest
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 
@@ -26,7 +26,7 @@ def _without_steering():
         for name, point in model.hardpoints.items()
         if name != "rack_center"
     }
-    return build_front_axle(
+    return compose_axle(
         model.model_copy(update={"hardpoints": hardpoints}),
         "K",
         AssemblyRequest(mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS - {"steering"}),
@@ -56,7 +56,7 @@ def _controls() -> list[DisplacementControl]:
 
 
 def test_an_assembly_with_steering_offers_the_rack_coordinate() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     assert "rack_drive" in _k_drivable_coordinates(assembly)
 
 
@@ -68,7 +68,7 @@ def test_an_assembly_without_steering_offers_only_wheel_travel() -> None:
 
 
 def test_the_grid_keeps_the_rack_axis_when_the_assembly_has_steering() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     section, combinations = _k_grid(
         _controls(), drivable=_k_drivable_coordinates(assembly)
     )

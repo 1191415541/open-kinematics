@@ -130,11 +130,13 @@ class AssemblyRequest:
     #: Which of the six roles this assembly carries.  The default is the
     #: single-axle set, which is what every existing caller gets.
     subsystems: frozenset[str] = DEFAULT_AXLE_SUBSYSTEMS
-    #: The instantiated suspension template, or `None` for the built-in one.
+    #: The suspension template to build, either an instantiation or a name.
     #:
-    #: This is how a template reaches the assembly: the assembly asks the
-    #: template for its numbers (mount stiffness today, springs and dampers once
-    #: subtask 06 lands) instead of carrying constants of its own.
+    #: A *name* is the user-facing form: an expert registers a template and a
+    #: caller selects it by name, which is what "choose a template" means to
+    #: somebody who did not write it.  An already-instantiated template is also
+    #: accepted, because a caller that resolved its own properties should not have
+    #: to hand back a name and have them re-resolved.
     suspension_template: object | None = None
 
     def carries(self, role: str) -> bool:
@@ -143,11 +145,16 @@ class AssemblyRequest:
 
     @property
     def instantiated_suspension(self) -> object:
-        """Return the suspension instantiation, building the default if needed."""
+        """
+        Return the suspension instantiation, resolving a name or the default.
+
+        Three inputs reach here and all three end in one instance, so the rest of
+        the package never has to ask which form a caller used.
+        """
         from ..templates import DOUBLE_WISHBONE, instantiate
 
         if self.suspension_template is not None:
-            return self.suspension_template
+            return _as_instance(self.suspension_template, mode=self.mode)
         return instantiate(
             DOUBLE_WISHBONE,
             mode=self.mode,
@@ -178,6 +185,36 @@ class AssemblyRequest:
         for index in range(3):
             matrix[index, index] = stiffness
         return matrix
+
+
+def _as_instance(selection: object, *, mode: str) -> object:
+    """
+    Resolve whatever a caller put in ``suspension_template``.
+
+    A string is a registered name and is looked up; anything else must already be
+    an instantiation, because accepting a bare ``Template`` here would silently
+    skip the property resolution that decides which columns carry stiffness.
+    """
+    from ..templates import instantiate
+    from ..templates.instantiate import SubsystemInstance
+    from ..templates.registry import get as get_template
+
+    if isinstance(selection, str):
+        return instantiate(
+            get_template(selection), mode=mode, properties={"spring": 0.0, "damper": 0.0}
+        )
+    if isinstance(selection, SubsystemInstance):
+        if selection.mode != mode:
+            raise ValueError(
+                f"the suspension template was instantiated for mode "
+                f"{selection.mode!r} but this assembly is mode {mode!r}; the mode "
+                "belongs to the instance, so resolve it for the mode you mean"
+            )
+        return selection
+    raise TypeError(
+        "suspension_template must be a registered template name or a "
+        f"SubsystemInstance, got {type(selection).__name__}"
+    )
 
 
 @dataclass

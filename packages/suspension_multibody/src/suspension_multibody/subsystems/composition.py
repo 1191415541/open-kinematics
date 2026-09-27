@@ -110,11 +110,24 @@ def _fragment_from_output(
     constraints to joints, element rows to forces -- because anything clever here
     would be a second implementation of the assembly, which is exactly what the
     architecture is trying to stop having.
+
+    Both constraint columns travel: ``joints`` carries the active column and
+    ``ideal_constraints`` the ideal one, so a C-mode composition can still answer
+    what its K joints would be.  Bushings, tire rows and connection rows travel
+    too, because a contract emitter reads all three and a fragment that dropped
+    them forced the composition to keep the historical build alive beside it.
     """
     joints: dict[str, object] = {}
+    ideal: dict[str, object] = {}
     for constraint in contribution.output.constraints:
         name = getattr(constraint, "name", None) or type(constraint).__name__
         joints[str(name)] = {
+            "kind": type(constraint).__name__,
+            "constraint": constraint,
+        }
+    for constraint in contribution.output.ideal_constraints:
+        name = getattr(constraint, "name", None) or type(constraint).__name__
+        ideal[str(name)] = {
             "kind": type(constraint).__name__,
             "constraint": constraint,
         }
@@ -122,6 +135,19 @@ def _fragment_from_output(
     forces: dict[str, object] = {}
     for row in contribution.output.elements:
         forces[str(row.name)] = {"kind": row.kind, "row": row}
+
+    bushings: dict[str, object] = {}
+    for row in contribution.output.bushings:
+        bushings[str(row.name)] = {"kind": row.kind, "row": row}
+
+    tires: dict[str, object] = {}
+    for name, row in forces.items():
+        if row.get("kind") == "tire":
+            tires[name] = row
+
+    connections: dict[str, object] = {}
+    for connection in contribution.output.connections:
+        connections[str(connection.name)] = connection
 
     bodies = {name: body for name, body in contribution.output.bodies.items()}
     points = {
@@ -136,7 +162,11 @@ def _fragment_from_output(
         bodies=bodies,
         points=points,
         joints=joints,
+        ideal_constraints=ideal,
+        bushings=bushings,
         forces=forces,
+        tires=tires,
+        connections=connections,
         requirements=tuple(contribution.needs),
         provenance=FragmentProvenance(
             template=f"subsystem:{contribution.role}",
@@ -161,6 +191,8 @@ def compose_simulation_assembly(
     explicit_bindings: Mapping[str, str] | None = None,
     body_order: Sequence[str] | None = None,
     physical: Any = None,
+    rig: Assembly | None = None,
+    rig_name: str = "none",
 ) -> SimulationAssembly:
     """
     Join subsystem contributions into one SI simulation assembly.
@@ -175,6 +207,15 @@ def compose_simulation_assembly(
     roles it carries).  It is optional because the composition itself does not
     need it: the ports carry the facts.  It is *used* when supplied, so a caller
     that has already derived capabilities does not derive them twice.
+
+    ``rig`` is the bench the assembly is run on.  A run is one assembly plus one
+    rig, and the two are joined here rather than by the caller, because the
+    *pair* is what a simulation assembly is: without a bench the assembled model
+    would be a device under test with nothing driving it.  The bench is kept as
+    its own level -- it is not merged into the device's fragment -- because the
+    rig is not part of the model it loads; a merged fragment could no longer say
+    which entities came from the bench, and the two roles would stop being
+    separable.
     """
     from ..connections.matcher import match_requirements
 
@@ -262,10 +303,16 @@ def compose_simulation_assembly(
         binding.requirement.role: ",".join(binding.port_ids)
         for binding in report.bindings
     }
+    if rig is not None:
+        # The bench's own entities are kept on their own level, and the
+        # cross-level connections are generated here, exactly like a nested
+        # instance: the pair is the simulation assembly, and a caller that asks
+        # for a body must be able to tell which side it came from.
+        bindings = {**bindings, **_bind_rig(assembly, rig)}
     return SimulationAssembly(
         name=name,
         assembly=assembly,
-        rig=Assembly(name="none", fragment=ModelFragment()),
+        rig=rig if rig is not None else Assembly(name="none", fragment=ModelFragment()),
         generated={"disappeared": report.disappeared, "dropped_outputs": report.dropped_outputs},
         # No capabilities: the fingerprint is a property of the *model*, and a
         # caller asking for it later -- with or without a capability report --
@@ -274,6 +321,34 @@ def compose_simulation_assembly(
         fingerprint=fingerprint_assembly(assembly),
         bindings=bindings,
     )
+
+
+def _bind_rig(assembly: Assembly, rig: Assembly) -> dict[str, str]:
+    """
+    Resolve the device's requirements against the bench's ports.
+
+    The device reports what it needs; the bench reports what it offers.  Matching
+    them is a real decision that can fail, so it goes through the same matcher the
+    subsystem level uses rather than a name comparison -- a bench bound by name
+    proximity is what produced rigs attached to whatever happened to be there.
+
+    Only *required* requirements raise: a bench that cannot reach an optional
+    branch contributes no measurement for it, which is the same rule the ports
+    already encode.
+    """
+    from ..connections.matcher import match_requirements
+
+    if not assembly.requirements:
+        return {}
+    offered = {
+        str(EntityId((rig.name,), local)): port
+        for local, port in rig.ports.items()
+    }
+    report = match_requirements(assembly.requirements, offered)
+    return {
+        binding.requirement.role: ",".join(binding.port_ids)
+        for binding in report.bindings
+    }
 
 
 def fingerprint_assembly(

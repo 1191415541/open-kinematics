@@ -3,8 +3,6 @@
 import numpy as np
 
 from suspension_multibody.modeling.primitives import PrismaticJoint
-from suspension_multibody.preparation.assembly import build_vehicle
-from suspension_multibody.preparation.assembly.front_axle import _build_explicit_axle
 from suspension_multibody.schema import (
     FrontAxleModel,
     MassSpec,
@@ -16,6 +14,7 @@ from suspension_multibody.schema import (
     VehicleModel,
     WheelSpec,
 )
+from suspension_multibody.subsystems.entry import compose_axle, compose_vehicle
 
 
 def _axle(name: str, x: float) -> FrontAxleModel:
@@ -63,8 +62,8 @@ def _vehicle() -> VehicleModel:
     )
 
 
-def test_build_vehicle_contains_two_axles_and_four_spinning_wheels() -> None:
-    assembly = build_vehicle(_vehicle())
+def test_compose_vehicle_contains_two_axles_and_four_spinning_wheels() -> None:
+    assembly = compose_vehicle(_vehicle())
 
     assert set(assembly.axle_assemblies) == {"front", "rear"}
     assert set(assembly.wheel_ids) == {
@@ -78,15 +77,15 @@ def test_build_vehicle_contains_two_axles_and_four_spinning_wheels() -> None:
     assert "rear_upright_R" in assembly.component_ids
 
 
-def test_build_vehicle_preserves_chassis_and_wheel_mass() -> None:
-    assembly = build_vehicle(_vehicle())
+def test_compose_vehicle_preserves_chassis_and_wheel_mass() -> None:
+    assembly = compose_vehicle(_vehicle())
 
     assert assembly.bodies["chassis"].mass == 1200.0
     assert assembly.total_mass == 1460.0
     assert all(assembly.wheel_center_local(name).shape == (3,) for name in assembly.wheel_ids)
 
 
-def test_build_vehicle_condenses_fixed_wheel_into_mount() -> None:
+def test_compose_vehicle_condenses_fixed_wheel_into_mount() -> None:
     model = _vehicle()
     fixed_wheel = model.wheels[0].model_copy(
         update={"mount_joint_kind": "fixed", "mass": 20.0}
@@ -95,7 +94,7 @@ def test_build_vehicle_condenses_fixed_wheel_into_mount() -> None:
         update={"wheels": (fixed_wheel, *model.wheels[1:])}
     )
 
-    assembly = build_vehicle(model)
+    assembly = compose_vehicle(model)
 
     assert assembly.wheel_body_names["front_left"] == "front_upright_L"
     assert "wheel_front_left" not in assembly.bodies
@@ -122,7 +121,7 @@ def test_fixed_wheel_condensation_preserves_world_mass_properties() -> None:
     fixed_model = wheel_model.model_copy(
         update={"wheels": (fixed_wheel, *model.wheels[1:])}
     )
-    original = build_vehicle(
+    original = compose_vehicle(
         wheel_model.model_copy(
             update={
                 "wheels": (
@@ -132,7 +131,7 @@ def test_fixed_wheel_condensation_preserves_world_mass_properties() -> None:
             }
         )
     )
-    condensed = build_vehicle(fixed_model)
+    condensed = compose_vehicle(fixed_model)
 
     def mass_properties(assembly):
         first_moment = np.zeros(3)
@@ -173,7 +172,7 @@ def test_explicit_free_rack_has_axis_guide() -> None:
         rack_fixed_to_chassis=False,
     )
 
-    assembly = _build_explicit_axle(axle, "K")
+    assembly = compose_axle(axle, "K")
 
     guides = [item for item in assembly.constraints if item.name == "rack_guide"]
     assert len(guides) == 1

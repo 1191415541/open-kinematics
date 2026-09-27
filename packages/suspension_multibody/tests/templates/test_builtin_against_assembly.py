@@ -14,13 +14,13 @@ from suspension_multibody.modeling.primitives import (
     RevoluteJoint,
     WeldJoint,
 )
-from suspension_multibody.preparation.assembly.front_axle import build_front_axle
+from suspension_multibody.subsystems.entry import compose_axle
 from suspension_multibody.templates import DOUBLE_WISHBONE
 from tests.benchmark_fixture import benchmark_model
 
 
 def _assembly(mode: str = "K"):
-    return build_front_axle(benchmark_model(), mode)  # ty: ignore[invalid-argument-type]
+    return compose_axle(benchmark_model(), mode)  # ty: ignore[invalid-argument-type]
 
 
 def test_the_assembly_still_produces_the_frozen_counts() -> None:
@@ -84,22 +84,35 @@ def test_the_template_agrees_point_by_point_with_the_assembly() -> None:
     c_bushing_names = {bushing.name for bushing in c.bushings}
 
     for connection in DOUBLE_WISHBONE.connections:
-        if connection.joint is not None:
+        # Which mode a column is active in is the declaration's own business, so
+        # the comparison reads the activation rather than assuming that a declared
+        # joint appears in both modes.  A declared-but-inactive column is checked
+        # in the other direction, below.
+        if connection.active_column("K") == "joint":
             assert connection.name in k_names, (
-                f"template declares joint {connection.name!r} but K mode has no "
-                "such constraint"
+                f"template activates joint {connection.name!r} in K but K mode has "
+                "no such constraint"
             )
+        if connection.active_column("C") == "joint":
             assert connection.name in c_names, (
-                f"template declares joint {connection.name!r} but it is missing "
-                "from C mode, where joint-only points must survive"
+                f"template activates joint {connection.name!r} in C but it is "
+                "missing from C mode, where joint-only points must survive"
             )
         if connection.bushing is not None:
-            assert connection.bushing in c_bushing_names, (
-                f"template declares bushing {connection.bushing!r} but C mode has "
-                "no such bushing"
-            )
-            assert connection.bushing not in k_names, (
-                f"bushing {connection.bushing!r} must not appear in K mode"
+            if "C" in connection.bushing_modes:
+                assert connection.bushing in c_bushing_names, (
+                    f"template declares bushing {connection.bushing!r} but C mode "
+                    "has no such bushing"
+                )
+            if "K" not in connection.bushing_modes:
+                assert connection.bushing not in k_names, (
+                    f"bushing {connection.bushing!r} is inactive in K and must not "
+                    "appear there"
+                )
+        if connection.joint is not None and "K" not in connection.joint_modes:
+            assert connection.name not in k_names, (
+                f"template declares joint {connection.name!r} inactive in K but K "
+                "mode carries it"
             )
 
 
@@ -123,7 +136,7 @@ def test_the_rack_guide_is_a_joint_in_both_modes() -> None:
 def test_a_rack_fixed_to_chassis_model_welds_instead_of_guiding() -> None:
     """The other branch of the rack attachment, unchanged by the template."""
     model = benchmark_model().model_copy(update={"rack_fixed_to_chassis": True})
-    assembly = build_front_axle(model, "K")
+    assembly = compose_axle(model, "K")
     names = {constraint.name for constraint in assembly.ideal_constraints}
     assert "rack_fixed_to_chassis" in names
     assert "rack_guide" not in names
@@ -148,6 +161,14 @@ def test_the_template_declares_the_arms_inboard_points_as_the_kc_choice() -> Non
             front = by_name[f"{arm}_mount_{side}_inner_front"]
             rear = by_name[f"{arm}_mount_{side}_inner_rear"]
             assert front.joint == "revolute", f"{front.name} should be the K joint"
-            assert rear.joint is None, f"{rear.name} should carry no K joint"
+            assert front.joint_kind("C") == "spherical", (
+                f"{front.name} is a ball joint in C's ideal column"
+            )
+            assert front.active_column("K") == "joint"
+            assert front.active_column("C") == "bushing"
+            # The rear point is inactive in K and carries both columns in C.
+            assert rear.active_column("K") is None, f"{rear.name} carries no K row"
+            assert rear.active_column("C") == "bushing"
+            assert rear.joint == "spherical"
             assert front.bushing is not None
             assert rear.bushing is not None

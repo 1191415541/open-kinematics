@@ -2,13 +2,13 @@
 One view of a model, whatever shape it arrived in.
 
 A contract compiler needs the same facts every time -- bodies with their mass
-properties, body-local points, joints and the built force elements -- and there
-are two live spellings of them in the package:
+properties, body-local points, joints and the built force elements -- and two shapes
+carry them:
 
-* :class:`~suspension_multibody.preparation.assembly.front_axle.FrontAxleAssembly`
-  -- the assembly the historical build produces, millimetres, carrying masses,
-  both column sets (K's ``ideal_constraints`` and C's ``constraints``) and the
-  built element objects;
+* :class:`~suspension_multibody.subsystems.runtime.SubsystemRuntime` -- what the
+  composition layer produces: bodies, both column sets (K's ``ideal_constraints``
+  and C's ``constraints``), the built element objects and the points, all keyed the
+  way a document needs them;
 * :class:`~suspension_multibody.modeling.assembly.SimulationAssembly` -- the SI
   composition, which carries bodies, points, joints, tires and ports by entity
   id and is what the global rules were checked against.
@@ -28,7 +28,7 @@ rather than making the emitter obtain it a second way.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ..modeling.assembly import SimulationAssembly
@@ -96,10 +96,24 @@ class ModelView:
 
 
 def view_of(source: Any) -> ModelView:
-    """Return the compile view of one assembly, in whichever shape it arrived."""
+    """
+    Return the compile view of one assembly.
+
+    Two shapes reach here and there used to be three readers: a composition (which
+    carries identity, ports and a fingerprint) and the runtime face itself.  The
+    runtime reader serves both -- a composition is read *through* its runtime -- so
+    the second reader for a hand-built assembly is gone along with that assembly.
+    """
+    from ..subsystems.runtime import SubsystemRuntime
+
     if isinstance(source, SimulationAssembly):
         return _from_simulation_assembly(source)
-    return _from_front_axle(source)
+    if isinstance(source, SubsystemRuntime):
+        return _view_from_runtime(source)
+    raise ViewError(
+        "a compile view is built from a SimulationAssembly or a SubsystemRuntime, "
+        f"got {type(source).__name__}"
+    )
 
 
 def _identity_of(assembly: Any) -> Mapping[str, Any]:
@@ -120,76 +134,71 @@ def _identity_of(assembly: Any) -> Mapping[str, Any]:
 
 def _from_simulation_assembly(source: SimulationAssembly) -> ModelView:
     """
-    Read the composition, delegating the physical facts to the build it kept.
+    Read the composition, taking the entities from the runtime it carries.
 
-    A composition is *identity and ports*: it is what the global rules were
-    checked against and what a fingerprint is taken of.  The physical facts a
-    document needs -- masses, the built elements, the column the mode selects --
-    belong to the build it was composed from, which is why the composition keeps
-    that build rather than re-deriving it.  Asking each level for what it owns is
-    what keeps a document and a fingerprint from disagreeing.
+    A composition is *identity and ports*; the objects a document needs come from
+    the runtime face the composition was built with.  That face used to be a
+    hand-built assembly, which meant a composition could not produce a document
+    without one -- the dependency this reader removes.  Now the runtime *is* the
+    only shape there is, so this reads it and reports the composition's own
+    fingerprint beside it.
     """
     inner = source.assembly
-    physical = inner.physical
-    if physical is None:
+    runtime = inner.physical
+    if runtime is None:
         raise ViewError(
-            "this simulation assembly carries no physical build to read; a "
-            "composition is identity and ports, so the assembly it was composed "
-            "from has to travel with it"
+            "this simulation assembly carries no runtime to read; a composition is "
+            "identity and ports, so the runtime it was composed from has to travel "
+            "with it"
         )
-    view = _from_front_axle(physical)
-    return replace(
-        view,
-        fingerprint=source.fingerprint,
-        provenance=_identity_of(inner),
-        source=source,
-    )
+    return _view_from_runtime(runtime, source)
 
 
-def _from_front_axle(source: Any) -> ModelView:
+def _view_from_runtime(runtime: Any, source: Any = None) -> ModelView:
     """
-    Read the historical build, selecting the column the mode carries.
+    Read one runtime face into the view a compiler consumes.
 
-    The mode selects the joint set here for the same reason the family emitter
-    does it: K drives the wheel centres through the rigid kinematic set, so its
-    joints are the collapsed ideal set, while C loads the compliant set.  The
-    *other* column is kept on the view rather than dropped, so a caller can ask
-    what a C assembly's ideal set would be without rebuilding it.
+    ``source`` is the object the runtime came from, when there is one: a
+    ``SimulationAssembly`` carries the fingerprint and the provenance, and a view
+    built from it must report those.  A caller that hands the runtime over
+    directly has neither, and the view reports none rather than inventing one --
+    an empty fingerprint already means "this object has no structural identity",
+    which is exactly true.
     """
-    from ..preparation.assembly import FrontAxleAssembly
-
-    if not isinstance(source, FrontAxleAssembly):
-        raise ViewError(
-            "a compile view is built from a FrontAxleAssembly or a "
-            f"SimulationAssembly, got {type(source).__name__}"
-        )
-
     from ..cases.kc_quasi_static.convert import collapse_spherical_pairs
 
-    mode = source.mode
-    ideal = tuple(source.ideal_constraints)
-    compliant = tuple(source.constraints)
+    mode = runtime.mode
+    ideal = tuple(runtime.ideal_constraints)
+    compliant = tuple(runtime.constraints)
     active = collapse_spherical_pairs(ideal) if mode == "K" else compliant
     inactive = compliant if mode == "K" else collapse_spherical_pairs(ideal)
 
     tires: list[Any] = []
     elements: list[Any] = []
-    for element in source.elements:
+    for element in runtime.elements:
         if type(element).__name__ == "VerticalTireElement":
             tires.append(element)
         else:
             elements.append(element)
 
+    inner = getattr(source, "assembly", None)
     return ModelView(
-        name=getattr(source, "name", "") or "",
+        name=getattr(source, "name", "") or getattr(runtime, "name", "") or "",
         mode=mode,
-        bodies=dict(source.bodies),
-        points=dict(source.points),
+        bodies=dict(runtime.bodies),
+        points=dict(runtime.points),
         joints=tuple(active),
         inactive_joints=tuple(inactive),
-        bushings=tuple(source.bushings),
+        bushings=tuple(runtime.bushings),
         elements=tuple(elements),
         tires=tuple(tires),
-        physical=source,
-        source=source,
+        fingerprint=getattr(source, "fingerprint", "") or "",
+        provenance=_identity_of(inner) if inner is not None else {},
+        physical=runtime,
+        source=source if source is not None else runtime,
     )
+
+
+def _from_runtime(runtime: Any, source: SimulationAssembly) -> ModelView:
+    """Read a composition's runtime face, keeping the composition's identity."""
+    return _view_from_runtime(runtime, source)

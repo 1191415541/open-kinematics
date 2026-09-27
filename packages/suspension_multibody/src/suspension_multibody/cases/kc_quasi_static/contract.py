@@ -46,6 +46,7 @@ from ...modeling.primitives.joints import (
     RevoluteJoint,
     UniversalJoint,
 )
+from ...subsystems.capabilities import kernel_axis
 from .convert import (
     NativeKcError,
     _local_axis,
@@ -119,7 +120,28 @@ def _unit_axis(values) -> list[float]:
     return [float(v) for v in axis / np.linalg.norm(axis)]
 
 
-def model_document(assembly, *, name: str = "front-axle", drive_wheels: bool = True) -> dict[str, object]:
+#: The three readings, and what each carries into the document.
+#:
+#: * ``kinematics``    -- the constraint equations alone.  No elastic element and no tire
+#:   enters the residual, so the run is pure geometry.  Defined on the **K** reading,
+#:   where the arm mounts are ideal constraints; on C the mounts *are* the bushing column,
+#:   so removing it would leave the mechanism unconstrained.
+#: * ``force_balance`` -- the elastic elements balance against the driven targets.  This is
+#:   the default, and it is what makes the arm mounts and the spring react load.
+#: * ``pad``           -- a ground height is driven instead of the wheel centre, so the
+#:   tires carry the wheel.  Tires therefore belong to this mode only; a wheel-centre-driven
+#:   reading *places* the wheel rather than carrying it.
+ELASTIC_MODES: frozenset[str] = frozenset({"force_balance", "pad"})
+TIRE_MODES: frozenset[str] = frozenset({"pad"})
+
+
+def model_document(
+    assembly,
+    *,
+    name: str = "front-axle",
+    drive_wheels: bool = True,
+    drive_mode: str | None = None,
+) -> dict[str, object]:
     """
     Describe one axle assembly as a multibody model document.
 
@@ -127,7 +149,22 @@ def model_document(assembly, *, name: str = "front-axle", drive_wheels: bool = T
     rigid kinematic set of the K family, or the compliant set of the C family.
     It is not a solver setting, which is why it lives here rather than in the
     case document.
+
+    ``drive_mode`` selects how much of the assembly's mechanics enters the
+    document -- see ``ELASTIC_MODES``/``TIRE_MODES``.  When it is ``None`` the
+    legacy boolean decides, through the one mapping in
+    :func:`~suspension_multibody.schema.case.drive_mode_for`, so the two spellings
+    cannot drift apart.
     """
+    from ...schema.case import drive_mode_for
+
+    mode = drive_mode if drive_mode is not None else drive_mode_for(drive_wheels)
+    if mode not in ("kinematics", "force_balance", "pad"):
+        raise NativeKcError(
+            f"unknown drive_mode {mode!r}; expected one of "
+            "'kinematics', 'force_balance', 'pad'"
+        )
+
     bodies = []
     for body_name, body in assembly.bodies.items():
         inertia = np.asarray(body.inertia, dtype=float)
@@ -187,9 +224,11 @@ def model_document(assembly, *, name: str = "front-axle", drive_wheels: bool = T
             entry["convel_angle_target"] = float(constraint.angle_target)
         joints.append(entry)
 
-    elements = []
-    if not drive_wheels:
-        elements = [_bushing_element(bushing) for bushing in assembly.bushings]
+    elements = (
+        _element_entries(assembly, drive_wheels=drive_wheels)
+        if mode in ELASTIC_MODES
+        else []
+    )
 
     markers = [
         {
@@ -212,7 +251,13 @@ def model_document(assembly, *, name: str = "front-axle", drive_wheels: bool = T
         "bodies": bodies,
         "joints": joints + driven_joints,
         "elements": elements,
-        "tires": _tire_entries(assembly, markers),
+        # Tires belong to the pad reading only.  A wheel-centre-driven reading *places*
+        # the wheel, so a tire there would be a second, competing statement about where
+        # the wheel is -- and measured, the two cannot both hold: a K run with a tire
+        # declared stops at "static equilibrium initialization failed" with
+        # `force_residual = 0` and a 20 mm position residual, i.e. the force balances and
+        # the prescribed travel is what cannot be met.
+        "tires": _tire_entries(assembly, markers) if mode in TIRE_MODES else [],
         "markers": markers,
         # A `c` path loads the wheel centre, which is a point of the upright
         # rather than the upright's origin.  Naming the marker here is what
@@ -310,8 +355,8 @@ def _bushing_element(bushing) -> dict[str, object]:
         "body_a": bushing.body_a,
         "body_b": bushing.body_b,
         "parameters": {
-            "point_a": _vec3(bushing.local_pose_a.translation),
-            "point_b": _vec3(bushing.local_pose_b.translation),
+            "point_a": _vec3(np.asarray(bushing.local_pose_a.translation, dtype=float)),
+            "point_b": _vec3(np.asarray(bushing.local_pose_b.translation, dtype=float)),
             "frame_a_quaternion": [float(v) for v in bushing.local_pose_a.quaternion],
             "frame_b_quaternion": [float(v) for v in bushing.local_pose_b.quaternion],
             "stiffness": [
@@ -321,6 +366,186 @@ def _bushing_element(bushing) -> dict[str, object]:
                 [float(v) for v in row] for row in np.asarray(bushing.damping, dtype=float)
             ],
             "preload": [float(v) for v in np.asarray(bushing.preload, dtype=float)[:6]],
+        },
+    }
+
+
+def _element_entries(assembly, *, drive_wheels: bool) -> list[dict[str, object]]:
+    """
+    Describe the assembly's force elements for the document.
+
+    What goes in depends on the reading, and the difference is physical rather than
+    cosmetic:
+
+    * **K** drives the wheel centres through the *rigid kinematic set*, so the arm mounts
+      are ideal constraints.  Emitting the bushings as well would double-count the mounts,
+      so the elastic column the K document carries is the suspension's own springs and
+      bars -- and the *kinematic* reading carries none of them.
+    * **C** loads the *compliant* set, where the arm mounts **are** bushings.  Those are
+      the elements that carry the wheel load, so they belong in the document.
+
+    Springs are emitted by both readings now.  Before this, they were emitted by neither:
+    measured, the module had zero occurrences of `spring`, so a K or C solve had no spring
+    reaction at all and the arm mounts were the only compliance in play.  A spring whose
+    assembled length differs from its free length applies a force, and a residual that
+    cannot see it cannot balance it.
+
+    The bushing list comes from `assembly.elements`, not from `assembly.bushings`: the two
+    hold the same objects (measured 16 and 16), so iterating both would emit every mount
+    twice.
+    """
+    entries: list[dict[str, object]] = []
+    for element in getattr(assembly, "elements", ()):
+        kind = type(element).__name__
+        if kind == "LinearSpringElement":
+            entries.append(_spring_element(element))
+        elif kind == "StaticDamperElement":
+            entries.append(_damper_element(element))
+        elif kind == "BumpStopElement":
+            entries.append(_bump_stop_element(element))
+        elif kind == "AntiRollBarElement":
+            entries.append(_anti_roll_element(element))
+        elif kind == "BushingElement" and not drive_wheels:
+            # The C reading's mounts.  In K these are ideal constraints instead, so the
+            # same named bushings would be a second, redundant description of one joint.
+            entries.append(_bushing_element(element))
+    return entries
+
+
+def _spring_element(spring) -> dict[str, object]:
+    """
+    One elastic element, in the document's millimetres.
+
+    `free_length` and `reference_length` are two spellings of the same reference, and the
+    element refuses both at once; whichever was given is what the document states.  A
+    `preload` is carried separately because it is a force, not a length.
+    """
+    parameters: dict[str, object] = {
+        "point_a": _vec3(np.asarray(spring.point_a, dtype=float)),
+        "point_b": _vec3(np.asarray(spring.point_b, dtype=float)),
+        "stiffness": float(spring.stiffness),
+        "preload": float(spring.preload),
+    }
+    if spring.free_length is not None:
+        parameters["free_length"] = float(spring.free_length)
+    if spring.reference_length is not None:
+        parameters["reference_length"] = float(spring.reference_length)
+    if spring.force_curve:
+        parameters["elastic_curve"] = [
+            [float(deflection), float(force)] for deflection, force in spring.force_curve
+        ]
+    return {
+        "name": spring.name,
+        "type": "spring",
+        "body_a": spring.body_a,
+        "body_b": spring.body_b,
+        "parameters": parameters,
+    }
+
+
+def _damper_element(damper) -> dict[str, object]:
+    """
+    One dissipative element.
+
+    Every coefficient is stated, including the ones a *static* solve cannot use: the
+    reading has zero velocity, so the damping terms contribute nothing.  They are written
+    rather than omitted because the document is a description of the element, and a reader
+    that had to infer "absent means zero" would be reading a different element than the
+    one the assembly built.
+    """
+    parameters: dict[str, object] = {
+        "point_a": _vec3(np.asarray(damper.point_a, dtype=float)),
+        "point_b": _vec3(np.asarray(damper.point_b, dtype=float)),
+        "compression_damping": float(damper.viscous_damping),
+        "rebound_damping": float(damper.viscous_damping),
+        "gas_stiffness": float(damper.gas_stiffness),
+        "gas_reference_force": float(damper.gas_reference_force),
+        "preload": float(damper.preload),
+        "friction": float(damper.friction),
+        "extension_sign": float(damper.extension_sign),
+    }
+    if damper.gas_reference_length is not None:
+        parameters["gas_reference_length"] = float(damper.gas_reference_length)
+    if damper.force_curve:
+        parameters["damper_curve"] = [
+            [float(velocity), float(force)] for velocity, force in damper.force_curve
+        ]
+    return {
+        "name": damper.name,
+        "type": "damper",
+        "body_a": damper.body_a,
+        "body_b": damper.body_b,
+        "parameters": parameters,
+    }
+
+
+def _bump_stop_element(stop) -> dict[str, object]:
+    """
+    One unilateral element.
+
+    `direction` is the string `bump`/`rebound` in the modelling layer and a signed number
+    in the contract -- the kernel compares it numerically to decide which side of
+    `clearance` engages, so passing the word through would compare a string to a number.
+    """
+    parameters: dict[str, object] = {
+        "point_a": _vec3(np.asarray(stop.point_a, dtype=float)),
+        "point_b": _vec3(np.asarray(stop.point_b, dtype=float)),
+        "clearance": float(stop.clearance),
+        "stiffness": float(stop.stiffness),
+        "direction": 1.0 if str(stop.direction).lower() == "bump" else -1.0,
+    }
+    if stop.force_curve:
+        parameters["stop_curve"] = [
+            [float(penetration), float(force)] for penetration, force in stop.force_curve
+        ]
+    return {
+        "name": stop.name,
+        "type": "bump_stop",
+        "body_a": stop.body_a,
+        "body_b": stop.body_b,
+        "parameters": parameters,
+    }
+
+
+def _anti_roll_element(bar) -> dict[str, object]:
+    """
+    One anti-roll bar, as the **link law** the assembly actually builds.
+
+    The modelling layer's bar is a link: it applies a vertical force pair proportional to
+    the vertical separation of its two attachment points.  The kernel's own
+    `anti_roll_bar` is a different statement -- a *torsional* bar taking an axis and a
+    reference quaternion -- and `preparation/vehicle_dynamic.py` refuses to convert
+    between them by name.
+
+    So the link law is expressed as what it is: a **bushing with a single non-zero
+    stiffness entry**, `K[2][2]`.  A bushing's force is `K6x6` times the relative
+    displacement at its own point pair, so a matrix that is zero everywhere except the
+    vertical term produces exactly the vertical pair the link law produces.  Measured at
+    dz = +/-10 mm with K = 10 N/mm: the link law gives [0, 0, +/-100] and the z-only
+    bushing gives [0, 0, +/-100].
+
+    The identity holds because a bushing evaluates in its own frame, and these attachments
+    are declared with the unit quaternion -- so the frame's z *is* the world z.  A tilted
+    pair would make the two diverge, which is why the quaternions are written out rather
+    than defaulted.
+    """
+    stiffness = float(bar.stiffness)
+    matrix = [[0.0] * 6 for _ in range(6)]
+    matrix[2][2] = stiffness
+    identity = [1.0, 0.0, 0.0, 0.0]
+    return {
+        "name": bar.name,
+        "type": "bushing",
+        "body_a": bar.left_body,
+        "body_b": bar.right_body,
+        "parameters": {
+            "point_a": _vec3(np.asarray(bar.left_point, dtype=float)),
+            "point_b": _vec3(np.asarray(bar.right_point, dtype=float)),
+            "frame_a_quaternion": list(identity),
+            "frame_b_quaternion": list(identity),
+            "stiffness": matrix,
+            "damping": [[0.0] * 6 for _ in range(6)],
+            "preload": [0.0] * 6,
         },
     }
 
@@ -484,8 +709,27 @@ def case_document(
     times_s: tuple[float, ...] = (),
     settings=None,
     drive_wheels: bool | None = None,
+    drives: tuple[str, ...] | None = None,
 ) -> dict[str, object]:
-    """Describe a ``kc_quasi_static`` request as a case document."""
+    """
+    Describe a ``kc_quasi_static`` request as a case document.
+
+    ``drives`` is the set of drive coordinates the *resolved run* actually moves,
+    in the rig's own order, and it is what the axis map is built from.  The set
+    comes from shrinking the rig's declaration to the assembly's capabilities
+    (``rigs.compose``), so a coordinate the assembly cannot offer never appears
+    here at all.
+
+    It used to be derived by searching the emitted names for a prefix
+    (``value.startswith("wheel_drive_")``), which made the grouping a property of
+    the *spelling*: a coordinate renamed in the rig, or a group the kernel grows,
+    would fall out of the map silently and the grid would lose an axis without
+    reporting it.  ``subsystems.capabilities.kernel_axis`` states the mapping once
+    and this function reads it.
+
+    Passing ``None`` keeps the historical behaviour for callers that have no rig
+    composition in hand; the coordinates are then taken from the assembly itself.
+    """
     if family not in ("kc_quasi_static",):
         raise NativeKcError(f"unsupported case family {family!r}")
     document: dict[str, object] = {
@@ -499,27 +743,26 @@ def case_document(
         drive_wheels = bool(wheel_values_mm)
     driven, _ = _driven_coordinates(assembly, drive_wheels=drive_wheels)
     driven_names = [coordinate for coordinate, _ in driven]
+    resolved_drives = tuple(driven_names) if drives is None else tuple(drives)
     if times_s:
         document["time"] = time_document(times_s)
     if settings is not None:
         document["solver"] = solver_settings_document(settings, times_s=times_s)
     if wheel_values_mm or rack_values_mm:
-        # The axis map names the driven coordinates the grid moves.  The rack
-        # entry appears only when the model actually declared a rack coordinate:
-        # `next(...)` over the names raised `StopIteration` on a steering-less
-        # assembly, which is a failure that says nothing about why, and the run
-        # that "succeeded" by padding the axis with zeros was worse -- it looked
-        # steered and was not.
-        axis_map: dict[str, object] = {
-            "wheel": [
-                value for value in driven_names if value.startswith("wheel_drive_")
-            ],
-        }
-        rack_name = next(
-            (value for value in driven_names if value.startswith("rack_")), None
-        )
-        if rack_name is not None:
-            axis_map["rack"] = rack_name
+        # The axis map names the driven coordinates the grid moves, grouped the way
+        # the kernel reads them.  A group with no surviving coordinate is *absent*
+        # rather than empty-or-zero: an assembly without steering has no rack axis,
+        # and writing one at 0.0 would make the run look steered when it is not.
+        axis_map: dict[str, object] = {}
+        for coordinate in resolved_drives:
+            group = kernel_axis(coordinate)
+            if group is None:
+                continue
+            if group == "wheel":
+                axis_map.setdefault("wheel", [])
+                axis_map["wheel"].append(coordinate)  # type: ignore[union-attr]
+            else:
+                axis_map[group] = coordinate
         document["k"] = {
             "wheel_values_mm": [float(v) for v in wheel_values_mm],
             "rack_values_mm": [float(v) for v in rack_values_mm],

@@ -48,7 +48,7 @@ from ..modeling.primitives.joints import (
     UniversalJoint,
     WeldJoint,
 )
-from ..preparation.assembly import FrontAxleAssembly
+from ..subsystems.runtime import SubsystemRuntime
 
 __all__ = ["BridgeError", "MM", "axle_dynamics_model"]
 
@@ -320,7 +320,7 @@ def axle_dynamics_model(
     accounts for every element the assembly can hold and refuses the ones this
     schema has no field for.
     """
-    assembly: FrontAxleAssembly = study_assembly.assembly
+    assembly: SubsystemRuntime = study_assembly.assembly
     bodies = tuple(_body(key, value) for key, value in assembly.bodies.items())
     joints = tuple(_joint(constraint) for constraint in assembly.constraints)
     bushings = tuple(
@@ -449,7 +449,7 @@ def _bump_stop(element) -> AxleBumpStop:
     )
 
 
-def _refuse_unreadable_elements(assembly: FrontAxleAssembly) -> None:
+def _refuse_unreadable_elements(assembly: SubsystemRuntime) -> None:
     """
     Raise for any element this schema has no field for, naming it.
 

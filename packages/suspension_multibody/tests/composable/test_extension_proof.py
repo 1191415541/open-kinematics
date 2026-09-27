@@ -33,9 +33,9 @@ import pytest
 from suspension_multibody import api
 from suspension_multibody.cases.kc_quasi_static import model_document
 from suspension_multibody.compilation import KcStudyInputs, compile_plan, plan_for
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import CaseSpec, DisplacementControl
 from suspension_multibody.subsystems import AssemblyRequest
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 from tests.composable.fixtures import (
     load_bench_payload,
@@ -72,8 +72,9 @@ def _source_hashes() -> dict[str, str]:
         "studies/study.py",
         "rigs/rig.py",
         "subsystems/composition.py",
+        "subsystems/entry.py",
+        "subsystems/vehicle_parts.py",
         "modeling/assembly.py",
-        "preparation/assembly/front_axle.py",
     )
     return {
         name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in core
@@ -100,8 +101,8 @@ def test_the_fixture_is_marked_synthetic_and_is_not_a_wishbone_rename() -> None:
     assert whole["_synthetic"] is True
     assert "SYNTHETIC" in whole["description"]
 
-    trailing = build_front_axle(trailing_arm_model(), "K")
-    wishbone = build_front_axle(benchmark_model(), "K")
+    trailing = compose_axle(trailing_arm_model(), "K")
+    wishbone = compose_axle(benchmark_model(), "K")
 
     assert set(trailing.bodies) == {"chassis", "upright_L", "upright_R"}
     assert len(trailing.bodies) < len(wishbone.bodies)
@@ -120,7 +121,7 @@ def test_the_fixture_is_marked_synthetic_and_is_not_a_wishbone_rename() -> None:
 
 def test_the_double_wishbone_is_not_the_trailing_arm() -> None:
     """The other direction, so the difference is a comparison and not a claim."""
-    wishbone = build_front_axle(benchmark_model(), "K")
+    wishbone = compose_axle(benchmark_model(), "K")
     assert any(name.startswith("upper_arm") for name in wishbone.bodies)
     assert any(name.startswith("tie_rod") for name in wishbone.bodies)
     assert len({type(c).__name__ for c in wishbone.constraints}) > 1
@@ -333,7 +334,7 @@ def test_one_bench_drives_both_topologies(topology: str) -> None:
         mode="K",
         inputs=KcStudyInputs(name=topology),
     )
-    assembly = build_front_axle(model, "K")
+    assembly = compose_axle(model, "K")
     document, case, _, _, metadata = compile_plan(plan, assembly)
 
     assert metadata["rig"] == "kc_quasi_static"
@@ -490,7 +491,7 @@ def test_registering_a_bench_is_a_declaration_not_a_core_edit() -> None:
         from suspension_multibody.rigs import check_assembly
         from suspension_multibody.rigs.compose import _RIG_ASSEMBLIES
 
-        capabilities = build_front_axle(benchmark_model(), "K").capabilities
+        capabilities = compose_axle(benchmark_model(), "K").capabilities
         _RIG_ASSEMBLIES["synthetic_load_bench"] = "axle"
         try:
             check_assembly("axle", "synthetic_load_bench", capabilities)
@@ -526,7 +527,7 @@ def test_the_synthetic_topology_is_readable_as_a_dynamic_model() -> None:
         build_study_assembly,
     )
 
-    assembly = build_front_axle(trailing_arm_model(), "K")
+    assembly = compose_axle(trailing_arm_model(), "K")
     study_assembly = build_study_assembly(assembly, study=DYNAMIC, mode="K")
     model = axle_dynamics_model(study_assembly, name="trailing-arm")
 
@@ -550,7 +551,7 @@ def test_the_synthetic_topology_keeps_its_own_document_under_a_different_bench_n
 
     from suspension_multibody.rigs.rig import RIGS
 
-    assembly = build_front_axle(trailing_arm_model(), "K")
+    assembly = compose_axle(trailing_arm_model(), "K")
     original = RIGS["kc_quasi_static"]
     RIGS["synthetic_bench"] = replace(
         original, name="synthetic_bench", family="kc_quasi_static"
@@ -582,7 +583,7 @@ def test_the_trailing_arm_runs_without_any_steering_declaration() -> None:
     # A single-axle assembly is refused a brake or a drive subsystem, and the
     # refusal names the role rather than silently dropping it.
     with pytest.raises(ValueError, match="brake"):
-        build_front_axle(
+        compose_axle(
             benchmark_model(),
             "K",
             AssemblyRequest(
@@ -591,7 +592,7 @@ def test_the_trailing_arm_runs_without_any_steering_declaration() -> None:
             ),
         )
     with pytest.raises(ValueError, match="drive"):
-        build_front_axle(
+        compose_axle(
             benchmark_model(),
             "K",
             AssemblyRequest(

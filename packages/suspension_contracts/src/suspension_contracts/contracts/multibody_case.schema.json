@@ -18,6 +18,10 @@
     },
     "name": {"type": "string", "minLength": 1},
     "description": {"type": "string"},
+    "drive_mode": {
+      "description": "How the case decides the assembly's pose. 'kinematics' solves the constraint equations alone, with no force element or tire in the residual. 'force_balance' additionally balances the elastic elements (springs, dampers, anti-roll bars, bushings, bump stops) against the driven targets, and is the default. 'pad' drives a ground height instead of the wheel centre, so the tires carry the wheel and the ground is what is swept.",
+      "enum": ["kinematics", "force_balance", "pad"]
+    },
     "solver": {
       "type": "object",
       "additionalProperties": false,
@@ -88,6 +92,12 @@
           }
         },
         "rack_values_mm": {"type": "array", "items": {"type": "number"}},
+        "pad_height_mm": {
+          "description": "The ground heights to sweep, in millimetres, for drive_mode 'pad'. One expansion entry per height, each solved as its own equilibrium: the pad is a surface the wheel is measured against, not a driven coordinate, so it cannot be expressed through axis_map. A plane road's origin_z carries the height.",
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "number"}
+        },
         "drive": {"enum": ["wheel_center", "contact_point"]},
         "left_right_mode": {"enum": ["single", "symmetric", "opposite"]},
         "axis_map": {

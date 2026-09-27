@@ -186,6 +186,74 @@ bool expand_k_axes(const JsonValue& axes, const ContractModel& model,
   }
 }
 
+bool expand_pad(const JsonValue& pad_heights, const ContractModel& model,
+                const std::vector<double>& times,
+                const std::vector<BodyLoad>& loads, ContractPlan& plan,
+                std::string& error) {
+  // A pad sweep is a grid of *ground heights*, one case each.  It does not go
+  // through `axis_map`, and it cannot: a pad height is not a driven coordinate, so
+  // `model.driven_index` has nothing to resolve it against.  The axis machinery
+  // states how far a joint is moved; a pad states where the ground is.
+  //
+  // The ground travels in `run.road_z`, per tire, which is the channel the dynamic
+  // families already fill and the tire already reads every step.  The plane's own
+  // height is written to the case's road origin as well, so a run reports the pad it
+  // ran on rather than only the compression that followed from it.
+  const std::size_t sample_count = times.size();
+  const std::size_t tire_count = model.tire_order().size();
+  if (tire_count == 0) {
+    return fail(error, "a pad sweep needs tires: the pad carries the wheel, and "
+                       "without a tire nothing bears on it");
+  }
+
+  std::vector<double> heights;
+  if (!read_numbers(pad_heights, heights, "k.pad_height_mm", error)) return false;
+  if (heights.empty()) {
+    return fail(error, "k.pad_height_mm must name at least one height");
+  }
+
+  // The wheels are not driven by this reading: the pad is.  A driven coordinate left
+  // in the document would hold the wheel centre at its assembled separation, which is
+  // a second statement about where the wheel is and would fight the tire.
+  std::vector<double> zero_targets(sample_count * model.driven_count(), 0.0);
+  std::vector<double> offsets(model.driven_count(), 0.0);
+
+  for (std::size_t index = 0; index < heights.size(); ++index) {
+    ContractCase run;
+    run.name = "pad" + format("%+.0f", heights[index]);
+    run.sample_count = sample_count;
+    run.sample_times = times;
+
+    // Every sample carries the same height: one pad position held for the whole
+    // output grid, so the case is a single equilibrium rather than a path along the
+    // ground.  The trim then solves it from the assembled pose, which is what makes
+    // each pad height its own equilibrium (the runner trims once per case).
+    //
+    // The pad is stated through `road_z` **only**.  The tire adds the profile height
+    // *and* this per-tire table (`radius + road_profile.height + road_z - center.z`),
+    // so also setting the case-level road origin would count the same pad twice -- a
+    // 30 mm pad would read as 60 mm of travel, which still converges and still looks
+    // like a plausible curve.
+    const double height = heights[index] * kMillimetreScale;
+    run.road_z.assign(sample_count * tire_count, height);
+    run.road_velocity.assign(sample_count * tire_count, 0.0);
+
+    // The driven coordinates keep their assembled separation -- unchanged, since
+    // nothing here drives them -- so the case's own targets are the separation.
+    for (std::size_t coordinate = 0; coordinate < model.driven_count(); ++coordinate) {
+      const double separation = model.driven_separation(coordinate);
+      for (std::size_t sample = 0; sample < sample_count; ++sample) {
+        zero_targets[sample * model.driven_count() + coordinate] = separation;
+      }
+    }
+    run.driven_target = zero_targets;
+    run.driven_target_rate.assign(sample_count * model.driven_count(), 0.0);
+    fill_body_loads(loads, sample_count, model.body_count(), run.body_wrench);
+    plan.cases.push_back(std::move(run));
+  }
+  return true;
+}
+
 bool expand_k(const JsonValue& document, const ContractModel& model,
               const std::vector<double>& times, ContractPlan& plan, std::string& error) {
   const JsonValue* k = document.find("k");
@@ -224,6 +292,13 @@ bool expand_k(const JsonValue& document, const ContractModel& model,
   std::vector<BodyLoad> body_loads;
   if (const JsonValue* entries = k->find("body_wrench"); entries != nullptr) {
     if (!read_body_loads(*entries, model, body_loads, error)) return false;
+  }
+
+  // A pad sweep is its own form, checked before the driven-coordinate ones because
+  // it does not name driven coordinates at all: the ground moves and the wheel
+  // follows, which is a different question from "move the wheel this far".
+  if (const JsonValue* pad = k->find("pad_height_mm"); pad != nullptr) {
+    return expand_pad(*pad, model, times, body_loads, plan, error);
   }
 
   if (const JsonValue* axes = k->find("axes"); axes != nullptr) {

@@ -1,24 +1,31 @@
 """
-Full-vehicle multibody topology and wheel-end assembly.
+The mechanisms a vehicle runtime is built from.
 
-The author-side half of the vehicle: two axles merged under one chassis, the
-wheel ends attached, and the load-bearing names the contract needs.  Welded
-bodies stay separate by default (the epic's A3 ruling): each weld goes to the
-kernel as a ``kind="fixed"`` joint, six rows of point coincidence plus full
-relative rotation.  ``_fuse_welded_bodies`` keeps the Python-side fusion
-behind ``SUSPENSION_MULTIBODY_CONDENSE_WELDS=1``.  Moved here from
-``model/vehicle.py``, which 08 deletes.
+Merging two composed axles under one chassis, attaching the wheel ends, and the
+renaming that makes the result readable as a whole vehicle.  Welded bodies stay
+separate by default: each weld reaches the kernel as a ``kind="fixed"`` joint, six
+rows of point coincidence plus full relative rotation.
+``SUSPENSION_MULTIBODY_CONDENSE_WELDS=1`` restores the older fused form.
+
+This module holds *mechanisms* and no entry point of its own.
+``subsystems/vehicle_assembly.py`` composes the axles and calls these.  The two used
+to be one module whose ``compose_vehicle`` was a hand-written path beside the
+composition; that path is gone, and these are the parts of it worth keeping.
+
+The functions here name :class:`VehicleRuntime` in their signatures only, so the
+import is under ``TYPE_CHECKING``: ``vehicle_assembly`` imports *this* module, and a
+real import back would be a cycle.
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field, fields, replace
-from typing import Any, Literal
+from dataclasses import fields, replace
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from ...modeling.primitives import (
+from ..modeling.primitives import (
     SE3,
     BumpStopElement,
     BushingElement,
@@ -28,188 +35,27 @@ from ...modeling.primitives import (
     RigidBody,
     RigidBodyState,
     StaticDamperElement,
-    VerticalTireElement,
     WeldJoint,
 )
-from ...schema import RigidBodySpec, VehicleModel, WheelSpec
-from ...subsystems import (
-    DEFAULT_VEHICLE_SUBSYSTEMS,
-    AssemblyCapabilities,
-    capabilities_for,
-)
-from .front_axle import (
-    Connection,
-    FrontAxleAssembly,
-    _local_point,
-    build_front_axle,
-)
+from ..schema import RigidBodySpec, WheelSpec
+from .geometry import local_point
+from .types import Connection
 
+if TYPE_CHECKING:  # pragma: no cover - annotations only, keeps the import acyclic
+    from .vehicle_assembly import VehicleRuntime
 
-@dataclass(frozen=True)
-class VehicleAssembly:
-    """Merged chassis, suspension and wheel-end runtime representation."""
-
-    mode: Literal["K", "C"]
-    bodies: dict[str, RigidBody]
-    state: RigidBodyState
-    points: dict[tuple[str, str], np.ndarray]
-    constraints: tuple[Constraint, ...]
-    ideal_constraints: tuple[Constraint, ...]
-    elements: tuple[object, ...]
-    connections: tuple[Connection, ...]
-    wheel_specs: dict[str, WheelSpec]
-    wheel_centers: dict[str, tuple[str, np.ndarray]]
-    wheel_body_names: dict[str, str]
-    wheel_rotations_local: dict[str, np.ndarray]
-    axle_assemblies: dict[str, FrontAxleAssembly]
-    body_aliases: dict[str, str] = field(default_factory=dict)
-    #: What this assembly carries.  A full-vehicle rig binds to this instead of
-    #: probing for body names; the full vehicle carries all six roles, brake and
-    #: drive included (requirement 17 / D8).  Defaulted so existing constructions
-    #: and `replace` calls keep working unchanged.
-    capabilities: AssemblyCapabilities | None = None
-
-    @property
-    def component_ids(self) -> tuple[str, ...]:
-        """Return deterministic body identifiers."""
-        return tuple(self.bodies)
-
-    @property
-    def wheel_ids(self) -> tuple[str, ...]:
-        """Return deterministic corner identifiers."""
-        return tuple(self.wheel_specs)
-
-    @property
-    def element_ids(self) -> tuple[str, ...]:
-        """Return deterministic force-element identifiers."""
-        return tuple(
-            getattr(element, "name", f"element_{index}")
-            for index, element in enumerate(self.elements)
-        )
-
-    @property
-    def total_mass(self) -> float:
-        """Return the sum of all movable and fixed body masses."""
-        return float(sum(body.mass for body in self.bodies.values()))
-
-    def wheel_center_local(self, wheel: str) -> np.ndarray:
-        """Return the wheel-center point on its upright body."""
-        try:
-            return self.wheel_centers[wheel][1].copy()
-        except KeyError as exc:
-            raise KeyError(f"unknown wheel {wheel!r}") from exc
-
-
-def build_vehicle(model: VehicleModel, mode: Literal["K", "C"] = "K") -> VehicleAssembly:
-    """Compose suspension and wheel ends, condensing fixed wheels exactly."""
-    if mode not in ("K", "C"):
-        raise ValueError("mode must be K or C")
-    chassis = _body_from_spec(model.chassis)
-    bodies: dict[str, RigidBody] = {chassis.name: chassis}
-    points: dict[tuple[str, str], np.ndarray] = {}
-    constraints: list[Constraint] = []
-    ideal_constraints: list[Constraint] = []
-    elements: list[object] = []
-    connections: list[Connection] = []
-    axle_assemblies: dict[str, FrontAxleAssembly] = {}
-    wheel_specs = {wheel.name: wheel for wheel in model.wheels}
-    wheel_centers: dict[str, tuple[str, np.ndarray]] = {}
-    wheel_body_names: dict[str, str] = {}
-    wheel_rotations_local: dict[str, np.ndarray] = {}
-
-    for axle_name, axle_model, prefix in (
-        ("front", model.front_axle, "front_"),
-        ("rear", model.rear_axle, "rear_"),
-    ):
-        axle = build_front_axle(axle_model, mode=mode)
-        axle_assemblies[axle_name] = axle
-        body_map = {
-            old: model.chassis.name if old == "chassis" else f"{prefix}{old}"
-            for old in axle.bodies
-        }
-        for old_name, body in axle.bodies.items():
-            if old_name == "chassis":
-                continue
-            new_name = body_map[old_name]
-            if new_name in bodies:
-                raise ValueError(f"duplicate vehicle body {new_name!r}")
-            bodies[new_name] = replace(body, name=new_name)
-        points.update(
-            {
-                (body_map[body], label): np.asarray(point, dtype=float).copy()
-                for (body, label), point in axle.points.items()
-            }
-        )
-        constraints.extend(
-            _rename_dataclasses(axle.constraints, body_map, prefix)
-        )
-        ideal_constraints.extend(
-            _rename_dataclasses(axle.ideal_constraints, body_map, prefix)
-        )
-        elements.extend(
-            element
-            for element in _rename_dataclasses(axle.elements, body_map, prefix)
-            if not isinstance(element, VerticalTireElement)
-        )
-        connections.extend(
-            _rename_connections(axle.connections, body_map, prefix)
-        )
-
-        for wheel in model.wheels:
-            if (wheel.name.startswith(f"{axle_name}_")):
-                side = "L" if wheel.name.endswith("left") else "R"
-                upright = body_map[f"upright_{side}"]
-                center = points[(upright, "wheel_center")]
-                mount_body = wheel.mount_body or f"upright_{side}"
-                actual_mount_body = body_map.get(mount_body, mount_body)
-                if actual_mount_body not in bodies:
-                    raise ValueError(
-                        f"wheel {wheel.name!r} mount body {mount_body!r} is undefined"
-                    )
-                runtime_body = (
-                    actual_mount_body
-                    if wheel.mount_joint_kind == "fixed"
-                    else wheel.body
-                )
-                _add_wheel(
-                    wheel,
-                    upright,
-                    center,
-                    actual_mount_body,
-                    runtime_body,
-                    bodies,
-                    points,
-                    constraints,
-                    connections,
-                    wheel_centers,
-                    wheel_body_names,
-                    wheel_rotations_local,
-                    prefix,
-                )
-
-    state = RigidBodyState(bodies)
-    assembly = VehicleAssembly(
-        mode=mode,
-        bodies=bodies,
-        state=state,
-        points=points,
-        constraints=tuple(constraints),
-        ideal_constraints=tuple(ideal_constraints),
-        elements=tuple(elements),
-        connections=tuple(connections),
-        wheel_specs=wheel_specs,
-        wheel_centers=wheel_centers,
-        wheel_body_names=wheel_body_names,
-        wheel_rotations_local=wheel_rotations_local,
-        axle_assemblies=axle_assemblies,
-        # The full vehicle carries all six roles, brake and drive included
-        # (requirement 17 / D8), so a vehicle rig can ask rather than probe.
-        capabilities=capabilities_for(
-            subsystems=frozenset(DEFAULT_VEHICLE_SUBSYSTEMS),
-            body_names=frozenset(bodies),
-        ),
-    )
-    return _drop_isolated_bodies(_condense_welded_bodies(assembly))
+__all__ = [
+    "_add_wheel",
+    "_body_from_spec",
+    "_condense_welded_bodies",
+    "_drop_isolated_bodies",
+    "_fuse_welded_bodies",
+    "_merge_fixed_wheel",
+    "_parallel_axis_inertia",
+    "_rename_connections",
+    "_rename_dataclasses",
+    "_wheel_inertia",
+]
 
 
 def _body_from_spec(spec: RigidBodySpec) -> RigidBody:
@@ -264,7 +110,7 @@ def _rename_connections(
     )
 
 
-def _condense_welded_bodies(assembly: VehicleAssembly) -> VehicleAssembly:
+def _condense_welded_bodies(assembly: VehicleRuntime) -> VehicleRuntime:
     """
     Return the assembly unchanged: the kernel's ``fixed`` joint carries a weld.
 
@@ -284,7 +130,7 @@ def _condense_welded_bodies(assembly: VehicleAssembly) -> VehicleAssembly:
     return _fuse_welded_bodies(assembly)
 
 
-def _fuse_welded_bodies(assembly: VehicleAssembly) -> VehicleAssembly:
+def _fuse_welded_bodies(assembly: VehicleRuntime) -> VehicleRuntime:
     """Exactly merge bodies connected by WeldJoint constraints."""
     welds = tuple(
         constraint
@@ -559,7 +405,7 @@ def _fuse_welded_bodies(assembly: VehicleAssembly) -> VehicleAssembly:
     )
 
 
-def _drop_isolated_bodies(assembly: VehicleAssembly) -> VehicleAssembly:
+def _drop_isolated_bodies(assembly: VehicleRuntime) -> VehicleRuntime:
     """Remove free bodies that have no physical connection to the vehicle."""
     flag = os.environ.get("SUSPENSION_MULTIBODY_DROP_ISOLATED_BODIES")
     if flag is not None and flag != "" and flag == "0":
@@ -672,7 +518,7 @@ def _add_wheel(
         [0.0, 0.0, -wheel.tire.unloaded_radius], dtype=float
     )
     if mount_body != upright:
-        mount_point = _local_point(bodies, mount_body, center_global)
+        mount_point = local_point(bodies, mount_body, center_global)
         points[(mount_body, "mount")] = mount_point.copy()
     else:
         mount_point = center

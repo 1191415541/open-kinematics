@@ -20,7 +20,6 @@ import pytest
 from suspension_multibody.modeling.primitives import RigidBodyState
 from suspension_multibody.outputs import BUILTIN, builtin
 from suspension_multibody.outputs.builtin import LEGACY_CLASSIFICATION
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.report.metrics import (
     compute_axle_metrics,
     compute_common_metrics,
@@ -31,6 +30,7 @@ from suspension_multibody.report.metrics.case_specific import (
     compute_k_metrics,
     wheel_metrics,
 )
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 #: The 27 functions of `report/metrics/`, one entry per function, as
@@ -193,7 +193,7 @@ def test_the_steering_restatement_ignores_non_finite_samples_like_the_legacy_cod
 
 def test_the_kc_geometry_metrics_are_restated_value_for_value() -> None:
     """The pose-based metrics, over a real assembly rather than a fake result."""
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     state = RigidBodyState(assembly.bodies)
     values: dict[str, object] = {}
     for side in ("L", "R"):

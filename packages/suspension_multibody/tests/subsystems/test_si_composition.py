@@ -16,7 +16,6 @@ from __future__ import annotations
 import pytest
 
 from suspension_multibody.modeling import SimulationAssembly
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import FrontAxleModel, MassSpec, Vec3
 from suspension_multibody.subsystems.composition import (
     CompositionError,
@@ -24,6 +23,7 @@ from suspension_multibody.subsystems.composition import (
     compose_simulation_assembly,
     fingerprint_assembly,
 )
+from suspension_multibody.subsystems.entry import compose_axle
 from suspension_multibody.subsystems.si_assembly import (
     contributions_for_axle,
     si_assembly_for_axle,
@@ -58,14 +58,14 @@ def test_the_composed_bodies_match_the_historical_order(mode: str) -> None:
     different document, which is exactly the kind of difference that is invisible
     in a summary and visible in every recorded artifact.
     """
-    historical = build_front_axle(_model(), mode)
+    historical = compose_axle(_model(), mode)
     composed = si_assembly_for_axle(_model(), request=AssemblyRequest(mode=mode))
     assert list(composed.assembly.fragment.bodies) == list(historical.bodies)
 
 
 @pytest.mark.parametrize("mode", ["K", "C"])
 def test_the_composed_points_match_the_historical_set(mode: str) -> None:
-    historical = build_front_axle(_model(), mode)
+    historical = compose_axle(_model(), mode)
     composed = si_assembly_for_axle(_model(), request=AssemblyRequest(mode=mode))
     assert set(composed.assembly.fragment.points) == set(historical.points)
 
@@ -73,7 +73,7 @@ def test_the_composed_points_match_the_historical_set(mode: str) -> None:
 @pytest.mark.parametrize("mode,expected", [("K", 13), ("C", 9)])
 def test_the_active_constraint_count_is_preserved(mode: str, expected: int) -> None:
     """K has 13 joints and C has 9: C keeps the tie rods, it does not drop them."""
-    historical = build_front_axle(_model(), mode)
+    historical = compose_axle(_model(), mode)
     composed = si_assembly_for_axle(_model(), request=AssemblyRequest(mode=mode))
     assert len(historical.constraints) == expected
     assert len(composed.assembly.fragment.joints) == expected
@@ -170,7 +170,7 @@ def test_composition_does_not_need_the_legacy_path() -> None:
     """
     The composed value is built from the subsystems directly.
 
-    Checked by composing without ever calling ``build_front_axle``: if the new
+    Checked by composing without ever calling the historical builder: if the new
     path secretly depended on the old one having run, the two would be one path
     wearing two names, and 07 could not switch over.
     """

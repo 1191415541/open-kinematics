@@ -32,9 +32,9 @@ from ..modeling.primitives.spatial import (
     quaternion_multiply,
     quaternion_to_rotation_vector,
 )
-from ..preparation.assembly import side_hardpoints
 from ..schema import Bushing6x6, FrontAxleModel, MassSpec, Pose, Vec3
 from ..simulation import SimulationRequest, run_request
+from ..subsystems.geometry import side_hardpoints
 from .adapter import SmokeResult, Tolerance
 from .probe import AdamsProfile, _adams_environment, producer_id
 from .reference import _KC_SETTINGS, _KC_TIMES_S, _side_fields

@@ -17,7 +17,6 @@ import numpy as np
 import pytest
 
 from suspension_multibody.cases.kc_quasi_static import model_document
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.results import (
     ELEMENT_WRENCH_BLOCK,
     ELEMENT_WRENCH_SWITCH,
@@ -33,6 +32,7 @@ from suspension_multibody.results.element_wrench import (
 )
 from suspension_multibody.schema import Bushing6x6, FrontAxleModel, Pose, Vec3
 from suspension_multibody.simulation import SimulationRequest, run_request
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 _NAN = float("nan")
@@ -318,7 +318,7 @@ def _compliant_model() -> FrontAxleModel:
 
 def _run_c():
     """Run one loaded C case on the compliant model through the runner."""
-    assembly = build_front_axle(_compliant_model(), "C")
+    assembly = compose_axle(_compliant_model(), "C")
     model = model_document(assembly, name="c-element-wrench", drive_wheels=False)
     case = {
         "contract": "multibody-case",

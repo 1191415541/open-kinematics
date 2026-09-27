@@ -22,8 +22,8 @@ import numpy as np
 from suspension_contracts import validate_case
 
 from suspension_multibody.cases.kc_quasi_static import case_document, model_document
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.simulation import SimulationRequest, run_request
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 _TIMES_S = (0.0, 1e-3)
@@ -61,7 +61,7 @@ def _run(assembly, case: dict[str, object]):
 
 
 def test_a_single_axis_grid_is_the_shorthand_that_drives_the_wheels_by_zero() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     racks = (-5.0, 0.0, 5.0)
     axes_case = _grid_case({"rack_drive": racks})
     validate_case(axes_case)
@@ -83,7 +83,7 @@ def test_a_single_axis_grid_is_the_shorthand_that_drives_the_wheels_by_zero() ->
 
 
 def test_a_two_axis_grid_drives_the_two_sides_independently() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     left_values = (-10.0, 0.0, 10.0)
     right_values = (-20.0, 5.0)
     run = _run(

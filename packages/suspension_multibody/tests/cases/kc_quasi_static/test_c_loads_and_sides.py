@@ -19,8 +19,8 @@ import numpy as np
 import pytest
 
 from suspension_multibody.cases.kc_quasi_static import case_document, model_document
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.simulation import SimulationRequest, run_request
+from suspension_multibody.subsystems.entry import compose_axle
 
 from .kc_fixtures import _compliant_model
 
@@ -63,7 +63,7 @@ def _upright_names() -> tuple[str, str]:
 
 
 def test_a_mirror_is_required_when_both_sides_are_loaded() -> None:
-    assembly = build_front_axle(_compliant_model(), "C")
+    assembly = compose_axle(_compliant_model(), "C")
     model = model_document(assembly, name="c-loads", drive_wheels=False)
     case = _c_case([{"fz": 100.0}], side_mode="symmetric", mirror=False)
     with pytest.raises(Exception, match="mirror_marker"):
@@ -72,7 +72,7 @@ def test_a_mirror_is_required_when_both_sides_are_loaded() -> None:
 
 def test_an_explicit_load_list_is_the_sweep_it_replaces() -> None:
     """`c.loads` and `paths`+`levels`+`maximum` must agree load for load."""
-    assembly = build_front_axle(_compliant_model(), "C")
+    assembly = compose_axle(_compliant_model(), "C")
     model = model_document(assembly, name="c-loads", drive_wheels=False)
     maximum = 100.0
     explicit = _c_case(
@@ -97,7 +97,7 @@ def test_an_explicit_load_list_is_the_sweep_it_replaces() -> None:
 
 
 def test_the_side_modes_load_the_mirror_in_phase_and_in_anti_phase() -> None:
-    assembly = build_front_axle(_compliant_model(), "C")
+    assembly = compose_axle(_compliant_model(), "C")
     model = model_document(assembly, name="c-loads", drive_wheels=False)
     load = [{"fz": 100.0}]
     states = {}

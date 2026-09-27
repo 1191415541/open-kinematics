@@ -246,7 +246,7 @@ def test_registration_occurrences_are_verified(tmp_path: Path) -> None:
 def test_a_module_that_imports_nothing_retired_passes(tmp_path: Path) -> None:
     root = _package(tmp_path)
     _write(
-        _module_path(root, "preparation/assembly/types.py"),
+        _module_path(root, "preparation/signals.py"),
         "from dataclasses import dataclass\n\n"
         "@dataclass\nclass Joint:\n    name: str\n",
     )
@@ -345,19 +345,23 @@ def test_report_importing_or_running_preparation_is_detected(tmp_path: Path) -> 
     _write(
         _module_path(root, "report/authors_inputs.py"),
         "from suspension_multibody.preparation.signals import time_grid\n"
-        "from ..preparation.assembly import build_front_axle\n\n"
+        "from ..subsystems.entry import compose_axle\n\n"
         "def replay(model, case):\n"
-        "    return build_front_axle(model, 'K'), time_grid(case)\n",
+        "    return compose_axle(model, 'K'), time_grid(case)\n",
     )
     findings = gate.scan_tree(root)
     rules = _rules(findings)
     assert "report_preparation_import" in rules
     assert "report_preparation_call" in rules
     imported = _symbols(findings, "report_preparation_import")
+    # The fixture's preparation import is `preparation.signals`; the composition
+    # entry it also imports is caught by the *call* rule below, because that is what
+    # it does -- it authors a model.  The assertion here used to name
+    # the authoring layer's `assembly` subpackage, which was a second preparation
+    # import in the fixture and is no longer a module at all.
     assert "suspension_multibody.preparation.signals" in imported
-    assert "suspension_multibody.preparation.assembly" in imported
     called = _symbols(findings, "report_preparation_call")
-    assert {"build_front_axle", "time_grid"} <= called
+    assert {"compose_axle", "time_grid"} <= called
     assert gate.evaluate(findings, mode=gate.MODE_MIGRATION) != []
     assert gate.evaluate(findings, mode=gate.MODE_FINAL) != []
 

@@ -60,7 +60,8 @@ src/suspension_multibody/
 `preparation`、`simulation`、`kernel` 或 `report`；这条边界由
 `tests/architecture/test_import_boundaries.py` 在独立子进程里逐入口检查。
 
-已删除：`model/`（迁至 `preparation/assembly/`）、`metrics/`（迁至 `report/metrics/`）、
+已删除：`model/`（其内容先迁至作者层的 `assembly` 子包，该子包随组合层落地整体退役，见下）、
+`metrics/`（迁至 `report/metrics/`）、
 `core/`（spatial 代数与关节/刚体数据迁至 `modeling/primitives/`；`rank.py` 与
 `reactions.py` 无生产调用者，其物理断言转为
 `tests/axle_dynamics/test_solver_invariants.py` 的 native 契约断言）、顶层
@@ -69,8 +70,13 @@ src/suspension_multibody/
 `simulation/replay.py`；`compute_static_wheel_loads` 迁至
 `vehicle/static_loads.py`，`compute_vehicle_roll_centers` 迁至
 `vehicle/roll_centers.py`）。02 留在 `preparation/geometry.py` 与
-`preparation/assembly/types.py` 的两个转发壳也已删除，调用方直接导入
+`preparation` 下两个转发壳（`geometry.py` 与旧 `assembly/types.py`）也已删除，调用方直接导入
 `modeling/primitives/`。
+
+作者层的 `assembly` 子包整体退役：轴与整车一律经组合层构建，
+入口是 `subsystems/entry.py`（`compose_axle` / `compose_vehicle`），
+机制代码留在同层的 `subsystems/vehicle_parts.py`，
+元素构造在 `subsystems/element_build.py`，硬点与镜像在 `subsystems/geometry.py`。
 
 ### 仍保留 elements/ 的理由
 

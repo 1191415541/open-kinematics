@@ -7,8 +7,8 @@ points and its axes; a rigid body carries its pose and its mass properties.
 Neither carries a *residual*, a *Jacobian* or an *evaluate*: those are the
 solving side of the boundary, and the native kernel owns them.
 
-These lived in ``preparation/assembly/types.py``.  They moved into the low layer
-because a leaf module inside ``preparation/assembly`` could not be imported
+These lived in the authoring layer's ``assembly/types.py``.  They moved into the low layer
+because a leaf module inside that package could not be imported
 without executing that package's ``__init__``, which pulls in ``front_axle``,
 ``elements`` and ``subsystems`` -- so a declaration could not be used without
 also loading the whole author-side chain.

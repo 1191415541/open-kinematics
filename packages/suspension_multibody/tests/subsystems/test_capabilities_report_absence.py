@@ -9,8 +9,8 @@ case layer instead of a decision at the boundary.
 
 from __future__ import annotations
 
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.subsystems import DEFAULT_AXLE_SUBSYSTEMS, AssemblyRequest
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 
@@ -24,7 +24,7 @@ def _without_steering_bodies():
 
 
 def test_an_axle_with_steering_offers_the_rack_coordinate() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     assert assembly.capabilities is not None
     assert assembly.capabilities.has("steering")
     assert assembly.capabilities.provides("rack_drive")
@@ -33,7 +33,7 @@ def test_an_axle_with_steering_offers_the_rack_coordinate() -> None:
 
 
 def test_an_axle_without_steering_offers_no_rack_coordinate() -> None:
-    assembly = build_front_axle(
+    assembly = compose_axle(
         _without_steering_bodies(),
         "K",
         AssemblyRequest(mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS - {"steering"}),
@@ -49,7 +49,7 @@ def test_an_axle_without_steering_offers_no_rack_coordinate() -> None:
 
 
 def test_the_capability_set_uses_the_six_role_names() -> None:
-    assembly = build_front_axle(benchmark_model(), "C")
+    assembly = compose_axle(benchmark_model(), "C")
     assert assembly.capabilities is not None
     # `wheel`, not `tire`: the rig supplies the wheels on a single axle (D9).
     assert "wheel" in assembly.capabilities.subsystems
@@ -59,7 +59,7 @@ def test_the_capability_set_uses_the_six_role_names() -> None:
 
 
 def test_requiring_an_absent_coordinate_names_what_is_missing() -> None:
-    assembly = build_front_axle(
+    assembly = compose_axle(
         _without_steering_bodies(),
         "K",
         AssemblyRequest(mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS - {"steering"}),

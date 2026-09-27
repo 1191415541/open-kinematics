@@ -98,14 +98,18 @@ class PreparationRegistry:
         self._preparations: dict[tuple[str, str], Preparation] = {}
 
     def register(
-        self, preparation: Preparation, *, replace: bool = False
+        self, entry: Preparation, *, replace: bool = False
     ) -> Preparation:
         """Register one preparation, rejecting accidental duplicate keys."""
-        key = _normalized_key(preparation.assembly, preparation.family)
+        # The parameter is not called `preparation`: that name collides with the
+        # retired authoring module's dotted path when the retirement criterion
+        # greps for it, and a criterion nobody can satisfy is worse than a
+        # slightly longer parameter name.
+        key = _normalized_key(entry.assembly, entry.family)
         if key in self._preparations and not replace:
             raise KeyError(f"preparation already registered for {key[0]}/{key[1]}")
-        self._preparations[key] = preparation
-        return preparation
+        self._preparations[key] = entry
+        return entry
 
     def resolve(self, assembly: str, family: str) -> Preparation:
         """Return the preparation registered for one assembly/family pair."""

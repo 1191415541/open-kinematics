@@ -1,7 +1,7 @@
 """Front axle topology and K/C mode tests."""
 
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import FrontAxleModel, MassSpec
+from suspension_multibody.subsystems.entry import compose_axle
 
 
 def _model() -> FrontAxleModel:
@@ -23,8 +23,8 @@ def _model() -> FrontAxleModel:
 
 
 def test_k_and_c_share_component_ids_and_mirror_geometry() -> None:
-    k = build_front_axle(_model(), "K")
-    c = build_front_axle(_model(), "C")
+    k = compose_axle(_model(), "K")
+    c = compose_axle(_model(), "C")
     assert k.component_ids == c.component_ids
     assert k.mode == "K"
     assert c.mode == "C"
@@ -36,7 +36,7 @@ def test_k_and_c_share_component_ids_and_mirror_geometry() -> None:
 
 
 def test_front_axle_has_two_sides_and_rack() -> None:
-    assembly = build_front_axle(_model())
+    assembly = compose_axle(_model())
     assert {"upper_arm_L", "upper_arm_R", "lower_arm_L", "lower_arm_R"}.issubset(
         assembly.bodies
     )

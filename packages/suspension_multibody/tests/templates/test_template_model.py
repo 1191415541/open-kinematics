@@ -120,15 +120,28 @@ def test_the_builtin_marks_the_arms_inboard_points_as_the_kc_choice() -> None:
     The K/C mapping is transcribed from the assembly, not from the prose.
 
     In K mode only the inboard *front* point has a joint; the rear point carries
-    a bushing column but no joint column, because the assembly puts no constraint
-    there.  Both points are bushings in C.
+    a bushing column but is inactive in K, because the assembly puts no constraint
+    there -- the arm pivots on one revolute at the front point whose axis runs to
+    the rear one.  Both points are compliant in C.
+
+    The distinction used to be spelled as "the rear point has no joint column",
+    which was true of the earlier model but could not also say that the same point
+    *is* a ball joint in C's ideal set.  It is now spelled as which modes activate
+    which column, so the assertion is about activation rather than about a field
+    being absent.
     """
     by_name = {c.name: c for c in DOUBLE_WISHBONE.connections}
     front = by_name["uca_mount_L_inner_front"]
     rear = by_name["uca_mount_L_inner_rear"]
     assert front.joint == "revolute"
     assert front.bushing is not None
-    assert rear.joint is None, "the inboard rear point carries no K-mode joint"
+    assert front.active_column("K") == "joint"
+    assert front.active_column("C") == "bushing"
+    # The rear point constrains nothing in K, and is both a joint and a bushing in C.
+    assert rear.active_column("K") is None, "the inboard rear point carries no K row"
+    assert rear.active_column("C") == "bushing"
+    assert rear.joint is not None, "C's ideal column needs its ball joint"
+    assert rear.joint == "spherical"
     assert rear.bushing is not None
 
 

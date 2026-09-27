@@ -198,6 +198,10 @@ GEMINI.md
 !/.codex-tasks/20260922-suspension-template-architecture/**
 !/.codex-tasks/multibody-composable-architecture/
 !/.codex-tasks/multibody-composable-architecture/**
+!/.codex-tasks/20260927-composable-model-flow/
+!/.codex-tasks/20260927-composable-model-flow/**
+!/.codex-tasks/20260928-pad-driven-kc/
+!/.codex-tasks/20260928-pad-driven-kc/**
 /artifacts/
 /packages/*/artifacts/
 /packages/*/.codex-tasks/

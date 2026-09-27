@@ -23,6 +23,16 @@ from ..modeling.instance import ModelFragment
 from .ports import PortDeclaration, PortNeed
 from .roles import RoleSpec, get_role
 
+#: The two modes a template can be instantiated for.
+MODES: tuple[str, str] = ("K", "C")
+
+#: Which column a connection activates when *both* are active in the mode.
+#:
+#: Defined here rather than in the instantiation layer because it is part of the
+#: connection's own contract: a template that declares both columns is saying
+#: "rigid in K, compliant in C", and that reading belongs beside the declaration.
+ACTIVATED_MODES: dict[str, str] = {"K": "joint", "C": "bushing"}
+
 __all__ = [
     "Builder",
     "ConnectionDefinition",
@@ -77,16 +87,32 @@ class ConnectionDefinition:
 
     Both columns are optional, and so is both being absent:
 
-    * **both absent** -- the point exists only to locate geometry (the inboard
-      rear hardpoint is used to define the arm's rotation axis and carries no
-      constraint of its own in K mode);
-    * **joint only** -- the point is a joint in both modes (arm outer points, tie
-      rod ends, the rack guide);
-    * **bushing only** -- the point is compliant in both modes;
+    * **both absent** -- the point exists only to locate geometry (the wheel
+      centre is measured against, and carries no constraint of its own);
+    * **joint only** -- the point is a joint in the modes that activate the joint
+      column (arm outer points, tie rod ends, the rack guide);
+    * **bushing only** -- the point is compliant in the modes that activate the
+      bushing column;
     * **both present** -- the K/C choice decides, which is the case the user
       described: the same point is a revolute in K and a bushing in C.
 
-    `mount` names the hardpoint role that locates the point, so a template can be
+    ``joint_modes`` / ``bushing_modes`` say **which modes activate each column**,
+    and they default to both.  The default is the rule the prose states -- a
+    single-column point uses that column in both modes -- and it is right for the
+    arm outer points and the tie rod ends.  It is *not* right for every point,
+    which is why the modes are declared rather than inferred: the inboard rear
+    arm point is a ball joint in C's ideal column and a bushing in C, and carries
+    **nothing** in K, because the K arm pivots on a single revolute at the front
+    point whose axis runs to the rear one.  Declaring "bushing only" there would
+    put a compliance element into the K model that the assembly has never had.
+
+    ``owner`` and ``label`` say *where* the point sits: the part it belongs to and
+    its name within that part.  They are what let an assembly resolve a declared
+    connection against a real hardpoint without guessing from the connection's
+    name -- guessing is how a renamed part silently moves a joint.  Empty means
+    the older behaviour, where the owner is inferred from the declared parts.
+
+    ``mount`` names the hardpoint role that locates the point, so a template can be
     read against an existing hardpoint set.
     """
 
@@ -96,6 +122,47 @@ class ConnectionDefinition:
     joint: str | None = None
     #: The bushing column: the name a properties file supplies stiffness for.
     bushing: str | None = None
+    #: The part this point is attached to.  Empty means "infer from the parts".
+    owner: str = ""
+    #: The point's label within its owner.  Empty means "infer from the name".
+    label: str = ""
+    #: The modes in which the joint column is active.
+    joint_modes: tuple[str, ...] = MODES
+    #: The modes in which the bushing column is active.
+    bushing_modes: tuple[str, ...] = MODES
+    #: ``(mode, joint type)`` where a mode uses a different type than ``joint``.
+    #:
+    #: A mount that is a revolute when rigid and a ball joint when compliant is
+    #: the case that needs this: one point, two modes, two joint types *and* a
+    #: bushing column -- three claims a single ``joint`` field cannot carry.
+    joint_kind_by_mode: tuple[tuple[str, str], ...] = ()
+    #: The second body a two-ended connection puts a point on.
+    #:
+    #: Every connection here joins two bodies: an inboard arm mount spans the arm
+    #: and the chassis, an outer joint spans the arm and the upright, a tie rod end
+    #: spans the tie rod and the rack.  Both ends are real points the document
+    #: records, and both must be named, or a builder would have to guess the far
+    #: end from the connection's own name -- which is how a renamed part silently
+    #: moves a joint.  Empty means the connection has one end.
+    far_owner: str = ""
+    #: The far end's label within its owner.
+    far_label: str = ""
+    #: Which end is the joint's ``body_a``: ``"owner"`` (the default) or ``"far"``.
+    #:
+    #: The document records both endpoints in a fixed order, and the assembly does
+    #: not use one order for every joint: an inboard mount names the *support* first
+    #: (chassis, then arm) while an outer joint names the arm first (arm, then
+    #: upright).  That is a recorded fact about the document, so it is declared
+    #: rather than inferred -- a joint whose endpoints were swapped would still
+    #: solve, and would still be a different document.
+    first_body: Literal["owner", "far"] = "owner"
+    #: The hardpoint role whose point defines this connection's rotation axis.
+    #:
+    #: A revolute joint needs an axis, and the assembly derives it from a *second*
+    #: hardpoint: the arm's inboard front joint runs along the line from the front
+    #: point to the rear one.  Naming that role here is what lets a template-driven
+    #: build reproduce the axis without hard-coding which point feeds which.
+    axis_reference_role: str = ""
 
     def columns(self) -> tuple[Column, ...]:
         """Return which columns this connection declares, in a stable order."""
@@ -105,6 +172,41 @@ class ConnectionDefinition:
         if self.bushing is not None:
             declared.append("bushing")
         return tuple(declared)
+
+    def joint_kind(self, mode: str) -> str | None:
+        """Return the joint type this connection uses in ``mode``."""
+        for candidate, kind in self.joint_kind_by_mode:
+            if candidate == mode:
+                return kind
+        return self.joint
+
+    def active_column(self, mode: str) -> Column | None:
+        """
+        Return the column ``mode`` activates at this connection.
+
+        Three cases, in this order:
+
+        * **both columns active in this mode** -- the mode chooses, which is the
+          K/C choice the user described: rigid in K, compliant in C;
+        * **one column active** -- that column, which is what keeps the arm outer
+          points and tie rod ends joints in C mode (discarding them would drop
+          four of the nine joints the C-mode axle has);
+        * **neither active** -- the point locates geometry and constrains nothing.
+          That is a real state, not an omission: in K mode the arm pivots on a
+          single revolute whose axis runs to the inboard rear point, so the rear
+          point carries no row of its own.
+        """
+        if mode not in MODES:
+            raise TemplateError(f"unknown mode {mode!r}; modes are K and C")
+        has_joint = self.joint is not None and mode in self.joint_modes
+        has_bushing = self.bushing is not None and mode in self.bushing_modes
+        if has_joint and has_bushing:
+            return ACTIVATED_MODES[mode]
+        if has_joint:
+            return "joint"
+        if has_bushing:
+            return "bushing"
+        return None
 
 
 @dataclass(frozen=True)
@@ -295,6 +397,15 @@ def _connections_to_json(template: Template) -> list[dict[str, Any]]:
             "role": connection.role,
             "joint": connection.joint,
             "bushing": connection.bushing,
+            "owner": connection.owner,
+            "label": connection.label,
+            "joint_modes": list(connection.joint_modes),
+            "bushing_modes": list(connection.bushing_modes),
+            "joint_kind_by_mode": [list(pair) for pair in connection.joint_kind_by_mode],
+            "far_owner": connection.far_owner,
+            "far_label": connection.far_label,
+            "first_body": connection.first_body,
+            "axis_reference_role": connection.axis_reference_role,
         }
         for connection in template.connections
     ]
@@ -378,6 +489,22 @@ def template_from_json(payload: dict[str, Any]) -> Template:
                 role=str(connection["role"]),
                 joint=connection.get("joint"),
                 bushing=connection.get("bushing"),
+                owner=str(connection.get("owner", "")),
+                label=str(connection.get("label", "")),
+                joint_modes=tuple(
+                    str(mode) for mode in connection.get("joint_modes", MODES)
+                ),
+                bushing_modes=tuple(
+                    str(mode) for mode in connection.get("bushing_modes", MODES)
+                ),
+                joint_kind_by_mode=tuple(
+                    (str(pair[0]), str(pair[1]))
+                    for pair in connection.get("joint_kind_by_mode", ())
+                ),
+                far_owner=str(connection.get("far_owner", "")),
+                far_label=str(connection.get("far_label", "")),
+                first_body=str(connection.get("first_body", "owner")),  # type: ignore[arg-type]
+                axis_reference_role=str(connection.get("axis_reference_role", "")),
             )
             for connection in payload.get("connections", ())
         ),

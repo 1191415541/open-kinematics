@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import pytest
 
-from suspension_multibody.preparation.assembly import build_front_axle, build_vehicle
 from suspension_multibody.schema import (
     FrontAxleModel,
     MassSpec,
@@ -29,6 +28,7 @@ from suspension_multibody.subsystems import (
     DEFAULT_VEHICLE_SUBSYSTEMS,
     AssemblyRequest,
 )
+from suspension_multibody.subsystems.entry import compose_axle, compose_vehicle
 
 _BODY_NAMES = (
     "rack",
@@ -115,7 +115,7 @@ def test_the_vehicle_assembly_carries_all_six_roles() -> None:
     A vehicle rig asks for them rather than probing the body list, so the absence
     of either would be a silently weaker assembly.
     """
-    assembly = build_vehicle(_vehicle(), "K")
+    assembly = compose_vehicle(_vehicle(), "K")
     assert assembly.capabilities is not None
     assert assembly.capabilities.subsystems == frozenset(DEFAULT_VEHICLE_SUBSYSTEMS)
     assert {"brake", "drive"} <= assembly.capabilities.subsystems
@@ -129,8 +129,8 @@ def test_the_two_assemblies_share_one_set_of_subsystem_definitions() -> None:
     and the vehicle does not (or the reverse) would mean two vocabularies for one
     architecture.  The vehicle's set is the axle's plus brake and drive, exactly.
     """
-    axle = build_front_axle(_axle("front", 1400), "K")
-    vehicle = build_vehicle(_vehicle(), "K")
+    axle = compose_axle(_axle("front", 1400), "K")
+    vehicle = compose_vehicle(_vehicle(), "K")
     assert axle.capabilities is not None and vehicle.capabilities is not None
     axle_roles = axle.capabilities.subsystems
     vehicle_roles = vehicle.capabilities.subsystems
@@ -140,9 +140,9 @@ def test_the_two_assemblies_share_one_set_of_subsystem_definitions() -> None:
 
 def test_the_vehicle_builds_its_own_wheels_unlike_the_axle() -> None:
     """A single axle gets its wheels from the rig; a vehicle builds them (D9)."""
-    vehicle = build_vehicle(_vehicle(), "K")
+    vehicle = compose_vehicle(_vehicle(), "K")
     assert any(name.startswith("wheel_") for name in vehicle.bodies)
-    axle = build_front_axle(_axle("front", 1400), "K")
+    axle = compose_axle(_axle("front", 1400), "K")
     assert not any(name.startswith("wheel_") for name in axle.bodies)
 
 
@@ -172,7 +172,7 @@ def test_the_axle_side_does_allow_steering_to_be_absent() -> None:
     hardpoints = {
         name: point for name, point in model.hardpoints.items() if name != "rack_center"
     }
-    without = build_front_axle(
+    without = compose_axle(
         model.model_copy(update={"hardpoints": hardpoints}),
         "K",
         AssemblyRequest(mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS - {"steering"}),
@@ -190,8 +190,8 @@ def test_a_declared_tire_mass_leaves_the_wheel_body_alone() -> None:
     would move the vehicle's total mass, which is the one thing requirement 10
     must not do.
     """
-    plain = build_vehicle(_vehicle(tire_mass=0.0), "K")
-    shared = build_vehicle(_vehicle(tire_mass=5.0), "K")
+    plain = compose_vehicle(_vehicle(tire_mass=0.0), "K")
+    shared = compose_vehicle(_vehicle(tire_mass=5.0), "K")
     assert plain.total_mass == pytest.approx(shared.total_mass)
     for name, body in plain.bodies.items():
         assert shared.bodies[name].mass == pytest.approx(body.mass)

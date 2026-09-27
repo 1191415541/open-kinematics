@@ -25,14 +25,14 @@ from suspension_multibody.cases.kc_quasi_static import (
     model_document,
 )
 from suspension_multibody.cases.kc_quasi_static.load_paths import LoadPath
-from suspension_multibody.preparation.assembly import build_front_axle
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 from .kc_fixtures import _compliant_model
 
 
 def test_ideal_model_document_is_a_valid_contract_member() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     document = model_document(assembly, name="benchmark-k", drive_wheels=True)
     validate_model(document)
     assert document["units"]["length"] == "mm"
@@ -64,7 +64,7 @@ def test_ideal_model_document_is_a_valid_contract_member() -> None:
 
 
 def test_compliant_model_document_carries_its_bushings() -> None:
-    assembly = build_front_axle(_compliant_model(), "C")
+    assembly = compose_axle(_compliant_model(), "C")
     document = model_document(assembly, name="benchmark-c", drive_wheels=False)
     validate_model(document)
     bushing_elements = [e for e in document["elements"] if e["type"] == "bushing"]
@@ -81,7 +81,7 @@ def test_compliant_model_document_carries_its_bushings() -> None:
 
 
 def test_joint_points_are_body_local() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     document = model_document(assembly, name="benchmark-k", drive_wheels=True)
     # The frame conversion happens once, in the emitter: a constraint whose
     # world point differs from its body-local point must arrive local.
@@ -93,7 +93,7 @@ def test_joint_points_are_body_local() -> None:
 
 
 def test_k_case_document_is_a_valid_contract_member() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     document = case_document(
         assembly,
         family="kc_quasi_static",
@@ -111,7 +111,7 @@ def test_k_case_document_is_a_valid_contract_member() -> None:
 
 
 def test_c_case_document_is_a_valid_contract_member() -> None:
-    assembly = build_front_axle(_compliant_model(), "C")
+    assembly = compose_axle(_compliant_model(), "C")
     document = case_document(
         assembly,
         family="kc_quasi_static",
@@ -133,7 +133,7 @@ def test_the_case_document_carries_its_time_grid_and_solver() -> None:
         DEFAULT_TIMES,
     )
 
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     document = case_document(
         assembly,
         family="kc_quasi_static",
@@ -155,14 +155,14 @@ def test_the_case_document_carries_its_time_grid_and_solver() -> None:
 
 
 def test_an_unknown_family_is_rejected() -> None:
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     with pytest.raises(NativeKcError):
         case_document(assembly, family="rally", name="nope")
 
 
 def test_documents_round_trip_through_the_container_format() -> None:
     """The wire format has to carry a real axle document, not just fixtures."""
-    assembly = build_front_axle(benchmark_model(), "K")
+    assembly = compose_axle(benchmark_model(), "K")
     model = model_document(assembly, name="benchmark-k", drive_wheels=True)
     case = case_document(
         assembly,

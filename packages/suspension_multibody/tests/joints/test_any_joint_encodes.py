@@ -21,7 +21,6 @@ from suspension_multibody.modeling.primitives import (
     UniversalJoint,
     WeldJoint,
 )
-from suspension_multibody.preparation.assembly.front_axle import build_front_axle
 from suspension_multibody.schema import (
     FrontAxleModel,
     IdealJointSpec,
@@ -29,6 +28,7 @@ from suspension_multibody.schema import (
     RigidBodySpec,
     Vec3,
 )
+from suspension_multibody.subsystems.entry import compose_axle
 
 #: The five joint kinds the kc authoring layer used to reject outright.
 PREVIOUSLY_REJECTED = (
@@ -86,7 +86,7 @@ def _explicit_model(kind: str) -> FrontAxleModel:
 @pytest.mark.parametrize(("kind", "constraint_type"), PREVIOUSLY_REJECTED)
 def test_the_assembly_builds_the_declared_joint(kind: str, constraint_type: type) -> None:
     """The assembly layer already supported all eight; this is the precondition."""
-    assembly = build_front_axle(_explicit_model(kind), "K")
+    assembly = compose_axle(_explicit_model(kind), "K")
     assert any(isinstance(c, constraint_type) for c in assembly.ideal_constraints)
 
 
@@ -99,7 +99,7 @@ def test_the_document_encodes_the_declared_joint(kind: str, constraint_type: typ
     entries, so the encoding loop raised for every kind here except those three.
     """
     del constraint_type
-    assembly = build_front_axle(_explicit_model(kind), "K")
+    assembly = compose_axle(_explicit_model(kind), "K")
     document = model_document(assembly, name=f"doc-{kind}", drive_wheels=True)
     types = {entry["type"] for entry in document["joints"]}
     expected = "convel" if kind == "constant_velocity" else kind
@@ -113,7 +113,7 @@ def test_secondary_axes_and_angle_target_ride_along_for_convel() -> None:
     The kernel treats every axis as optional and substitutes a default, so an
     omission would produce a plausible model that answers a different question.
     """
-    assembly = build_front_axle(_explicit_model("constant_velocity"), "K")
+    assembly = compose_axle(_explicit_model("constant_velocity"), "K")
     document = model_document(assembly, name="convel-doc", drive_wheels=True)
     entry = next(e for e in document["joints"] if e["type"] == "convel")
     for field in ("axis_a", "axis_b", "axis_a_secondary", "axis_b_secondary"):
@@ -129,7 +129,7 @@ def test_the_in_plane_joint_carries_only_the_plane_normal() -> None:
     A spurious `axis_b` would be silently accepted by the kernel and would change
     what the row means.
     """
-    assembly = build_front_axle(_explicit_model("inplane"), "K")
+    assembly = compose_axle(_explicit_model("inplane"), "K")
     document = model_document(assembly, name="inplane-doc", drive_wheels=True)
     entry = next(e for e in document["joints"] if e["type"] == "inplane")
     assert "axis_a" in entry

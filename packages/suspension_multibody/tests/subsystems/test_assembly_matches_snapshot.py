@@ -20,8 +20,8 @@ from pathlib import Path
 
 import numpy as np
 
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import FrontAxleModel
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 SNAPSHOT = (
@@ -39,7 +39,7 @@ def _combination(model: FrontAxleModel, expected: dict) -> object:
     rebuilt = model.model_copy(
         update={"rack_fixed_to_chassis": expected["rack_fixed_to_chassis"]}
     )
-    return build_front_axle(rebuilt, expected["mode"])
+    return compose_axle(rebuilt, expected["mode"])
 
 
 def _close(actual: np.ndarray, expected: list[float]) -> bool:
@@ -141,7 +141,7 @@ def test_constraint_geometry_is_unchanged() -> None:
     """
     model = benchmark_model()
     for mode in ("K", "C"):
-        assembly = build_front_axle(model, mode)
+        assembly = compose_axle(model, mode)
         for constraint in assembly.ideal_constraints:
             point_a = np.asarray(constraint.point_a, dtype=float)
             point_b = np.asarray(constraint.point_b, dtype=float)
@@ -182,7 +182,7 @@ def test_c_mode_placeholders_are_the_eight_inboard_slots() -> None:
     that subtask 05 will change: exactly eight, inboard, zero stiffness, identity
     rotation -- i.e. still placeholders, not silently turned into real bushings.
     """
-    assembly = build_front_axle(benchmark_model(), "C")
+    assembly = compose_axle(benchmark_model(), "C")
     placeholders = [
         element
         for element in assembly.elements

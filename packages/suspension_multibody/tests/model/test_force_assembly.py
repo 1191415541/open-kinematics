@@ -7,7 +7,6 @@ from suspension_multibody.modeling.primitives import (
     LinearSpringElement,
     VerticalTireElement,
 )
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import (
     Bushing6x6,
     FrontAxleModel,
@@ -17,6 +16,7 @@ from suspension_multibody.schema import (
     Vec3,
     VerticalTire,
 )
+from suspension_multibody.subsystems.entry import compose_axle
 
 
 def _model() -> FrontAxleModel:
@@ -72,8 +72,8 @@ def _model() -> FrontAxleModel:
 
 def test_force_elements_are_side_paired_and_c_bushings_are_active() -> None:
     model = _model()
-    k_assembly = build_front_axle(model, "K")
-    c_assembly = build_front_axle(model, "C")
+    k_assembly = compose_axle(model, "K")
+    c_assembly = compose_axle(model, "C")
     assert (
         sum(isinstance(item, LinearSpringElement) for item in k_assembly.elements) == 2
     )

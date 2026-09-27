@@ -97,6 +97,41 @@ class TrimInverse(StrictModel):
 
 Trim = Annotated[TrimForward | TrimInverse, Field(discriminator="kind")]
 
+#: The three readings a K/C case can ask for.
+DriveMode = Literal["kinematics", "force_balance", "pad"]
+
+#: The exhaustive set, for validation error messages and for callers that must enumerate.
+DRIVE_MODES: tuple[str, ...] = ("kinematics", "force_balance", "pad")
+
+#: How the legacy ``drive_wheels`` boolean maps onto ``drive_mode``.
+#:
+#: The boolean predates the three-way field and is used across the repository (29 files),
+#: so it keeps working rather than being migrated in one sweep.  The mapping is fixed
+#: here, in one place, because two callers inferring it separately is how a silent
+#: disagreement starts:
+#:
+#: * ``True``  -- the wheel centres are the driven coordinates, and the reading balances
+#:   the elastic elements against them: ``force_balance``;
+#: * ``False`` -- the C reading, where the wheel centre is loaded rather than placed and
+#:   the tire is what reacts: ``pad``.
+#:
+#: ``kinematics`` has no legacy spelling: it did not exist as a distinct reading before,
+#: so a caller that wants it says so by name.
+DRIVE_WHEELS_TO_MODE: dict[bool, str] = {True: "force_balance", False: "pad"}
+
+
+def drive_mode_for(drive_wheels: bool | None, default: str = "force_balance") -> str:
+    """
+    Resolve the legacy boolean and the three-way field into one mode name.
+
+    ``None`` means the caller did not say, which yields ``default``.  This is the single
+    place the legacy mapping is applied, so ``drive_wheels=True`` and
+    ``drive_mode="force_balance"`` cannot drift apart.
+    """
+    if drive_wheels is None:
+        return default
+    return DRIVE_WHEELS_TO_MODE[bool(drive_wheels)]
+
 
 class CaseSpec(StrictModel):
     """A mutually exclusive K or C quasi-static analysis run."""
@@ -120,6 +155,24 @@ class CaseSpec(StrictModel):
     #: Making it a case input is what lets a caller ask for that run through the
     #: public entry instead of only through the assembly constructor.
     subsystems: frozenset[str] | None = None
+    #: How this run decides the assembly's pose.
+    #:
+    #: ``kinematics``
+    #:     solves the constraint equations alone.  Nothing elastic and no tire enters the
+    #:     residual, so the run is pure geometry -- this is the reading a linkage study
+    #:     wants, and it is the one whose numbers are frozen.
+    #: ``force_balance``
+    #:     the default.  The elastic elements the assembly carries (springs, dampers,
+    #:     anti-roll bars, bushings, bump stops) balance against the driven targets, so
+    #:     the arm mounts and the spring actually react load.  Tires stay out: in a
+    #:     wheel-centre-driven reading the wheel is placed, not carried.
+    #: ``pad``
+    #:     drives a *ground height* instead of the wheel centre, so the tires carry the
+    #:     wheel and the sweep is the pad moving under it.
+    #:
+    #: It lives on the case rather than on the model because the same assembly is read
+    #: all three ways; it is a property of the analysis being run.
+    drive_mode: DriveMode = "force_balance"
     worker_count: int = Field(default=1, ge=1)
     checkpoint_path: str | None = None
 

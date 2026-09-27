@@ -21,9 +21,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..preparation.assembly import VehicleAssembly, build_vehicle
 from ..report.wheel_loads import WheelLoadSummary, summarize_wheel_loads
 from ..schema import VehicleModel
+from ..subsystems.vehicle_assembly import VehicleRuntime, compose_vehicle_runtime
 
 _WHEELS = ("front_left", "front_right", "rear_left", "rear_right")
 
@@ -66,7 +66,12 @@ def compute_static_wheel_loads(
     accel = np.zeros(3) if acceleration is None else np.asarray(acceleration, dtype=float)
     if accel.shape != (3,) or not np.all(np.isfinite(accel)):
         raise ValueError("acceleration must contain three finite values")
-    assembly = build_vehicle(vehicle, mode="K")
+    # The vehicle is built through the composition layer, which is the same
+    # construction every other reading uses.  This module reads `total_mass`,
+    # `center_of_mass` and the wheel centres, and the composed runtime offers all
+    # three -- so there is no reason for it to reach for the historical builder and
+    # keep that path alive on its own.
+    assembly = compose_vehicle_runtime(vehicle, mode="K")
     support_points = _support_points(vehicle, assembly, road_z)
     total_mass = assembly.total_mass
     center_of_mass = _center_of_mass(assembly, total_mass)
@@ -101,7 +106,7 @@ def compute_static_wheel_loads(
     )
 
 
-def _center_of_mass(assembly: VehicleAssembly, total_mass: float) -> np.ndarray:
+def _center_of_mass(assembly: VehicleRuntime, total_mass: float) -> np.ndarray:
     weighted = np.zeros(3)
     for name, body in assembly.bodies.items():
         if body.mass <= 0.0:
@@ -111,7 +116,7 @@ def _center_of_mass(assembly: VehicleAssembly, total_mass: float) -> np.ndarray:
 
 
 def _support_points(
-    vehicle: VehicleModel, assembly: VehicleAssembly, road_z: float
+    vehicle: VehicleModel, assembly: VehicleRuntime, road_z: float
 ) -> dict[str, np.ndarray]:
     points: dict[str, np.ndarray] = {}
     for wheel in vehicle.wheels:

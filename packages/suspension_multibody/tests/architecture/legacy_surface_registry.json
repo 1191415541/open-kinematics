@@ -4,11 +4,11 @@
   "notes": "Exact registry for the migration mode: every production/script legacy import must appear here, and every entry must still match a live finding, so the registry can only shrink.  The final mode ignores it and refuses every legacy import and legacy package. Owners come from the epic's Python migration matrix; findings in tests are not registered because 08 deletes them with the packages.  What is left is the element construction of the authoring layer (A1) in api.py: the other four entries were retired when their callers moved to modeling/primitives and vehicle/.",
   "successors": {
     "core": {
-      "target": "preparation/assembly/types.py",
+      "target": "modeling/primitives/ (data objects moved down)",
       "owner": "06-authoring (data objects); the residual/Jacobian/reaction solving leaves Python for the native assembly and solve"
     },
     "model": {
-      "target": "preparation/assembly/front_axle.py, preparation/assembly/vehicle.py",
+      "target": "subsystems/entry.py + subsystems/vehicle_parts.py (composition layer)",
       "owner": "06-authoring"
     },
     "elements": {

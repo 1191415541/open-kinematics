@@ -36,8 +36,8 @@ from suspension_multibody.cases.kc_quasi_static.workflow import (
     wheel_center_world,
 )
 from suspension_multibody.modeling.primitives import quaternion_to_rotation_vector
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.simulation import SimulationRequest, run_request
+from suspension_multibody.subsystems.entry import compose_axle
 
 BASELINE = Path("packages/suspension_multibody/tests/data/kc_baseline")
 OUT = Path("artifacts/kc-native-probe")
@@ -165,7 +165,7 @@ def c_path_states(assembly, *, paths: tuple[str, ...]) -> list[dict[str, object]
 
 def main() -> int:
     """Run the C paths natively and score them against the frozen snapshot."""
-    assembly = build_front_axle(_compliant_model(), "C")
+    assembly = compose_axle(_compliant_model(), "C")
     axes = tuple(path.name for path in LoadPath.standard())
     produced = c_path_states(assembly, paths=axes)
     frozen = json.loads((BASELINE / "c_states.json").read_text(encoding="utf-8"))

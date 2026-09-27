@@ -30,9 +30,9 @@ import pytest
 
 from suspension_multibody.cases.kc_quasi_static import model_document
 from suspension_multibody.compilation import KcStudyInputs, compile_plan, plan_for
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import FrontAxleModel
 from suspension_multibody.simulation import SimulationRequest, run_request
+from suspension_multibody.subsystems.entry import compose_axle
 
 FIXTURE = "packages/suspension_multibody/tests/data/benchmark_axle.json"
 
@@ -74,10 +74,20 @@ def _model(*, stiffness: float | None) -> FrontAxleModel:
     return FrontAxleModel.model_validate(raw)
 
 
-def _solve(stiffness: float | None):
-    """Solve the K probe on the axle with (or without) a declared tire."""
-    assembly = build_front_axle(_model(stiffness=stiffness), "K")
-    document = model_document(assembly, name="tire-probe", drive_wheels=True)
+def _solve(stiffness: float | None, *, drive_mode: str = "pad"):
+    """
+    Solve the K probe on the axle with (or without) a declared tire.
+
+    ``drive_mode`` defaults to ``pad`` because that is the reading a tire belongs to: a
+    wheel-centre-driven case *places* the wheel, so a tire there would be a competing
+    statement about where the wheel is.  The default is stated explicitly rather than left
+    to the legacy boolean so that these tests keep exercising the tire law rather than
+    silently losing it.
+    """
+    assembly = compose_axle(_model(stiffness=stiffness), "K")
+    document = model_document(
+        assembly, name="tire-probe", drive_wheels=True, drive_mode=drive_mode
+    )
     run = run_request(
         SimulationRequest(
             assembly="axle",
@@ -92,17 +102,24 @@ def _solve(stiffness: float | None):
 
 def test_the_model_document_declares_the_tires_the_assembly_carries() -> None:
     """
-    The declaration is a consequence of the assembly, not of the family.
+    The declaration is a consequence of the reading, and only of the pad reading.
 
     This is the defect in its smallest form: the assembly carried a
     `VerticalTireElement` per side and the document it was authored into carried
     none, so nothing downstream could have consumed it.
+
+    The reading matters, and that is the change this test now records.  A tire carries the
+    wheel; a wheel-centre-driven case *places* it.  Declaring both is two statements about
+    one quantity, and measured, a prescribed travel with a tire in the residual fails the
+    static trim -- the force balances while a 20 mm position residual cannot be met.  So
+    the tire is declared by `pad`, and by the wheel-centre readings it is *absent*, which
+    is a statement rather than an oversight.
     """
-    assembly = build_front_axle(_model(stiffness=200.0), "K")
+    assembly = compose_axle(_model(stiffness=200.0), "K")
     carried = [element for element in assembly.elements if element.name.startswith("tire_")]
     assert len(carried) == 2, "the fixture assembled no tires to declare"
 
-    document = model_document(assembly, name="tire-probe", drive_wheels=True)
+    document = model_document(assembly, name="tire-probe", drive_mode="pad")
     declared = document["tires"]
     assert [entry["name"] for entry in declared] == ["tire_L", "tire_R"]
     for entry in declared:
@@ -114,6 +131,11 @@ def test_the_model_document_declares_the_tires_the_assembly_carries() -> None:
         assert entry["parameters"]["vertical_stiffness"] == 200.0
         assert entry["parameters"]["unloaded_radius"] == 320.0
         assert entry["parameters"]["longitudinal_friction_coefficient"] > 0.0
+
+    # The wheel-centre readings do not declare it, and the absence is deliberate.
+    for mode in ("kinematics", "force_balance"):
+        other = model_document(assembly, name=f"tire-probe-{mode}", drive_mode=mode)
+        assert other["tires"] == [], f"{mode} must not place a tire in the residual"
 
 
 def test_a_tire_declared_by_the_model_enters_the_residual() -> None:
@@ -187,7 +209,7 @@ def test_the_quasi_static_tire_is_the_same_entry_the_dynamic_reading_emits() -> 
     emitted entries is the checkable form: a second, simpler law would show up
     here as a different entry.
     """
-    assembly = build_front_axle(_model(stiffness=200.0), "K")
+    assembly = compose_axle(_model(stiffness=200.0), "K")
     inputs = KcStudyInputs(name="probe", wheel_values_mm=(-20.0,), rack_values_mm=(0.0,))
 
     from_plan = {
@@ -217,6 +239,10 @@ def test_the_result_channel_reports_the_solved_compression() -> None:
         _model(stiffness=200.0),
         CaseSpec(
             mode="K",
+            # The pad reading is the one a tire belongs to: it is what lets the tire carry
+            # the wheel.  A wheel-centre-driven case places the wheel instead, and declaring
+            # a tire there would be two statements about one quantity.
+            drive_mode="pad",
             controls=(
                 DisplacementControl(target="wheel_travel_left", values=(travel_mm,)),
             ),
@@ -263,7 +289,7 @@ def test_the_neutral_coefficients_are_the_kernel_s_requirement() -> None:
 
 def test_a_declaring_model_declares_a_physical_compression_limit() -> None:
     """`maximum_compression` must be positive and below the radius, or no solve."""
-    assembly = build_front_axle(_model(stiffness=200.0), "K")
+    assembly = compose_axle(_model(stiffness=200.0), "K")
     document = model_document(assembly, name="tire-probe", drive_wheels=True)
     for entry in document["tires"]:
         radius = entry["parameters"]["unloaded_radius"]
@@ -286,8 +312,8 @@ def test_declaring_a_tire_leaves_the_frozen_kinematics_untouched() -> None:
 
     assert UNITS["length"] == "mm"  # the contract's own frame, unchanged
 
-    without = build_front_axle(_model(stiffness=None), "K")
-    with_tire = build_front_axle(_model(stiffness=200.0), "K")
+    without = compose_axle(_model(stiffness=None), "K")
+    with_tire = compose_axle(_model(stiffness=200.0), "K")
     assert not without.elements
     assert len(with_tire.elements) == 2
 

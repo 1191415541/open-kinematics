@@ -103,13 +103,13 @@ def _dynamic_model(
     bushings and tires, not a driven-coordinate table or a time history, so a
     request built from one still authors its own driven coordinates.
     """
-    from ..preparation.assembly import FrontAxleAssembly
     from ..rigs import check_assembly
     from ..studies import DYNAMIC, axle_dynamics_model, build_study_assembly
+    from ..subsystems.runtime import SubsystemRuntime
 
     if isinstance(source, AxleDynamicsModel):
         return source
-    if isinstance(source, FrontAxleAssembly):
+    if isinstance(source, SubsystemRuntime):
         study_assembly = build_study_assembly(
             source, study=DYNAMIC, mode=source.mode
         )
@@ -121,7 +121,7 @@ def _dynamic_model(
         return axle_dynamics_model(study_assembly, name=request.name or "axle")
     raise TypeError(
         "axle dynamic preparation requires an AxleDynamicsModel or an "
-        f"assembled FrontAxleAssembly, got {type(source).__name__}"
+        f"assembled SubsystemRuntime, got {type(source).__name__}"
     )
 
 

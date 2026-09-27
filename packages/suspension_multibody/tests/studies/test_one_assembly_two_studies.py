@@ -3,9 +3,9 @@ One assembly, two readings.
 
 The requirement is that `kc_quasi_static` and `axle_dynamic` differ in how the
 model is *read*.  That can only be true if both readings start from the same
-object, so the tests here check identity rather than similarity: the same
-`FrontAxleAssembly` is handed to both studies, and the documents each study
-produces are checked to be derived from that one object.
+object, so the tests here check identity rather than similarity: the same composed
+runtime is handed to both studies, and the documents each study produces are checked
+to be derived from that one object.
 
 The last test is the one that keeps the guarantee honest: the bridge refuses an
 assembly it cannot read, instead of quietly producing a dynamic model that is
@@ -99,11 +99,11 @@ def test_the_two_readings_come_from_one_assembly_function() -> None:
     assembly built from a model against the one built from that same model by the
     package's own entry point is what rules that out.
     """
-    from suspension_multibody.preparation.assembly import build_front_axle
+    from suspension_multibody.subsystems.entry import compose_axle
 
     model = _model()
     via_study = build_study_assembly(model, study=QUASI_STATIC).assembly
-    directly = build_front_axle(model, "K")
+    directly = compose_axle(model, "K")
     assert list(via_study.bodies) == list(directly.bodies)
     assert set(via_study.points) == set(directly.points)
     for key, point in via_study.points.items():

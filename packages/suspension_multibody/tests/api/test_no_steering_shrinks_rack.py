@@ -28,12 +28,12 @@ import pytest
 from suspension_multibody import api
 from suspension_multibody.cases.kc_quasi_static import model_document
 from suspension_multibody.cases.kc_quasi_static.contract import has_rack
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import CaseSpec, DisplacementControl
 from suspension_multibody.subsystems import (
     DEFAULT_AXLE_SUBSYSTEMS,
     AssemblyRequest,
 )
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 #: The subsystem set a single-axle run has when it carries no steering.
@@ -65,8 +65,8 @@ def _k_case(subsystems: frozenset[str] | None = None) -> CaseSpec:
 
 def test_has_rack_asks_the_assembly_not_a_role_name() -> None:
     """The question is answered by what the assembly built."""
-    with_steering = build_front_axle(benchmark_model(), "K")
-    without = build_front_axle(
+    with_steering = compose_axle(benchmark_model(), "K")
+    without = compose_axle(
         _model_without_rack_center(),
         "K",
         AssemblyRequest(mode="K", subsystems=_WITHOUT_STEERING),
@@ -82,7 +82,7 @@ def test_the_model_document_declares_no_rack_coordinate_without_one() -> None:
     This is the half that raised `KeyError` before: the rack row was emitted
     unconditionally, so the document could not describe an axle that has no rack.
     """
-    without = build_front_axle(
+    without = compose_axle(
         _model_without_rack_center(),
         "K",
         AssemblyRequest(mode="K", subsystems=_WITHOUT_STEERING),
@@ -97,7 +97,7 @@ def test_the_model_document_declares_no_rack_coordinate_without_one() -> None:
 
 def test_the_model_document_still_declares_the_rack_when_it_has_one() -> None:
     """The negative control: the omission is a consequence, not a deletion."""
-    with_steering = build_front_axle(benchmark_model(), "K")
+    with_steering = compose_axle(benchmark_model(), "K")
     document = model_document(with_steering, name="steering", drive_wheels=True)
     driven = [joint["name"] for joint in document["joints"] if "driven" in joint["type"]]
     assert "rack_drive" in driven

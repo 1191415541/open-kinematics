@@ -19,13 +19,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.properties import (
     ENTRY_KINDS,
     PropertiesError,
     load_properties,
 )
 from suspension_multibody.subsystems import DEFAULT_AXLE_SUBSYSTEMS, AssemblyRequest
+from suspension_multibody.subsystems.entry import compose_axle
 from suspension_multibody.templates import (
     DOUBLE_WISHBONE,
     TemplateError,
@@ -121,8 +121,8 @@ def test_same_file_twice_is_reproducible() -> None:
             DOUBLE_WISHBONE, mode="C", properties=resolve_properties(DOUBLE_WISHBONE, second)
         ),
     )
-    a = build_front_axle(model, "C", request)
-    b = build_front_axle(model, "C", other)
+    a = compose_axle(model, "C", request)
+    b = compose_axle(model, "C", other)
     assert list(a.bodies) == list(b.bodies)
     assert {f"{x}::{y}" for x, y in a.points} == {f"{x}::{y}" for x, y in b.points}
     for key, point in a.points.items():
@@ -140,7 +140,7 @@ def test_a_different_file_changes_stiffness_and_nothing_else() -> None:
     assemblies = {}
     for label, path in (("baseline", BASELINE), ("stiffer", STIFFER)):
         loaded = load_properties(path)
-        assemblies[label] = build_front_axle(
+        assemblies[label] = compose_axle(
             model,
             "C",
             AssemblyRequest(

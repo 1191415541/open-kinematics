@@ -15,7 +15,6 @@ to it.
 
 from __future__ import annotations
 
-from suspension_multibody.preparation.assembly import build_front_axle, build_vehicle
 from suspension_multibody.schema import (
     FrontAxleModel,
     MassSpec,
@@ -31,6 +30,7 @@ from suspension_multibody.subsystems import (
     DEFAULT_VEHICLE_SUBSYSTEMS,
     AssemblyRequest,
 )
+from suspension_multibody.subsystems.entry import compose_axle, compose_vehicle
 from tests.benchmark_fixture import benchmark_model
 
 #: The two roles under test, and the two roles every other test here assumes.
@@ -92,7 +92,7 @@ def _legal_vehicle() -> VehicleModel:
 
 
 def test_the_axle_capability_set_excludes_brake_and_drive() -> None:
-    capabilities = build_front_axle(benchmark_model(), "K").capabilities
+    capabilities = compose_axle(benchmark_model(), "K").capabilities
     assert capabilities is not None
     for role in TORQUE_ROLES:
         assert role not in capabilities.subsystems, role
@@ -103,7 +103,7 @@ def test_the_axle_capability_set_excludes_brake_and_drive() -> None:
 
 
 def test_the_vehicle_capability_set_includes_brake_and_drive() -> None:
-    capabilities = build_vehicle(_legal_vehicle(), "K").capabilities
+    capabilities = compose_vehicle(_legal_vehicle(), "K").capabilities
     assert capabilities is not None
     for role in TORQUE_ROLES:
         assert role in capabilities.subsystems, role
@@ -125,7 +125,7 @@ def test_the_axle_refuses_a_brake_or_drive_request_by_name() -> None:
             mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS | {role}
         )
         try:
-            build_front_axle(benchmark_model(), "K", request)
+            compose_axle(benchmark_model(), "K", request)
         except ValueError as error:
             assert role in str(error), role
             assert "single-axle" in str(error), role

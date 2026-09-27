@@ -75,10 +75,16 @@ class RootRule:
 #: A single axle: suspension plus a fixed chassis support, optional steering, and
 #: **no** brake or drive.  The wheels come from the rig, because a bare axle on a
 #: bench is loaded through them.
+#:
+#: ``chassis`` is required and always has been in effect: the axle's suspension
+#: hangs from a fixed support, and an assembly without one has nothing to react
+#: against.  It was missing from ``required`` while the assembly enforced it
+#: inline, which meant the rule and the behaviour disagreed; the assembly's check
+#: has moved here, so the list now says what the rule's own name says.
 AXLE_RULE = RootRule(
     kind="axle",
     forbidden=frozenset({"brake", "drive"}),
-    required=frozenset({"suspension"}),
+    required=frozenset({"suspension", "chassis"}),
     wheels_from_rig=True,
     reason=(
         "a single-axle bench assembly carries no brake or drive: the bench loads "

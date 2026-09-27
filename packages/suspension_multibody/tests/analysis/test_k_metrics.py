@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 
 from suspension_multibody.modeling.primitives import SE3, RigidBodyState
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.report.metrics import compute_k_metrics
 from suspension_multibody.schema import FrontAxleModel, MassSpec
+from suspension_multibody.subsystems.entry import compose_axle
 
 
 def test_static_symmetric_metrics_have_zero_differences() -> None:
@@ -27,7 +27,7 @@ def test_static_symmetric_metrics_have_zero_differences() -> None:
         },
         mass=MassSpec(sprung_mass=1000),
     )
-    assembly = build_front_axle(model)
+    assembly = compose_axle(model)
     metrics = compute_k_metrics(assembly.state, assembly)
     assert metrics["camber_deg_difference"] == 0
     assert metrics["toe_deg_difference"] == 0
@@ -50,7 +50,7 @@ def test_wheel_angles_use_lateral_axis_when_upright_is_steered() -> None:
         },
         mass=MassSpec(sprung_mass=1000),
     )
-    assembly = build_front_axle(model)
+    assembly = compose_axle(model)
     quaternion = np.array(
         [
             0.9997546608565223,

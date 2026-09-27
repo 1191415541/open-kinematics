@@ -3164,9 +3164,12 @@ def _source_initial_wheel_speeds(
     """从源主轴角速度投影得到四个轮端的初始自转速度."""
     source_body_map = _source_native_body_part_map(data, model)
     state_by_body = {state.body: state for state in initial_states}
-    from ..preparation.assembly.vehicle import build_vehicle
+    from ..subsystems.vehicle_assembly import compose_vehicle_runtime
 
-    assembly = build_vehicle(model, mode="K")
+    # The composed runtime, because that is what every other reader builds from.
+    # This function reads `wheel_rotations_local`, one of the four wheel tables the
+    # runtime carries for exactly this purpose.
+    assembly = compose_vehicle_runtime(model, mode="K")
     result: list[tuple[str, float]] = []
     for wheel in model.wheels:
         mount_body = wheel.mount_body

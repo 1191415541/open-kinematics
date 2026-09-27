@@ -96,7 +96,10 @@ class _KcQuasiStaticEmitter:
         name = plan.inputs.name
         inputs = plan.inputs
         model_doc = model_document(
-            assembly, name=name, drive_wheels=plan.drive_wheels
+            assembly,
+            name=name,
+            drive_wheels=plan.drive_wheels,
+            drive_mode=plan.drive_mode,
         )
         case_doc = case_document(
             assembly,

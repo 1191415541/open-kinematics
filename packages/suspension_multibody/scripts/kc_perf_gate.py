@@ -66,9 +66,9 @@ def _native_workloads() -> dict[str, Callable[[], int]]:
         DEFAULT_SETTINGS,
         DEFAULT_TIMES,
     )
-    from suspension_multibody.preparation.assembly import build_front_axle
     from suspension_multibody.schema import FrontAxleModel
     from suspension_multibody.simulation import SimulationRequest, run_request
+    from suspension_multibody.subsystems.entry import compose_axle
     fixture = PACKAGE_ROOT / "tests/cases/kc_quasi_static/kc_fixtures.py"
     spec = importlib.util.spec_from_file_location("kc_perf_fixture", fixture)
     assert spec is not None and spec.loader is not None
@@ -80,9 +80,9 @@ def _native_workloads() -> dict[str, Callable[[], int]]:
     payload = _benchmark_payload()
     # A physical C sweep needs a compliance to answer with, so it uses the
     # compliant fixture every other native C gate uses.
-    k_assembly = build_front_axle(FrontAxleModel.model_validate(payload["model"]), "K")
+    k_assembly = compose_axle(FrontAxleModel.model_validate(payload["model"]), "K")
     compliant = getattr(module, "_compliant_model")()  # test fixture, not a public API
-    c_assembly = build_front_axle(compliant, "C")
+    c_assembly = compose_axle(compliant, "C")
     wheel_values = tuple(float(value) for value in payload["grid"]["wheel_values_mm"])
     rack_values = tuple(float(value) for value in payload["grid"]["rack_values_mm"])
     axes = tuple(path.name for path in LoadPath.standard())

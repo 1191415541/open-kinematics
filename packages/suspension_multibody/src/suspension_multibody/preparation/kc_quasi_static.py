@@ -25,7 +25,7 @@ from ..axle_dynamics.schema import AxleSolverSettings
 from ..schema import FrontAxleModel
 from ..simulation.preparation import PreparedSimulation
 from ..simulation.request import SimulationRequest
-from .assembly import FrontAxleAssembly
+from ..subsystems.runtime import SubsystemRuntime
 
 ASSEMBLY = "axle"
 FAMILY = "kc_quasi_static"
@@ -56,7 +56,7 @@ class KcQuasiStaticCase:
 class KcQuasiStaticPrepared:
     """The assembly and the contract documents one K/C request was authored into."""
 
-    assembly: FrontAxleAssembly
+    assembly: SubsystemRuntime
     model_document: dict[str, Any]
     case_document: dict[str, Any]
 
@@ -76,39 +76,41 @@ def assembly_for(
     mode: Literal["K", "C"],
     rig: str,
     request: Any = None,
-) -> FrontAxleAssembly:
+    name: str = "axle",
+) -> SubsystemRuntime:
     """
     Return the assembly this family runs, with its bench checked.
 
-    Two jobs that belong together: the assembly is built through the study layer,
-    so a quasi-static request and a dynamic one are configurations of one
-    construction, and the bench the request names is resolved against it here
-    rather than assumed.  Keeping them in one entry is what makes "this run is
-    this assembly on this bench" checkable at the call site instead of a claim
-    about two modules agreeing.
+    The assembly is built through the **composition layer**, which is the same
+    construction a dynamic run uses: a quasi-static request and a dynamic one are
+    two readings of one build, and neither is a path beside the other.  The bench
+    the request names is resolved against the built assembly here rather than
+    assumed, so "this run is this assembly on this bench" is checkable at the call
+    site instead of being a claim about two modules agreeing.
 
     `api` calls this directly.  It authors its own contract documents -- that
     split is older than this function -- but the assembly those documents are
-    written from has to be the one the study layer builds, or the two readings
+    written from has to be the one the composition builds, or the two readings
     drift and the rig check never runs.
 
-    The mode is passed to the study layer rather than resolved here, so a C
-    assembly asked for the K reading is refused by the same check that guards
-    every other study entry.
+    The mode travels on the assembly request rather than being resolved here, so a
+    C assembly asked for the K reading is refused by the same check that guards
+    every other entry.
 
     ``request`` carries the *subsystem set* when the caller wants something other
     than the default axle, which is how a run can be asked for without steering.
-    It is an ``AssemblyRequest`` and it is passed straight through: the study
-    layer already decides the mode, and re-deriving it here would be a second
-    answer to a question this function has just been told.
+    It is an ``AssemblyRequest`` and it is passed straight through, because it
+    already decides the mode and re-deriving that would be a second answer to a
+    question this function has just been told.
     """
     from ..rigs import check_assembly
-    from ..studies import QUASI_STATIC, build_study_assembly
+    from ..subsystems.si_assembly import si_assembly_for_axle
+    from ..subsystems.types import AssemblyRequest
 
-    if not isinstance(model, (FrontAxleAssembly, FrontAxleModel)):
+    if not isinstance(model, (SubsystemRuntime, FrontAxleModel)):
         raise TypeError(
-            "kc quasi-static preparation requires a FrontAxleAssembly or "
-            f"FrontAxleModel, got {type(model).__name__}"
+            "kc quasi-static preparation requires a FrontAxleModel or a composed "
+            f"SubsystemRuntime, got {type(model).__name__}"
         )
     if request is not None:
         # A caller that states the subsystem set owns the mode with it, so the
@@ -119,9 +121,29 @@ def assembly_for(
                 f"the run asks for mode {mode!r} and the assembly request says "
                 f"{stated!r}; pass one or the other"
             )
-    assembly = build_study_assembly(
-        model, study=QUASI_STATIC, mode=mode, request=request
-    ).assembly
+    # The production entry builds through the composition layer, so the model a
+    # K/C run solves is the one the composition produces.  This is the cutover the
+    # architecture asks for: a run that went through the historical builder would
+    # keep the old path alive no matter how complete the new one became.
+    resolved = request if request is not None else AssemblyRequest(mode=mode)
+    if isinstance(model, SubsystemRuntime):
+        # An already-built runtime is handed back unchanged: a caller that built one
+        # -- and the tests that compare two readings -- must not have it silently
+        # rebuilt from a model it no longer carries.  Its own mode is still checked
+        # against the reading being asked for, because a C assembly read as K would
+        # produce documents describing a model nobody built.
+        observed = getattr(model, "mode", None)
+        if observed is not None and observed != mode:
+            raise ValueError(
+                f"the assembly was built for mode {observed!r} but this run asks "
+                f"for mode {mode!r}; the mode belongs to the assembly"
+            )
+        assembly = model
+    else:
+        composed = si_assembly_for_axle(
+            model, request=resolved, rig=rig, name=name
+        )
+        assembly = composed.assembly.physical
     check_assembly(ASSEMBLY, rig, getattr(assembly, "capabilities", None))
     return assembly
 
@@ -143,8 +165,28 @@ def prepare_request(request: SimulationRequest) -> PreparedSimulation:
     name = request.name or case.name
 
     from ..cases.kc_quasi_static import case_document, model_document
+    from ..rigs import compose, get_rig
 
     model_emitted = model_document(assembly, name=name, drive_wheels=drive_wheels)
+    # The drives the case may sweep are the rig's declaration shrunk to this
+    # assembly's capabilities -- one judgement, made once, in `rigs.compose`.  The
+    # case document is authored from that set rather than from a search over the
+    # emitted coordinate names, so "which axes this run has" is a consequence of
+    # the bench and the assembly and not of how a coordinate happens to be spelled.
+    #
+    # An assembly built outside the subsystem path reports no capabilities, and its
+    # drives stay the bench's own declaration -- the same fallback `compose`'s
+    # callers document, rather than a refusal that would break those callers.
+    capabilities = getattr(assembly, "capabilities", None)
+    if capabilities is None:
+        declared_drives = tuple(
+            drive.coordinate for drive in get_rig(request.rig).drives
+        )
+    else:
+        declared_drives = tuple(
+            drive.coordinate
+            for drive in compose(get_rig(request.rig), capabilities).drives
+        )
     case_emitted = case_document(
         assembly,
         family=FAMILY,
@@ -160,6 +202,7 @@ def prepare_request(request: SimulationRequest) -> PreparedSimulation:
         times_s=case.times_s,
         settings=case.settings if case.settings is not None else AxleSolverSettings(),
         drive_wheels=drive_wheels,
+        drives=declared_drives,
     )
     prepared = KcQuasiStaticPrepared(
         assembly=assembly,

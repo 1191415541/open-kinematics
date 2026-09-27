@@ -18,6 +18,10 @@ from .common import (
 from .dynamic import DynamicSolverSettings, InitialBodyState, TimeSignal, TireModelSpec
 from .model import FrontAxleModel, RigidBodySpec
 
+# The road surface is shared with the axle model, so it lives in its own module and is
+# re-exported here: callers that already import it from the vehicle schema keep working.
+from .road import RoadSurfaceSpec
+
 
 class AerodynamicDragSpec(StrictModel):
     """Quadratic aerodynamic drag applied to the chassis."""
@@ -234,35 +238,6 @@ class DrivelineSpec(StrictModel):
             raise ValueError("drive_split is required when drive torque is enabled")
         if sum(self.drive_split) > 0 and abs(sum(self.drive_split) - 1.0) > 1e-9:
             raise ValueError("drive_split must sum to one")
-        return self
-
-
-class RoadSurfaceSpec(StrictModel):
-    """Analytic road surface queried by the tire contact evaluator."""
-
-    kind: Literal["plane", "sine", "bump", "random_fourier", "four_post"] = "plane"
-    origin: Vec3 = Field(default_factory=Vec3)
-    normal: Vec3 = Vec3(x=0.0, y=0.0, z=1.0)
-    amplitude: float = Field(default=0.0, ge=0)
-    wavelength: float = Field(default=1_000.0, gt=0)
-    phase: float = 0.0
-    bump_start: float = 0.0
-    bump_length: float = Field(default=500.0, gt=0)
-    corner_scales: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
-    corner_height_signals: tuple[TimeSignal, TimeSignal, TimeSignal, TimeSignal] | None = None
-    friction_coefficient: float = Field(default=1.0, gt=0)
-
-    @model_validator(mode="after")
-    def _normal_and_kind(self) -> RoadSurfaceSpec:
-        normal = self.normal.as_array()
-        if not all(math.isfinite(float(value)) for value in normal) or float(normal @ normal) <= 1e-12:
-            raise ValueError("road normal must be a non-zero finite vector")
-        if normal[2] <= 0.0:
-            raise ValueError("road normal must point upward with a positive z component")
-        if self.kind == "plane" and self.amplitude != 0.0:
-            raise ValueError("plane road must have zero amplitude")
-        if any(not math.isfinite(value) or value < 0.0 for value in self.corner_scales):
-            raise ValueError("corner_scales must contain finite non-negative values")
         return self
 
 

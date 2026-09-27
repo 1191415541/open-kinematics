@@ -21,7 +21,6 @@ from pathlib import Path
 import pytest
 
 from suspension_multibody.modeling.primitives import RigidBody
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.preparation.kc_quasi_static import assembly_for
 from suspension_multibody.rigs import resolve_combination
 from suspension_multibody.schema import (
@@ -43,6 +42,7 @@ from suspension_multibody.studies import (
     axle_dynamics_model,
     build_study_assembly,
 )
+from suspension_multibody.subsystems.entry import compose_axle
 
 _BODIES = (
     "rack",
@@ -191,7 +191,7 @@ def test_the_drivable_set_is_what_the_bench_asks_for() -> None:
     """
     from suspension_multibody.api import _k_drivable_coordinates
 
-    assembly = build_front_axle(_model(), "K")
+    assembly = compose_axle(_model(), "K")
     assert _k_drivable_coordinates(assembly) == frozenset(
         {"wheel_drive_L", "wheel_drive_R", "rack_drive"}
     )
@@ -205,7 +205,7 @@ def test_an_assembly_without_steering_loses_only_the_rack() -> None:
     )
 
     hardpoints = {k: v for k, v in _HARDPOINTS.items() if k != "RACK_CENTER"}
-    assembly = build_front_axle(
+    assembly = compose_axle(
         _model(hardpoints=hardpoints),
         "K",
         AssemblyRequest(mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS - {"steering"}),
@@ -230,7 +230,7 @@ def test_the_bench_and_the_drivable_set_agree() -> None:
     )
 
     hardpoints = {k: v for k, v in _HARDPOINTS.items() if k != "RACK_CENTER"}
-    assembly = build_front_axle(
+    assembly = compose_axle(
         _model(hardpoints=hardpoints),
         "K",
         AssemblyRequest(mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS - {"steering"}),
@@ -264,16 +264,23 @@ def test_a_compatible_bench_passes_preparation() -> None:
     assert assembly.mode == "K"
 
 
-def test_the_assembly_entry_builds_through_the_study_layer() -> None:
+def test_the_assembly_entry_builds_through_the_study_layer(monkeypatch) -> None:
     """
     The assembly a K/C run uses must be the one the study layer builds.
 
-    This is what keeps the two readings one construction: an assembly built by
-    the family entry and one built by `build_front_axle` directly have to be the
-    same thing, or a quasi-static run and a dynamic one would start from
-    different models while claiming to share one.
+    This is what keeps the two readings one construction: an assembly built by the
+    family entry and one built by the composition entry directly have to be the same
+    thing, or a quasi-static run and a dynamic one would start from different models
+    while claiming to share one.
+
+    D1 deliberately adds the bench's wheel to the model, so the two paths are
+    compared with that contribution switched off -- which is what the switch exists
+    for -- and the contribution is then asserted separately.  Stating the difference
+    is the point: a looser comparison would absorb it, and the next reader could not
+    tell an intended addition from a drift.
     """
-    direct = build_front_axle(_model(), "K")
+    monkeypatch.setenv("SUSPENSION_MULTIBODY_RIG_ENTITIES", "0")
+    direct = compose_axle(_model(), "K")
     via_entry = assembly_for(_model(), mode="K", rig="kc_quasi_static")
     assert list(via_entry.bodies) == list(direct.bodies)
     assert set(via_entry.points) == set(direct.points)
@@ -281,11 +288,26 @@ def test_the_assembly_entry_builds_through_the_study_layer() -> None:
     assert len(via_entry.elements) == len(direct.elements)
     assert via_entry.mode == direct.mode
 
+    monkeypatch.delenv("SUSPENSION_MULTIBODY_RIG_ENTITIES", raising=False)
+    with_bench = assembly_for(_model(), mode="K", rig="kc_quasi_static")
+    added = set(with_bench.bodies) - set(direct.bodies)
+    assert added == {"wheel_carrier_L", "wheel_carrier_R"}, (
+        "the production entry must carry the bench's wheels and nothing else"
+    )
+    # The addition is attached, not merely present: each carrier is welded to its
+    # upright, which is what makes it part of the model rather than a loose body.
+    welds = {
+        constraint.name
+        for constraint in with_bench.constraints
+        if "weld" in constraint.name
+    }
+    assert welds == {"wheel_carrier_L_weld", "wheel_carrier_R_weld"}
+
 
 def test_the_mode_is_checked_against_the_assembly_it_is_handed() -> None:
     """A C assembly asked for the K reading is refused, not silently re-read."""
     with pytest.raises(ValueError, match="mode"):
-        assembly_for(build_front_axle(_model(), "C"), mode="K", rig="kc_quasi_static")
+        assembly_for(compose_axle(_model(), "C"), mode="K", rig="kc_quasi_static")
 
 
 def test_a_public_run_resolves_its_bench(monkeypatch) -> None:
@@ -324,7 +346,7 @@ def test_a_public_run_resolves_its_bench(monkeypatch) -> None:
 
 def test_one_assembly_becomes_a_dynamic_model() -> None:
     """The whole point of the study merge, driven through the product."""
-    assembly = build_front_axle(_model(), "K")
+    assembly = compose_axle(_model(), "K")
     study_assembly = build_study_assembly(assembly, study=DYNAMIC, mode="K")
     model = axle_dynamics_model(study_assembly, name="wired")
 
@@ -343,8 +365,12 @@ def test_the_axle_family_accepts_an_assembled_axle() -> None:
     readings" would hold inside `studies/` and nowhere a caller could reach.
     """
     from suspension_multibody.preparation.axle_dynamic import _dynamic_model
+    from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
+    from suspension_multibody.subsystems.types import AssemblyRequest
 
-    assembly = build_front_axle(_model(), "K")
+    assembly = si_assembly_for_axle(
+        _model(), request=AssemblyRequest(mode="K")
+    ).assembly.physical
     request = SimulationRequest(
         assembly="axle", family="axle_dynamic", model=assembly, name="wired"
     )
@@ -356,8 +382,12 @@ def test_the_axle_family_accepts_an_assembled_axle() -> None:
 def test_an_si_model_still_passes_straight_through() -> None:
     """The original input stays the original input."""
     from suspension_multibody.preparation.axle_dynamic import _dynamic_model
+    from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
+    from suspension_multibody.subsystems.types import AssemblyRequest
 
-    assembly = build_front_axle(_model(), "K")
+    assembly = si_assembly_for_axle(
+        _model(), request=AssemblyRequest(mode="K")
+    ).assembly.physical
     request = SimulationRequest(
         assembly="axle", family="axle_dynamic", model=assembly, name="wired"
     )
@@ -411,7 +441,7 @@ def test_a_spring_and_a_damper_reach_the_dynamic_model() -> None:
     presence check.
     """
     spring, damper = _spring_pair()
-    assembly = build_front_axle(_model(springs=(spring,), dampers=(damper,)), "K")
+    assembly = compose_axle(_model(springs=(spring,), dampers=(damper,)), "K")
     assert assembly.elements, "the fixture assembled no elements"
 
     study_assembly = build_study_assembly(assembly, study=DYNAMIC, mode="K")
@@ -459,7 +489,7 @@ def test_a_preloaded_spring_keeps_its_resting_length() -> None:
         reference_length=300.0,
         preload=1000.0,
     )
-    assembly = build_front_axle(_model(springs=(spring,)), "K")
+    assembly = compose_axle(_model(springs=(spring,)), "K")
     study_assembly = build_study_assembly(assembly, study=DYNAMIC, mode="K")
     model = axle_dynamics_model(study_assembly, name="wired")
 
@@ -479,7 +509,7 @@ def test_a_bump_stop_reaches_the_dynamic_model_as_a_unilateral_record() -> None:
     its clearance and its direction intact -- and not silently dropped, which
     would leave a solver that converges on the wrong model.
     """
-    assembly = build_front_axle(
+    assembly = compose_axle(
         _model(
             stops=(
                 BumpStop(
@@ -518,7 +548,7 @@ def test_a_bump_stop_reaches_the_dynamic_model_as_a_unilateral_record() -> None:
 
 def test_an_anti_roll_bar_with_no_dynamic_reading_is_named_not_dropped() -> None:
     """The same refusal for the other element the schema cannot read."""
-    assembly = build_front_axle(
+    assembly = compose_axle(
         _model(
             anti_roll_bars=(
                 AntiRollBar(
@@ -549,7 +579,7 @@ def test_the_quasi_static_reading_still_emits_the_kc_contract() -> None:
     from suspension_multibody.studies import study_model_document
 
     assembly = build_study_assembly(
-        build_front_axle(_model(), "K"), study=QUASI_STATIC
+        compose_axle(_model(), "K"), study=QUASI_STATIC
     )
     document = study_model_document(assembly, name="wired")
     assert document["contract"] == "multibody-model"
@@ -564,7 +594,7 @@ def test_a_body_without_mass_has_no_dynamic_reading() -> None:
     rather than inventing one.  This drives it through an assembly so the
     refusal is exercised where it actually happens.
     """
-    assembly = build_front_axle(_model(), "K")
+    assembly = compose_axle(_model(), "K")
     massless = dict(assembly.bodies)
     massless["rack"] = RigidBody(
         name="rack",

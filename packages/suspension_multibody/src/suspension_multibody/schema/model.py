@@ -23,6 +23,7 @@ from .elements import (
     StaticDamper,
     VerticalTire,
 )
+from .road import RoadSurfaceSpec
 
 
 class MassSpec(StrictModel):
@@ -174,6 +175,12 @@ class FrontAxleModel(StrictModel):
     joints: tuple[IdealJointSpec, ...] = ()
     rack_axis: Vec3 = Vec3(x=0.0, y=1.0, z=0.0)
     rack_fixed_to_chassis: bool = False
+    #: The ground the tires are measured against, when the model declares one.  A pad is
+    #: a *surface*, not a body, so this is a geometry rather than something the
+    #: equations of motion carry.  Absent means "let the case supply it": the K/C
+    #: readings drive the wheel centre and need no ground at all, while the pad reading
+    #: states its height as a case input, one height per scan point.
+    road: RoadSurfaceSpec | None = None
 
     @field_validator("hardpoints")
     @classmethod

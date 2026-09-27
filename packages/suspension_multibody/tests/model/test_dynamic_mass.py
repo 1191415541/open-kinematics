@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import FrontAxleModel, MassSpec, RigidBodySpec, Vec3
+from suspension_multibody.subsystems.entry import compose_axle
 
 
 def _hardpoints() -> dict[str, Vec3]:
@@ -43,7 +43,7 @@ def test_body_spec_maps_to_front_axle_runtime_body() -> None:
         ),
     )
 
-    assembly = build_front_axle(model, "K")
+    assembly = compose_axle(model, "K")
 
     assert assembly.bodies["upright_L"].mass == pytest.approx(38.0)
     assert assembly.bodies["upright_L"].center_of_mass.tolist() == [1.0, 2.0, 3.0]

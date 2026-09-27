@@ -5,7 +5,6 @@ import os
 import numpy as np
 import pytest
 
-from suspension_multibody.preparation.assembly import build_vehicle
 from suspension_multibody.preparation.vehicle_dynamic import (
     _build_elements,
     _build_joints,
@@ -39,6 +38,7 @@ from suspension_multibody.schema import (
     VehicleModel,
     WheelSpec,
 )
+from suspension_multibody.subsystems.entry import compose_vehicle
 from suspension_multibody.vehicle.service import run_vehicle_dynamics
 
 _BODY_NAMES = (
@@ -289,7 +289,7 @@ def _uniform_velocity_initial_states(
     vx_mm_s: float = 10_000.0,
     vy_mm_s: float = 5_000.0,
 ) -> tuple[InitialBodyState, ...]:
-    assembly = build_vehicle(model, mode="K")
+    assembly = compose_vehicle(model, mode="K")
     states: list[InitialBodyState] = []
     for name, body in assembly.bodies.items():
         quaternion = body.pose.quaternion
@@ -345,7 +345,7 @@ def test_native_fixed_joint_is_what_carries_a_weld() -> None:
     The native ``kind="fixed"`` joint carries the weld; Python no longer fuses.
 
     This is the target state of the A1 decision (2026-09-22): the authoring layer
-    stopped answering a *solving* question, so ``build_vehicle`` hands the kernel
+    stopped answering a *solving* question, so ``compose_vehicle`` hands the kernel
     the welded pair as two bodies plus a six-row ``fixed`` joint
     (``mb_joint/types.hpp``: the coincident point plus the full relative
     rotation) instead of fusing them itself.
@@ -369,7 +369,7 @@ def test_native_fixed_joint_is_what_carries_a_weld() -> None:
 
     # 1. The default path: separate bodies, the weld sent as a fixed joint.
     os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
-    assembly = build_vehicle(model)
+    assembly = compose_vehicle(model)
     joints = _build_joints(assembly, _frames_for(assembly, model), 1.0)
     fixed = [joint for joint in joints if joint.kind == "fixed"]
     assert fixed, "the weld has to reach the kernel as a fixed joint"
@@ -382,7 +382,7 @@ def test_native_fixed_joint_is_what_carries_a_weld() -> None:
     # 2. The rollback: the fused form still works and still carries the pair's mass.
     os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = "1"
     try:
-        fused = build_vehicle(model)
+        fused = compose_vehicle(model)
         assert fused.bodies["front_upright_L"].mass == 120.0  # 100 kg upright + 20 kg
         assert not any(
             joint.kind == "fixed"
@@ -416,10 +416,10 @@ def test_the_two_weld_routes_agree_on_the_world_mass_properties() -> None:
         return total, moment / total
 
     os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
-    separate = build_vehicle(model)
+    separate = compose_vehicle(model)
     os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = "1"
     try:
-        fused = build_vehicle(model)
+        fused = compose_vehicle(model)
     finally:
         os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
 
@@ -451,7 +451,7 @@ def test_native_fixed_joint_shape_matches_the_registry() -> None:
     previous = os.environ.get("SUSPENSION_MULTIBODY_CONDENSE_WELDS")
     os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = "0"
     try:
-        uncondensed = build_vehicle(model)
+        uncondensed = compose_vehicle(model)
     finally:
         if previous is None:
             os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
@@ -1289,7 +1289,7 @@ def test_native_attachment_points_respect_body_origin_and_orientation() -> None:
             )
         }
     )
-    assembly = build_vehicle(model, mode="K")
+    assembly = compose_vehicle(model, mode="K")
     case = _case(model)
     bodies, body_frames = _initial_body_state(assembly, case, 1.0e-3)
 
@@ -1353,7 +1353,7 @@ def test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi() -> None:
             )
         }
     )
-    assembly = build_vehicle(model, mode="K")
+    assembly = compose_vehicle(model, mode="K")
     _bodies, body_frames = _initial_body_state(assembly, _case(model), 1.0e-3)
     springs, _dampers, bump_stops, _bushings = _build_elements(
         assembly, body_frames, 1.0e-3
@@ -1575,7 +1575,7 @@ def test_engineering_damper_preload_is_converted_before_si_scaling() -> None:
         friction=5.0,
     )
     model = _vehicle(front_dampers=(damper,))
-    assembly = build_vehicle(model, mode="C")
+    assembly = compose_vehicle(model, mode="C")
     bodies, shifts = _initial_body_state(assembly, _case(model), 1.0e-3)
     del bodies
     _springs, dampers, _stops, _bushings = _build_elements(assembly, shifts, 1.0e-3)

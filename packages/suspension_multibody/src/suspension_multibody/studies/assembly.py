@@ -8,9 +8,9 @@ start from the same object, so this module owns the single construction:
     assembly = build_study_assembly(model, study=...)
 
 and both studies then ask that one object for their documents.  The two readings
-are therefore the same `FrontAxleAssembly` -- same bodies, same points, same
-constraints -- and a divergence between them would have to be coded deliberately
-rather than appearing as a side effect of two assembly functions drifting.
+are therefore the same runtime -- same bodies, same points, same constraints -- and a
+divergence between them would have to be coded deliberately rather than appearing as
+a side effect of two assembly functions drifting.
 
 The mode is K or C and belongs to the assembly, not to the study: a dynamic run
 of a compliant axle and a quasi-static run of a rigid one are both legitimate, so
@@ -22,7 +22,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from ..preparation.assembly import FrontAxleAssembly, build_front_axle
 from ..schema import FrontAxleModel
 from .study import DYNAMIC, QUASI_STATIC, StudySpec, get_study
 
@@ -52,9 +51,16 @@ class StudyAssembly:
     quasi-statically and dynamically without rebuilding it, which is what makes
     "the same model, two studies" checkable by identity rather than by comparing
     two independently built results and hoping.
+
+    ``assembly`` is typed loosely because a composition and a bare runtime both
+    legitimately reach here: the
+    :class:`~suspension_multibody.subsystems.runtime.SubsystemRuntime` a composition
+    carries, and one a caller composed directly.  Both expose the same faces --
+    ``mode``, bodies, both constraint columns, bushings, elements -- and the readers
+    below ask for those faces rather than for a class.
     """
 
-    assembly: FrontAxleAssembly
+    assembly: Any
     study: StudySpec
     mode: str
 
@@ -70,7 +76,7 @@ class StudyAssembly:
 
 
 def build_study_assembly(
-    source: FrontAxleModel | FrontAxleAssembly,
+    source: FrontAxleModel | Any,
     *,
     study: str,
     mode: str | None = None,
@@ -79,11 +85,18 @@ def build_study_assembly(
     """
     Build the one assembly a study reads, from a model or an existing assembly.
 
-    Accepting an already-built `FrontAxleAssembly` matters: a caller who wants to
-    compare the two readings can assemble once and hand the same object to both,
-    so the comparison is between two *readings* and not between two assemblies.
-    Passing a model builds it through the same `build_front_axle` the rest of the
-    package uses -- there is no second assembly path here to drift from it.
+    Accepting an already-built assembly or runtime matters: a caller who wants to
+    compare two readings can assemble once and hand the same value to both, so the
+    comparison is between two *readings* and not between two assemblies.  Passing a
+    model builds it through the **composition layer**, so the study reads the same
+    model the rest of the package builds -- there is no second assembly path here to
+    drift from it.
+
+    A :class:`~suspension_multibody.subsystems.runtime.SubsystemRuntime` is
+    accepted as well, because that is what a composition carries: it exposes the
+    same faces (``mode``, bodies, both constraint columns, bushings, elements), so
+    a caller holding a composition can hand it straight to a study instead of
+    rebuilding the assembly the composition replaces.
     """
     spec = get_study(study)
     resolved_mode = mode or _DEFAULT_MODE[spec.name]
@@ -91,8 +104,8 @@ def build_study_assembly(
         raise ValueError(f"mode must be K or C, got {resolved_mode!r}")
     mode_literal: Literal["K", "C"] = "K" if resolved_mode == "K" else "C"
 
-    assembly: FrontAxleAssembly
-    if isinstance(source, FrontAxleAssembly):
+    assembly: Any
+    if _is_runtime(source):
         assembly = source
         observed = getattr(assembly, "mode", None)
         if observed is not None and observed != resolved_mode:
@@ -102,13 +115,30 @@ def build_study_assembly(
                 "assembly, so build the one you mean"
             )
     elif isinstance(source, FrontAxleModel):
-        assembly = build_front_axle(source, mode_literal, request)
+        from ..subsystems.si_assembly import si_assembly_for_axle
+        from ..subsystems.types import AssemblyRequest
+
+        resolved_request = (
+            request
+            if request is not None
+            else AssemblyRequest(mode=mode_literal)
+        )
+        assembly = si_assembly_for_axle(
+            source, request=resolved_request
+        ).assembly.physical
     else:
         raise TypeError(
             "a study assembly is built from a FrontAxleModel or a "
-            f"FrontAxleAssembly, got {type(source).__name__}"
+            f"SubsystemRuntime, got {type(source).__name__}"
         )
     return StudyAssembly(assembly=assembly, study=spec, mode=resolved_mode)
+
+
+def _is_runtime(source: Any) -> bool:
+    """Return whether ``source`` is the runtime face a composition carries."""
+    from ..subsystems.runtime import SubsystemRuntime
+
+    return isinstance(source, SubsystemRuntime)
 
 
 def study_model_document(

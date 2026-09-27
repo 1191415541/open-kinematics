@@ -31,6 +31,7 @@ import numpy as np
 __all__ = [
     "MM",
     "body_state_vector",
+    "pad_contact_from_run",
     "rigid_state_from_row",
     "tire_compression_from_run",
 ]
@@ -48,6 +49,11 @@ _QUATERNION = slice(3, 7)
 #: metres, already clamped at zero by the kernel.  It is the same column in the
 #: static branch as in the dynamic one, which is what lets a K/C run read it.
 _TIRE_PENETRATION_COLUMN = 2
+
+#: The tire block's column holding the vertical force the contact law produced, in
+#: newtons.  Named for the same reason as the penetration column: a caller should
+#: read a name, not an index.
+_TIRE_LOAD_COLUMN = 4
 
 
 def rigid_state_from_row(assembly: Any, bodies: list[str], row: Any):
@@ -126,3 +132,102 @@ def tire_compression_from_run(
             if str(name).endswith(f"_{side}"):
                 by_side[label] = compression
     return by_side
+
+
+def pad_contact_from_run(run: Any, case_index: int = 0) -> dict[str, dict[str, float]]:
+    """
+    Return what a pad reading owes per side: wheel centre, tire load, contact point.
+
+    The pad reading is the one where the ground carries the wheel, so the three
+    quantities a caller asks it for are the three the geometry defines:
+
+    * **wheel centre** -- the tire's own centre point on its body, resolved at the
+      solved pose.  It is read from the tire definition rather than from a body
+      origin, because the centre sits at a body-local offset
+      (``center_local``) and an offset of zero would name a different point;
+    * **tire load** -- the vertical force the contact law produced, in newtons;
+    * **contact point** -- derived, not encoded.  The kernel reports how far the
+      tire is compressed and says nothing about where the patch is, because the
+      patch is a consequence of the geometry::
+
+          delta   = penetration
+          contact = center - [0, 0, radius - delta]
+
+      so the contact sits directly below the centre, ``radius - delta`` away.
+      The identity that makes this checkable is ``contact.z == pad height``: the
+      pad is what the wheel rests on, so the patch is on it.
+
+    A side the model declares no tire for is **absent**, not zero -- the same
+    distinction the compression channel is built on.  A run with no tire block at
+    all returns an empty mapping rather than a fabricated one.
+    """
+    try:
+        names = run.tire_names
+        block = run.block("tire_output")
+    except Exception:  # noqa: BLE001 - a kernel without the block has no tires
+        return {}
+    if not names:
+        return {}
+
+    entry: Mapping[str, Any] = run.cases[case_index]
+    first = int(entry["sample_offset"])
+    last = first + int(entry["sample_count"]) - 1
+
+    # The tire's own declaration: the body it sits on, its centre offset and its
+    # unloaded radius.  Read from the model document rather than guessed, so a tire
+    # mounted anywhere other than a body origin is reported where it is.
+    declared: dict[str, Mapping[str, Any]] = {}
+    document = getattr(run, "model_document", None) or {}
+    for tire in (document or {}).get("tires", ()) or ():
+        declared[str(tire["name"])] = tire
+
+    states: dict[str, np.ndarray] = {}
+    result: dict[str, dict[str, float]] = {}
+    for index, name in enumerate(names):
+        tire = declared.get(str(name))
+        if tire is None:
+            continue
+        body = str(tire["body"])
+        if body not in states:
+            states[body] = np.asarray(run.body_state(body), dtype=float)
+        row = states[body][last]
+        origin = row[0:3] * MM
+        center_local = np.asarray(
+            tire["parameters"]["center_local"], dtype=float
+        )
+        radius = float(tire["parameters"]["unloaded_radius"])
+        # The body rotates, so the centre's offset turns with it.
+        quaternion = row[3:7]
+        center = origin + _rotate(center_local, quaternion)
+
+        delta = float(block[last, index, _TIRE_PENETRATION_COLUMN]) * MM
+        load = float(block[last, index, _TIRE_LOAD_COLUMN])
+        contact = np.array(
+            [center[0], center[1], center[2] - (radius - delta)], dtype=float
+        )
+        for side, label in (("L", "left"), ("R", "right")):
+            if str(name).endswith(f"_{side}"):
+                result[label] = {
+                    "wheel_center_x_mm": float(center[0]),
+                    "wheel_center_y_mm": float(center[1]),
+                    "wheel_center_z_mm": float(center[2]),
+                    "tire_load_n": load,
+                    "contact_x_mm": float(contact[0]),
+                    "contact_y_mm": float(contact[1]),
+                    "contact_z_mm": float(contact[2]),
+                }
+    return result
+
+
+def _rotate(vector: np.ndarray, quaternion: np.ndarray) -> np.ndarray:
+    """Rotate a body-local offset into the world, from a (w, x, y, z) quaternion."""
+    w, x, y, z = (float(value) for value in quaternion)
+    rotation = np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+        ],
+        dtype=float,
+    )
+    return rotation @ vector

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -13,7 +13,6 @@ from suspension_multibody.adams.time_domain import (
     AdamsResultChannel,
     parse_adams_result_history,
 )
-from suspension_multibody.preparation.assembly import build_vehicle
 from suspension_multibody.preparation.vehicle_dynamic import (
     _build_tires,
     _initial_body_state,
@@ -21,6 +20,7 @@ from suspension_multibody.preparation.vehicle_dynamic import (
     _select_assembly_mode,
 )
 from suspension_multibody.schema import VehicleDynamicCase, VehicleModel
+from suspension_multibody.subsystems.vehicle_assembly import compose_vehicle_runtime
 
 WHEELS = (
     ("front_left", "til", "front", "front_spindle_L"),
@@ -70,9 +70,13 @@ def diagnose(adams_result: Path, native_artifact: Path) -> dict[str, Any]:
     model = VehicleModel.model_validate(manifest["model"])
     case = VehicleDynamicCase.model_validate(manifest["case"])
     scale = _length_scale(model.units)
-    assembly = build_vehicle(
-        model, mode=_select_assembly_mode(model, case.suspension_mode)  # ty: ignore[invalid-argument-type]
+    # The composed runtime, matching what the run itself builds.  The mode is
+    # narrowed here because the reader accepts only K or C, while the selector
+    # returns the resolved spelling.
+    selected: Literal["K", "C"] = (
+        "K" if _select_assembly_mode(model, case.suspension_mode) == "K" else "C"
     )
+    assembly = compose_vehicle_runtime(model, mode=selected)
     _, body_frames = _initial_body_state(assembly, case, scale)
     native_tires = {
         tire.name: tire

@@ -81,12 +81,25 @@ class ModelFragment:
     points: Mapping[tuple[str, str], Any] = field(default_factory=dict)
     #: Joint declarations, keyed by local name.
     joints: Mapping[str, Any] = field(default_factory=dict)
+    #: The ideal-joint column, keyed by local name.
+    #:
+    #: Separate from ``joints`` because a C-mode assembly carries both columns:
+    #: ``joints`` is the active one and this is the ideal set a K reading of the
+    #: same model would use.  Keeping only the active column made a composition
+    #: unable to answer "what would this model's K joints be", which is what a
+    #: study switch asks.
+    ideal_constraints: Mapping[str, Any] = field(default_factory=dict)
+    #: The compliance column, keyed by local name.
+    bushings: Mapping[str, Any] = field(default_factory=dict)
     #: Coordinate drives, keyed by local name.
     drives: Mapping[str, Any] = field(default_factory=dict)
     #: Force elements (springs, bushings, bars), keyed by local name.
     forces: Mapping[str, Any] = field(default_factory=dict)
     #: Tire references, keyed by local name. The tire owns its own mass.
     tires: Mapping[str, Any] = field(default_factory=dict)
+    #: Connection rows, keyed by local name.  Accounting only: no document reads
+    #: them, but an assembly's connection list is part of what it produces.
+    connections: Mapping[str, Any] = field(default_factory=dict)
     #: Minimum output declarations, keyed by local name.
     outputs: Mapping[str, Any] = field(default_factory=dict)
     #: Ports this fragment offers, keyed by local name.
@@ -106,9 +119,12 @@ class ModelFragment:
             ("bodies", self.bodies),
             ("points", self.points),
             ("joints", self.joints),
+            ("ideal_constraints", self.ideal_constraints),
+            ("bushings", self.bushings),
             ("drives", self.drives),
             ("forces", self.forces),
             ("tires", self.tires),
+            ("connections", self.connections),
             ("outputs", self.outputs),
             ("ports", self.ports),
         ):
@@ -195,9 +211,18 @@ class ModelFragment:
             bodies={**self.bodies, **self._unique("bodies", other.bodies)},
             points={**self.points, **self._unique("points", other.points)},
             joints={**self.joints, **self._unique("joints", other.joints)},
+            ideal_constraints={
+                **self.ideal_constraints,
+                **self._unique("ideal_constraints", other.ideal_constraints),
+            },
+            bushings={**self.bushings, **self._unique("bushings", other.bushings)},
             drives={**self.drives, **self._unique("drives", other.drives)},
             forces={**self.forces, **self._unique("forces", other.forces)},
             tires={**self.tires, **self._unique("tires", other.tires)},
+            connections={
+                **self.connections,
+                **self._unique("connections", other.connections),
+            },
             outputs={**self.outputs, **self._unique("outputs", other.outputs)},
             ports={**self.ports, **self._unique("ports", other.ports)},
             requirements=(*self.requirements, *other.requirements),
@@ -225,9 +250,12 @@ class ModelFragment:
                 self.bodies,
                 self.points,
                 self.joints,
+                self.ideal_constraints,
+                self.bushings,
                 self.drives,
                 self.forces,
                 self.tires,
+                self.connections,
                 self.outputs,
                 self.ports,
             )
@@ -242,9 +270,12 @@ class ModelFragment:
         for mapping in (
             self.bodies,
             self.joints,
+            self.ideal_constraints,
+            self.bushings,
             self.drives,
             self.forces,
             self.tires,
+            self.connections,
             self.outputs,
             self.ports,
         ):

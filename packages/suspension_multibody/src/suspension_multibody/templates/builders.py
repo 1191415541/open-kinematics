@@ -167,21 +167,32 @@ def declared_fragment(
     for connection in template.connections:
         # A connection's point sits on the part its role names; that is the whole
         # meaning of `role` here, and it is why the declaration carries no
-        # coordinates: the assembly resolves the role against a real model.
-        owner = _owner_for(template, connection)
-        points[(owner, connection.name)] = {"role": connection.role}
-        column = activated_column(connection, mode)
-        if column == "joint" and connection.joint:
-            joints[connection.name] = {
-                "kind": connection.joint,
-                "body": owner,
-                "point": connection.name,
+        # coordinates: the assembly resolves the role against a real model.  The
+        # owner and label are read from the declaration when it states them, so a
+        # renamed part cannot silently move a joint.
+        owner = connection.owner or _owner_for(template, connection)
+        label = connection.label or connection.name
+        points[(owner, label)] = {"role": connection.role}
+        if connection.far_owner:
+            points[(connection.far_owner, connection.far_label)] = {
+                "role": connection.role,
+                "end": "far",
             }
+        column = activated_column(connection, mode)
+        if column == "joint":
+            joint_kind = connection.joint_kind(mode)
+            if joint_kind:
+                joints[connection.name] = {
+                    "kind": joint_kind,
+                    "body": owner,
+                    "point": label,
+                    "modes": tuple(connection.joint_modes),
+                }
         elif column == "bushing" and connection.bushing:
             forces[connection.name] = {
                 "kind": "bushing",
                 "body": owner,
-                "point": connection.name,
+                "point": label,
                 "slot": _slot_name_for(template, connection),
             }
 

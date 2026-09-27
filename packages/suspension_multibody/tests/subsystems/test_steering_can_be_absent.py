@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import FrontAxleModel, RigidBodySpec
 from suspension_multibody.subsystems import DEFAULT_AXLE_SUBSYSTEMS, AssemblyRequest
+from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 #: Everything the steering subsystem owns, and nothing else.  The benchmark
@@ -74,7 +74,7 @@ def _request(mode: str) -> AssemblyRequest:
 
 
 def _both(mode: str):
-    return build_front_axle(benchmark_model(), mode), build_front_axle(
+    return compose_axle(benchmark_model(), mode), compose_axle(
         _without_steering(), mode, _request(mode)
     )
 
@@ -156,7 +156,7 @@ def test_a_declared_steering_body_spec_is_tolerated_not_rejected() -> None:
             )
         }
     )
-    reduced = build_front_axle(with_specs, "K", _request("K"))
+    reduced = compose_axle(with_specs, "K", _request("K"))
     assert "rack" not in reduced.bodies
     assert set(reduced.bodies) == set(_both("K")[1].bodies)
 
@@ -182,7 +182,7 @@ def test_an_axle_cannot_claim_brake_or_drive() -> None:
             mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS | {role}
         )
         try:
-            build_front_axle(benchmark_model(), "K", request)
+            compose_axle(benchmark_model(), "K", request)
         except ValueError as error:
             assert role in str(error)
         else:  # pragma: no cover - the call must raise

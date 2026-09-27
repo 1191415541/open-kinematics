@@ -4,7 +4,7 @@ The wheel subsystem: the wheel body and the tire.
 Availability is deliberately asymmetric (requirement 19 / D9):
 
 * on a full vehicle the wheel subsystem builds `wheel.body` and its spin joint,
-  which is what `preparation/assembly/vehicle.py` does today;
+  which is what `subsystems/vehicle_parts.py` does today;
 * on a single axle it builds **no body at all**.  Adams does the same: the axle
   assembly `acar_gs_front.asy` carries only `suspension`/`steering` plus the
   suspension testrig, and the wheels come from the rig's own parameters

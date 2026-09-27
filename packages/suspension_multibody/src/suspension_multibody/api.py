@@ -49,7 +49,6 @@ from .modeling.primitives.spatial import (
     quaternion_to_rotation_vector,
     wrench_global_to_local,
 )
-from .preparation.assembly import FrontAxleAssembly
 from .preparation.signals import loads_at_time, motion, time_grid, wrenches_at_time
 from .report.compliance import secant_compliance
 from .report.metrics import (
@@ -80,6 +79,7 @@ from .schema import (
 from .schema.case import DisplacementControl, LoadControl
 from .simulation import CompiledSimulation, SimulationRequest, run_compiled, run_request
 from .simulation.replay import VehicleKCTimeDomainSolver
+from .subsystems.runtime import SubsystemRuntime
 
 #: The output grid a K/C case is solved on.  The kernel's case layer expands a
 #: start/end/step, so the product API has to state one; two samples is the
@@ -344,7 +344,7 @@ def _kc_assembly(
     model: FrontAxleModel,
     mode: Literal["K", "C"],
     subsystems: frozenset[str] | None = None,
-) -> FrontAxleAssembly:
+) -> SubsystemRuntime:
     """
     Return the assembly a K/C run is solved from, with its bench checked.
 
@@ -374,7 +374,7 @@ def _kc_assembly(
     )
 
 
-def _k_drivable_coordinates(assembly: FrontAxleAssembly) -> frozenset[str]:
+def _k_drivable_coordinates(assembly: SubsystemRuntime) -> frozenset[str]:
     """
     Return the drive coordinates the K/C bench can drive on this assembly.
 
@@ -550,7 +550,7 @@ def _case_envelope(name: str, sections: dict[str, object]) -> dict[str, object]:
 
 
 def _k_drives(
-    assembly: FrontAxleAssembly,
+    assembly: SubsystemRuntime,
     *,
     left: float,
     right: float,
@@ -578,10 +578,11 @@ def _k_drives(
 def _compile_plan_run(
     *,
     rig: str,
-    assembly: FrontAxleAssembly,
+    assembly: SubsystemRuntime,
     mode: Literal["K", "C"],
     name: str,
     drive_wheels: bool,
+    drive_mode: str | None = None,
     case_document: dict[str, object],
 ):
     """
@@ -606,6 +607,7 @@ def _compile_plan_run(
         times_s=_TIMES_S,
         solver=AxleSolverSettings(),
         drive_wheels=drive_wheels,
+        drive_mode=drive_mode,
     )
     model_emitted, _, model_blob, _, metadata = compile_plan(plan, assembly)
     compiled = CompiledSimulation(
@@ -629,7 +631,7 @@ def _compile_plan_run(
 
 
 def _run_k(
-    assembly: FrontAxleAssembly,
+    assembly: SubsystemRuntime,
     case: CaseSpec,
     checkpoint: CheckpointStore | None,
     hashes: tuple[str, str, str],
@@ -644,6 +646,7 @@ def _run_k(
         mode="K",
         name=f"{case.name}-k",
         drive_wheels=True,
+        drive_mode=case.drive_mode,
         case_document=_k_case_document(case, section),
     )
 
@@ -707,7 +710,7 @@ def _c_case_document(case: CaseSpec, loads: tuple[SixVector, ...]) -> dict[str, 
 
 
 def _run_c(
-    assembly: FrontAxleAssembly,
+    assembly: SubsystemRuntime,
     case: CaseSpec,
     checkpoint: CheckpointStore | None,
     hashes: tuple[str, str, str],
@@ -720,6 +723,7 @@ def _run_c(
         mode="C",
         name=f"{case.name}-c",
         drive_wheels=False,
+        drive_mode=case.drive_mode,
         case_document=_c_case_document(case, loads),
     )
 
@@ -783,7 +787,7 @@ def _run_c(
     return states, component_loads, bushings
 
 
-def _reference_state(assembly: FrontAxleAssembly) -> RigidBodyState:
+def _reference_state(assembly: SubsystemRuntime) -> RigidBodyState:
     """
     Return the pose the C response is measured from.
 
@@ -792,7 +796,16 @@ def _reference_state(assembly: FrontAxleAssembly) -> RigidBodyState:
     assembled at, which is what the kernel resolves an omitted driven target to
     and what the K reference equals.
     """
-    return assembly.state
+    pose = assembly.state
+    if pose is None:
+        # A runtime built without a state has no assembled pose to measure from.
+        # Saying so is better than returning a plausible zero pose, which would
+        # make the C response look measured from the right place.
+        raise ValueError(
+            "the assembly carries no reference state, so the C response has no "
+            "pose to be measured from"
+        )
+    return pose
 
 
 def _mirror_load(load: SixVector, side_mode: str) -> SixVector:
@@ -809,7 +822,7 @@ def _mirror_load(load: SixVector, side_mode: str) -> SixVector:
 
 
 def _rigid_state(
-    assembly: FrontAxleAssembly, bodies: list[str], row: np.ndarray
+    assembly: SubsystemRuntime, bodies: list[str], row: np.ndarray
 ) -> RigidBodyState:
     """
     Rebuild the reporting state from one contract sample, metres to mm.
@@ -821,14 +834,22 @@ def _rigid_state(
     """
     from .results.kc_state import rigid_state_from_row
 
-    names = list(bodies) or list(assembly.state.bodies)
+    # The body list comes from the caller when it names one, and otherwise from the
+    # assembled pose -- which has to exist for the row to be laid out against it.
+    reference = assembly.state
+    if reference is None:
+        raise ValueError(
+            "the assembly carries no reference state, so a sample cannot be laid "
+            "out against its body order"
+        )
+    names = list(bodies) or list(reference.bodies)
     return rigid_state_from_row(assembly, names, np.asarray(row, dtype=float))
 
 
 def _wheel_response(
     state: RigidBodyState,
     reference_state: RigidBodyState,
-    assembly: FrontAxleAssembly,
+    assembly: SubsystemRuntime,
     side: str,
 ) -> np.ndarray:
     """Return global wheel-center translation and rotation-vector response."""
@@ -953,7 +974,7 @@ def _checkpoint(
 
 
 def _collect_element_results(
-    assembly: FrontAxleAssembly, state: RigidBodyState, state_id: str
+    assembly: SubsystemRuntime, state: RigidBodyState, state_id: str
 ) -> tuple[tuple[ComponentLoad, ...], tuple[BushingResult, ...]]:
     loads: list[ComponentLoad] = []
     bushings: list[BushingResult] = []

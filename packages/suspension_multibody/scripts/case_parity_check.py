@@ -306,7 +306,7 @@ def _benchmark_model() -> Any:
 def check_kc_quasi_static() -> tuple[bool, str]:
     """Compare the contract-path K grid and C load paths with the snapshot."""
     from suspension_multibody.cases.kc_quasi_static import AXIS_ORDER
-    from suspension_multibody.preparation.assembly import build_front_axle
+    from suspension_multibody.subsystems.entry import compose_axle
 
     # Loaded by path rather than imported: the fixture is a test module, and a
     # module reached through `sys.path` is neither resolvable by a type checker
@@ -325,7 +325,7 @@ def check_kc_quasi_static() -> tuple[bool, str]:
         state["case_id"]: state
         for state in json.loads((TEST_DATA / "k_states.json").read_text(encoding="utf-8"))
     }
-    k_produced = _k_grid_records(build_front_axle(_benchmark_model(), "K"))
+    k_produced = _k_grid_records(compose_axle(_benchmark_model(), "K"))
     if {state["case_id"] for state in k_produced} != set(k_expected):
         return False, "the K grid did not cover the frozen case set"
     for state in k_produced:
@@ -343,7 +343,7 @@ def check_kc_quasi_static() -> tuple[bool, str]:
         for state in json.loads((TEST_DATA / "c_states.json").read_text(encoding="utf-8"))
     }
     c_produced = _c_path_records(
-        build_front_axle(_compliant_model(), "C"), paths=AXIS_ORDER
+        compose_axle(_compliant_model(), "C"), paths=AXIS_ORDER
     )
     if {state["case_id"] for state in c_produced} != set(c_expected):
         return False, "the C load paths did not cover the frozen case set"

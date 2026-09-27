@@ -24,7 +24,6 @@ from suspension_multibody.connections import (
     check_root,
     rule_for,
 )
-from suspension_multibody.preparation.assembly import build_front_axle
 from suspension_multibody.schema import (
     FrontAxleModel,
     MassSpec,
@@ -36,6 +35,7 @@ from suspension_multibody.subsystems import (
     DEFAULT_AXLE_SUBSYSTEMS,
     DEFAULT_VEHICLE_SUBSYSTEMS,
 )
+from suspension_multibody.subsystems.entry import compose_axle
 
 # -- the rule itself -------------------------------------------------------
 
@@ -139,7 +139,7 @@ def _axle_model() -> FrontAxleModel:
 
 def test_the_built_axle_reports_no_brake_or_drive() -> None:
     """The rule is checked against the assembly the product actually builds."""
-    assembly = build_front_axle(_axle_model(), mode="K")
+    assembly = compose_axle(_axle_model(), mode="K")
     roles = set(assembly.capabilities.subsystems) if assembly.capabilities else set()
     assert "brake" not in roles
     assert "drive" not in roles

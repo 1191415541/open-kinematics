@@ -18,9 +18,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..preparation.assembly import build_vehicle
-from ..preparation.assembly.front_axle import side_hardpoints
 from ..schema import FrontAxleModel, VehicleModel
+from ..subsystems.geometry import side_hardpoints
 
 
 @dataclass(frozen=True)
@@ -39,7 +38,6 @@ def compute_vehicle_roll_centers(
     road_z: float = 0.0,
 ) -> dict[str, RollCenterResult]:
     """Compute front-view roll centers from the four double-wishbone arms."""
-    assembly = build_vehicle(vehicle, mode="K")
     results: dict[str, RollCenterResult] = {}
     for axle_name, axle in (("front", vehicle.front_axle), ("rear", vehicle.rear_axle)):
         left_ic = _instant_center(axle, "L")
@@ -55,7 +53,6 @@ def compute_vehicle_roll_centers(
             left_instant_center=left_ic,
             right_instant_center=right_ic,
         )
-    del assembly
     return results
 
 

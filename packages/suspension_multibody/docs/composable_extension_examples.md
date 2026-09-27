@@ -129,7 +129,7 @@ from dataclasses import replace
 from suspension_contracts import pack_container
 
 from suspension_multibody.compilation import KcStudyInputs, compile_plan, plan_for
-from suspension_multibody.preparation.assembly import build_front_axle
+from suspension_multibody.subsystems.entry import compose_axle
 from suspension_multibody.rigs.compose import _RIG_ASSEMBLIES
 from suspension_multibody.rigs.rig import RIGS
 from suspension_multibody.schema import FrontAxleModel, MassSpec
@@ -180,7 +180,7 @@ try:
     assert plan.family == "kc_quasi_static"
     assert plan.study == "quasi_static"
 
-    assembly = build_front_axle(model, "K")
+    assembly = compose_axle(model, "K")
     model_document, case_document, model_blob, case_blob, metadata = compile_plan(
         plan, assembly
     )
@@ -234,7 +234,7 @@ means concretely — the numbers below are the check.
 """E-3: move a hardpoint and show the change reaching the solved response."""
 
 from suspension_multibody import api
-from suspension_multibody.preparation.assembly import build_front_axle
+from suspension_multibody.subsystems.entry import compose_axle
 from suspension_multibody.schema import (
     CaseSpec,
     DisplacementControl,
@@ -275,10 +275,10 @@ def sweep(hardpoints):
 moved = dict(HARDPOINTS)
 moved["uca_outer"] = [0.0, -700.0, 470.0]
 
-before = build_front_axle(
+before = compose_axle(
     FrontAxleModel(hardpoints=dict(HARDPOINTS), mass=MassSpec(sprung_mass=1000)), "K"
 )
-after = build_front_axle(
+after = compose_axle(
     FrontAxleModel(hardpoints=dict(moved), mass=MassSpec(sprung_mass=1000)), "K"
 )
 attached_before = before.points[("upright_L", "upper_arm_L_outer")]

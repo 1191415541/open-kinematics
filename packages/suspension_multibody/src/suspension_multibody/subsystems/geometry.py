@@ -2,7 +2,7 @@
 Hardpoint lookup, mirroring and body-local conversion, shared by the assembly
 layer and the subsystems.
 
-These helpers used to live inside ``preparation/assembly/front_axle.py``.  The
+These helpers used to live inside the retired axle builder.  The
 subsystems need them too, and a subsystem may not import the module that imports
 it, so they live here and the assembly re-exports the names it always had.  The
 code is unchanged: same aliases, same mirroring, same error text.
