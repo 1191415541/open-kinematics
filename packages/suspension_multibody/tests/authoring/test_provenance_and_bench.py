@@ -19,6 +19,7 @@ from suspension_multibody.authoring import (
     AuthoringError,
     Project,
     RigDocument,
+    SimulationAssembly,
     SubsystemDocument,
 )
 from suspension_multibody.authoring.solver import front_axle_model_for
@@ -123,3 +124,84 @@ def test_template_role_reads_both_names_and_writes_both() -> None:
 
     without_old_name = {key: value for key, value in payload.items() if key != "role"}
     assert template_from_json(without_old_name).functional_role == "suspension"
+
+
+def _rig_payload(paths: dict[str, Path]) -> dict[str, object]:
+    """Return the fixture rig, editable before it is written back."""
+    return json.loads(paths["rig"].read_text(encoding="utf-8"))
+
+
+def test_a_rig_declares_the_actuators_its_bench_drives(tmp_path: Path) -> None:
+    """
+    Phase 6: a rig file's actuators are checked against the bench it names.
+
+    The bench stays the code that drives, loads and measures; the file says which
+    of that bench's coordinates it asks for.  A coordinate the bench has no drive
+    for is refused by name, because the alternative is a file that reads as if it
+    drove something and drives nothing.
+    """
+    paths = write_axle_project(tmp_path)
+    payload = _rig_payload(paths)
+    payload["bench"] = "kc_quasi_static"
+    payload["actuators"] = ["wheel_drive_L", "rack_drive"]
+    paths["rig"].write_text(json.dumps(payload), encoding="utf-8")
+
+    document = RigDocument.load(paths["rig"])
+    assert document.actuators == ("wheel_drive_L", "rack_drive")
+
+    payload["actuators"] = ["brake_torque"]
+    paths["rig"].write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(AuthoringError, match="not driven by bench"):
+        RigDocument.load(paths["rig"])
+
+
+def test_a_rig_cannot_require_a_port_it_declares_no_support_for(tmp_path: Path) -> None:
+    """A support is the rig's own side of an attachment, so a required port needs one."""
+    paths = write_axle_project(tmp_path)
+    payload = _rig_payload(paths)
+    payload["supports"] = [{"name": "chassis_reference", "role": "chassis_reference"}]
+    paths["rig"].write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(AuthoringError, match="not declared in supports"):
+        RigDocument.load(paths["rig"])
+
+    payload["supports"].append(
+        {
+            "name": "wheel_centre",
+            "role": "wheel_centre",
+            "capabilities": ["wheel_supplying"],
+        }
+    )
+    paths["rig"].write_text(json.dumps(payload), encoding="utf-8")
+    document = RigDocument.load(paths["rig"])
+    assert document.supports == {
+        "chassis_reference": (),
+        "wheel_centre": ("wheel_supplying",),
+    }
+
+
+def test_optional_ports_are_bound_and_measured_channels_are_declared(
+    tmp_path: Path,
+) -> None:
+    """
+    A simulation assembly resolves both halves of the interface.
+
+    The required port is bound because the assembly without it was refused, and
+    the optional one is bound because the assembly happens to offer it; the
+    channels the rig reports travel with the resolved assembly rather than
+    staying in the file unread.
+    """
+    paths = write_axle_project(tmp_path)
+    payload = _rig_payload(paths)
+    # The qualified spelling names the role as well as the port, which is how a
+    # rig asks for the chassis's reference rather than the suspension's: both
+    # templates declare an unqualified `chassis_reference`.
+    payload["optional_ports"] = ["chassis:chassis_reference"]
+    paths["rig"].write_text(json.dumps(payload), encoding="utf-8")
+
+    simulation = SimulationAssembly.load(paths["assembly"])
+    assert simulation.bindings == {
+        "wheel_centre": "front.sub.json",
+        "chassis:chassis_reference": "chassis.sub.json",
+    }
+    assert simulation.channels == ("wheel_travel", "camber", "toe")
+    assert simulation.rig.optional_ports == frozenset({"chassis:chassis_reference"})

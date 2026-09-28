@@ -99,7 +99,16 @@ def test_the_default_file_reproduces_the_template_defaults_bit_for_bit() -> None
         },
     )
     assert from_file.stiffness_for("uca_mount_L_inner_front") == 0.0
-    assert from_file == from_defaults
+    # The numbers the two routes produce are the same, which is the property the
+    # test is about; they are compared as values rather than as whole instances
+    # because the file route additionally records *which* file answered, and a
+    # provenance that made two equal models compare unequal would be the wrong
+    # kind of information.
+    assert {
+        name: float(value) for name, value in from_file.properties.items()
+    } == {name: float(value) for name, value in from_defaults.properties.items()}
+    assert from_file.properties["bushing"].source == str(BASELINE)
+    assert from_defaults.properties["bushing"].source is None
 
 
 def test_same_file_twice_is_reproducible() -> None:

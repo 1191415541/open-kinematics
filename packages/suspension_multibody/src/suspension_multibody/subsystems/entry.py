@@ -55,6 +55,7 @@ def compose_axle(
 def compose_vehicle(
     model: VehicleModel,
     mode: Literal["K", "C"] = "K",
+    request: AssemblyRequest | None = None,
 ) -> VehicleRuntime:
     """
     Compose one vehicle: two composed axles merged under one chassis.
@@ -63,5 +64,9 @@ def compose_vehicle(
     beside it, so a change to how an axle is composed reaches the vehicle without
     this function being touched.  That is the property the two hand-written paths
     could never have.
+
+    ``request`` names the subsystems the vehicle carries, which is how an assembly
+    file's own role set reaches the composition; omitting it asks for the full
+    vehicle this entry has always built.
     """
-    return compose_vehicle_runtime(model, mode=mode)
+    return compose_vehicle_runtime(model, mode=mode, request=request)

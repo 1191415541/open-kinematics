@@ -30,29 +30,50 @@ depends on a value it cannot carry.
 
 from __future__ import annotations
 
-import re
 from dataclasses import replace
 from typing import Any, Literal, Mapping
 
-from ..schema import FrontAxleModel
+from ..schema import FrontAxleModel, VehicleModel
 from ..subsystems.types import AssemblyRequest
-from ..templates.instantiate import SubsystemInstance, instantiate
+from ..templates.instantiate import (
+    SubsystemInstance,
+    instantiate,
+    slot_element_type,
+)
 from ..templates.model import (
     ConnectionDefinition,
     OutputDeclaration,
     PartDefinition,
     PropertySlot,
+    SlotValue,
     Template,
     TemplateError,
 )
-from .bridge import BridgeError, front_axle_model_from
-from .documents import EffectiveSubsystem, SubsystemDocument, TemplateDocument
+from .bridge import (
+    _SIDE_TOKEN,
+    BridgeError,
+    _mirrored_parts,
+    _side_name,
+    front_axle_model_from,
+)
+from .documents import (
+    AssemblyDocument,
+    EffectiveSubsystem,
+    SimulationAssembly,
+    SubsystemDocument,
+    TemplateDocument,
+)
+from .errors import AuthoringError
+from .properties import ElementPropertyDocument
 
 __all__ = [
+    "assembly_request_for",
     "assembly_request_from",
+    "file_axles_from",
     "front_axle_model_for",
     "runtime_template_from",
     "template_document_from",
+    "vehicle_model_with_file_axles",
 ]
 
 #: Units for the slots a role requires but a file need not declare.  Stated so a
@@ -118,7 +139,7 @@ def runtime_template_from(document: TemplateDocument) -> Template:
     payload = document.payload
     parts = _mirrored_parts(payload)
     connections = _mirrored_connections(_connections_from(payload))
-    slots = _slots_from(payload, connections)
+    slots = _slots_from(payload, connections, _slot_connections(payload, connections))
     outputs = tuple(
         OutputDeclaration(
             name=str(row["name"]),
@@ -205,7 +226,9 @@ def _connections_from(payload: Mapping[str, Any]) -> tuple[ConnectionDefinition,
     connections: list[ConnectionDefinition] = []
     for row in payload["hardpoints"]:
         point = str(row["name"])
-        owner = str(row["owner"])
+        # A mount with no owner is one that sits on a body another role declares;
+        # the file states it without an owner rather than with an empty one.
+        owner = str(row.get("owner", ""))
         label = str(row.get("label", "")) or point
         joint = by_point.get(point)
         joint_type = str(joint["type"]) if joint is not None else None
@@ -274,33 +297,6 @@ def _connections_from(payload: Mapping[str, Any]) -> tuple[ConnectionDefinition,
     return tuple(connections)
 
 
-def _mirrored_parts(payload: Mapping[str, Any]) -> tuple[PartDefinition, ...]:
-    """
-    Build the template's parts, mirrored like its connections.
-
-    A part named for the left side gets a right-side twin with the same mass, so
-    the mirroring of connections lands on bodies that exist.  An unsided part --
-    the chassis, the rack -- is declared once, because it exists once.
-    """
-    declared = [
-        PartDefinition(
-            name=str(row["name"]),
-            mass=float(row.get("mass", 0.0)),
-            fixed=bool(row.get("fixed", False)),
-        )
-        for row in payload["bodies"]
-    ]
-    # Two passes, not one: every declared part is listed before its right-side twin.
-    # The sequence is a fact about the template -- it is the order the document
-    # records its bodies in -- so interleaving the twins would produce a different
-    # document from the same file even though both carry the same bodies.
-    mirrored = [
-        replace(part, name=_side_name(part.name, "R"))
-        for part in declared
-        if part.name.endswith("_L")
-    ]
-    return tuple(declared + mirrored)
-
 
 def _mirrored_connections(
     connections: tuple[ConnectionDefinition, ...],
@@ -339,24 +335,6 @@ def _mirrored_connections(
     return tuple(mirrored)
 
 
-#: A side token inside a generated name: ``_L`` or ``_R`` bounded by a ``_`` or the
-#: end of the name.  Rewriting the token rather than the suffix is what lets a name
-#: like ``uca_mount_L_inner_front`` mirror to ``uca_mount_R_inner_front`` -- its side
-#: is in the middle, and a suffix-only rule would leave both sides named alike.
-_SIDE_TOKEN = re.compile(r"_(L|R)(?=_|$)")
-
-
-def _side_name(name: str, side: str) -> str:
-    """
-    Rewrite one *body* name's side token, leaving an unsided name alone.
-
-    A body that exists once -- the chassis, the rack -- must stay shared when a
-    connection is mirrored, so this function never invents a side for it: a
-    ``chassis_R`` is a body no contribution produces.
-    """
-    return _SIDE_TOKEN.sub(f"_{side}", name, count=1)
-
-
 def _mirrored_name(name: str, side: str) -> str:
     """
     Return a per-side name for something that exists once per side.
@@ -382,26 +360,59 @@ def _connection_name(
     return f"{point}_{_MODEL_SIDE}"
 
 
-def _slots_from(
+def _slot_connections(
     payload: Mapping[str, Any], connections: tuple[ConnectionDefinition, ...]
+) -> dict[str, tuple[str, ...]]:
+    """
+    Return, per slot, the connections whose bushing column an element feeds.
+
+    The file already says this twice over -- an element names its ``property_slot``
+    and the connection it becomes carries that element's ``bushing`` name -- so the
+    slot's own ``connections`` list is *derived* rather than asked for.  Requiring
+    an author to repeat it would be asking for a name that must match a generated
+    one (``mount_upper_front_R``), and getting it subtly wrong fails far away, as a
+    bushing column no slot feeds.
+    """
+    slot_of_element = {
+        str(row["name"]): str(row["property_slot"])
+        for row in payload["elements"]
+        if str(row["type"]) == "bushing"
+    }
+    derived: dict[str, list[str]] = {}
+    for connection in connections:
+        slot = slot_of_element.get(connection.bushing or "")
+        if slot is not None:
+            derived.setdefault(slot, []).append(connection.name)
+    return {name: tuple(names) for name, names in derived.items()}
+
+
+def _slots_from(
+    payload: Mapping[str, Any],
+    connections: tuple[ConnectionDefinition, ...],
+    derived: Mapping[str, tuple[str, ...]],
 ) -> tuple[PropertySlot, ...]:
     """
     Build the runtime property slots from the file's declared slots.
 
-    A slot keeps its ``connections`` list because that is how the runtime finds
-    the slot feeding a bushing column without matching names; the file states it
-    for the same reason.  Every slot the *role* requires and the file does not
-    declare is added with the built-in's own zero, because the runtime role
-    contract is checked on the converted template: a file template whose spring
-    stiffness lives in the model -- as the built-in's does -- is a complete
-    template, not an invalid one.
+    A slot keeps its ``connections`` list because that is how the runtime finds the
+    slot feeding a bushing column without matching names; the file may state it, and
+    the connections its elements imply are added when it does not.  Every slot the
+    *role* requires and the file does not declare is added with the built-in's own
+    zero, because the runtime role contract is checked on the converted template: a
+    file template whose spring stiffness lives in the model -- as the built-in's
+    does -- is a complete template, not an invalid one.
     """
     slots: list[PropertySlot] = [
         PropertySlot(
             name=str(row["name"]),
             unit=str(row.get("unit", "-")),
             default=None if row.get("default") is None else float(row["default"]),
-            connections=tuple(str(name) for name in row.get("connections", ())),
+            connections=tuple(
+                dict.fromkeys(
+                    [str(name) for name in row.get("connections", ())]
+                    + list(derived.get(str(row["name"]), ()))
+                )
+            ),
         )
         for row in payload["property_slots"]
     ]
@@ -444,9 +455,16 @@ def front_axle_model_for(
     *,
     name: str | None = None,
     sprung_mass: float = 600.0,
+    overrides: Mapping[str, Any] | None = None,
 ) -> FrontAxleModel:
-    """Build the solver's model from one file subsystem, overrides applied."""
-    effective = subsystem.effective()
+    """
+    Build the solver's model from one file subsystem, overrides applied.
+
+    ``overrides`` are an assembly entry's own coverings, passed in rather than read
+    here so that the same function serves a standalone subsystem and one an
+    assembly has already covered.
+    """
+    effective = subsystem.effective(overrides=overrides)
     return bridge_model(
         effective, name=name or f"{subsystem.payload['name']}_axle", sprung_mass=sprung_mass
     )
@@ -462,32 +480,56 @@ def bridge_model(
     return front_axle_model_from(effective, name=name, sprung_mass=sprung_mass)
 
 
+def role_instance_from(
+    subsystem: SubsystemDocument,
+    *,
+    mode: Literal["K", "C"] = "K",
+    overrides: Mapping[str, Any] | None = None,
+) -> SubsystemInstance:
+    """
+    Build one role's runtime instance from one file subsystem.
+
+    This is the conversion every role shares: the template is the *file's*, and it
+    is instantiated with the resolved constitutive values of that subsystem's
+    property bindings, so whichever role a file describes reaches the composition
+    through the same path.  A file that names no property file still gets an
+    instance, because the role's own slots carry their defaults.
+
+    ``overrides`` are the assembly document's own copy-on-write coverings, passed
+    in rather than read here so that the subsystem file on disk stays the one the
+    assembly pointed at.
+    """
+    template = runtime_template_from(subsystem.template)
+    effective = subsystem.effective(overrides=overrides)
+    # The resolved law, not a stripped scalar: what the property file declared
+    # about the element -- its type, its model, its curve and where it came from --
+    # travels with the value, so a consumer that needs the whole law does not have
+    # to read the file a second time.
+    properties: dict[str, SlotValue] = {
+        slot_name: slot_value_of(document)
+        for slot_name, document in effective.property_bindings.items()
+    }
+    return instantiate(template, mode=mode, properties=properties)
+
+
 def assembly_request_from(
     subsystem: SubsystemDocument,
     *,
     mode: Literal["K", "C"] = "K",
     subsystems: frozenset[str] | None = None,
+    overrides: Mapping[str, Any] | None = None,
 ) -> AssemblyRequest:
     """
-    Build the assembly request the composition entry accepts.
+    Build the assembly request one *suspension* file subsystem describes.
 
-    The suspension template is the file's, instantiated with the *resolved*
+    The suspension template is the file's, instantiated with the resolved
     constitutive values of its property bindings, so the stiffness the C solve
     reads comes from the property file rather than from a number written beside
-    the template.  The other subsystem roles keep their existing implementations:
-    the plan's subject is the suspension template, and claiming to have migrated
-    steering or the wheel as well would be a claim this code does not support.
+    the template.  The other roles a *document* describes -- steering, wheel,
+    chassis -- travel through `assembly_request_for`, which is the entry that has
+    the whole document in hand.
     """
-    template = runtime_template_from(subsystem.template)
-    effective = subsystem.effective()
-    properties: dict[str, float] = {}
-    for slot_name, document in effective.property_bindings.items():
-        scalar = _scalar_of(document.resolved)
-        if scalar is not None:
-            properties[slot_name] = scalar
-    instance: SubsystemInstance = instantiate(
-        template, mode=mode, properties=properties
-    )
+    instance = role_instance_from(subsystem, mode=mode, overrides=overrides)
     return AssemblyRequest(
         mode=mode,
         subsystems=subsystems or AssemblyRequest().subsystems,
@@ -495,12 +537,167 @@ def assembly_request_from(
     )
 
 
-def _scalar_of(resolved: Mapping[str, Any]) -> float | None:
-    """Return the single scalar a runtime slot reads from a resolved law."""
-    element_type = str(resolved.get("element_type", ""))
+def assembly_request_for(
+    document: AssemblyDocument | SimulationAssembly,
+    *,
+    mode: Literal["K", "C"] = "K",
+) -> AssemblyRequest:
+    """
+    Build the composition request from an *assembly document*.
+
+    What the file decides is what the composition carries.  The roles come from the
+    document's own assignments rather than from the single-axle default, so an
+    assembly file that declares a steering subsystem is composed with steering and
+    one that does not is composed without it; the counts and placements were
+    already judged against ``connections.policy`` when the document loaded.
+
+    Each *subsystem the document places* also supplies its role's template, through
+    the one conversion `role_instance_from` performs: an authored steering, wheel or
+    chassis subsystem is the one that gets built, with that entry's overrides
+    applied.  A role the document does not place keeps its registered built-in.
+
+    The suspension template is supplied only for an *axle* document.  A vehicle
+    document places two suspensions and neither is "the" suspension, so the two
+    axles come from `file_axles_from` and the request only names the role set --
+    which is also why the vehicle's wheels, steering ratio and driveline stay
+    `VehicleModel` data unless the document's own `vehicle` section states them.
+
+    Which roles an assembly may carry stays the policy's decision rather than this
+    function's: a vehicle document composed as an axle is translated like any other
+    and then refused by ``check_root`` for the roles an axle must not carry.  That
+    keeps one home for the rule instead of a second copy here.
+    """
+    assembly = document.assembly if isinstance(document, SimulationAssembly) else document
+    roles = frozenset(entry.functional_role for entry in assembly.entries)
+    # `check_assembly_shape` requires exactly one suspension in an axle document,
+    # so the entry is taken rather than searched with a fallback that could never
+    # run: an assembly with two suspensions is refused while it is being loaded.
+    suspensions = [
+        entry for entry in assembly.entries if entry.functional_role == "suspension"
+    ]
+    templates: dict[str, object] = {}
+    if assembly.assembly_kind == "suspension_axle":
+        templates["suspension_template"] = role_instance_from(
+            suspensions[0].subsystem, mode=mode, overrides=suspensions[0].overrides
+        )
+    for entry in assembly.entries:
+        role = entry.functional_role
+        if role in _FILE_ROLE_TEMPLATES:
+            templates[f"{role}_template"] = role_instance_from(
+                entry.subsystem, mode=mode, overrides=entry.overrides
+            )
+    return AssemblyRequest(mode=mode, subsystems=roles, **templates)
+
+
+#: The roles a document may describe whose template reaches the composition
+#: directly.  The suspension is not here because an axle document supplies it as
+#: `suspension_template` and a vehicle document supplies two of them, which one
+#: field cannot hold; the steering and chassis roles have one entry each.  The
+#: wheel role is absent for the same reason as in `AssemblyRequest`: its wheel
+#: centre is a per-side mount on a body the wheel template does not own.
+_FILE_ROLE_TEMPLATES: tuple[str, ...] = ("steering", "chassis")
+
+
+def vehicle_model_with_file_axles(
+    template: VehicleModel,
+    document: AssemblyDocument | SimulationAssembly,
+    *,
+    name: str | None = None,
+) -> VehicleModel:
+    """
+    Return a vehicle model whose two axles come from an assembly document.
+
+    This is the compatibility conversion for a caller that already has a
+    `VehicleModel` and wants the document's axles in it: the wheels, the steering
+    ratio and the driveline stay the template model's own, while the two axles --
+    down to every hardpoint and every constitutive law -- are built from the
+    document's suspension entries, overrides applied.
+
+    A vehicle whose *whole* description is a file does not need a template at all;
+    `authoring.vehicle.vehicle_model_from` reads the document's own `vehicle`
+    section for the vehicle-level numbers.  Both paths take their axles from
+    `file_axles_from`, so the two cannot disagree about what a file's axle is.
+    """
+    assembly = document.assembly if isinstance(document, SimulationAssembly) else document
+    axles = file_axles_from(assembly)
+    return template.model_copy(
+        update={
+            "name": name or template.name,
+            "front_axle": axles["front"],
+            "rear_axle": axles["rear"],
+        }
+    )
+
+
+def file_axles_from(
+    document: AssemblyDocument | SimulationAssembly,
+) -> dict[str, FrontAxleModel]:
+    """
+    Build one model per suspension the document places, keyed by its placement.
+
+    This is the half of the vehicle conversion that both directions share: a
+    vehicle model's two axles are subsystems, so whether the vehicle-level numbers
+    come from a template or from the document's own `vehicle` section, the axles
+    come from here -- down to every hardpoint and every constitutive law, with the
+    entry's overrides applied.
+
+    A document that does not place one suspension at `front` and one at `rear` is
+    refused, naming the placements it does have: the alternative is a vehicle
+    silently carrying one axle twice or once.
+    """
+    assembly = document.assembly if isinstance(document, SimulationAssembly) else document
+    axles: dict[str, FrontAxleModel] = {}
+    for entry in assembly.entries:
+        if entry.functional_role != "suspension":
+            continue
+        axles[entry.placement_role] = front_axle_model_for(
+            entry.subsystem,
+            name=f"{entry.placement_role}_{assembly.name}",
+            overrides=entry.overrides,
+        )
+    missing = sorted({"front", "rear"} - set(axles))
+    if missing:
+        raise AuthoringError(
+            f"{assembly.path}: a vehicle model needs a suspension at {missing}; "
+            f"this document places them at {sorted(axles)}"
+        )
+    return axles
+
+def slot_value_of(document: ElementPropertyDocument) -> SlotValue:
+    """
+    Return the resolved constitutive value one property file produces.
+
+    The scalar is the one the kernel's parameter block reads -- a stiffness for
+    everything but a damper, whose number is its viscous damping -- and the curve
+    and the table are carried beside it rather than instead of it: the resolver
+    already derived a slope for the kernel's fallback from the curve's first
+    interval, so a consumer that only wants a number still gets one, and one that
+    has to build a six-axis mount gets the table.  For a table, the scalar view is
+    its first entry, which is the translational diagonal a diagonal table states --
+    meaningful for exactly the tables where the two agree.
+    """
+    resolved = document.resolved
+    element_type = str(resolved.get("element_type", "generic"))
     key = "viscous_damping" if element_type == "damper" else "stiffness"
     value = resolved.get(key)
-    return None if value is None else float(value)
+    table = value if isinstance(value, tuple) else ()
+    if table:
+        scalar = float(table[0][0])
+    elif value is None:
+        scalar = 0.0
+    else:
+        scalar = float(value)
+    return SlotValue(
+        element_type=element_type,
+        model=str(resolved.get("model", "linear")),
+        scalar=scalar,
+        curve=tuple(
+            (float(independent), float(dependent))
+            for independent, dependent in resolved.get("force_curve", ())
+        ),
+        matrix=table,
+        source=str(resolved.get("source", document.path)),
+    )
 
 
 def template_document_from(template: Template) -> dict[str, Any]:
@@ -524,14 +721,25 @@ def template_document_from(template: Template) -> dict[str, Any]:
         for connection in template.connections
         if not connection.owner.endswith("_R")
     ]
-    hardpoints = [
-        {
+    # One hardpoint per *mount role*, not one per connection.  A connection exists
+    # per side while the file states a mount once -- that is what the format
+    # declares and what the conversion mirrors -- and a role that owns no bodies
+    # (the simplified brake and drive) spells its two mounts once each on both
+    # sides, so writing them per connection would repeat the name and produce a
+    # document the loader has to refuse.
+    declared: dict[str, dict[str, Any]] = {}
+    for connection in connections:
+        row: dict[str, Any] = {
             "name": connection.role,
-            "owner": connection.owner,
             "label": connection.label or connection.role,
         }
-        for connection in connections
-    ]
+        # An ownerless mount is stated without an owner rather than with an empty
+        # one: the point sits on whichever body carries it, which is the other
+        # role's business.
+        if connection.owner:
+            row["owner"] = connection.owner
+        declared.setdefault(connection.role, row)
+    hardpoints = list(declared.values())
     joints: list[dict[str, Any]] = []
     elements: list[dict[str, Any]] = []
     for connection in connections:
@@ -572,7 +780,7 @@ def template_document_from(template: Template) -> dict[str, Any]:
     slots = [
         {
             "name": slot.name,
-            "element_type": _slot_element_type(slot.name),
+            "element_type": slot_element_type(slot.name),
             "unit": slot.unit,
             # "required" means the *role* needs a value from the properties file, not
             # merely that this slot carries no default: the model-owned slots
@@ -634,11 +842,6 @@ def _joint_bodies(connection: ConnectionDefinition) -> tuple[str, str]:
     if connection.first_body == "far":
         return own, far
     return far, own
-
-
-def _slot_element_type(name: str) -> str:
-    """Return the element type a slot of this name declares."""
-    return name if name in {"spring", "damper", "bump_stop", "bushing", "tire"} else "generic"
 
 
 def _owner_of(port: Any, parts: list[PartDefinition]) -> dict[str, Any]:

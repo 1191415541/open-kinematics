@@ -180,9 +180,17 @@ class TemplateDocument:
 
         body_names = set(bodies)
         hardpoint_names = set(hardpoints)
-        owners = {str(row["name"]): str(row["owner"]) for row in payload["hardpoints"]}
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
         for name, owner in owners.items():
-            if owner not in body_names:
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names:
                 raise AuthoringError(
                     f"{path}: hardpoint {name!r} is owned by {owner!r}, which is not "
                     "one of this template's bodies"
@@ -846,9 +854,18 @@ class RigDocument:
             if len(names) != len(set(names)):
                 duplicates = sorted({n for n in names if names.count(n) > 1})
                 raise AuthoringError(f"{target}: {key} repeats {duplicates}")
+        overlap = sorted(
+            set(str(name) for name in payload.get("required_ports", ()))
+            & set(str(name) for name in payload.get("optional_ports", ()))
+        )
+        if overlap:
+            raise AuthoringError(
+                f"{target}: port(s) {overlap} are declared both required and optional"
+            )
+        cls._check_supports(target, payload)
         bench = payload.get("bench")
         if bench is not None:
-            from ..rigs import rig_names
+            from ..rigs import get_rig, rig_names
 
             known = rig_names()
             if str(bench) not in known:
@@ -856,15 +873,56 @@ class RigDocument:
                     f"{target}: bench {bench!r} is not a registered test bench; the "
                     f"registered benches are {list(known)}"
                 )
-        overlap = sorted(
-            set(payload.get("required_ports", ()))
-            & set(payload.get("optional_ports", ()))
-        )
-        if overlap:
-            raise AuthoringError(
-                f"{target}: port(s) {overlap} are declared both required and optional"
-            )
+            cls._check_actuators(target, payload, get_rig(str(bench)))
         return cls(target, copy.deepcopy(payload))
+
+    @staticmethod
+    def _check_supports(path: Path, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a rig whose supports do not agree with the ports it insists on.
+
+        A support is the rig's own side of an attachment: this is the port it
+        reaches for and what it can do there.  A port a rig *requires* but does
+        not declare supporting is the fault worth naming -- the rig cannot both
+        insist on an attachment and say it has none -- while declaring support
+        for a port it merely tolerates stays legal, which is what makes a bench
+        usable on more than the one assembly it was written for.
+        """
+        names = [str(row["name"]) for row in payload.get("supports", ())]
+        if len(names) != len(set(names)):
+            repeated = sorted({name for name in names if names.count(name) > 1})
+            raise AuthoringError(f"{path}: supports repeats {repeated}")
+        if not names:
+            return
+        declared = set(names) | {str(name) for name in payload.get("optional_ports", ())}
+        unsupported = sorted(set(str(name) for name in payload["required_ports"]) - declared)
+        if unsupported:
+            raise AuthoringError(
+                f"{path}: required port(s) {unsupported} are not declared in supports "
+                f"or optional_ports; a rig cannot require an attachment it declares "
+                f"no support for"
+            )
+
+    @staticmethod
+    def _check_actuators(path: Path, payload: Mapping[str, Any], spec: Any) -> None:
+        """
+        Refuse an actuator the bench this rig names does not drive.
+
+        The declaration is checked rather than restated: the bench stays the code
+        that drives, loads and measures, and a file that names an actuator the
+        bench has no drive for is refused by name instead of silently driving
+        nothing.
+        """
+        actuators = [str(name) for name in payload.get("actuators", ())]
+        if len(actuators) != len(set(actuators)):
+            repeated = sorted({name for name in actuators if actuators.count(name) > 1})
+            raise AuthoringError(f"{path}: actuators repeats {repeated}")
+        unknown = sorted(set(actuators) - set(spec.coordinate_names()))
+        if unknown:
+            raise AuthoringError(
+                f"{path}: actuator(s) {unknown} are not driven by bench "
+                f"{spec.name!r}; it drives {list(spec.coordinate_names())}"
+            )
 
     @property
     def name(self) -> str:
@@ -877,6 +935,44 @@ class RigDocument:
     @property
     def required_ports(self) -> frozenset[str]:
         return frozenset(str(name) for name in self.payload["required_ports"])
+
+    @property
+    def optional_ports(self) -> frozenset[str]:
+        """
+        Return the ports this rig uses when offered, but does not insist on.
+
+        The distinction is what lets one bench serve an axle with steering and one
+        without: a required port is a fault when absent, an optional one is a
+        connection when present.
+        """
+        return frozenset(str(name) for name in self.payload.get("optional_ports", ()))
+
+    @property
+    def supports(self) -> Mapping[str, tuple[str, ...]]:
+        """Return the attachments this rig declares, by name, with their capabilities."""
+        return MappingProxyType(
+            {
+                str(row["name"]): tuple(str(entry) for entry in row.get("capabilities", ()))
+                for row in self.payload.get("supports", ())
+            }
+        )
+
+    @property
+    def actuators(self) -> tuple[str, ...]:
+        """
+        Return the bench coordinates this rig asks to be driven.
+
+        The names are *drive coordinates* -- the ones the bench's own drive
+        declarations use -- because naming the case layer's grouping keys instead
+        would describe the same axis in a second vocabulary, and the two would be
+        free to drift apart.
+        """
+        return tuple(str(name) for name in self.payload.get("actuators", ()))
+
+    @property
+    def measurements(self) -> tuple[str, ...]:
+        """Return the channels this rig reports, in declaration order."""
+        return tuple(str(name) for name in self.payload.get("measurements", ()))
 
     @property
     def bench(self) -> str | None:
@@ -961,10 +1057,19 @@ class SimulationAssembly:
         rig = RigDocument.load(assembly.path.parent / str(rig_ref))
         rig.check_assembly(assembly)
         offered = rig.offered_ports(assembly)
-        bindings = {
-            name: offered[name] for name in sorted(rig.required_ports) if name in offered
-        }
+        # Both halves of the interface, resolved once: a required port is bound
+        # because `check_assembly` refused the assembly without it, and an
+        # optional one is bound when the assembly turns out to offer it.  The
+        # result is the connection set the rig actually attaches to, which is
+        # what makes it auditable rather than a restatement of the file.
+        wanted = sorted(rig.required_ports | rig.optional_ports)
+        bindings = {name: offered[name] for name in wanted if name in offered}
         return cls(assembly, rig, MappingProxyType(bindings))
+
+    @property
+    def channels(self) -> tuple[str, ...]:
+        """Return the channels this simulation assembly is measured through."""
+        return self.rig.measurements
 
     @property
     def name(self) -> str:

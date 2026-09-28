@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 #: The ten hardpoint roles a double-wishbone axle has, with the body that owns
@@ -50,6 +51,9 @@ def write_axle_project(root: Path, *, spring_stiffness: float = 45.0) -> dict[st
     Everything a run needs is a file, which is the point of the exercise: the
     returned paths are the whole input to the file driven route.
     """
+    # A caller may name a subdirectory of the test's temporary tree, so the
+    # directory is the fixture's to create rather than the caller's to remember.
+    root.mkdir(parents=True, exist_ok=True)
     template = {
         "document": "template",
         "schema_version": 1,
@@ -345,4 +349,472 @@ def write_builtin_axle_project(root: Path) -> dict[str, Path]:
         ("rig", rig),
     ):
         written[key].write_text(json.dumps(payload), encoding="utf-8")
+    return written
+
+
+def _role_template(
+    role: str,
+    name: str,
+    *,
+    bodies: list[dict[str, object]],
+    hardpoints: list[dict[str, object]],
+    joints: list[dict[str, object]],
+    ports: list[dict[str, object]] = [],
+    outputs: list[dict[str, object]] = [],
+) -> dict[str, object]:
+    """Write one minimal, self-consistent template for a single-instance role."""
+    template: dict[str, object] = {
+        "document": "template",
+        "schema_version": 1,
+        "name": name,
+        "functional_role": role,
+        "allowed_placement_roles": ["any"],
+        "bodies": bodies,
+        "hardpoints": hardpoints,
+        "joints": joints,
+        "elements": [],
+        "property_slots": [],
+    }
+    if ports:
+        template["ports"] = ports
+    if outputs:
+        template["outputs"] = outputs
+    return template
+
+
+def _role_subsystem(
+    name: str,
+    template: str,
+    role: str,
+    placement: str,
+    hardpoints: dict[str, list[float]],
+) -> dict[str, object]:
+    """Write one subsystem file that places every hardpoint its template declares."""
+    return {
+        "document": "subsystem",
+        "schema_version": 1,
+        "name": name,
+        "template": template,
+        "functional_role": role,
+        "placement_role": placement,
+        "hardpoints": hardpoints,
+        "property_bindings": {},
+    }
+
+
+def write_vehicle_project(root: Path) -> dict[str, Path]:
+    """
+    Write a complete *vehicle* project: two suspensions and the four other roles.
+
+    The roles the package still implements in Python -- steering, wheel, brake,
+    drive and the axle chassis -- are declared here as ordinary template and
+    subsystem files, because what has to be shown is that a *user* can write them
+    and can build a vehicle out of them.  Nothing here claims the composition
+    builds a steering subsystem from these files: what the vehicle document decides
+    is which of the six roles the vehicle carries, and that is the question this
+    fixture exists to ask.
+    """
+    written = write_axle_project(root)
+    # The rack carries a mass because a *vehicle* model requires one: its
+    # validator asks every body a `symmetric_proxy` axle names to have a positive
+    # mass, and a rack that weighs nothing is a body the equations of motion
+    # cannot move.  The axle fixture leaves it at zero because the K/C readings
+    # it is used for prescribe the rack rather than integrate it.
+    template = json.loads(written["template"].read_text(encoding="utf-8"))
+    for row in template["bodies"]:
+        if row["name"] == "rack":
+            row["mass"] = 8.0
+    written["template"].write_text(json.dumps(template), encoding="utf-8")
+    front = json.loads(written["subsystem"].read_text(encoding="utf-8"))
+
+    # The rear suspension is the front one placed at the other end, which is what
+    # the placement roles exist for: one template, two instances.
+    rear = dict(front)
+    rear["name"] = "rear_suspension"
+    rear["placement_role"] = "rear"
+
+    steering_template = _role_template(
+        "steering",
+        "file_steering",
+        bodies=[
+            {"name": "rack"},
+            {"name": "tie_rod_L", "mass": 1.5},
+            {"name": "support", "fixed": True},
+        ],
+        hardpoints=[
+            {"name": "rack_center", "owner": "rack", "label": "center"},
+            {"name": "tie_inner", "owner": "tie_rod_L", "label": "inner"},
+            {"name": "tie_outer", "owner": "tie_rod_L", "label": "outer"},
+        ],
+        joints=[
+            {
+                "name": "rack_guide",
+                "type": "prismatic",
+                "body_a": "rack",
+                "body_b": "support",
+                "point_a": "rack_center",
+            },
+            {
+                "name": "rack_tie",
+                "type": "spherical",
+                "body_a": "rack",
+                "body_b": "tie_rod_L",
+                "point_a": "tie_inner",
+            },
+            {
+                "name": "tie_upright",
+                "type": "spherical",
+                "body_a": "tie_rod_L",
+                "body_b": "support",
+                "point_a": "tie_outer",
+            },
+        ],
+        ports=[{"name": "rack_center", "role": "rack_center", "owner": "rack"}],
+        outputs=[{"name": "rack_displacement", "unit": "mm"}],
+    )
+    steering_subsystem = _role_subsystem(
+        "steering",
+        "steering.tpl.json",
+        "steering",
+        "any",
+        {
+            "rack_center": [0.0, 0.0, 250.0],
+            "tie_inner": [100.0, -400.0, 250.0],
+            "tie_outer": [50.0, -700.0, 250.0],
+        },
+    )
+
+    wheel_template = _role_template(
+        "wheel",
+        "file_wheel",
+        bodies=[
+            {"name": "wheel_L", "mass": 22.0},
+            {"name": "wheel_carrier", "fixed": True},
+        ],
+        hardpoints=[
+            {"name": "wheel_center", "owner": "wheel_L", "label": "center"},
+            {"name": "spin_axis", "owner": "wheel_L", "label": "spin"},
+        ],
+        joints=[
+            {
+                "name": "wheel_spin",
+                "type": "revolute",
+                "body_a": "wheel_carrier",
+                "body_b": "wheel_L",
+                "point_a": "wheel_center",
+            }
+        ],
+        ports=[{"name": "wheel_centre", "role": "wheel_centre", "owner": "wheel_L"}],
+        outputs=[{"name": "wheel_center_pose", "unit": "mm"}],
+    )
+    wheel_subsystem = _role_subsystem(
+        "wheel",
+        "wheel.tpl.json",
+        "wheel",
+        "any",
+        {"wheel_center": [0.0, -700.0, 300.0], "spin_axis": [0.0, -700.0, 300.0]},
+    )
+
+    # Brake and drive own no bodies in the package's own simplified form, but a
+    # template's hardpoints have to be owned by a declared body, so each carries
+    # the smallest honest one: the part the torque acts through.
+    brake_template = _role_template(
+        "brake",
+        "file_brake",
+        bodies=[{"name": "caliper_L", "mass": 3.0}],
+        hardpoints=[
+            {"name": "wheel_center", "owner": "caliper_L", "label": "center"},
+            {"name": "spin_axis", "owner": "caliper_L", "label": "spin"},
+        ],
+        joints=[],
+        outputs=[{"name": "brake_torque", "unit": "N*mm"}],
+    )
+    brake_subsystem = _role_subsystem(
+        "brake",
+        "brake.tpl.json",
+        "brake",
+        "any",
+        {"wheel_center": [0.0, -700.0, 300.0], "spin_axis": [0.0, -700.0, 300.0]},
+    )
+    drive_template = _role_template(
+        "drive",
+        "file_drive",
+        bodies=[{"name": "half_shaft_L", "mass": 4.0}],
+        hardpoints=[
+            {"name": "wheel_center", "owner": "half_shaft_L", "label": "center"},
+            {"name": "spin_axis", "owner": "half_shaft_L", "label": "spin"},
+        ],
+        joints=[],
+        outputs=[{"name": "drive_torque", "unit": "N*mm"}],
+    )
+    drive_subsystem = _role_subsystem(
+        "drive",
+        "drive.tpl.json",
+        "drive",
+        "any",
+        {"wheel_center": [0.0, -700.0, 300.0], "spin_axis": [0.0, -700.0, 300.0]},
+    )
+
+    # The vehicle-level numbers, in the section the assembly schema calls
+    # `vehicle`.  They are the ones no subsystem owns: the chassis body, the four
+    # wheel ends, the steering system and the driveline.  The two axles are
+    # deliberately absent -- they are the suspension subsystems above, and stating
+    # them twice would be two descriptions of one axle.
+    vehicle = {
+        "chassis": {
+            "name": "chassis",
+            "mass": 1400.0,
+            "center_of_mass": [0.0, 0.0, 500.0],
+            "inertia": [
+                [600.0, 0.0, 0.0],
+                [0.0, 2400.0, 0.0],
+                [0.0, 0.0, 2600.0],
+            ],
+        },
+        "wheels": [
+            {
+                "name": corner,
+                "body": f"wheel_{corner}",
+                "center_local": [0.0, y, 300.0],
+                "mass": 22.0,
+                "axial_inertia": 1.2,
+                # The kind is named because the vehicle solver supports a fixed
+                # set of tire models: a wheel whose tire kind is unstated gets the
+                # schema's default, which that solver refuses.
+                "tire": {
+                    "kind": "fiala",
+                    "vertical_stiffness": 200.0,
+                    "unloaded_radius": 300.0,
+                },
+            }
+            for corner, y in (
+                ("front_left", -700.0),
+                ("front_right", 700.0),
+                ("rear_left", -700.0),
+                ("rear_right", 700.0),
+            )
+        ],
+        "steering": {"rack_body": "rack", "ratio": 1.0},
+        "driveline": {
+            "driven_wheels": ["rear_left", "rear_right"],
+            "maximum_drive_torque": 2000.0,
+            "drive_split": [0.0, 0.0, 0.5, 0.5],
+        },
+    }
+    assembly = {
+        "document": "assembly",
+        "schema_version": 1,
+        "name": "full_vehicle",
+        "assembly_kind": "full_vehicle",
+        "subsystems": [
+            {
+                "ref": "front.sub.json",
+                "functional_role": "suspension",
+                "placement_role": "front",
+            },
+            {
+                "ref": "rear.sub.json",
+                "functional_role": "suspension",
+                "placement_role": "rear",
+            },
+            {
+                "ref": "chassis.sub.json",
+                "functional_role": "chassis",
+                "placement_role": "any",
+            },
+            {
+                "ref": "wheel.sub.json",
+                "functional_role": "wheel",
+                "placement_role": "any",
+            },
+            {
+                "ref": "steering.sub.json",
+                "functional_role": "steering",
+                "placement_role": "any",
+            },
+            {
+                "ref": "brake.sub.json",
+                "functional_role": "brake",
+                "placement_role": "any",
+            },
+            {
+                "ref": "drive.sub.json",
+                "functional_role": "drive",
+                "placement_role": "any",
+            },
+        ],
+        "rig": "vehicle_rig.json",
+        "vehicle": vehicle,
+    }
+    rig = {
+        "document": "rig",
+        "schema_version": 1,
+        "name": "vehicle_kc",
+        "supported_assembly_kinds": ["suspension_axle", "full_vehicle"],
+        "required_ports": [],
+        "bench": "vehicle_kc",
+        "measurements": ["wheel_load", "rig_frame_pose"],
+    }
+    written.update(
+        {
+            "rear_subsystem": root / "rear.sub.json",
+            "steering_template": root / "steering.tpl.json",
+            "steering_subsystem": root / "steering.sub.json",
+            "wheel_template": root / "wheel.tpl.json",
+            "wheel_subsystem": root / "wheel.sub.json",
+            "brake_template": root / "brake.tpl.json",
+            "brake_subsystem": root / "brake.sub.json",
+            "drive_template": root / "drive.tpl.json",
+            "drive_subsystem": root / "drive.sub.json",
+            "vehicle_assembly": root / "vehicle.asy.json",
+            "vehicle_rig": root / "vehicle_rig.json",
+        }
+    )
+    for key, payload in (
+        ("rear_subsystem", rear),
+        ("steering_template", steering_template),
+        ("steering_subsystem", steering_subsystem),
+        ("wheel_template", wheel_template),
+        ("wheel_subsystem", wheel_subsystem),
+        ("brake_template", brake_template),
+        ("brake_subsystem", brake_subsystem),
+        ("drive_template", drive_template),
+        ("drive_subsystem", drive_subsystem),
+        ("vehicle_assembly", assembly),
+        ("vehicle_rig", rig),
+    ):
+        written[key].write_text(json.dumps(payload), encoding="utf-8")
+    return written
+
+
+#: The slot the C-ready fixture binds its mount bushing to.  Deliberately *not*
+#: named ``bushing``: a slot's name is the author's, and the route that feeds a
+#: mount has to find the slot from the element declaration rather than from the
+#: built-in template's spelling.  Were the name load-bearing, this fixture would
+#: build a zero-stiffness mechanism instead of a compliant axle.
+MOUNT_SLOT = "mount"
+#: The same, for the tire's law.
+TIRE_SLOT = "tire"
+#: The six-axis mount the C snapshot baselines were solved with: stiff in
+#: translation, stiffer in rotation.  Stated here rather than imported so the
+#: fixture cannot drift from what the file is supposed to describe.
+MOUNT_MATRIX: tuple[tuple[float, ...], ...] = tuple(
+    tuple(
+        10_000.0 if row == column and row < 3
+        else 10_000_000.0 if row == column
+        else 0.0
+        for column in range(6)
+    )
+    for row in range(6)
+)
+#: The tire's two numbers, in the same units the property files declare.
+TIRE_STIFFNESS = 200.0
+TIRE_RADIUS = 300.0
+
+
+def write_c_ready_axle_project(root: Path) -> dict[str, Path]:
+    """
+    Write the axle project in the shape the C reading can actually solve.
+
+    Three things the K reading does not need, and that the minimal project
+    therefore does not carry, are what a C run needs:
+
+    * the mount bushings, because C mode turns the four inboard joints into
+      compliance.  The file states the whole six-axis table: the rotational
+      diagonals a single number cannot express are the difference between a
+      compliant axle and a mechanism;
+    * a tire at the wheel centre, because that is the vertical support the pad
+      reading loads, and without one the load has nothing to push against;
+    * the loaded marker's *label*, because the case addresses the load by label,
+      and a hardpoint labelled after its role is a marker with another name.
+
+    The spring is assembled at its free length, and that is a property of the
+    reading rather than a convenience of this fixture: the pad reading's static
+    trim gives up on any spring whose assembled length differs from its free one,
+    and it does so *identically* for the built-in axle.  Measured, the built-in
+    benchmark with the same mounts, tire and spring reports the same success at
+    zero preload and the same failure -- `iterations=2`, `force_residual=0.290426`,
+    `position_residual=0.000140` at 5 mm -- as this project does.  So the numbers
+    below are the reading's, not the file route's, and the route is what the
+    equality demonstrates.
+    """
+    written = write_axle_project(root)
+    template = json.loads(written["template"].read_text(encoding="utf-8"))
+    subsystem = json.loads(written["subsystem"].read_text(encoding="utf-8"))
+    spring = json.loads(written["spring"].read_text(encoding="utf-8"))
+
+    for row in template["hardpoints"]:
+        if row["name"] == "wheel_center":
+            row["label"] = "wheel_center"
+
+    for role in ("upper_front", "upper_rear", "lower_front", "lower_rear"):
+        template["elements"].append(
+            {
+                "name": f"mount_{role}",
+                "type": "bushing",
+                "body_a": "chassis",
+                "body_b": ROLES[role][0],
+                "point_a": role,
+                "property_slot": MOUNT_SLOT,
+            }
+        )
+    template["elements"].append(
+        {
+            "name": "tire",
+            "type": "tire",
+            "body_a": "upright_L",
+            "body_b": "upright_L",
+            "point_a": "wheel_center",
+            "property_slot": TIRE_SLOT,
+        }
+    )
+    template["property_slots"].extend(
+        [
+            {
+                "name": MOUNT_SLOT,
+                "element_type": "bushing",
+                "allowed_models": ["linear"],
+                "required": True,
+            },
+            {
+                "name": TIRE_SLOT,
+                "element_type": "tire",
+                "allowed_models": ["linear"],
+                "required": True,
+            },
+        ]
+    )
+    spring["parameters"]["free_length"] = math.dist(
+        COORDINATES["upper_front"], COORDINATES["lower_outer"]
+    )
+    subsystem["property_bindings"][MOUNT_SLOT] = "mount.json"
+    subsystem["property_bindings"][TIRE_SLOT] = "tire.json"
+
+    mount = {
+        "document": "element_properties",
+        "schema_version": 1,
+        "name": "axle_mount",
+        "element_type": "bushing",
+        "model": "linear",
+        "units": {"force": "N", "length": "mm"},
+        "parameters": {},
+        "matrix": {"name": "stiffness", "rows": [list(row) for row in MOUNT_MATRIX]},
+    }
+    tire = {
+        "document": "element_properties",
+        "schema_version": 1,
+        "name": "axle_tire",
+        "element_type": "tire",
+        "model": "linear",
+        "units": {"force": "N", "length": "mm"},
+        "parameters": {"stiffness": TIRE_STIFFNESS, "unloaded_radius": TIRE_RADIUS},
+    }
+
+    written["template"].write_text(json.dumps(template), encoding="utf-8")
+    written["subsystem"].write_text(json.dumps(subsystem), encoding="utf-8")
+    written["spring"].write_text(json.dumps(spring), encoding="utf-8")
+    written["mount"] = root / "mount.json"
+    written["tire"] = root / "tire.json"
+    written["mount"].write_text(json.dumps(mount), encoding="utf-8")
+    written["tire"].write_text(json.dumps(tire), encoding="utf-8")
     return written

@@ -41,6 +41,7 @@ __all__ = [
     "PortDeclaration",
     "PortNeed",
     "PropertySlot",
+    "SlotValue",
     "Template",
     "TemplateError",
 ]
@@ -232,6 +233,43 @@ class PropertySlot:
     #: find a slot by guessing from a connection name, which would make the
     #: template's own naming load-bearing.
     connections: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SlotValue:
+    """
+    One slot's *resolved* constitutive value.
+
+    A slot used to hold a bare number, which was enough while the only thing a
+    template read from it was a stiffness.  It stopped being enough once
+    properties files arrived: the same slot can be filled by a linear law, a
+    piecewise curve or a six-by-six matrix, and a consumer that only ever sees a
+    float can neither tell those apart nor say which file answered.  The value
+    therefore carries what the file declared -- the element type it is a law of,
+    the model name, the scalar the kernel's parameter block reads, the curve when
+    there is one, and where it came from.
+
+    A plain number is still accepted wherever a slot value is read and is
+    normalised into this shape, so a caller that had a float did not have to
+    change; ``float(value)`` gives the scalar back.
+    """
+
+    #: What the value is a law *of*: spring, damper, bump_stop, bushing, tire.
+    element_type: str = "generic"
+    #: The constitutive model's name: linear, nonlinear, piecewise.
+    model: str = "linear"
+    #: The number the kernel's scalar parameter reads.
+    scalar: float = 0.0
+    #: Curve samples as ``(independent, dependent)``; empty for a linear law.
+    curve: tuple[tuple[float, float], ...] = ()
+    #: A tabulated law -- a mount's six axes -- when the file states one.  A flat
+    #: list would be a single row, so a vector needs no second field.
+    matrix: tuple[tuple[float, ...], ...] = ()
+    #: The file this law was resolved from, when it came from one.
+    source: str | None = None
+
+    def __float__(self) -> float:
+        return float(self.scalar)
 
 
 @dataclass(frozen=True)

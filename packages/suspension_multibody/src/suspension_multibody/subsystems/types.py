@@ -20,7 +20,7 @@ defined, not what it does.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Mapping
 
 import numpy as np
 
@@ -138,6 +138,21 @@ class AssemblyRequest:
     #: accepted, because a caller that resolved its own properties should not have
     #: to hand back a name and have them re-resolved.
     suspension_template: object | None = None
+    #: The steering and chassis templates to build, in the same two forms
+    #: `suspension_template` accepts: a registered name, or an already-resolved
+    #: instantiation.
+    #:
+    #: A role that names none gets that role's own default -- the registered
+    #: built-in its subsystem already selects.  They are separate fields rather
+    #: than one mapping so a caller cannot put a suspension template under
+    #: `steering` without anything noticing, which a mapping would accept
+    #: silently.
+    #:
+    #: The wheel role is absent on purpose: its wheel centre is a per-side mount
+    #: and the role owns no body on an axle, so the file format has no body to
+    #: hang one on -- see `subsystems/wheel.py`.
+    steering_template: object | None = None
+    chassis_template: object | None = None
 
     def carries(self, role: str) -> bool:
         """Return whether this assembly carries a subsystem role."""
@@ -161,6 +176,26 @@ class AssemblyRequest:
             properties=self._model_properties(),
         )
 
+    def role_instance(self, role: str) -> object | None:
+        """
+        Return the template instance a caller supplied for one role, or `None`.
+
+        `None` means "that role's own default", which is the registered built-in
+        the role's subsystem already selects.  It is deliberately *not* resolved
+        here: for steering the default depends on the model
+        (`rack_fixed_to_chassis`), and a request that guessed would be choosing a
+        topology the model did not ask for.
+        """
+        selection = getattr(self, _role_template_field(role), None)
+        if selection is None:
+            return None
+        return _as_instance(
+            selection,
+            mode=self.mode,
+            role=role,
+            properties={} if role != "suspension" else self._model_properties(),
+        )
+
     def _model_properties(self) -> dict[str, float]:
         """Return the property values the default instantiation needs."""
         # The spring and damper slots are model-owned today; a zero keeps the
@@ -169,50 +204,81 @@ class AssemblyRequest:
 
     def mount_stiffness(self) -> np.ndarray:
         """
-        Return the 6x6 stiffness for the template's mount bushing slot.
+        Return the 6x6 stiffness the assembly's compliant mounts carry.
+
+        Asked of the *instance* rather than read from a slot by name: which slot
+        feeds a bushing column is the template's declaration, and a file is free to
+        call that slot anything.  Reading ``properties["bushing"]`` here would make
+        the built-in template's slot name load-bearing and turn a differently named
+        mount into a silent zero -- a compliant assembly that is a mechanism.
 
         A zero-stiffness matrix means the slot is declared but carries no
-        compliance, which is the built-in template's state.  Anything else means a
-        template or properties file supplied a real number.
+        compliance, which is the built-in template's state.  A file that states the
+        whole table gets it as written: a mount's rotational diagonals are what a
+        single number cannot express.
         """
         instance = self.instantiated_suspension
-        values: dict[str, float] = getattr(instance, "properties", {})
-        slot_names = [name for name in values if name == "bushing"]
-        if not slot_names:
+        active: tuple[str, ...] = tuple(getattr(instance, "bushings", ()))
+        if not active:
             return np.zeros((6, 6))
-        stiffness = float(values["bushing"])
-        matrix = np.zeros((6, 6))
-        for index in range(3):
-            matrix[index, index] = stiffness
-        return matrix
+        return instance.bushing_stiffness_matrix(active[0])
 
 
-def _as_instance(selection: object, *, mode: str) -> object:
+#: The field each role's template selection travels in.  Named once because the
+#: accessor and the resolver have to agree on the spelling, and a role added to one
+#: without the other would resolve to `None` -- "the default" -- silently.
+_ROLE_TEMPLATE_FIELD: dict[str, str] = {
+    "suspension": "suspension_template",
+    "steering": "steering_template",
+    "chassis": "chassis_template",
+}
+
+
+def _role_template_field(role: str) -> str:
+    """Return the field one role's template selection travels in."""
+    try:
+        return _ROLE_TEMPLATE_FIELD[role]
+    except KeyError as exc:
+        raise ValueError(
+            f"role {role!r} has no template selection; the roles that do are "
+            f"{sorted(_ROLE_TEMPLATE_FIELD)}"
+        ) from exc
+
+
+def _as_instance(
+    selection: object,
+    *,
+    mode: str,
+    role: str = "suspension",
+    properties: Mapping[str, float] | None = None,
+) -> object:
     """
-    Resolve whatever a caller put in ``suspension_template``.
+    Resolve whatever a caller put in a role's template field.
 
     A string is a registered name and is looked up; anything else must already be
     an instantiation, because accepting a bare ``Template`` here would silently
     skip the property resolution that decides which columns carry stiffness.
+    ``properties`` is what a name-selected template is instantiated with: the
+    suspension's model-owned spring and damper, and nothing for a role whose slots
+    carry their own defaults.
     """
     from ..templates import instantiate
     from ..templates.instantiate import SubsystemInstance
     from ..templates.registry import get as get_template
 
+    supplied = {"spring": 0.0, "damper": 0.0} if properties is None else dict(properties)
     if isinstance(selection, str):
-        return instantiate(
-            get_template(selection), mode=mode, properties={"spring": 0.0, "damper": 0.0}
-        )
+        return instantiate(get_template(selection), mode=mode, properties=supplied)
     if isinstance(selection, SubsystemInstance):
         if selection.mode != mode:
             raise ValueError(
-                f"the suspension template was instantiated for mode "
+                f"the {role} template was instantiated for mode "
                 f"{selection.mode!r} but this assembly is mode {mode!r}; the mode "
                 "belongs to the instance, so resolve it for the mode you mean"
             )
         return selection
     raise TypeError(
-        "suspension_template must be a registered template name or a "
+        f"{role}_template must be a registered template name or a "
         f"SubsystemInstance, got {type(selection).__name__}"
     )
 

@@ -42,7 +42,12 @@ from ..schema import VehicleModel, WheelSpec
 from .capabilities import AssemblyCapabilities, capabilities_for
 from .runtime import SubsystemRuntime
 from .si_assembly import si_assembly_for_axle
-from .types import DEFAULT_VEHICLE_SUBSYSTEMS, AssemblyRequest, Connection
+from .types import (
+    DEFAULT_AXLE_SUBSYSTEMS,
+    DEFAULT_VEHICLE_SUBSYSTEMS,
+    AssemblyRequest,
+    Connection,
+)
 
 __all__ = [
     "VehicleRuntime",
@@ -115,7 +120,9 @@ class VehicleRuntime:
 
 
 def compose_vehicle_runtime(
-    model: VehicleModel, mode: Literal["K", "C"] = "K"
+    model: VehicleModel,
+    mode: Literal["K", "C"] = "K",
+    request: AssemblyRequest | None = None,
 ) -> VehicleRuntime:
     """
     Compose suspension, wheel ends and chassis into one vehicle runtime.
@@ -124,23 +131,29 @@ def compose_vehicle_runtime(
     composed axle rather than a second assembly path beside it: a change to how an
     axle is composed reaches the vehicle automatically, which is the property the
     two hand-written paths could never have.
+
+    ``request`` names the subsystems the vehicle carries.  It defaults to the full
+    set, so a caller that says nothing gets exactly the vehicle it always got, and
+    a caller that resolved its roles from an assembly file gets that assembly
+    instead of a role list this function decided on its own.
     """
     if mode not in ("K", "C"):
         raise ValueError(f"mode must be K or C, got {mode!r}")
+    if request is not None and request.mode != mode:
+        raise ValueError(
+            f"mode {mode!r} disagrees with request.mode {request.mode!r}; "
+            "pass one or the other, or make them agree"
+        )
+    resolved = request or AssemblyRequest(
+        mode=mode, subsystems=DEFAULT_VEHICLE_SUBSYSTEMS
+    )
 
     # The global rules are applied to the *root* category here, so a vehicle is
     # checked by the same statement that checks an axle rather than by an
-    # assertion local to this function.
-    #
-    # What the check can currently establish is bounded, and saying so is more
-    # useful than implying otherwise: `VehicleModel.driveline` is a required field
-    # carrying the brake and drive parameters, so the model cannot express a
-    # vehicle without them, and the role set is consequently always the full six.
-    # The check is therefore a *statement of the rule at the right place* -- it
-    # will refuse a future caller that passes a reduced role set, which is what a
-    # deliberately built vehicle could do -- but it is not yet a check that this
-    # model can fail.
-    check_root("vehicle", DEFAULT_VEHICLE_SUBSYSTEMS)
+    # assertion local to this function.  The role set is the caller's when it
+    # named one, which is what makes the check able to fail: a vehicle that does
+    # not steer or does not brake is refused here rather than assembled.
+    check_root("vehicle", resolved.subsystems)
 
     # The mechanisms live in `vehicle_parts`, in this same layer: welding, name
     # mapping and wheel placement are the composition's own business, and reaching
@@ -173,7 +186,22 @@ def compose_vehicle_runtime(
         ("rear", model.rear_axle, "rear_"),
     ):
         composed = si_assembly_for_axle(
-            axle_model, request=AssemblyRequest(mode=mode)
+            axle_model,
+            # The axle carries whichever of its own roles the vehicle declares:
+            # brake and drive are the vehicle's, and an axle inside a vehicle is
+            # not an independent single-axle simulation, so the intersection with
+            # the axle's own role vocabulary is what it may carry.
+            request=AssemblyRequest(
+                mode=resolved.mode,
+                subsystems=resolved.subsystems & DEFAULT_AXLE_SUBSYSTEMS,
+                # The role templates the caller supplied travel down to each axle.
+                # A file's steering or chassis declaration is *one* description of
+                # a vehicle, and both axles are built from it; dropping them here
+                # would make a document's own steering subsystem decorative, which
+                # is the state this forwarding exists to end.
+                steering_template=resolved.steering_template,
+                chassis_template=resolved.chassis_template,
+            ),
         )
         axle: SubsystemRuntime = composed.assembly.physical
         axle_assemblies[axle_name] = axle
@@ -260,9 +288,8 @@ def compose_vehicle_runtime(
         wheel_rotations_local=wheel_rotations_local,
         axle_assemblies=axle_assemblies,
         # The full vehicle carries all six roles, brake and drive included
-        # (requirement 17 / D8), so a vehicle rig can ask rather than probe.
         capabilities=capabilities_for(
-            subsystems=frozenset(DEFAULT_VEHICLE_SUBSYSTEMS),
+            subsystems=resolved.subsystems,
             body_names=frozenset(bodies),
         ),
     )

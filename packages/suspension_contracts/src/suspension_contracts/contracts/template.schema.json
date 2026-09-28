@@ -28,14 +28,30 @@
         "name": {"type": "string", "minLength": 1},
         "fixed": {"type": "boolean"},
         "mass": {"type": "number", "minimum": 0, "finite": true},
-        "mass_slot": {"type": "string"}
+        "mass_slot": {"type": "string"},
+        "center_of_mass": {
+          "type": "array", "items": {"type": "number", "finite": true},
+          "minItems": 3, "maxItems": 3
+        },
+        "inertia": {"$ref": "#/$defs/matrix"}
       }
     },
+    "matrix": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "array", "items": {"type": "number", "finite": true},
+        "minItems": 1
+      }
+    },
+    "vector": {
+      "type": "array", "items": {"type": "number", "finite": true},
+      "minItems": 3, "maxItems": 3
+    },
     "hardpoint": {
-      "type": "object", "additionalProperties": false, "required": ["name", "owner"],
+      "type": "object", "additionalProperties": false, "required": ["name"],
       "properties": {
         "name": {"type": "string", "minLength": 1},
-        "owner": {"type": "string", "minLength": 1},
+        "owner": {"type": "string"},
         "label": {"type": "string"},
         "symmetric": {"type": "boolean"}
       }

@@ -32,9 +32,14 @@ from .model import (
 from .registry import register
 
 __all__ = [
+    "BUILTINS",
+    "CHASSIS",
     "DEFAULT_MOUNT_STIFFNESS",
     "DOUBLE_WISHBONE",
     "DOUBLE_WISHBONE_NAME",
+    "STEERING_FIXED",
+    "STEERING_GUIDED",
+    "WHEEL",
     "register_builtins",
 ]
 
@@ -384,11 +389,215 @@ DOUBLE_WISHBONE = Template(
 )
 
 
-def register_builtins() -> Template:
+# --- the single-role templates ------------------------------------------------
+#
+# The composition used to answer "what does the steering subsystem contain" from
+# the function that emitted it: `steering.py` held the rack, the tie rods, the two
+# ball joints and the guide as literals, and a *file* could describe none of them.
+# These four templates are those same declarations written down as data, one per
+# role, so those modules can read their declaration instead of carrying it.
+#
+# The steering role needs *two* templates rather than one, and that is the file
+# format's own limit showing through rather than a preference: whether the rack is
+# guided along the model's rack axis or bolted to the chassis is decided by
+# `model.rack_fixed_to_chassis`, which is a *model* field, and a template has no
+# spelling for a conditional.  Two templates state the two cases and the module
+# picks the one the model asks for -- the same way a per-mode column states its
+# two cases by declaring both.
+
+_STEERING_PARTS: tuple[PartDefinition, ...] = (
+    PartDefinition("rack"),
+    PartDefinition("tie_rod_L"),
+    PartDefinition("tie_rod_R"),
+)
+
+#: The tie rod ends, both sides: a ball joint at the rack and one at the upright.
+#: The names are the ones the recorded contract carries, so a template-driven
+#: steering emits the same constraints the literal build did.
+_STEERING_TIES: tuple[ConnectionDefinition, ...] = (
+    ConnectionDefinition(
+        "rack_tie_joint_L",
+        "tie_inner",
+        "spherical",
+        owner="tie_rod_L",
+        label="inner",
+        far_owner="rack",
+        far_label="tie_L",
+    ),
+    ConnectionDefinition(
+        "tie_upright_joint_L",
+        "tie_outer",
+        "spherical",
+        owner="tie_rod_L",
+        label="outer",
+        far_owner="upright_L",
+        far_label="tie_outer",
+        # The tie rod is this joint's first body, while the rack-side joint records
+        # the rack first.  Both are what the assembly has always emitted, and
+        # stating them is what makes the template describe *that* assembly rather
+        # than a plausible one.
+        first_body="far",
+    ),
+    ConnectionDefinition(
+        "rack_tie_joint_R",
+        "tie_inner",
+        "spherical",
+        owner="tie_rod_R",
+        label="inner",
+        far_owner="rack",
+        far_label="tie_R",
+    ),
+    ConnectionDefinition(
+        "tie_upright_joint_R",
+        "tie_outer",
+        "spherical",
+        owner="tie_rod_R",
+        label="outer",
+        far_owner="upright_R",
+        far_label="tie_outer",
+        first_body="far",
+    ),
+)
+
+_STEERING_SLOTS: tuple[PropertySlot, ...] = (
+    PropertySlot("rack_axis", "-", default=0.0),
+    PropertySlot("rack_fixed_to_chassis", "-", default=0.0),
+)
+
+_STEERING_OUTPUTS: tuple[OutputDeclaration, ...] = (
+    OutputDeclaration("rack_displacement", "mm", "kernel"),
+)
+
+STEERING_GUIDED = Template(
+    name="steering_guided",
+    role="steering",
+    parts=_STEERING_PARTS,
+    connections=_STEERING_TIES
+    + (
+        ConnectionDefinition(
+            "rack_guide",
+            "rack_center",
+            "prismatic",
+            owner="rack",
+            label="center",
+            far_owner="chassis",
+            far_label="rack_center",
+        ),
+    ),
+    property_slots=_STEERING_SLOTS,
+    outputs=_STEERING_OUTPUTS,
+    description=(
+        "A rack guided along the model's rack axis: the rack is a body with one "
+        "ideal degree of freedom, and the axis it slides along is the model's "
+        "rather than the template's."
+    ),
+)
+
+STEERING_FIXED = Template(
+    name="steering_fixed",
+    role="steering",
+    parts=_STEERING_PARTS,
+    connections=_STEERING_TIES
+    + (
+        ConnectionDefinition(
+            "rack_fixed_to_chassis",
+            "rack_center",
+            "fixed",
+            owner="rack",
+            label="center",
+            far_owner="chassis",
+            far_label="rack_center",
+        ),
+    ),
+    property_slots=_STEERING_SLOTS,
+    outputs=_STEERING_OUTPUTS,
+    description=(
+        "A rack bolted to the chassis: the vehicle declares one steering system, "
+        "so the axle it does not steer carries a rack that cannot move."
+    ),
+)
+
+CHASSIS = Template(
+    name="chassis_fixed",
+    role="chassis",
+    parts=(PartDefinition("chassis", fixed=True),),
+    connections=(
+        ConnectionDefinition(
+            "chassis_reference",
+            "chassis_reference",
+            owner="chassis",
+            label="reference",
+        ),
+    ),
+    property_slots=(
+        PropertySlot("chassis_mass", "kg", default=0.0),
+        PropertySlot("chassis_inertia", "kg*m^2", default=0.0),
+    ),
+    outputs=(OutputDeclaration("chassis_pose", "mm", "kernel"),),
+    description=(
+        "The ground-side body an axle reacts against: one fixed body.  The axle "
+        "side consumes no mass here, which is the recorded state rather than an "
+        "omission."
+    ),
+)
+
+WHEEL = Template(
+    name="wheel_on_upright",
+    role="wheel",
+    # No parts: on a single axle the wheel is supplied by the rig rather than by
+    # the assembly (decision D9), so the wheel role declares where a wheel would
+    # attach instead of declaring a body.
+    parts=(),
+    connections=(
+        ConnectionDefinition(
+            "wheel_center_L",
+            "wheel_center",
+            owner="upright_L",
+            label="wheel_center",
+        ),
+        # The spin axis carries no owner: which body spins and about what is the
+        # *model's* statement (`VehicleModel.wheels[].spin_axis`), and the axle
+        # side hangs its tire on the wheel centre instead.
+        ConnectionDefinition("spin_axis_L", "spin_axis"),
+        ConnectionDefinition(
+            "wheel_center_R",
+            "wheel_center",
+            owner="upright_R",
+            label="wheel_center",
+        ),
+        ConnectionDefinition("spin_axis_R", "spin_axis"),
+    ),
+    property_slots=(
+        PropertySlot("unloaded_radius", "m", default=0.0),
+        PropertySlot("wheel_mass", "kg", default=0.0),
+        PropertySlot("wheel_inertia", "kg*m^2", default=0.0),
+        PropertySlot("tire", "-", default=0.0),
+    ),
+    outputs=(
+        OutputDeclaration("wheel_center_pose", "mm", "kernel"),
+        OutputDeclaration("tire_force", "N", "kernel"),
+    ),
+    description=(
+        "The wheel end: the point a wheel attaches at and the axis it spins "
+        "about, with the tire's law supplied by the model."
+    ),
+)
+
+#: Every template the package registers at import, in registration order.
+BUILTINS: tuple[Template, ...] = (
+    DOUBLE_WISHBONE,
+    STEERING_GUIDED,
+    STEERING_FIXED,
+    CHASSIS,
+    WHEEL,
+)
+
+
+def register_builtins() -> tuple[Template, ...]:
     """
     Register the built-in templates, idempotently.
 
     Called at import so the registry always holds the built-ins; safe to call
-    again, because the second call replaces the first with the same object.
+    again, because a second call replaces each one with the same object.
     """
-    return register(DOUBLE_WISHBONE, replace=True)
+    return tuple(register(template, replace=True) for template in BUILTINS)

@@ -38,6 +38,27 @@
         }
       }
     },
-    "rig": {"type": "string", "minLength": 1}
+    "rig": {"type": "string", "minLength": 1},
+    "vehicle": {
+      "description": "The vehicle-level numbers a full-vehicle assembly needs and its subsystems do not carry: the chassis body, the four wheel ends, the steering system and the driveline.  Each is validated here as an object and in full by the model's own class, so a bound such as 'steering ratio must be positive' has one home rather than two that can disagree.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chassis", "wheels", "steering"],
+      "properties": {
+        "chassis": {"$ref": "#/$defs/vehicle_part"},
+        "wheels": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"$ref": "#/$defs/vehicle_part"}
+        },
+        "steering": {"$ref": "#/$defs/vehicle_part"},
+        "driveline": {"$ref": "#/$defs/vehicle_part"}
+      }
+    }
+  },
+  "$defs": {
+    "vehicle_part": {
+      "description": "One vehicle-level object, in the model's own shape.  The fields are the schema class's; stating them a second time here would let the two sets of bounds drift apart.",
+      "type": "object"
+    }
   }
 }

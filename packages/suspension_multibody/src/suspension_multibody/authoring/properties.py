@@ -54,12 +54,19 @@ ELEMENT_MODELS: dict[str, str] = {
 }
 
 #: Which parameter name carries the scalar stiffness or damping of each element
-#: Which parameter name carries the scalar stiffness or damping of each element
 #: type, which of those must be strictly positive, and the model class whose
 #: bounds the file therefore obeys.
 _SCALAR_FIELD: dict[str, tuple[str, bool]] = {
     "spring": ("stiffness", True),
     "damper": ("viscous_damping", True),
+    # A mount bushing's one number is its translational stiffness.  The six-axis
+    # form needs a matrix, which is why `matrix` exists as its own section: without
+    # it a mount could only be this scalar form, whose rotational diagonals are
+    # zero, and a compliant assembly built from a file would be a mechanism.
+    "bushing": ("stiffness", True),
+    # A tire's number is its vertical stiffness; its unloaded radius rides beside it
+    # in `parameters`, because a tire needs both to be a tire.
+    "tire": ("stiffness", True),
     # ``BumpStop.stiffness`` is ``ge=0``: a stop that is declared and currently
     # carries no force is a real state, and refusing it here would be a second,
     # stricter rule than the model's own.
@@ -162,9 +169,14 @@ class ElementPropertyDocument:
             raise ElementPropertyError(
                 f"{target}: model {model!r} requires a 'curve' object"
             )
-        if needs == "parameters" and not payload.get("parameters"):
+        if (
+            needs == "parameters"
+            and not payload.get("parameters")
+            and payload.get("matrix") is None
+        ):
             raise ElementPropertyError(
-                f"{target}: model 'linear' requires a non-empty 'parameters' object"
+                f"{target}: model 'linear' requires a non-empty 'parameters' object "
+                "or a 'matrix'"
             )
 
         resolved = _resolve(target, element_type, model, payload)
@@ -204,6 +216,13 @@ class ElementPropertyDocument:
         return tuple((float(x), float(y)) for x, y in curve["points"])
 
 
+#: The model class a property file's element type is checked against.  The file
+#: speaks of a `bushing` -- the element the assembly builds -- while the model's
+#: own entry table calls the six-axis form `bushing6x6`, so the two spellings are
+#: translated here rather than in every reader.
+_MODEL_CLASS_KIND: dict[str, str] = {"bushing": "bushing6x6"}
+
+
 def _check_with_model_class(
     path: Path, element_type: str, resolved: Mapping[str, Any]
 ) -> None:
@@ -218,7 +237,7 @@ def _check_with_model_class(
     formatting problem.  Placement fields are placeholders because a property file
     carries numbers and not geometry.
     """
-    kind = "bump_stop" if element_type == "bump_stop" else element_type
+    kind = _MODEL_CLASS_KIND.get(element_type, element_type)
     model_class = ENTRY_KINDS.get(kind)
     if model_class is None:
         raise ElementPropertyError(
@@ -230,11 +249,20 @@ def _check_with_model_class(
     payload: dict[str, Any] = {
         key: value for key, value in resolved.items() if key in fields
     }
-    payload["name"] = "validation"
-    for name in ("body_a", "body_b"):
+    # A mount's single number is the isotropic six-axis mount the assembly builds
+    # from it: the three translational diagonals the runtime fills, and nothing else.
+    # Validating the scalar *as* that matrix keeps the file's bounds the model's
+    # bounds rather than a second set invented here.  A file that states the table
+    # itself is already in the shape the class wants.
+    if kind == "bushing6x6" and isinstance(payload.get("stiffness"), float):
+        payload["stiffness"] = _isotropic_mount(payload["stiffness"])
+    # Placeholders for the fields that are placement rather than law: a file carries
+    # numbers, not geometry, and only the fields the model actually has are filled,
+    # so a spec without a name or a body (a tire) is not handed one.
+    for name in ("name", "body_a", "body_b"):
         if name in fields:
             payload.setdefault(name, "validation")
-    for name in ("point_a", "point_b"):
+    for name in ("point_a", "point_b", "contact_point"):
         if name in fields:
             payload.setdefault(name, {"x": 0.0, "y": 0.0, "z": 0.0})
     try:
@@ -244,6 +272,14 @@ def _check_with_model_class(
             f"{path}: the {element_type} law was rejected by the "
             f"{kind} model: {_first_problem(exc)}"
         ) from exc
+
+
+def _isotropic_mount(stiffness: float) -> tuple[tuple[float, ...], ...]:
+    """Return the six-axis mount a single stiffness stands for."""
+    return tuple(
+        tuple(stiffness if row == column and row < 3 else 0.0 for column in range(6))
+        for row in range(6)
+    )
 
 
 def _first_problem(exc: Any) -> str:
@@ -265,9 +301,10 @@ def _resolve(
     Convert a validated law into the parameters the element build path consumes.
 
     The result is what ``subsystems/element_build.py`` hands the kernel: a scalar
-    stiffness or damping for a linear law, plus the curve when the file declares
-    one.  A linear law keeps its declared numbers and carries no curve, so a later
-    swap to a nonlinear file changes these values and only these values.
+    stiffness or damping for a linear law, a six-axis matrix for a mount, plus the
+    curve when the file declares one.  A linear law keeps its declared numbers and
+    carries no curve, so a later swap to a nonlinear file changes these values and
+    only these values.
     """
     resolved: dict[str, Any] = {
         "element_type": element_type,
@@ -283,6 +320,22 @@ def _resolve(
                 f"{type(value).__name__}"
             )
         resolved[key] = float(value)
+
+    # A matrix is the one shape `parameters` cannot state -- a mount's six axes and
+    # a wheel's inertia are tables, not numbers -- so it rides in its own section,
+    # naming the parameter it fills.  Without it, a mount could only ever be the
+    # scalar form, whose rotational diagonals are zero, and a compliant assembly
+    # built from a file would be a mechanism.
+    matrix = payload.get("matrix")
+    if matrix is not None:
+        rows = tuple(tuple(float(item) for item in row) for row in matrix["rows"])
+        widths = {len(row) for row in rows}
+        if len(widths) != 1:
+            raise ElementPropertyError(
+                f"{path}: matrix {matrix['name']!r} has rows of differing length "
+                f"{sorted(widths)}"
+            )
+        resolved[str(matrix["name"])] = rows
 
     points = tuple((float(x), float(y)) for x, y in payload.get("curve", {}).get("points", ()))
     if points:
@@ -305,6 +358,12 @@ def _resolve(
                 f"slope, found {slope!r}"
             )
         resolved[scalar] = slope
+    if isinstance(resolved[scalar], tuple):
+        # The matrix *is* the law, so there is no single number to bound here: the
+        # model's own class checks its shape, and a mount whose numbers are all zero
+        # is a mount that carries nothing -- a legal state the class is free to
+        # accept, so no second rule is invented for it.
+        return resolved
     value = float(resolved[scalar])
     if must_be_positive and value <= 0.0:
         raise ElementPropertyError(

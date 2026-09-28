@@ -19,6 +19,9 @@ belongs to subtask 10.
 
 from __future__ import annotations
 
+from ..templates.builtin import WHEEL
+from ..templates.instantiate import SubsystemInstance, instantiate
+from ..templates.model import ConnectionDefinition, TemplateError
 from .types import SIDES, ResolvedElement, Side, SubsystemContext, SubsystemOutput
 
 __all__ = ["build", "role", "tires"]
@@ -38,24 +41,67 @@ def build(context: SubsystemContext) -> SubsystemOutput:
     return SubsystemOutput()
 
 
+def _instance(context: SubsystemContext) -> SubsystemInstance:
+    """
+    Return the wheel template to read: the registered built-in.
+
+    The built-in is the only wheel template that can be read, and the reason is
+    the file format's rather than a choice made here: the wheel centre is a
+    *per-side* mount, the conversion mirrors a per-side mount by its owner's side
+    token, and a template may only own its own bodies -- while on an axle the wheel
+    role builds no body at all (decision D9), because the wheel comes from the rig
+    and the wheel body belongs to the model.  A file therefore has no body to hang
+    a wheel centre on, and a document's wheel subsystem is not a wheel topology.
+
+    So the attachment stays the built-in's, which names the suspension's upright --
+    the body that does carry the wheel centre.
+    """
+    return instantiate(WHEEL, mode=context.mode)
+
+
+def _wheel_mount(context: SubsystemContext, side: Side) -> ConnectionDefinition:
+    """
+    Return the wheel-centre mount the wheel template declares for one side.
+
+    Found by *role* and side rather than by name, because the name is the
+    template's and the role is the interface: a template that calls its wheel
+    centre something else is still a wheel template, and looking the name up
+    would make the spelling load-bearing again -- which is the state this
+    declaration exists to end.
+    """
+    instance = _instance(context)
+    matches = [
+        connection
+        for connection in instance.template.connections
+        if connection.role == "wheel_center" and connection.owner.endswith(f"_{side}")
+    ]
+    if len(matches) != 1:
+        raise TemplateError(
+            f"wheel template {instance.template.name!r} declares {len(matches)} "
+            f"wheel-centre mounts for side {side!r}; the role needs exactly one, "
+            "and a tire with nowhere to hang is not a wheel"
+        )
+    return matches[0]
+
+
 def tires(context: SubsystemContext, side: Side) -> list[ResolvedElement]:
     """
-    Declare one vertical tire at `upright_{side}`'s wheel centre.
+    Declare one vertical tire per model tire, where the template says it hangs.
 
-    The tire hangs off the upright, as it always has; the element constructor
-    stays in `front_axle` because that module is the registered `elements`
-    importer.  This function only decides what exists and where.  Names repeat
-    per spec, exactly as the loop it replaces did.
+    The template states the *attachment* -- which body carries the wheel centre
+    and which hardpoint role locates it -- while the law is the model's own
+    `model.tires`, exactly as before.  The element constructor stays in
+    `front_axle` because that module is the registered `elements` importer; this
+    function only decides what exists and where.
     """
-    local_center = context.local(
-        f"upright_{side}", context.mirror(side, "wheel_center")
-    )
+    mount = _wheel_mount(context, side)
+    local_center = context.local(mount.owner, context.mirror(side, mount.role))
     return [
         ResolvedElement(
             kind="tire",
             name=f"tire_{side}",
             spec=spec,
-            body_a=f"upright_{side}",
+            body_a=mount.owner,
             point_a=local_center,
         )
         for spec in context.model.tires

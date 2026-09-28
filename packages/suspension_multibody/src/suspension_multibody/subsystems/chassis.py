@@ -14,6 +14,8 @@ import numpy as np
 
 from ..modeling.primitives.joints import RigidBody
 from ..modeling.primitives.spatial import SE3
+from ..templates.builtin import CHASSIS
+from ..templates.instantiate import SubsystemInstance, instantiate
 from .types import SubsystemContext, SubsystemOutput
 
 __all__ = ["build", "role"]
@@ -24,20 +26,34 @@ role = "chassis"
 
 def build(context: SubsystemContext) -> SubsystemOutput:
     """
-    Contribute the axle's fixed chassis body.
+    Contribute the axle's fixed chassis body, as the chassis template declares it.
 
-    The body carries mass specs from `model.bodies` later, in the assembly's
-    `_with_body_specs` pass, so that the mass table keeps its single authority.
+    The *declaration* is the template's: which bodies the role has, and which of
+    them are fixed.  The pose and the inertia are the axle's own, because the axle
+    side consumes no `MassSpec` -- `_with_body_specs` fills the mass table later,
+    so that table keeps its single authority.
+
+    Reading the declaration rather than repeating it is what makes a chassis
+    template replaceable: a template that declared a second body would produce a
+    second body here, which is the property that was missing while the name was a
+    literal in this function.  A *file* subsystem's chassis template reaches here
+    through the request, so an authored chassis is the one that is built.
     """
-    del context  # 轴侧 chassis 不读 MassSpec，也不读任何硬点
+    requested = context.request.role_instance("chassis")
+    instance = (
+        requested
+        if isinstance(requested, SubsystemInstance)
+        else instantiate(CHASSIS, mode=context.mode)
+    )
     return SubsystemOutput(
         bodies={
-            "chassis": RigidBody(
-                "chassis",
+            part.name: RigidBody(
+                part.name,
                 pose=SE3.identity(),
                 inertia=np.eye(3),
                 center_of_mass=np.zeros(3),
-                fixed=True,
+                fixed=part.fixed,
             )
+            for part in instance.template.parts
         }
     )

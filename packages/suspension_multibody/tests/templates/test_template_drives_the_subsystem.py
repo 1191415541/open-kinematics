@@ -11,11 +11,10 @@ rather than worked around:
 * the ``suspension`` **role contract** requires seven named mounts, so a
   different topology within that role still declares those mount names; what it
   changes is which connections exist and which columns they activate.  A layout
-  with different hardpoint *names* would be a different model, not a different
-  template for this one;
-* the steering rows still come from the steering subsystem, which is hard-coded
-  today, so a suspension template cannot add or remove them.  The test therefore
-  compares the rows the template does control.
+* the steering rows come from the *steering* subsystem and its own template rather
+  than from the suspension one, so a suspension template cannot add or remove
+  them.  The test therefore compares the rows the template does control.  Which
+  template a role reads is asserted at the end of this file, one role at a time.
 
 The second template below is a single-arm layout: only the lower arm pivots, and
 the upper mount names locate geometry without constraining it.  That is a real
@@ -29,7 +28,7 @@ from dataclasses import replace
 
 import pytest
 
-from suspension_multibody.schema import FrontAxleModel, MassSpec, Vec3
+from suspension_multibody.schema import FrontAxleModel, MassSpec, Vec3, VerticalTire
 from suspension_multibody.subsystems.entry import compose_axle
 from suspension_multibody.subsystems.types import AssemblyRequest
 from suspension_multibody.templates import DOUBLE_WISHBONE, instantiate
@@ -490,3 +489,128 @@ def test_an_unknown_joint_kind_is_refused() -> None:
     )
     with pytest.raises(ValueError, match="unsupported ideal joint kind"):
         _build_with(template)
+
+
+# --- the three single-role templates ------------------------------------------
+#
+# Steering, wheel and chassis used to carry their declarations as literals inside
+# the functions that emitted them, so a *file* could describe none of those roles.
+# Each test below changes the declaration and requires the composed assembly to
+# change with it, which is the difference between a template that drives a
+# subsystem and one that documents it.
+
+
+def _named(runtime, name: str):
+    """Return one composed constraint by name, naming the unknown one."""
+    for constraint in runtime.constraints:
+        if constraint.name == name:
+            return constraint
+    raise AssertionError(
+        f"no constraint {name!r}; the assembly has "
+        f"{sorted(c.name for c in runtime.constraints)}"
+    )
+
+
+def test_the_steering_template_decides_the_rack_guide(monkeypatch) -> None:
+    """
+    The rack guide's *name* is the steering template's, not a literal.
+
+    Renaming it in the template renames the joint in the model, which is what
+    "the template drives the subsystem" means for this role.
+    """
+    from suspension_multibody.subsystems import steering as steering_subsystem
+    from suspension_multibody.templates.builtin import STEERING_GUIDED
+
+    assert "rack_guide" in {c.name for c in compose_axle(_model(), "K").constraints}
+
+    renamed = replace(
+        STEERING_GUIDED,
+        connections=tuple(
+            replace(connection, name="rack_guide_alt")
+            if connection.role == "rack_center"
+            else connection
+            for connection in STEERING_GUIDED.connections
+        ),
+    )
+    monkeypatch.setattr(steering_subsystem, "STEERING_GUIDED", renamed)
+    names = {c.name for c in compose_axle(_model(), "K").constraints}
+    assert "rack_guide_alt" in names
+    assert "rack_guide" not in names
+
+
+def test_the_steering_template_follows_the_model_s_rack() -> None:
+    """
+    Which steering template is instantiated is the model's decision.
+
+    A rack bolted to the chassis is a weld named `rack_fixed_to_chassis`; a free
+    rack slides on a prismatic guide named `rack_guide`.  They are different
+    constraints rather than two spellings of one, which is why the two cases are
+    two templates: a template has no spelling for a conditional.
+    """
+    free = compose_axle(_model(), "K")
+    welded = compose_axle(
+        _model().model_copy(update={"rack_fixed_to_chassis": True}), "K"
+    )
+    assert type(_named(free, "rack_guide")).__name__ == "PrismaticJoint"
+    assert type(_named(welded, "rack_fixed_to_chassis")).__name__ == "WeldJoint"
+
+
+def test_the_chassis_template_decides_the_chassis_bodies(monkeypatch) -> None:
+    """
+    The chassis role's bodies are the chassis template's.
+
+    A template that declares a second fixed body produces a second fixed body
+    here.  That is the property that was missing while the body's name was a
+    literal in the chassis function: the declaration could not be changed at all.
+    """
+    from suspension_multibody.subsystems import chassis as chassis_subsystem
+    from suspension_multibody.templates.builtin import CHASSIS
+
+    assert "chassis" in compose_axle(_model(), "K").bodies
+
+    two_bodies = replace(
+        CHASSIS,
+        parts=(CHASSIS.parts[0], replace(CHASSIS.parts[0], name="frame")),
+    )
+    monkeypatch.setattr(chassis_subsystem, "CHASSIS", two_bodies)
+    bodies = compose_axle(_model(), "K").bodies
+    assert "frame" in bodies
+    assert bodies["frame"].fixed is True
+
+
+def test_the_wheel_template_decides_where_the_tire_hangs(monkeypatch) -> None:
+    """
+    The tire's attachment is the wheel template's declaration.
+
+    The template names the body that carries the wheel centre and the hardpoint
+    role that locates it, while the *law* stays the model's own.  Pointing the
+    template's wheel centre at another declared body therefore moves the tire
+    without touching its stiffness -- which is what makes the attachment a
+    declaration rather than a convention.
+    """
+    from suspension_multibody.subsystems import wheel as wheel_subsystem
+    from suspension_multibody.templates.builtin import WHEEL
+
+    tire = VerticalTire(
+        stiffness=200.0,
+        unloaded_radius=300.0,
+        contact_point=Vec3(x=0.0, y=-700.0, z=0.0),
+    )
+    model = _model().model_copy(update={"tires": (tire,)})
+
+    def wheel_bodies(runtime) -> set[str]:
+        return {element.wheel_body for element in runtime.elements}
+
+    assert wheel_bodies(compose_axle(model, "K")) == {"upright_L", "upright_R"}
+
+    moved = replace(
+        WHEEL,
+        connections=tuple(
+            replace(connection, owner="lower_arm_L")
+            if connection.owner == "upright_L"
+            else connection
+            for connection in WHEEL.connections
+        ),
+    )
+    monkeypatch.setattr(wheel_subsystem, "WHEEL", moved)
+    assert "lower_arm_L" in wheel_bodies(compose_axle(model, "K"))

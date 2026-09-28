@@ -10,6 +10,7 @@ every check except this one.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -25,14 +26,26 @@ from suspension_multibody.authoring import (
 )
 from suspension_multibody.authoring.bridge import canonical_hardpoint
 from suspension_multibody.authoring.solver import (
+    assembly_request_for,
     assembly_request_from,
+    bridge_model,
     front_axle_model_for,
     runtime_template_from,
 )
+from suspension_multibody.axle_dynamics import ENERGY_COLUMNS, TIRE_OUTPUT_COLUMNS
+from suspension_multibody.cases.kc_quasi_static import model_document
 from suspension_multibody.schema import CaseSpec
+from suspension_multibody.simulation import SimulationRequest, run_request
 from suspension_multibody.subsystems.entry import compose_axle
 
-from .fixtures import COORDINATES, ROLES, write_axle_project
+from .fixtures import (
+    COORDINATES,
+    ROLES,
+    TIRE_RADIUS,
+    TIRE_STIFFNESS,
+    write_axle_project,
+    write_c_ready_axle_project,
+)
 
 
 def test_hardpoint_roles_map_onto_the_model_lookup() -> None:
@@ -350,3 +363,415 @@ def test_exported_builtin_template_is_equivalent_in_both_modes(tmp_path: Path) -
     c = compose_axle(model, request=AssemblyRequest(mode="C"))
     assert (len(k.constraints), len(k.bushings)) == (13, 0)
     assert (len(c.constraints), len(c.bushings)) == (9, 8)
+
+
+def _half_slope_spring(root: Path) -> Path:
+    """
+    Write a spring law whose curve is *half* the slope of its scalar field.
+
+    The scalar says 45 N/mm and the curve says 20 N/mm, so a solve that reads the
+    curve and a solve that reads the scalar cannot produce the same force.  That
+    is deliberate: the assertion below is a ratio, so it names *which* of the two
+    the kernel applied rather than only that something moved.
+    """
+    import json
+
+    law = {
+        "document": "element_properties",
+        "schema_version": 1,
+        "name": "half_slope_spring",
+        "element_type": "spring",
+        "model": "piecewise",
+        "units": {"force": "N", "length": "mm"},
+        # The scalar is declared *beside* the curve.  Without it the resolver
+        # would derive the scalar from the curve's own first slope, and the
+        # assertion could no longer tell a curve from a differently-sloped line.
+        "parameters": {"stiffness": 45.0, "free_length": 250.0},
+        # Abscissas are deflections, and the axle sits in *extension*, so the
+        # curve has to span the negative side.  One that covered compression only
+        # would be clamped to its first sample and apply no force at all.
+        "curve": {
+            "independent": "deflection",
+            "dependent": "force",
+            "points": [[-400.0, -8000.0], [-200.0, -4000.0], [-100.0, -2000.0], [0.0, 0.0]],
+        },
+    }
+    target = root / "half_slope_spring.json"
+    target.write_text(json.dumps(law), encoding="utf-8")
+    return target
+
+
+def test_the_property_curve_is_the_law_the_kernel_applies(tmp_path: Path) -> None:
+    """
+    Acceptance 10: a curve file reaches the kernel, and it is the law it applies.
+
+    Two things are asserted and the second is the one that matters: the curve
+    travels into the model document the solve submits, *and* the force the kernel
+    reports afterwards is the curve's rather than the scalar stiffness written
+    beside it in the same file.  A run that carried the curve but solved the
+    scalar would pass the first assertion and fail the second.
+    """
+    from suspension_multibody.cases.kc_quasi_static import model_document
+    from suspension_multibody.schema import DisplacementControl
+
+    from .fixtures import write_axle_project
+
+    paths = write_axle_project(tmp_path)
+    _half_slope_spring(tmp_path)
+    subsystem = SubsystemDocument.load(paths["subsystem"])
+    linear = front_axle_model_for(subsystem, name="linear")
+    curved = bridge_model(
+        subsystem.effective(
+            overrides={"property_bindings": {"spring": "half_slope_spring.json"}}
+        ),
+        name="curved",
+    )
+
+    # The curve is carried, in the convention the contract states: a deflection
+    # against a force, signed, so the extension the axle sits in is inside it.
+    assert linear.springs[0].force_curve == ()
+    assert curved.springs[0].force_curve == (
+        (-400.0, -8000.0),
+        (-200.0, -4000.0),
+        (-100.0, -2000.0),
+        (0.0, 0.0),
+    )
+    document = model_document(
+        compose_axle(curved, request=assembly_request_from(subsystem, mode="K")),
+        name="curved-k",
+        drive_wheels=True,
+    )
+    spring = next(entry for entry in document["elements"] if entry["type"] == "spring")
+    assert spring["parameters"]["elastic_curve"] == [
+        [-400.0, -8000.0],
+        [-200.0, -4000.0],
+        [-100.0, -2000.0],
+        [0.0, 0.0],
+    ]
+
+    # The slot the composition carries is the resolved law -- its model, its curve
+    # and the file that answered -- rather than a number that lost all three.  This
+    # is the shape the phase-3 migration is about, and the solve below is what
+    # shows it is not merely carried: the kernel applies it.
+    law = assembly_request_from(
+        subsystem,
+        mode="K",
+        overrides={"property_bindings": {"spring": "half_slope_spring.json"}},
+    ).instantiated_suspension.properties["spring"]
+    assert law.model == "piecewise"
+    assert law.curve == (
+        (-400.0, -8000.0),
+        (-200.0, -4000.0),
+        (-100.0, -2000.0),
+        (0.0, 0.0),
+    )
+    assert law.source.endswith("half_slope_spring.json")
+
+    case = CaseSpec(
+        mode="K",
+        subsystems=frozenset({"suspension", "chassis", "steering", "wheel"}),
+        controls=(DisplacementControl(target="wheel_travel_left", values=(30.0,)),),
+    )
+
+    def spring_force(model: object) -> float:
+        """Return the positive-end force the kernel reported for the spring."""
+        bundle = api.run_case(model, case)  # ty: ignore[invalid-argument-type]
+        forces = [
+            load.global_load.fz
+            for load in bundle.component_loads
+            if load.component == "spring_L_L"
+        ]
+        return max(forces)
+
+    linear_force = spring_force(linear)
+    assert linear_force > 0.0
+    # Half the slope in the curve, so half the force -- while the scalar the same
+    # file declares is untouched.  That is what makes the difference the curve's.
+    assert spring_force(curved) == pytest.approx(linear_force * 20.0 / 45.0, rel=1e-9)
+
+def test_an_assembly_file_decides_the_axle_s_subsystems(tmp_path: Path) -> None:
+    """
+    Acceptance 5/6: the assembly document fixes what is composed, overrides and all.
+
+    The fixture's assembly declares a suspension and a chassis, so the composed
+    axle carries exactly those two roles -- no steering, and no wheel, because the
+    single-axle bench supplies the wheels.  The default request carries all four,
+    which is what makes this the file's decision rather than the entry's.
+    """
+    import json
+
+    paths = write_axle_project(tmp_path)
+    simulation = SimulationAssembly.load(paths["assembly"])
+    request = assembly_request_for(simulation)
+    assert request.subsystems == frozenset({"suspension", "chassis"})
+
+    model = front_axle_model_for(SubsystemDocument.load(paths["subsystem"]))
+    runtime = compose_axle(model, request=request)
+    assert runtime.capabilities.subsystems == frozenset({"suspension", "chassis"})
+    assert compose_axle(model).capabilities.subsystems == frozenset(
+        {"suspension", "chassis", "steering", "wheel"}
+    )
+
+    # An assembly-level override repoints the property file, and the override is
+    # what the composed instance reads -- while the subsystem file it names still
+    # holds the original binding, which is the copy-on-write rule.
+    stiffer = {
+        "document": "element_properties",
+        "schema_version": 1,
+        "name": "stiff",
+        "element_type": "spring",
+        "model": "linear",
+        "units": {"force": "N", "length": "mm"},
+        "parameters": {"stiffness": 120.0, "free_length": 250.0},
+    }
+    (tmp_path / "stiff.json").write_text(json.dumps(stiffer), encoding="utf-8")
+    payload = json.loads(paths["assembly"].read_text(encoding="utf-8"))
+    payload["subsystems"][0]["overrides"] = {
+        "property_bindings": {"spring": "stiff.json"}
+    }
+    paths["assembly"].write_text(json.dumps(payload), encoding="utf-8")
+
+    overridden = assembly_request_for(SimulationAssembly.load(paths["assembly"]))
+    # The resolved law, not a stripped number: the file it came from travels with
+    # the value, which is what makes "this run read that file" checkable.
+    assert request.instantiated_suspension.properties["spring"].scalar == 45.0
+    assert request.instantiated_suspension.properties["spring"].source.endswith(
+        "spring.json"
+    )
+    assert overridden.instantiated_suspension.properties["spring"].scalar == 120.0
+    assert overridden.instantiated_suspension.properties["spring"].source.endswith(
+        "stiff.json"
+    )
+    assert (
+        SubsystemDocument.load(paths["subsystem"]).payload["property_bindings"]["spring"]
+        == "spring.json"
+    )
+
+
+def test_every_defined_template_exports_to_a_file_and_reads_back(
+    tmp_path: Path,
+) -> None:
+    """
+    Phase 8: the templates the package defines are all expressible as files.
+
+    The double wishbone is compared assembly to assembly above; these two are the
+    simplified providers, whose topology is what has to survive: no parts, the two
+    mount points and the role's own slots.  A built-in a user can use but cannot
+    read would be the opposite of what a file format is for.
+    """
+    import json
+
+    from suspension_multibody.authoring import TemplateDocument
+    from suspension_multibody.authoring.solver import template_document_from
+    from suspension_multibody.subsystems.brake import SIMPLIFIED_BRAKE
+    from suspension_multibody.subsystems.drive import SIMPLIFIED_DRIVE
+
+    for template in (SIMPLIFIED_BRAKE, SIMPLIFIED_DRIVE):
+        document = template_document_from(template)
+        path = tmp_path / f"{template.name}.tpl.json"
+        path.write_text(json.dumps(document), encoding="utf-8")
+        read_back = runtime_template_from(TemplateDocument.load(path))
+
+        assert read_back.name == template.name
+        assert read_back.role == template.role
+        assert [part.name for part in read_back.parts] == [
+            part.name for part in template.parts
+        ]
+        # A mount is stated once in a file and once per side in the runtime, so the
+        # comparison is on the set of mount roles: that is what the format carries.
+        assert sorted(
+            {connection.role for connection in read_back.connections}
+        ) == sorted({connection.role for connection in template.connections})
+        # Neither of these roles owns a body, so its mounts are stated without one.
+        assert all(not connection.owner for connection in read_back.connections)
+        assert [slot.name for slot in read_back.property_slots] == [
+            slot.name for slot in template.property_slots
+        ]
+        assert [slot.default for slot in read_back.property_slots] == [
+            slot.default for slot in template.property_slots
+        ]
+
+
+#: The result layouts, read by name.  An index into a block is a statement about
+#: a layout that lives elsewhere, and naming the channel keeps the two in step.
+_TIRE_NORMAL_FORCE = TIRE_OUTPUT_COLUMNS.index("normal_force_n")
+_TIRE_PENETRATION = TIRE_OUTPUT_COLUMNS.index("penetration_m")
+_POTENTIAL_ENERGY = ENERGY_COLUMNS.index("potential_energy_j")
+
+
+def _c_load_case() -> dict:
+    """One C load path: three levels of vertical load at the wheel centre."""
+    return {
+        "contract": "multibody-case",
+        "contract_version": 1,
+        "kind": "case",
+        "family": "kc_quasi_static",
+        "name": "file-c-loads",
+        "time": {"start_s": 0.0, "end_s": 1e-3, "step_s": 1e-3},
+        "c": {
+            "load_marker": "wheel_center_L",
+            "side_mode": "single",
+            "mirror_marker": "wheel_center_R",
+            "loads": [{"fz": 0.0}, {"fz": -1500.0}, {"fz": -3000.0}],
+        },
+    }
+
+
+def _run_c(runtime) -> object:
+    """Run one C document pair through the runner the product uses."""
+    document = model_document(runtime, name="file-c-loads", drive_wheels=False)
+    return run_request(
+        SimulationRequest(
+            assembly="axle",
+            family="kc_quasi_static",
+            model=document,
+            case=_c_load_case(),
+        )
+    ).raw
+
+
+def _tire_channel(result, level: int, column: int) -> float:
+    """
+    Return one tire channel of the loaded side at one load level.
+
+    Each load level is its own case, and a case carries two samples of the same
+    load, so the level's last sample is what a reader wants.
+    """
+    return float(result.block("tire_output")[2 * level + 1, 0, column])
+
+
+def _potential_energy(result, level: int) -> float:
+    """Return the axle's stored potential energy at one load level."""
+    return float(result.block("energy")[2 * level + 1, _POTENTIAL_ENERGY])
+
+
+def _file_project_with(tmp_path: Path, *, drop: str = "none"):
+    """
+    Write the C-ready project with one ingredient removed, and compose it.
+
+    ``drop`` names what to take away: the tire, the mount bushings, or the
+    ``wheel_center`` label the case addresses its load by.  The removals are made
+    in the *template*, which is the file that declares them, so what is being
+    tested is the file route rather than the fixture's Python.
+    """
+    paths = write_c_ready_axle_project(tmp_path)
+    template = json.loads(paths["template"].read_text(encoding="utf-8"))
+    if drop == "tire":
+        template["elements"] = [
+            row for row in template["elements"] if row["type"] != "tire"
+        ]
+    elif drop == "mounts":
+        template["elements"] = [
+            row for row in template["elements"] if row["type"] != "bushing"
+        ]
+    elif drop == "marker":
+        for row in template["hardpoints"]:
+            if row["name"] == "wheel_center":
+                row["label"] = "center"
+    elif drop != "none":
+        raise AssertionError(f"unknown removal {drop!r}")
+    paths["template"].write_text(json.dumps(template), encoding="utf-8")
+    subsystem = SubsystemDocument.load(paths["subsystem"])
+    model = front_axle_model_for(subsystem)
+    runtime = compose_axle(model, request=assembly_request_from(subsystem, mode="C"))
+    return model, runtime
+
+
+def test_a_file_project_solves_the_c_reading(tmp_path: Path) -> None:
+    """
+    Plan step 1: the pad reading -- the one that loads the wheel centre and lets
+    the tire carry the wheel -- runs on a model built entirely from files.
+
+    This is the reading the file route could not reach before: a file-built model
+    reached the solver but stopped in the static trim, because it carried neither
+    a tire to react the load nor a mount table to hold the inboard points once C
+    mode made them compliant.
+    """
+    paths = write_c_ready_axle_project(tmp_path)
+    subsystem = SubsystemDocument.load(paths["subsystem"])
+    model = front_axle_model_for(subsystem)
+
+    # What the files supplied reached the model: a tire whose law is the file's,
+    # and a mount table that is the file's rather than a scalar's three diagonals.
+    assert len(model.tires) == 1
+    assert model.tires[0].stiffness == pytest.approx(TIRE_STIFFNESS)
+    assert model.tires[0].unloaded_radius == pytest.approx(TIRE_RADIUS)
+
+    request = assembly_request_from(subsystem, mode="C")
+    stiffness = request.mount_stiffness()
+    assert stiffness.shape == (6, 6)
+    assert stiffness[0, 0] == pytest.approx(10_000.0)
+    # The rotational diagonal is the part a single number cannot express, and it
+    # is the reason the mount slot carries a table.
+    assert stiffness[3, 3] == pytest.approx(10_000_000.0)
+
+    runtime = compose_axle(model, request=request)
+    assert runtime.mode == "C"
+    assert len(runtime.bushings) == 8
+
+    result = _run_c(runtime)
+    assert result.status == "success", dict(result.failure_evidence)
+    assert len(result.cases) == 3
+    # A converged static trim: the constraint and dynamics residuals the kernel
+    # reports for each load level are at solver noise.
+    for index in range(len(result.cases)):
+        constraint, dynamics, _ = result.case_residuals(index)
+        assert abs(constraint) < 1e-6
+        assert abs(dynamics) < 1e-6
+
+    # The load reached the model, and the numbers it reached it with are the
+    # file's: the wheel sinks into the tire the file declares, and the kernel's
+    # normal force is that file's law applied to the penetration it solved for.
+    # A tire declared and ignored would report a force unrelated to its stiffness.
+    assert _tire_channel(result, 0, _TIRE_PENETRATION) == pytest.approx(0.0, abs=1e-9)
+    assert _tire_channel(result, 0, _TIRE_NORMAL_FORCE) == pytest.approx(0.0, abs=1e-9)
+    light = _tire_channel(result, 1, _TIRE_PENETRATION)
+    heavy = _tire_channel(result, 2, _TIRE_PENETRATION)
+    assert heavy > light > 0.0
+    # N/mm of stiffness against metres of penetration.
+    assert _tire_channel(result, 2, _TIRE_NORMAL_FORCE) == pytest.approx(
+        TIRE_STIFFNESS * 1000.0 * heavy, rel=1e-6
+    )
+
+
+def test_every_c_ready_ingredient_changes_the_run(tmp_path: Path) -> None:
+    """
+    The same project with one ingredient removed at a time.
+
+    None of the three is decoration: each removal produces a *different* run, and
+    the difference is measured rather than asserted.  Only the marker's removal is
+    refused outright -- the other two build a model that solves, and solve to
+    something else, which is exactly why a fixture that omitted them would look
+    like a working run.
+    """
+    _, complete = _file_project_with(tmp_path / "complete", drop="none")
+    baseline = _run_c(complete)
+    assert baseline.status == "success"
+
+    # No tire: the pad reading has nothing to carry the wheel with, so the whole
+    # load falls on the suspension.  The axle's stored energy at the loaded level
+    # rises from 3.758 J to 4.514 J -- the tire was carrying its share rather than
+    # being declared and ignored.
+    model, without_tire = _file_project_with(tmp_path / "no_tire", drop="tire")
+    assert model.tires == ()
+    without_tire_run = _run_c(without_tire)
+    assert without_tire_run.tire_names == ()
+    assert _potential_energy(without_tire_run, 2) > _potential_energy(baseline, 2)
+
+    # No mount bushings: C mode leaves the four inboard joints ideal instead, so
+    # the compliant reading is not built at all.  The assembly says so -- thirteen
+    # constraints and no bushings, against nine and eight -- and the wheel then
+    # takes nearly the whole load (2680 N of 3000 N) because nothing yields.
+    _, without_mounts = _file_project_with(tmp_path / "no_mounts", drop="mounts")
+    assert len(without_mounts.bushings) == 0
+    assert len(without_mounts.constraints) == 13
+    rigid = _run_c(without_mounts)
+    assert _tire_channel(rigid, 2, _TIRE_NORMAL_FORCE) > 5.0 * _tire_channel(
+        baseline, 2, _TIRE_NORMAL_FORCE
+    )
+
+    # No `wheel_center` label: the marker the case loads does not exist, and the
+    # run is refused by name rather than quietly loading nothing.
+    _, without_marker = _file_project_with(tmp_path / "no_marker", drop="marker")
+    with pytest.raises(Exception, match="wheel_center_L"):
+        _run_c(without_marker)

@@ -30,6 +30,11 @@ from suspension_multibody.schema import (
     VehicleModel,
     WheelSpec,
 )
+from suspension_multibody.subsystems import (
+    DEFAULT_AXLE_SUBSYSTEMS,
+    DEFAULT_VEHICLE_SUBSYSTEMS,
+    AssemblyRequest,
+)
 from suspension_multibody.subsystems.entry import compose_vehicle
 from suspension_multibody.subsystems.vehicle_assembly import (
     VehicleRuntime,
@@ -232,3 +237,47 @@ def test_an_unknown_mode_is_refused() -> None:
     """A mode the composition cannot read is named, not defaulted."""
     with pytest.raises(ValueError, match="mode must be K or C"):
         compose_vehicle_runtime(_vehicle(), mode="X")  # type: ignore[arg-type]
+
+
+def test_the_vehicle_carries_the_roles_its_request_names() -> None:
+    """
+    Phase 5: the vehicle's role set comes from the request, not from a constant.
+
+    Two facts, and the second is the one that was missing.  Naming the full set
+    produces exactly the vehicle this entry has always produced, and naming a set
+    that is not a vehicle is refused -- by the same policy statement that checks an
+    axle, so a vehicle without brakes is a rule violation rather than an assembly
+    nobody thought to check.
+    """
+    from suspension_multibody.connections.policy import RuleViolation
+
+    model = _vehicle()
+    explicit = compose_vehicle(
+        model,
+        "K",
+        AssemblyRequest(mode="K", subsystems=DEFAULT_VEHICLE_SUBSYSTEMS),
+    )
+    default = compose_vehicle(model, "K")
+    assert explicit.capabilities.subsystems == default.capabilities.subsystems
+    assert [c.name for c in explicit.constraints] == [
+        c.name for c in default.constraints
+    ]
+
+    # The single-axle set is not a vehicle: it carries no brake and no drive, and
+    # the policy names both rather than assembling a car that cannot stop.
+    with pytest.raises(RuleViolation, match="brake"):
+        compose_vehicle(
+            model,
+            "K",
+            AssemblyRequest(mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS),
+        )
+
+
+def test_a_vehicle_request_disagreeing_with_the_mode_is_refused() -> None:
+    """The same contract `compose_axle` keeps, kept here as well."""
+    with pytest.raises(ValueError, match="disagrees with request.mode"):
+        compose_vehicle(
+            _vehicle(),
+            "K",
+            AssemblyRequest(mode="C", subsystems=DEFAULT_VEHICLE_SUBSYSTEMS),
+        )

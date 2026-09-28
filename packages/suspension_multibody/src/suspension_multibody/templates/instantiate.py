@@ -20,6 +20,7 @@ Two rules make the K/C story real rather than rhetorical:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -28,6 +29,7 @@ from .model import (
     ACTIVATED_MODES,
     MODES,
     ConnectionDefinition,
+    SlotValue,
     Template,
     TemplateError,
 )
@@ -39,6 +41,7 @@ __all__ = [
     "activated_column",
     "instantiate",
     "resolve_properties",
+    "slot_element_type",
 ]
 
 
@@ -75,8 +78,9 @@ class SubsystemInstance:
 
     template: Template
     mode: str
-    #: Property values by slot name: supplied values over the template's defaults.
-    properties: dict[str, float] = field(default_factory=dict)
+    #: Resolved constitutive values by slot name: supplied laws over the template's
+    #: defaults.  A caller may still pass plain numbers; they are normalised here.
+    properties: Mapping[str, SlotValue] = field(default_factory=dict)
     #: Template part names, in declaration order.
     bodies: tuple[str, ...] = ()
     #: `(connection name, hardpoint role)` in declaration order.
@@ -88,13 +92,14 @@ class SubsystemInstance:
     #: Connection names that carry no constraint in this mode, in order.
     inert: tuple[str, ...] = ()
 
-    def stiffness_for(self, connection_name: str) -> float:
+    def law_for(self, connection_name: str) -> SlotValue:
         """
-        Return the stiffness the bushing column at `connection_name` resolves to.
+        Return the resolved constitutive value the slot at `connection_name` holds.
 
-        The connection names the slot its bushing column refers to; the value is
-        that slot's, which is how a template says "the mount bushing" without
-        knowing what number an author will put there.
+        `stiffness_for` is the scalar view of this; a consumer that has to build
+        the kernel's parameter block needs the whole law -- its element type, its
+        model and its curve -- and reading it here is what keeps that consumer from
+        reaching back into the property file a second time.
         """
         connection = self._connection(connection_name)
         if connection is None or connection.bushing is None:
@@ -117,7 +122,19 @@ class SubsystemInstance:
                 f"slot {slot.name!r} used by connection {connection_name!r} has "
                 "no default and no supplied value"
             )
-        return slot.default
+        return SlotValue(
+            element_type=slot_element_type(slot.name), scalar=float(slot.default)
+        )
+
+    def stiffness_for(self, connection_name: str) -> float:
+        """
+        Return the stiffness the bushing column at `connection_name` resolves to.
+
+        The connection names the slot its bushing column refers to; the value is
+        that slot's, which is how a template says "the mount bushing" without
+        knowing what number an author will put there.
+        """
+        return float(self.law_for(connection_name))
 
     def bushing_stiffness(self) -> dict[str, float]:
         """Return the resolved stiffness of every active bushing, by connection."""
@@ -127,15 +144,18 @@ class SubsystemInstance:
         """
         Return the 6x6 stiffness matrix for one active bushing.
 
-        A slot value is a translational stiffness, so it goes on the three
-        translational diagonals; the rotational diagonals stay zero unless a
-        template says otherwise.  This mirrors how the model's own `Bushing6x6`
-        entries are read.
+        A file may state the table itself, in which case that *is* the mount and is
+        returned as written -- the rotational diagonals a scalar cannot express are
+        what makes a compliant assembly a mechanism or not.  A slot that holds only
+        a number goes on the three translational diagonals, which mirrors how the
+        model's own `Bushing6x6` entries are read.
         """
-        value = self.stiffness_for(connection_name)
+        law = self.law_for(connection_name)
+        if law.matrix:
+            return np.asarray(law.matrix, dtype=float)
         matrix = np.zeros((6, 6))
         for index in range(3):
-            matrix[index, index] = value
+            matrix[index, index] = float(law)
         return matrix
 
     def with_mode(self, mode: str) -> SubsystemInstance:
@@ -182,7 +202,7 @@ def instantiate(
     template: Template,
     *,
     mode: str,
-    properties: dict[str, float] | None = None,
+    properties: Mapping[str, float | SlotValue] | None = None,
 ) -> SubsystemInstance:
     """
     Instantiate `template` for `mode`, activating the columns that mode selects.
@@ -190,11 +210,16 @@ def instantiate(
     The role contract is re-checked here rather than only at registration: a
     template can be registered with placeholders and filled in later, and a
     failure has to name the missing mount or slot where someone tries to use it.
+
+    Supplied values may be resolved laws or plain numbers; both arrive at the
+    instance as resolved values, so a caller that had a number did not have to
+    learn a second shape and a caller with a property file does not have to give
+    up what the file said about the law.
     """
     if mode not in MODES:
         raise TemplateError(f"unknown mode {mode!r}; modes are K and C")
     template.check_role_contract()
-    supplied: dict[str, float] = dict(properties or {})
+    supplied = {name: _as_slot_value(name, value) for name, value in (properties or {}).items()}
     _check_property_names(template, supplied)
     merged = _resolve_defaults(template, supplied)
     template.check_filled(dict(merged))
@@ -225,7 +250,27 @@ def instantiate(
     )
 
 
-def _check_property_names(template: Template, supplied: dict[str, float]) -> None:
+def _as_slot_value(name: str, value: object) -> SlotValue:
+    """
+    Normalise one supplied value into a resolved slot value.
+
+    A number is a linear law of whatever element the slot is named after, which is
+    what a template's own default means and what a caller who passed a float means.
+    Anything else is refused here rather than at the first arithmetic: a slot whose
+    value is a string would otherwise reach the kernel's parameter block and fail
+    there, naming the arithmetic instead of the file.
+    """
+    if isinstance(value, SlotValue):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return SlotValue(element_type=slot_element_type(name), scalar=float(value))
+    raise TemplateError(
+        f"slot {name!r} was given {value!r} ({type(value).__name__}); a slot value "
+        "is a resolved law or a number"
+    )
+
+
+def _check_property_names(template: Template, supplied: Mapping[str, SlotValue]) -> None:
     """Reject a property whose name the template does not declare."""
     declared = {slot.name for slot in template.property_slots}
     unknown = sorted(set(supplied) - declared)
@@ -236,8 +281,8 @@ def _check_property_names(template: Template, supplied: dict[str, float]) -> Non
 
 
 def _resolve_defaults(
-    template: Template, supplied: dict[str, float]
-) -> dict[str, float]:
+    template: Template, supplied: Mapping[str, SlotValue]
+) -> dict[str, SlotValue]:
     """
     Merge supplied properties over the template's own defaults.
 
@@ -245,12 +290,14 @@ def _resolve_defaults(
     kept in the instance's property map rather than looked up again at each use.
     A `None` default means "the author must supply this".
     """
-    merged: dict[str, float] = {}
+    merged: dict[str, SlotValue] = {}
     for slot in template.property_slots:
         if slot.name in supplied:
-            merged[slot.name] = float(supplied[slot.name])
+            merged[slot.name] = supplied[slot.name]
         elif slot.default is not None:
-            merged[slot.name] = float(slot.default)
+            merged[slot.name] = SlotValue(
+                element_type=slot_element_type(slot.name), scalar=float(slot.default)
+            )
     return merged
 
 #: Which entry field carries the scalar a slot reads, per entry kind.
@@ -266,8 +313,26 @@ _SLOT_SCALAR_FIELD: dict[str, str] = {
     "bump_stop": "stiffness",
 }
 
+#: Slot names that name an element kind; anything else is a plain number source.
+_ELEMENT_SLOT_NAMES: frozenset[str] = frozenset(
+    {"spring", "damper", "bump_stop", "bushing", "tire"}
+)
 
-def resolve_properties(template: Template, property_set: object) -> dict[str, float]:
+
+def slot_element_type(name: str) -> str:
+    """
+    Return the element type a slot of this name declares.
+
+    Named ``generic`` when the slot is not named after an element kind -- a mass
+    or an inertia is a number too, and claiming it is a spring would be a worse
+    answer than saying it is not a law.
+    """
+    return name if name in _ELEMENT_SLOT_NAMES else "generic"
+
+
+def resolve_properties(
+    template: Template, property_set: object
+) -> dict[str, SlotValue]:
     """
     Bind a loaded properties file to a template's slots, producing slot values.
 
@@ -276,6 +341,12 @@ def resolve_properties(template: Template, property_set: object) -> dict[str, fl
     the file does not mention keeps the template's own default -- that is what
     "a template may also carry its numbers directly" means in practice, and it is
     why this is an added option rather than a replacement.
+
+    The result has the same *shape* the element-property route produces: resolved
+    values carrying the element kind the entry declares, not bare numbers.  The
+    two routes into a slot -- this one and `authoring/properties.py` -- therefore
+    hand the instance the same thing, which is what makes them one channel with
+    two spellings rather than two channels that have to be kept in step.
 
     A slot the role requires, that the template gives no default for, and that the
     file does not supply, is an error that names the slot and the file: silently
@@ -288,26 +359,49 @@ def resolve_properties(template: Template, property_set: object) -> dict[str, fl
             f"with an 'entries' mapping), found {type(property_set).__name__}"
         )
     path = getattr(property_set, "path", "<properties>")
-    values: dict[str, float] = {}
+    values: dict[str, SlotValue] = {}
     for slot in template.property_slots:
         entry = entries.get(slot.name)
         if entry is not None:
-            field = _SLOT_SCALAR_FIELD.get(str(entry.get("kind")), "stiffness")
+            kind = str(entry.get("kind"))
+            field = _SLOT_SCALAR_FIELD.get(kind, "stiffness")
             value = entry.get(field)
             if isinstance(value, list):
-                values[slot.name] = _scalar_from_matrix(
-                    path, slot.name, template.name, value
+                rows = tuple(tuple(float(item) for item in row) for row in value)
+                values[slot.name] = SlotValue(
+                    element_type=(
+                        kind if kind in _ELEMENT_SLOT_NAMES else slot_element_type(slot.name)
+                    ),
+                    # The scalar view is kept beside the table: it is what a reader
+                    # that only takes a number uses, and for the isotropic mounts the
+                    # recorded baselines were solved with, the two agree exactly.
+                    scalar=_scalar_from_matrix(path, slot.name, template.name, value),
+                    matrix=rows,
+                    source=str(path),
                 )
                 continue
-            if not isinstance(value, (int, float)):
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
                 raise TemplateError(
                     f"{path}: property {slot.name!r} (kind {entry.get('kind')!r}) "
                     f"has no numeric {field!r} to fill slot {slot.name!r} of "
                     f"template {template.name!r}"
                 )
-            values[slot.name] = float(value)
+            values[slot.name] = SlotValue(
+                # The entry's own kind when it names an element, the slot's name
+                # otherwise: a properties file spells a mount bushing
+                # `bushing6x6`, which is the entry's vocabulary, while the slot and
+                # the kernel speak of a `bushing` law, so the value is normalised to
+                # the slot's name rather than carrying the file's spelling on.
+                element_type=(
+                    kind if kind in _ELEMENT_SLOT_NAMES else slot_element_type(slot.name)
+                ),
+                scalar=float(value),
+                source=str(path),
+            )
         elif slot.default is not None:
-            values[slot.name] = float(slot.default)
+            values[slot.name] = SlotValue(
+                element_type=slot_element_type(slot.name), scalar=float(slot.default)
+            )
     required = set(template.role_spec.required_slots)
     missing = sorted(
         slot.name

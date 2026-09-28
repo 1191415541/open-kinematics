@@ -26,6 +26,7 @@ from .security import (
     Revision,
     UserAuthoring,
 )
+from .vehicle import vehicle_document_from, vehicle_model_from
 
 __all__ = [
     "DOCUMENT_KINDS",
@@ -56,4 +57,6 @@ __all__ = [
     "TemplateAuthoringError",
     "TemplateDocument",
     "UserAuthoring",
+    "vehicle_document_from",
+    "vehicle_model_from",
 ]
