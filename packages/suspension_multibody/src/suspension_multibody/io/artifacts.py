@@ -36,6 +36,7 @@ def write_artifact(
     failure: BaseException | None = None,
     partial: Any | None = None,
     formats: tuple[str, ...] = ("parquet", "csv"),
+    inputs: Mapping[str, Any] | None = None,
 ) -> Path:
     """
     Write one success, partial, or failed result artifact.
@@ -94,6 +95,15 @@ def write_artifact(
         _write_native_result(storage_result, destination, manifest)
     else:
         _write_generic_result(storage_result, destination, manifest)
+
+    if inputs is not None:
+        # A sidecar rather than a manifest key: an existing run's artifact stays
+        # byte-for-byte what it was, and a file-driven run says which bytes it read.
+        (destination / "inputs.json").write_text(
+            json.dumps(_jsonable(dict(inputs)), indent=2, sort_keys=True, default=str),
+            encoding="utf-8",
+        )
+        manifest["inputs_file"] = "inputs.json"
 
     manifest_path = destination / "manifest.json"
     manifest_path.write_text(

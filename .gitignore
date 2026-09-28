@@ -202,6 +202,8 @@ GEMINI.md
 !/.codex-tasks/20260927-composable-model-flow/**
 !/.codex-tasks/20260928-pad-driven-kc/
 !/.codex-tasks/20260928-pad-driven-kc/**
+!/.codex-tasks/20260928-file-driven-authoring/
+!/.codex-tasks/20260928-file-driven-authoring/**
 /artifacts/
 /packages/*/artifacts/
 /packages/*/.codex-tasks/

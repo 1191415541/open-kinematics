@@ -21,16 +21,24 @@ change this file and say so in review.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 __all__ = [
+    "ASSEMBLY_RULES",
     "AXLE_RULE",
     "ROOT_KINDS",
+    "AssemblyRule",
+    "RuleViolation",
     "RootRule",
     "RuleViolation",
     "VEHICLE_RULE",
+    "check_assembly_roles",
+    "check_assembly_shape",
+    "check_forbidden_roles",
     "check_root",
     "rule_for",
+    "rule_for_assembly",
 ]
 
 #: The two root categories the global rules distinguish.
@@ -154,3 +162,171 @@ def check_root(kind: str, roles: frozenset[str] | set[str]) -> None:
             f"assembly of kind {kind!r} is missing required role(s) "
             f"{required_missing}: {rule.reason}"
         )
+
+
+#: What a file-driven assembly must carry, per root category.
+#:
+#: The same rules the linear reads above state, written as *counts and placements*
+#: rather than as a set of roles, because a file declares which subsystem sits where
+#: and "two suspensions" is satisfied by two front axles -- which is not a vehicle.
+#: Kept here rather than in the authoring layer so there is one home for "what an
+#: assembly of this kind is": the layers that consume it differ in how they read an
+#: assembly, not in what an assembly is allowed to be.
+@dataclass(frozen=True)
+class AssemblyRule:
+    """The exact shape one assembly category must have."""
+
+    kind: str
+    #: How many subsystems each functional role carries, exactly.
+    role_counts: Mapping[str, int]
+    #: ``(functional_role, placement_role)`` that must be present.
+    required_placements: frozenset[tuple[str, str]]
+    #: Roles this category may carry, and at most how many.  An axle's steering is
+    #: optional but never doubled, which is a *ceiling* rather than a count.
+    at_most: Mapping[str, int]
+    #: Roles this category must not carry at all.
+    forbidden_roles: frozenset[str]
+    #: Whether every one of the four wheel ends must be accounted for.
+    wheels_complete: bool = False
+
+
+#: The rules, keyed by the category name a file states in ``assembly_kind``.
+ASSEMBLY_RULES: dict[str, AssemblyRule] = {
+    "suspension_axle": AssemblyRule(
+        kind="suspension_axle",
+        role_counts={"suspension": 1, "chassis": 1},
+        at_most={"steering": 1},
+        required_placements=frozenset(),
+        forbidden_roles=frozenset({"brake", "drive"}),
+    ),
+    "full_vehicle": AssemblyRule(
+        kind="full_vehicle",
+        role_counts={
+            "suspension": 2,
+            "chassis": 1,
+            "steering": 1,
+            "brake": 1,
+            "drive": 1,
+        },
+        at_most={},
+        required_placements=frozenset(
+            {("suspension", "front"), ("suspension", "rear")}
+        ),
+        forbidden_roles=frozenset(),
+        wheels_complete=True,
+    ),
+}
+
+#: The four wheel ends a full vehicle must account for.
+WHEEL_ENDS: tuple[str, ...] = ("front_left", "front_right", "rear_left", "rear_right")
+
+
+def rule_for_assembly(kind: str) -> AssemblyRule:
+    """Return the rule for a file's ``assembly_kind``, naming unknown ones."""
+    try:
+        return ASSEMBLY_RULES[kind]
+    except KeyError as exc:
+        known = ", ".join(sorted(ASSEMBLY_RULES))
+        raise RuleViolation(
+            f"unknown assembly kind {kind!r}; the known kinds are {known}"
+        ) from exc
+
+
+def check_forbidden_roles(kind: str, roles: Iterable[str]) -> None:
+    """
+    Refuse a role the category must not carry, before anything else is judged.
+
+    Asked first because "an axle has no brake" is true whatever else the file says:
+    reporting a missing chassis instead would name the wrong repair, and the role
+    that is actually forbidden would stay in the file.
+    """
+    rule = rule_for_assembly(kind)
+    forbidden = sorted(set(str(role) for role in roles) & rule.forbidden_roles)
+    if forbidden:
+        raise RuleViolation(
+            f"an assembly of kind {kind!r} forbids {forbidden}: the bench loads the "
+            "axle through wheels it supplies, and a brake or drive belongs to a vehicle"
+        )
+
+
+def check_assembly_shape(
+    kind: str, assignments: Iterable[tuple[str, str]]
+) -> None:
+    """
+    Raise unless a file-driven assembly has the shape its category fixes.
+
+    Asked after every reference has been checked against the file it names: a count
+    taken over assignments that do not match their files would report a number
+    rather than the mistake behind it.
+    """
+    rule = rule_for_assembly(kind)
+    pairs = [(str(role), str(placement)) for role, placement in assignments]
+    roles = [role for role, _placement in pairs]
+
+    for role, placement in sorted(rule.required_placements):
+        if (role, placement) not in pairs:
+            raise RuleViolation(
+                f"an assembly of kind {kind!r} requires one {placement} {role}; found "
+                f"{sorted(pairs)}"
+            )
+
+    # The rule's own order, not an alphabetical one: the first role the rule
+    # names is the first thing a missing assembly should be told about.
+    for role, expected in rule.role_counts.items():
+        found = roles.count(role)
+        if found != expected:
+            raise RuleViolation(
+                f"an assembly of kind {kind!r} requires exactly {_word(expected)} "
+                f"{role} subsystem(s), found {found}"
+            )
+
+    for role, ceiling in rule.at_most.items():
+        found = roles.count(role)
+        if found > ceiling:
+            raise RuleViolation(
+                f"an assembly of kind {kind!r} carries at most {_word(ceiling)} {role} "
+                f"subsystem(s), found {found}"
+            )
+
+    if rule.wheels_complete:
+        covered: set[str] = set()
+        for role, placement in pairs:
+            if role not in {"suspension", "wheel"}:
+                continue
+            covered.update(_covered_corners(placement))
+        missing = sorted(set(WHEEL_ENDS) - covered)
+        if missing:
+            raise RuleViolation(
+                f"an assembly of kind {kind!r} must account for all four wheel ends; "
+                f"missing {missing}"
+            )
+
+
+#: How a small count reads in a message.  Spelling it out is what makes the sentence
+#: an instruction -- "requires exactly one chassis" -- rather than a table row.
+_COUNT_WORDS: dict[int, str] = {1: "one", 2: "two", 3: "three", 4: "four"}
+
+
+def _word(count: int) -> str:
+    """Return a small count as a word, and anything larger as digits."""
+    return _COUNT_WORDS.get(count, str(count))
+
+
+def check_assembly_roles(
+    kind: str, assignments: Iterable[tuple[str, str]]
+) -> None:
+    """Refuse an assembly that breaks either the forbidden-role check or the shape."""
+    pairs = [(str(role), str(placement)) for role, placement in assignments]
+    check_forbidden_roles(kind, [role for role, _placement in pairs])
+    check_assembly_shape(kind, pairs)
+
+
+def _covered_corners(placement: str) -> set[str]:
+    """Return the wheel ends one placement accounts for."""
+    if placement == "front":
+        return {"front_left", "front_right"}
+    if placement == "rear":
+        return {"rear_left", "rear_right"}
+    if placement == "any":
+        return set(WHEEL_ENDS)
+    return {placement}

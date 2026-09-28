@@ -35,6 +35,11 @@ SCHEMA_FILES = {
     "model": "multibody_model.schema.json",
     "case": "multibody_case.schema.json",
     "result": "multibody_result.schema.json",
+    "template": "template.schema.json",
+    "element_properties": "element_properties.schema.json",
+    "subsystem": "subsystem.schema.json",
+    "assembly": "assembly.schema.json",
+    "rig": "rig.schema.json",
 }
 
 
@@ -259,3 +264,26 @@ def validate_case(document: Mapping[str, Any]) -> None:
 def validate_result(document: Mapping[str, Any]) -> None:
     """Validate a result document."""
     validate(document, "result")
+def validate_template(document: Mapping[str, Any]) -> None:
+    """Validate a declarative subsystem template document."""
+    validate(document, "template")
+
+
+def validate_element_properties(document: Mapping[str, Any]) -> None:
+    """Validate a spring, damper, or bump-stop property document."""
+    validate(document, "element_properties")
+
+
+def validate_subsystem(document: Mapping[str, Any]) -> None:
+    """Validate a subsystem instance document."""
+    validate(document, "subsystem")
+
+
+def validate_assembly(document: Mapping[str, Any]) -> None:
+    """Validate an assembly document."""
+    validate(document, "assembly")
+
+
+def validate_rig(document: Mapping[str, Any]) -> None:
+    """Validate a test-rig document."""
+    validate(document, "rig")

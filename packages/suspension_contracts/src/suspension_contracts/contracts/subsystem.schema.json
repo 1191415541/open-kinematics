@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-kinematics.dev/contracts/subsystem_v1.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["document", "schema_version", "name", "template", "functional_role", "placement_role", "hardpoints", "property_bindings"],
+  "properties": {
+    "document": {"const": "subsystem"}, "schema_version": {"const": 1}, "name": {"type": "string", "minLength": 1}, "template": {"type": "string", "minLength": 1},
+    "functional_role": {"enum": ["suspension", "steering", "wheel", "chassis", "brake", "drive"]}, "placement_role": {"enum": ["any", "front", "rear", "front_left", "front_right", "rear_left", "rear_right"]},
+    "hardpoints": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}},
+    "property_bindings": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
+    "parameters": {"type": "object"}
+  }
+}

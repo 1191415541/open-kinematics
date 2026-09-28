@@ -28,9 +28,14 @@ from .multibody import (
     parse_json,
     unpack_container,
     validate,
+    validate_assembly,
     validate_case,
+    validate_element_properties,
     validate_model,
     validate_result,
+    validate_rig,
+    validate_subsystem,
+    validate_template,
 )
 
 __all__ = [
@@ -59,7 +64,12 @@ __all__ = [
     "parse_json",
     "unpack_container",
     "validate",
+    "validate_assembly",
     "validate_case",
+    "validate_element_properties",
     "validate_model",
     "validate_result",
+    "validate_rig",
+    "validate_subsystem",
+    "validate_template",
 ]

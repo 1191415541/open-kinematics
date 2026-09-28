@@ -286,6 +286,18 @@ class Template:
     builder: str = ""
 
     @property
+    def functional_role(self) -> str:
+        """
+        The role this template implements, under the name the file format uses.
+
+        ``role`` is the field's historical name and stays readable and writable so
+        that every existing template, document and reader keeps working; the file
+        format calls it ``functional_role`` because it now sits beside
+        ``placement_role``, and the two are only confusing while they share a word.
+        """
+        return self.role
+
+    @property
     def role_spec(self) -> RoleSpec:
         """Return this template's role declaration."""
         return get_role(self.role)
@@ -420,6 +432,10 @@ def template_to_json(template: Template) -> dict[str, Any]:
     """
     return {
         "name": template.name,
+        # Both names during the migration: the file format reads
+        # ``functional_role``, and every existing reader reads ``role``.  Writing
+        # both is what makes the rename additive rather than a break.
+        "functional_role": template.role,
         "role": template.role,
         "parts": _parts_to_json(template),
         "connections": _connections_to_json(template),
@@ -472,9 +488,18 @@ def template_to_json(template: Template) -> dict[str, Any]:
 
 def template_from_json(payload: dict[str, Any]) -> Template:
     """Rebuild a template from `template_to_json` output."""
+    # The role is read under either name: ``functional_role`` is what the file
+    # format calls it and ``role`` is what every template written before the rename
+    # carries.  Resolved before the call because a ``get`` with a fallback would
+    # evaluate its default eagerly and raise on the file that only has the new name.
+    role = payload.get("functional_role")
+    if role is None:
+        role = payload.get("role")
+    if role is None:
+        raise TemplateError("a template document must state its role")
     return Template(
         name=str(payload["name"]),
-        role=str(payload["role"]),
+        role=str(role),
         parts=tuple(
             PartDefinition(
                 name=str(part["name"]),

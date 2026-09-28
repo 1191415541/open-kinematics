@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-kinematics.dev/contracts/rig_v1.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["document", "schema_version", "name", "supported_assembly_kinds", "required_ports"],
+  "properties": {
+    "document": {"const": "rig"}, "schema_version": {"const": 1}, "name": {"type": "string", "minLength": 1},
+    "supported_assembly_kinds": {"type": "array", "items": {"enum": ["suspension_axle", "full_vehicle"]}, "minItems": 1},
+    "required_ports": {"type": "array", "items": {"type": "string"}}, "optional_ports": {"type": "array", "items": {"type": "string"}},
+    "supports": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["name", "role"], "properties": {"name": {"type": "string"}, "role": {"type": "string"}, "capabilities": {"type": "array", "items": {"type": "string"}}}}},
+    "bench": {"type": "string", "minLength": 1},
+    "actuators": {"type": "array", "items": {"type": "string"}}, "measurements": {"type": "array", "items": {"type": "string"}}
+  }
+}
