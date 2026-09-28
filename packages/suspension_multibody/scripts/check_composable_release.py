@@ -69,21 +69,15 @@ FENCE = "```python runnable"
 #: tolerated violation.  The probe fails on a finding that is not listed here,
 #: and also on a listed finding that has disappeared, so the list can only shrink
 #: -- the same discipline the migration-mode registry uses.
-EXPECTED_BOUNDARY_FINDINGS: tuple[tuple[str, str], ...] = (
-    # The A1 retention, now down to its last import: ``api.py`` evaluates the
-    # force elements in Python to report component loads and bushing results.
-    # The declarations themselves are no longer here -- they moved to
-    # ``modeling/primitives/elements.py``, beside the joint and body
-    # declarations, so the authoring layer imports nothing retired.
-    # Release condition: the component-load reporting reads the native
-    # element-wrench channel instead.  That needs the KC contract to declare the
-    # springs, dampers and anti-roll bars it currently never emits (native holds
-    # no fact at all for them, so decoding today would silently drop rows the
-    # report has always carried), the fixed-body end recorded rather than left
-    # NaN, the moment reference point agreed, and the channel's default state
-    # settled.
-    ("src/suspension_multibody/api.py", "elements"),
-)
+EXPECTED_BOUNDARY_FINDINGS: tuple[tuple[str, str], ...] = ()
+#: The Python boundary findings the final mode still reports, by path and symbol.
+#:
+#: Empty: the last retention was the A1 ``elements/`` import in ``api.py``, and it
+#: is gone now that the component-load reporting decodes the native
+#: element-wrench channel instead of evaluating the element laws in Python.  The
+#: tuple stays because the discipline it encodes does -- the probe fails on a
+#: finding that is not listed here and on a listed finding that has disappeared,
+#: so the list can only shrink and a new retention cannot be added silently.
 
 #: The retired package directories the final mode must not find.
 #:
@@ -111,7 +105,6 @@ DOCUMENTED_PACKAGES: tuple[str, ...] = (
     "schema",
     "kernel",
     "vehicle",
-    "elements",
 )
 
 #: The wheels the release consists of, in build order.

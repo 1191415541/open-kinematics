@@ -83,7 +83,16 @@ def _run_gate(*arguments: str):
 
 
 def test_live_registry_is_exact_and_matches_every_finding() -> None:
-    """Migration mode: every live finding is registered and none is stale."""
+    """
+    Migration mode: every live finding is registered and none is stale.
+
+    Both sides are empty now.  The registry's last entry was the A1 `elements/`
+    import in `api.py`; `api` decodes the native element-wrench channel instead,
+    so the finding is gone and the entry with it.  The assertions keep their
+    shape rather than being dropped: ``evaluate`` still fails on an unregistered
+    finding, and ``stale_registrations`` still fails on an entry with no finding,
+    which is what makes a *new* retention impossible to add silently.
+    """
     findings = gate.scan_tree(PACKAGE_ROOT)
     registered = gate.load_registry(REGISTRY)
     live = [
@@ -95,28 +104,42 @@ def test_live_registry_is_exact_and_matches_every_finding() -> None:
         findings, mode=gate.MODE_MIGRATION, registered=registered
     ) == []
     assert gate.stale_registrations(findings, registered) == []
-    assert live, "the live tree has no registered legacy import at all"
+    assert not live, "a legacy import reappeared without being registered"
     keys = {(finding.path, finding.symbol) for finding in live}
     entries = {(str(entry["path"]), str(entry["symbol"])) for entry in registered}
     assert keys == entries
 
 
+def test_the_registry_is_empty_and_the_final_mode_passes_the_live_tree() -> None:
+    """
+    No retained legacy import is left, so both gate modes accept the live tree.
+
+    `--final` used to fail here: `api.py` imported the retired `elements` package
+    and the package was still on disk.  Both are gone.  That the gate still
+    *refuses* a legacy import and a retired package is checked against synthetic
+    trees elsewhere in this file, so accepting the real one costs no coverage.
+    """
+    assert gate.load_registry(REGISTRY) == []
+    migration = _run_gate("--check", "--package-root", str(PACKAGE_ROOT))
+    assert migration.returncode == 0, migration.stdout + migration.stderr
+    final = _run_gate("--check", "--final", "--package-root", str(PACKAGE_ROOT))
+    assert final.returncode == 0, final.stdout + final.stderr
+    assert "no unregistered Python boundary violation" in final.stdout
+
+
 def test_registry_entries_name_their_owner_and_successor() -> None:
-    registered = gate.load_registry(REGISTRY)
-    assert registered
-    for entry in registered:
+    """
+    Every registered retention names who owns it and what replaces it.
+
+    Vacuously true now that the registry is empty, and kept for exactly that
+    reason: it is the check that fires the moment a new entry is added without an
+    owner or a successor, which is the only way the list can grow again.
+    """
+    for entry in gate.load_registry(REGISTRY):
         assert entry["owner"], entry
         assert entry["successor"], entry
         assert entry["rule"].startswith("legacy_module_")
         assert entry["symbol"] in gate.LEGACY_PACKAGES
-
-
-def test_migration_mode_passes_and_final_mode_fails_on_the_live_tree() -> None:
-    migration = _run_gate("--check", "--package-root", str(PACKAGE_ROOT))
-    assert migration.returncode == 0, migration.stdout + migration.stderr
-    final = _run_gate("--check", "--final", "--package-root", str(PACKAGE_ROOT))
-    assert final.returncode == 1
-    assert "legacy package still present" in final.stdout
 
 
 def test_scanning_only_reads_the_production_tree() -> None:

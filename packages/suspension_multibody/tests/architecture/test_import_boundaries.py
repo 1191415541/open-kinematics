@@ -74,7 +74,6 @@ PUBLIC_ENTRY_POINTS = (
     "suspension_multibody.axle_dynamics",
     "suspension_multibody.cases",
     "suspension_multibody.connections",
-    "suspension_multibody.elements",
     "suspension_multibody.io",
     "suspension_multibody.joints",
     "suspension_multibody.kernel",

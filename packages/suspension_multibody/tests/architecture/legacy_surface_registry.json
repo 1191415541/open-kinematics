@@ -1,7 +1,7 @@
 {
   "version": 1,
   "mode": "migration",
-  "notes": "Exact registry for the migration mode: every production/script legacy import must appear here, and every entry must still match a live finding, so the registry can only shrink.  The final mode ignores it and refuses every legacy import and legacy package. Owners come from the epic's Python migration matrix; findings in tests are not registered because 08 deletes them with the packages.  What is left is the element construction of the authoring layer (A1) in api.py: the other four entries were retired when their callers moved to modeling/primitives and vehicle/.",
+  "notes": "Exact registry for the migration mode: every production/script legacy import must appear here, and every entry must still match a live finding, so the registry can only shrink.  The final mode ignores it and refuses every legacy import and legacy package. Owners come from the epic's Python migration matrix; findings in tests are not registered because 08 deletes them with the packages.  The registry is now empty: its last entry was the element construction of the authoring layer (A1) in api.py, retired when `api` began reading the native element-wrench channel instead of evaluating the element laws in Python.",
   "successors": {
     "core": {
       "target": "modeling/primitives/ (data objects moved down)",
@@ -24,15 +24,5 @@
       "owner": "06-authoring (signals) + 07-report (replay and metrics); the surviving entry is the A2-retained compute_static_wheel_loads"
     }
   },
-  "entry": [
-    {
-      "path": "src/suspension_multibody/api.py",
-      "scope": "production",
-      "rule": "legacy_module_import",
-      "symbol": "elements",
-      "successor": "native facts decoded by results/, then report/",
-      "owner": "05-native-facts + 07-report",
-      "occurrences": 1
-    }
-  ]
+  "entry": []
 }

@@ -168,11 +168,17 @@ class ElementWrenchRecord:
     a drive or a brake -- has NaN in ``force`` while ``moment`` holds the value.
     A pure-moment record keeps the point its row was opened with, which may be
     NaN.
+
+    ``element_index`` is the element's position within its own type's group, in
+    the order the model document lists that type.  The rows are laid out by that
+    index, so it is what ties a record back to the element that produced it: the
+    rows carry no name, and a name could not survive the ABI anyway.
     """
 
     sample: int
     type_code: int
     type_name: str
+    element_index: int
     body: int
     body_a: int
     body_b: int
@@ -236,13 +242,37 @@ def decode_element_wrench(
         )
     records: list[ElementWrenchRecord] = []
     for sample in range(values.shape[0]):
+        starts = _group_starts(values[sample])
         for row in range(values.shape[1]):
             entry = values[sample, row]
             if not np.isfinite(entry[_APPLIED_COLUMNS]).any():
                 # The element applied nothing to this body in this sample.
                 continue
-            records.append(_record(entry, sample, row, body_names))
+            records.append(_record(entry, sample, row, body_names, starts))
     return tuple(records)
+
+
+def _group_starts(sample_rows: np.ndarray) -> Mapping[int, int]:
+    """
+    Return the first row of each type code's group within one sample.
+
+    The rows are laid out group by group in code order and the type code column
+    is written for every row the sink opens -- including one nothing was applied
+    to -- so the first row carrying a code is that group's start.  Deriving it
+    from the block itself, rather than from a count the caller would have to
+    supply, is what keeps this decoder independent of the model.
+    """
+    starts: dict[int, int] = {}
+    for row in range(sample_rows.shape[0]):
+        code_value = float(sample_rows[row, TYPE_CODE_COLUMN])
+        if not np.isfinite(code_value):
+            # A row nothing opened: its identity columns are NaN too.
+            continue
+        code = int(code_value)
+        if code_value != code:
+            continue
+        starts.setdefault(code, row)
+    return starts
 
 
 def _record(
@@ -250,6 +280,7 @@ def _record(
     sample: int,
     row: int,
     body_names: Sequence[str] | None,
+    group_starts: Mapping[int, int],
 ) -> ElementWrenchRecord:
     """Build one record from a row the element applied a wrench in."""
     code_value = float(entry[TYPE_CODE_COLUMN])
@@ -260,6 +291,13 @@ def _record(
             f"element wrench row {row} of sample {sample} carries the unknown "
             f"type code {code_value!r}"
         )
+    start = group_starts.get(code)
+    if start is None:
+        raise ValueError(
+            f"element wrench row {row} of sample {sample} carries type code "
+            f"{code} but no row opened that code's group"
+        )
+    element_index = (row - start) // rows_per_element(code)
     body_a = _index(float(entry[BODY_A_COLUMN]), "body_a", sample, row)
     body_b = _index(float(entry[BODY_B_COLUMN]), "body_b", sample, row)
     body = _index(float(entry[BODY_COLUMN]), "body", sample, row)
@@ -279,6 +317,7 @@ def _record(
         sample=sample,
         type_code=code,
         type_name=name,
+        element_index=element_index,
         body=body,
         body_a=body_a,
         body_b=body_b,

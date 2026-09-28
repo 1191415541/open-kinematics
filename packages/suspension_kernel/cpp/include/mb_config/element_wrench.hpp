@@ -48,6 +48,13 @@ enum ElementWrenchType {
   kElementWrenchBumpStop = 9,
 };
 
+/// One past the highest frozen code: how many type codes the channel defines,
+/// and the extent a per-code table needs.  A code appended at the end extends
+/// every such table instead of overflowing one -- the damper/bump-stop split did
+/// exactly that to the sink's `group_`, which is why this is a name rather than
+/// a literal.
+inline constexpr int kElementWrenchCodeCount = kElementWrenchBumpStop + 1;
+
 /// The element counts a sample's rows are laid out from.  They are the counts
 /// of the model the solver runs, so the ABI (which sizes the block) and the
 /// observer (which addresses a row) derive the same shape from the same
@@ -64,12 +71,12 @@ struct ElementWrenchCounts {
   std::size_t drags = 0;
 };
 
-/// Records per sample: two per spring, bushing, anti-roll bar and steering
-/// actuator (one per end), one per tire for its contact wrench, four per tire
-/// for its drive/brake torques (drive, its reaction, brake, its reaction), and
-/// one per body plus one per aerodynamic drag for the external sources.  A
-/// body's row carries its declared wrench and its gravity; a drag's row carries
-/// the drag force at its application point.
+/// Records per sample: two per spring, damper, bump stop, bushing, anti-roll
+/// bar and steering actuator (one per end), one per tire for its contact
+/// wrench, four per tire for its drive/brake torques (drive, its reaction,
+/// brake, its reaction), and one per body plus one per aerodynamic drag for
+/// the external sources.  A body's row carries its declared wrench and its
+/// gravity; a drag's row carries the drag force at its application point.
 std::size_t element_wrench_record_count(const ElementWrenchCounts& counts);
 
 /// The process-wide recorder.  It is a single object because the row layout and
@@ -167,7 +174,7 @@ class ElementWrenchSink {
     double* block_ = nullptr;
     std::size_t record_count_ = 0;
     /// First row of each type's group within a sample, indexed by type code.
-    std::size_t group_[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    std::size_t group_[kElementWrenchCodeCount] = {};
     /// This sample's first row, and the row currently selected.  Both null when
     /// no window is open, which is what makes a physics pass silent.
     double* rows_ = nullptr;

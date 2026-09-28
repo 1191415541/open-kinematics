@@ -53,7 +53,7 @@ src/suspension_multibody/
   cases/           各族契约文档的作者层。
   preparation/     域输入适配（assembly/、axle_dynamic.py、vehicle_dynamic.py 等）。
   vehicle/         整车级服务与派生量（service.py、static_loads.py、roll_centers.py）。
-  elements/        A1 保留：仅剩 evaluate_generalized_forces（Python 侧力元求值）。
+```
 ```
 
 `modeling/` 不得反向依赖 `templates`、`subsystems`、`rigs`、`connections`、
@@ -78,22 +78,34 @@ src/suspension_multibody/
 机制代码留在同层的 `subsystems/vehicle_parts.py`，
 元素构造在 `subsystems/element_build.py`，硬点与镜像在 `subsystems/geometry.py`。
 
-### 仍保留 elements/ 的理由
+### elements/ 已退役
 
-它现在只剩一个函数 `evaluate_generalized_forces`，被 `api.py` 用来重算组件载荷与
-衬套结果——而同一批力元 native 已经算过。当前 import 点、阻断原因与解除条件如下；
-`legacy_surface_gate.py --final` 的对应发现已登记，
-`scripts/check_composable_release.py` 会核对登记表与实测发现一致，新增或消失都会
-失败。
+原 A1 保留项，只剩一个 `evaluate_generalized_forces`，被 `api.py` 用来重算组件载荷
+——而同一批力元 native 已经算过。它现在已删除，`api.py` 的组件载荷改由
+`results/element_wrench.py::decode_element_wrench` 解码内核自己的 `element_wrench`
+事实通道，`results/kc_state.py::element_wrenches_from_run` 把记录还原成
+`(元素名, 受力体, 全局力旋量, 体局部力旋量)`。
 
-| 保留项 | 现役 import 点 | 阻断原因 | 解除条件 |
-|---|---|---|---|
-| `elements/`（A1） | `api.py`（`evaluate_generalized_forces`） | 三条，第一条最重：① KC 契约只发出 bushing（`contract.py:190-192`，且仅 C 模式）与 tire（`_tire_entries`），**弹簧、减振器、横向稳定杆从不发出**，native 对它们没有任何事实——实测同一根轴上 K 模式 `api.py` 报 7 个力元而 native 只收到 2 个、C 模式报 17 个只收到 12 个，两种模式都缺同样 5 个；② 固定体端那一行被 `cpp/src/element/assembly_primitives.cpp:16` 的早退留在 NaN；③ 力矩参考点两侧不一致（native 对受力体原点，Python 对世界原点） | KC 契约扩出弹簧/减振器/稳定杆声明（K 模式为规定运动，声明力元不得进入残差）+ 固定端开始记录 + 力矩参考点口径对齐 + 通道默认状态（契约版本）确认后，`api.py` 改走 `results/element_wrench.py` 解码，本包随之删除 |
+退役时逐条结清的三件事：
 
-力元件的**声明**已经不在这里了：`LinearSpringElement` 等八个类连同
+1. **契约发不出力元。** 现在是 `contract.py::_element_entries` 发射
+   spring/damper/bump_stop/anti_roll/bushing，通道因此有事实可记。
+2. **固定体端留在 NaN。** `cpp/src/element/assembly_primitives.cpp` 现在把固定端也写进
+   sink：底盘与台架支座上的反力是求解器手里真实握有的事实，报告此前把它丢了。
+3. **力矩参考点口径。** native 的力矩绕**受力体原点**，报告模型的 `global_load` 绕
+   **世界原点**；换算 `world_moment = body_moment + r × F` 写在
+   `results/kc_state.py::element_wrenches_from_run` 里，两个口径因此不再互相冒充。
+
+通道默认仍是关闭的（`SUSPENSION_KERNEL_ELEMENT_WRENCH_OUTPUT`），KC 生产路径在
+`api.py::_compile_plan_run` 里围绕一次提交局部开启，所以不经这条路径的求解不付这个代价，
+原生结果文档在其默认配置下仍是 `contract_version` 1。
+
+同时删掉的还有 `tests/elements/`：它测的是 `modeling/primitives` 的元件类，已迁至
+`tests/modeling/test_elements.py`。
+
+力元件的**声明**此前就已不在那里：`LinearSpringElement` 等八个类连同
 `ForceEvaluation`、`ElementError` 迁至 `modeling/primitives/elements.py`，与关节和
-刚体声明并列，所以作者层（`preparation/`）不再 import 任何退役包。留在本包的只有
-Python 侧求值这一件事。
+刚体声明并列。
 
 原 `analysis/`（A2）已不再是保留项。它的两个构造都是整车级派生量而不是内核求解：
 静力轮荷是四个未知量对三个平衡方程的最小范数解，native 静力求解器只分解方阵，

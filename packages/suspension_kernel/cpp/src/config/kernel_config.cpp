@@ -404,6 +404,9 @@ std::size_t element_wrench_rows_per_element(int type) {
 
     case kElementWrenchSteering:
 
+    case kElementWrenchDamper:
+
+    case kElementWrenchBumpStop:
         return 2;
 
     case kElementWrenchDriveBrake:
@@ -456,7 +459,7 @@ std::size_t element_wrench_element_count(
 
 bool element_wrench_type_known(int type) {
 
-    return type >= kElementWrenchSpring && type <= kElementWrenchExternal;
+    return type >= kElementWrenchSpring && type < kElementWrenchCodeCount;
 
 }
 
@@ -479,7 +482,7 @@ std::size_t element_wrench_record_count(const ElementWrenchCounts& counts) {
 
     std::size_t total = 0;
 
-    for (int type = kElementWrenchSpring; type <= kElementWrenchExternal; ++type) {
+    for (int type = kElementWrenchSpring; type < kElementWrenchCodeCount; ++type) {
 
         total += element_wrench_rows_per_element(type)
             * element_wrench_element_count(type, counts);
@@ -509,7 +512,7 @@ void ElementWrenchSink::begin_sample(
 
     std::size_t offset = 0;
 
-    for (int type = kElementWrenchSpring; type <= kElementWrenchExternal; ++type) {
+    for (int type = kElementWrenchSpring; type < kElementWrenchCodeCount; ++type) {
 
         group_[type] = offset;
 

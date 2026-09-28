@@ -22,11 +22,12 @@ Two conventions are worth stating because the takeover moved them:
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, timezone
 from itertools import product
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable, Literal, Mapping
 
 import numpy as np
 from suspension_contracts import pack_container
@@ -39,7 +40,6 @@ from .cases.kc_quasi_static.contract import (
     time_document,
 )
 from .cases.kc_quasi_static.convert import MM
-from .elements import evaluate_generalized_forces
 from .io import CheckpointStore, canonical_hash, write_artifact
 from .kernel.solver import solver_settings_document
 from .modeling.primitives.elements import BushingElement
@@ -47,7 +47,6 @@ from .modeling.primitives.joints import RigidBodyState
 from .modeling.primitives.spatial import (
     SE3,
     quaternion_to_rotation_vector,
-    wrench_global_to_local,
 )
 from .preparation.signals import loads_at_time, motion, time_grid, wrenches_at_time
 from .report.compliance import secant_compliance
@@ -99,9 +98,20 @@ _RIGHT_MARKER = "wheel_center_R"
 
 
 def run_case(
-    model: FrontAxleModel, case: CaseSpec, output_dir: str | Path | None = None
+    model: FrontAxleModel,
+    case: CaseSpec,
+    output_dir: str | Path | None = None,
+    *,
+    inputs: Mapping[str, Any] | None = None,
 ) -> ResultBundle:
-    """Run one validated model/case and optionally write result files."""
+    """
+    Run one validated model/case and optionally write result files.
+
+    ``inputs`` carries the hashes of the files a file-driven run read, and is
+    written beside the result when an output directory is given.  It is optional
+    because a model authored in Python read no documents: recording an empty set of
+    inputs would be a claim, and not recording one is the truth.
+    """
     assembly = _kc_assembly(model, case.mode, case.subsystems)
     model_hash = canonical_hash(model.model_dump(mode="json"))
     case_hash = canonical_hash(case.model_dump(mode="json"))
@@ -137,7 +147,7 @@ def run_case(
         diagnostics=tuple(),
     )
     if output_dir is not None:
-        write_artifact(bundle, output_dir, model=model, case=case)
+        write_artifact(bundle, output_dir, model=model, case=case, inputs=inputs)
     return bundle
 
 
@@ -627,7 +637,22 @@ def _compile_plan_run(
         layout={"document_order": ["model", "case"], "payload_order": ["model", "case"]},
         metadata=metadata,
     )
-    return run_compiled(compiled).raw
+    from .results.element_wrench import ELEMENT_WRENCH_SWITCH
+
+    # The component table is decoded from the kernel's own facts, so this run
+    # asks for them.  The switch is set around the call rather than exported as a
+    # process default: the channel is a *fact* surface this reporting path needs,
+    # not something every solve should pay for, and a run that does not ask for it
+    # leaves the result document at its original contract version.
+    previous = os.environ.get(ELEMENT_WRENCH_SWITCH)
+    os.environ[ELEMENT_WRENCH_SWITCH] = "1"
+    try:
+        return run_compiled(compiled).raw
+    finally:
+        if previous is None:
+            os.environ.pop(ELEMENT_WRENCH_SWITCH, None)
+        else:
+            os.environ[ELEMENT_WRENCH_SWITCH] = previous
 
 
 def _run_k(
@@ -677,7 +702,9 @@ def _run_k(
                 diagnostics=_convergence_note(state_id),
             )
         )
-        loads, bushings_found = _collect_element_results(assembly, physical, state_id)
+        loads, bushings_found = _collect_element_results(
+            run, assembly, physical, state_id, index
+        )
         component_loads.extend(loads)
         bushings.extend(bushings_found)
         _checkpoint(checkpoint, state_id, *hashes)
@@ -780,7 +807,9 @@ def _run_c(
                 diagnostics=_convergence_note(state_id),
             )
         )
-        found, bushings_found = _collect_element_results(assembly, physical, state_id)
+        found, bushings_found = _collect_element_results(
+            run, assembly, physical, state_id, index
+        )
         component_loads.extend(found)
         bushings.extend(bushings_found)
         _checkpoint(checkpoint, state_id, *hashes)
@@ -974,47 +1003,58 @@ def _checkpoint(
 
 
 def _collect_element_results(
-    assembly: SubsystemRuntime, state: RigidBodyState, state_id: str
+    run: Any,
+    assembly: SubsystemRuntime,
+    state: RigidBodyState,
+    state_id: str,
+    case_index: int,
 ) -> tuple[tuple[ComponentLoad, ...], tuple[BushingResult, ...]]:
-    loads: list[ComponentLoad] = []
-    bushings: list[BushingResult] = []
-    _force, evaluations = evaluate_generalized_forces(
-        state,
-        assembly.elements,
-        body_order=tuple(
-            name for name, body in state.bodies.items() if not body.fixed
-        ),
-    )
-    for evaluation in evaluations:
-        for body, global_array in evaluation.body_wrenches_global.items():
-            local_array = wrench_global_to_local(state.pose(body), global_array)
-            loads.append(
-                ComponentLoad(
-                    state_id=state_id,
-                    component=evaluation.name,
-                    endpoint=body,
-                    global_load=_six_vector(global_array),
-                    local_load=_six_vector(local_array),
-                )
-            )
-    for element in assembly.elements:
-        if not isinstance(element, BushingElement):
-            continue
-        deformation = element.deformation(state)
-        bushings.append(
-            BushingResult(
-                state_id=state_id,
-                bushing=element.name,
-                deformation=_six_vector(deformation),
-                load=_six_vector(-element.stiffness @ deformation + element.preload),
-                strain_energy=0.5
-                * float(deformation @ element.stiffness @ deformation),
-                stiffness_id=element.name,
-                zero_load_pose=_schema_pose(element.local_pose_a),
-            )
-        )
-    return tuple(loads), tuple(bushings)
+    """
+    Report one case's element loads and bushing deformations.
 
+    The loads are the kernel's own, decoded from the native ``element_wrench``
+    channel -- the wrenches the solve applied, rather than a second evaluation of
+    each element law in Python.  That is what makes the component table agree
+    with the solve by construction, and it is also why a reaction on a *fixed*
+    body (a chassis or bench mount) is now reported: the solve had that fact in
+    hand and left it in the channel, where before only the movable end was read.
+
+    The bushing deformation stays the element's own `deformation` method: it is a
+    read of the state against the mount's declared pose, not a solve result the
+    kernel answered differently, and it is the same record the reporting model has
+    always carried.
+    """
+    from .results.kc_state import element_wrenches_from_run
+
+    loads = tuple(
+        ComponentLoad(
+            state_id=state_id,
+            component=name,
+            endpoint=body,
+            global_load=_six_vector(global_wrench),
+            local_load=_six_vector(local_wrench),
+        )
+        for name, body, global_wrench, local_wrench in element_wrenches_from_run(
+            run, case_index
+        )
+    )
+    bushings = tuple(
+        BushingResult(
+            state_id=state_id,
+            bushing=element.name,
+            deformation=_six_vector(element.deformation(state)),
+            load=_six_vector(
+                -element.stiffness @ element.deformation(state) + element.preload
+            ),
+            strain_energy=0.5
+            * float(element.deformation(state) @ element.stiffness @ element.deformation(state)),
+            stiffness_id=element.name,
+            zero_load_pose=_schema_pose(element.local_pose_a),
+        )
+        for element in assembly.elements
+        if isinstance(element, BushingElement)
+    )
+    return loads, bushings
 
 def _matrix(values: np.ndarray) -> tuple[tuple[float, ...], ...]:
     return tuple(tuple(float(value) for value in row) for row in values)

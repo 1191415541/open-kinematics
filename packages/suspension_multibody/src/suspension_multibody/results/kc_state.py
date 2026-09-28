@@ -24,13 +24,17 @@ what the kernel reported.
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import Any, Mapping
 
 import numpy as np
 
+from ..modeling.primitives.spatial import quaternion_to_matrix
+
 __all__ = [
     "MM",
     "body_state_vector",
+    "element_wrenches_from_run",
     "pad_contact_from_run",
     "rigid_state_from_row",
     "tire_compression_from_run",
@@ -231,3 +235,129 @@ def _rotate(vector: np.ndarray, quaternion: np.ndarray) -> np.ndarray:
         dtype=float,
     )
     return rotation @ vector
+
+
+def element_wrenches_from_run(
+    run: Any, case_index: int = 0
+) -> tuple[tuple[str, str, np.ndarray, np.ndarray], ...]:
+    """
+    Return one case's element wrenches as the kernel itself applied them.
+
+    Each row is ``(element name, body name, global wrench, local wrench)``, both
+    wrenches ``(force N, moment N*mm)``.  The facts come from the native
+    ``element_wrench`` channel, so they are the wrenches the solve used rather
+    than a second evaluation of the same laws in Python -- and an element that
+    applied its wrench to a *fixed* body is reported too, because the reaction on
+    a chassis or bench mount is a fact the solve had in hand.
+
+    Two reference points are in play and they are deliberately different, so the
+    conversion between them is written here rather than left implicit:
+
+    * native reports the moment about the **receiving body's origin**.  That is
+      the physically meaningful one and it is what the local frame uses, since a
+      body's own frame starts at its origin;
+    * the reporting model's ``global_load`` is stated about the **world origin**,
+      which is what it has always been.  ``world_moment = body_moment + r x F``
+      is the conversion, and it is skipped only when the body sits at the world
+      origin.
+
+    The channel carries no element name -- a name could not survive the ABI -- so
+    the name is recovered from the model document: the rows are laid out by
+    element index within each type's group, in the order the document lists that
+    type.  A record whose index names no declared element is skipped rather than
+    guessed at.
+
+    Only the case's last sample is read.  One state is reported per case and it
+    is the case's final sample; a case that holds one equilibrium across its
+    samples would otherwise contribute the same rows once per sample.
+    """
+    from .element_wrench import decode_element_wrench
+
+    declared = _declared_element_names(run)
+    entry = run.cases[case_index]
+    last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
+    rows: list[tuple[str, str, np.ndarray, np.ndarray]] = []
+    for record in decode_element_wrench(run, body_names=run.body_names):
+        if record.sample != last:
+            continue
+        names = declared.get(record.type_code, ())
+        if record.element_index >= len(names):
+            continue
+        body = run.body_names[record.body]
+        force = np.asarray(record.force, dtype=float)
+        body_moment = np.asarray(record.moment, dtype=float) * MM
+        row = np.asarray(run.body_state(body), dtype=float)[record.sample]
+        origin = np.asarray(row[0:3], dtype=float) * MM
+        rows.append(
+            (
+                names[record.element_index],
+                body,
+                np.concatenate((force, body_moment + np.cross(origin, force))),
+                _in_body_frame(row, force, body_moment),
+            )
+        )
+    return tuple(rows)
+
+
+#: The channel's type code for each declared element type, and the document key
+#: the names live under.  A tire is declared in the document's own ``tires`` list
+#: rather than in ``elements``; steering actuators, drive/brake torques and
+#: external sources are not declared elements at all, which is why they have no
+#: entry and their records are skipped.  An anti-roll bar is emitted as a
+#: bushing, so code 2 already covers it.
+_CHANNEL_DOCUMENT_TYPES: Mapping[int, tuple[str, str]] = MappingProxyType(
+    {
+        1: ("elements", "spring"),
+        2: ("elements", "bushing"),
+        6: ("tires", ""),
+        8: ("elements", "damper"),
+        9: ("elements", "bump_stop"),
+    }
+)
+
+
+def _declared_element_names(run: Any) -> Mapping[int, tuple[str, ...]]:
+    """
+    Return the declared element names per channel type code, in document order.
+
+    The order is the contract: the channel's rows within a type's group run in
+    the order the document lists that type, so the index a record carries is a
+    position in exactly this tuple.
+    """
+    document = getattr(run, "model_document", None) or {}
+    by_code: dict[int, tuple[str, ...]] = {}
+    for code, (key, wanted) in _CHANNEL_DOCUMENT_TYPES.items():
+        entries = document.get(key, ()) or ()
+        by_code[code] = tuple(
+            str(entry["name"])
+            for entry in entries
+            if isinstance(entry, Mapping)
+            and "name" in entry
+            and (wanted == "" or str(entry.get("type", "")) == wanted)
+        )
+    return MappingProxyType(by_code)
+
+
+def _in_body_frame(
+    row: np.ndarray, force: np.ndarray, body_moment: np.ndarray
+) -> np.ndarray:
+    """
+    Express a wrench in one body's own frame, from that body's solved state row.
+
+    ``body_moment`` is native's, about that body's origin, so the transform is
+    the rotation alone: both the force and the moment are world vectors that the
+    body's rotation carries into the body frame.  A moment about the *world*
+    origin would need the lever arm subtracted first, which is exactly the
+    conversion `element_wrenches_from_run` performs for the other reference
+    point -- keeping the two apart is what stops a factor of ``r x F`` from being
+    applied twice or not at all.
+    """
+    rotation = np.asarray(
+        quaternion_to_matrix(np.asarray(row[3:7], dtype=float))
+    )
+    return np.concatenate(
+        (
+            rotation.T @ np.asarray(force, dtype=float),
+            rotation.T @ np.asarray(body_moment, dtype=float),
+        )
+    )
