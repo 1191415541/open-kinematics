@@ -522,22 +522,31 @@ def _add_wheel(
         points[(mount_body, "mount")] = mount_point.copy()
     else:
         mount_point = center
-    spin_joint = RevoluteJoint(
-        mount_body,
-        mount_point,
-        bodies[mount_body].pose.rotation.T @ wheel.spin_axis.as_array(),
-        wheel.body,
-        center_local,
-        wheel.spin_axis.as_array(),
-        name=f"{prefix}wheel_spin_{wheel.name}",
-    )
-    constraints.append(spin_joint)
+    if "wheel_hub" in mount_body:
+        joint: Constraint = WeldJoint(
+            mount_body,
+            mount_point,
+            wheel.body,
+            center_local,
+            name=f"{prefix}wheel_mount_{wheel.name}",
+        )
+    else:
+        joint = RevoluteJoint(
+            mount_body,
+            mount_point,
+            bodies[mount_body].pose.rotation.T @ wheel.spin_axis.as_array(),
+            wheel.body,
+            center_local,
+            wheel.spin_axis.as_array(),
+            name=f"{prefix}wheel_spin_{wheel.name}",
+        )
+    constraints.append(joint)
     wheel_body_names[wheel.name] = wheel.body
     wheel_rotations_local[wheel.name] = np.eye(3)
     wheel_centers[wheel.name] = (upright, center.copy())
     connections.append(
         Connection(
-            name=spin_joint.name,
+            name=joint.name,
             kind="ideal",
             body_a=mount_body,
             body_b=wheel.body,

@@ -95,13 +95,16 @@ def tires(context: SubsystemContext, side: Side) -> list[ResolvedElement]:
     function only decides what exists and where.
     """
     mount = _wheel_mount(context, side)
-    local_center = context.local(mount.owner, context.mirror(side, mount.role))
+    owner = mount.owner
+    if owner not in context.bodies and f"upright_{side}" in context.bodies:
+        owner = f"upright_{side}"
+    local_center = context.local(owner, context.mirror(side, mount.role))
     return [
         ResolvedElement(
             kind="tire",
             name=f"tire_{side}",
             spec=spec,
-            body_a=mount.owner,
+            body_a=owner,
             point_a=local_center,
         )
         for spec in context.model.tires

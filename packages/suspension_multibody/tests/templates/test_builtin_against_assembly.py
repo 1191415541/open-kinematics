@@ -12,7 +12,6 @@ from suspension_multibody.modeling.primitives import (
     BallJoint,
     PrismaticJoint,
     RevoluteJoint,
-    WeldJoint,
 )
 from suspension_multibody.subsystems.entry import compose_axle
 from suspension_multibody.templates import DOUBLE_WISHBONE
@@ -33,11 +32,11 @@ def test_the_assembly_still_produces_the_frozen_counts() -> None:
     """
     k = _assembly("K")
     c = _assembly("C")
-    assert len(k.constraints) == 13
-    assert len(k.ideal_constraints) == 13
+    assert len(k.constraints) == 16
+    assert len(k.ideal_constraints) == 16
     assert len(k.bushings) == 0
-    assert len(c.constraints) == 9
-    assert len(c.ideal_constraints) == 17
+    assert len(c.constraints) == 12
+    assert len(c.ideal_constraints) == 20
     assert len(c.bushings) == 8
 
 
@@ -133,19 +132,23 @@ def test_the_rack_guide_is_a_joint_in_both_modes() -> None:
         assert isinstance(guide, expected)
 
 
-def test_a_rack_fixed_to_chassis_model_welds_instead_of_guiding() -> None:
-    """The other branch of the rack attachment, unchanged by the template."""
-    model = benchmark_model().model_copy(update={"rack_fixed_to_chassis": True})
-    assembly = compose_axle(model, "K")
-    names = {constraint.name for constraint in assembly.ideal_constraints}
-    assert "rack_fixed_to_chassis" in names
-    assert "rack_guide" not in names
-    welded = next(
-        constraint
-        for constraint in assembly.ideal_constraints
-        if constraint.name == "rack_fixed_to_chassis"
+def test_suspension_without_steering_connects_tie_rods_to_ground() -> None:
+    """When an assembly has only suspension, tie rods directly connect to ground/chassis."""
+    from suspension_multibody.subsystems.types import AssemblyRequest
+
+    assembly = compose_axle(
+        benchmark_model(),
+        request=AssemblyRequest(
+            mode="K", subsystems=frozenset({"suspension", "wheel", "chassis"})
+        ),
     )
-    assert isinstance(welded, WeldJoint)
+    names = {constraint.name for constraint in assembly.ideal_constraints}
+    assert "rack_guide" not in names
+    assert "rack_tie_joint_L" in names
+    assert "rack_tie_joint_R" in names
+    tie_joint = next(c for c in assembly.constraints if c.name == "rack_tie_joint_L")
+    assert tie_joint.body_a == "chassis"
+    assert tie_joint.body_b == "tie_rod_L"
 
 
 def test_the_template_declares_the_arms_inboard_points_as_the_kc_choice() -> None:

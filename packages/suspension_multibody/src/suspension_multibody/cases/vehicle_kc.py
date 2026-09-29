@@ -88,14 +88,28 @@ def driven_joints(
             raise ValueError(f"the assembly has no {label!r} point on {body!r}") from error
 
     for corner in corners:
-        add(
-            f"wheel_drive_{corner.name}",
-            corner.body,
-            point(corner.body, "wheel_center"),
-            (0.0, 0.0, 1.0),
-        )
+        body, center_local = _driven_wheel_centre(assembly, corner, point)
+        add(f"wheel_drive_{corner.name}", body, center_local, (0.0, 0.0, 1.0))
     add("rack_drive", rack_body, point(rack_body, "center"), (0.0, 1.0, 0.0))
     return joints
+
+
+def _driven_wheel_centre(assembly, corner: VehicleKcCorner, point):
+    """
+    Return the body one corner's wheel-centre drive acts through, and its centre.
+
+    The centre belongs to whichever body *declares* it: `方式 A` gives the wheel a hub
+    of its own, so the driven point is the hub's, while a topology that hangs the wheel
+    straight on the upright leaves it there.  The vehicle build states both already --
+    `wheel_centers` holds every wheel's centre on the body that carries it -- so the
+    drive reads them from there rather than from the upright's name: a corner names a
+    *wheel*, not the part that happens to carry it.
+    """
+    centers = getattr(assembly, "wheel_centers", {})
+    if corner.name in centers:
+        body, center = centers[corner.name]
+        return body, np.asarray(center, dtype=float)
+    return corner.body, point(corner.body, "wheel_center")
 
 
 def model_document(

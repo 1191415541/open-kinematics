@@ -35,6 +35,7 @@ from ..modeling.primitives.spatial import (
 from ..schema import Bushing6x6, FrontAxleModel, MassSpec, Pose, Vec3
 from ..simulation import SimulationRequest, run_request
 from ..subsystems.geometry import side_hardpoints
+from ..subsystems.runtime import wheel_centre_local
 from .adapter import SmokeResult, Tolerance
 from .probe import AdamsProfile, _adams_environment, producer_id
 from .reference import _KC_SETTINGS, _KC_TIMES_S, _side_fields
@@ -205,7 +206,7 @@ def _assembling_pose(model, side: str):
 def _wheel_center_world(assembly, side: str, position_m, quaternion):
     """World position of the wheel-centre marker for one side (metres)."""
     rotation = quaternion_to_rotation(quaternion)
-    local = np.asarray(assembly.point(f"upright_{side}", "wheel_center"), dtype=float) * MM
+    local = np.asarray(wheel_centre_local(assembly, f"upright_{side}"), dtype=float) * MM
     return np.asarray(position_m, dtype=float) + rotation @ local
 
 

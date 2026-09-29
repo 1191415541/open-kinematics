@@ -1,16 +1,19 @@
 {
   "C_rack_fixed_false": {
     "bodies": [
-      "chassis",
-      "rack",
       "upper_arm_L",
       "lower_arm_L",
       "upright_L",
       "tie_rod_L",
+      "wheel_hub_L",
       "upper_arm_R",
       "lower_arm_R",
       "upright_R",
-      "tie_rod_R"
+      "tie_rod_R",
+      "wheel_hub_R",
+      "ground",
+      "rack",
+      "rack_housing"
     ],
     "bushings": [
       "uca_bushing_L_inner_front",
@@ -24,7 +27,7 @@
     ],
     "connections": [
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_L",
         "kind": "bushing",
         "name": "uca_mount_L_inner_front",
@@ -32,7 +35,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_L",
         "kind": "bushing",
         "name": "uca_mount_L_inner_rear",
@@ -40,7 +43,7 @@
         "point_b": "inner_rear"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_L",
         "kind": "bushing",
         "name": "lca_mount_L_inner_front",
@@ -48,7 +51,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_L",
         "kind": "bushing",
         "name": "lca_mount_L_inner_rear",
@@ -88,7 +91,15 @@
         "point_b": "tie_outer"
       },
       {
-        "body_a": "chassis",
+        "body_a": "upright_L",
+        "body_b": "wheel_hub_L",
+        "kind": "ideal",
+        "name": "wheel_spin_joint_L",
+        "point_a": "spindle",
+        "point_b": "center"
+      },
+      {
+        "body_a": "ground",
         "body_b": "upper_arm_R",
         "kind": "bushing",
         "name": "uca_mount_R_inner_front",
@@ -96,7 +107,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_R",
         "kind": "bushing",
         "name": "uca_mount_R_inner_rear",
@@ -104,7 +115,7 @@
         "point_b": "inner_rear"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_R",
         "kind": "bushing",
         "name": "lca_mount_R_inner_front",
@@ -112,7 +123,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_R",
         "kind": "bushing",
         "name": "lca_mount_R_inner_rear",
@@ -150,6 +161,14 @@
         "name": "tie_upright_joint_R",
         "point_a": "outer",
         "point_b": "tie_outer"
+      },
+      {
+        "body_a": "upright_R",
+        "body_b": "wheel_hub_R",
+        "kind": "ideal",
+        "name": "wheel_spin_joint_R",
+        "point_a": "spindle",
+        "point_b": "center"
       }
     ],
     "constraints": [
@@ -170,6 +189,10 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_L",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "upper_arm_R_outer_joint",
         "type": "BallJoint"
       },
@@ -186,8 +209,16 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_R",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "rack_guide",
         "type": "PrismaticJoint"
+      },
+      {
+        "name": "housing_mount",
+        "type": "WeldJoint"
       }
     ],
     "elements": [
@@ -391,6 +422,10 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_L",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "uca_mount_R_inner_front",
         "type": "BallJoint"
       },
@@ -423,53 +458,61 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_R",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "rack_guide",
         "type": "PrismaticJoint"
+      },
+      {
+        "name": "housing_mount",
+        "type": "WeldJoint"
       }
     ],
     "mode": "C",
     "points": {
-      "chassis::lca_L_inner_front": [
+      "ground::lca_L_inner_front": [
         -120.0,
         -500.0,
         150.0
       ],
-      "chassis::lca_L_inner_rear": [
+      "ground::lca_L_inner_rear": [
         120.0,
         -500.0,
         150.0
       ],
-      "chassis::lca_R_inner_front": [
+      "ground::lca_R_inner_front": [
         -120.0,
         500.0,
         150.0
       ],
-      "chassis::lca_R_inner_rear": [
+      "ground::lca_R_inner_rear": [
         120.0,
         500.0,
         150.0
       ],
-      "chassis::rack_center": [
+      "ground::rack_center": [
         0.0,
         0.0,
         250.0
       ],
-      "chassis::uca_L_inner_front": [
+      "ground::uca_L_inner_front": [
         -100.0,
         -500.0,
         400.0
       ],
-      "chassis::uca_L_inner_rear": [
+      "ground::uca_L_inner_rear": [
         100.0,
         -500.0,
         400.0
       ],
-      "chassis::uca_R_inner_front": [
+      "ground::uca_R_inner_front": [
         -100.0,
         500.0,
         400.0
       ],
-      "chassis::uca_R_inner_rear": [
+      "ground::uca_R_inner_rear": [
         100.0,
         500.0,
         400.0
@@ -574,6 +617,11 @@
         -700.0,
         150.0
       ],
+      "upright_L::spindle": [
+        0.0,
+        -700.0,
+        300.0
+      ],
       "upright_L::tie_outer": [
         50.0,
         -700.0,
@@ -584,15 +632,15 @@
         -700.0,
         450.0
       ],
-      "upright_L::wheel_center": [
-        0.0,
-        -700.0,
-        300.0
-      ],
       "upright_R::lower_arm_R_outer": [
         0.0,
         700.0,
         150.0
+      ],
+      "upright_R::spindle": [
+        0.0,
+        700.0,
+        300.0
       ],
       "upright_R::tie_outer": [
         50.0,
@@ -604,7 +652,22 @@
         700.0,
         450.0
       ],
-      "upright_R::wheel_center": [
+      "wheel_hub_L::center": [
+        0.0,
+        -700.0,
+        300.0
+      ],
+      "wheel_hub_L::wheel_center": [
+        0.0,
+        -700.0,
+        300.0
+      ],
+      "wheel_hub_R::center": [
+        0.0,
+        700.0,
+        300.0
+      ],
+      "wheel_hub_R::wheel_center": [
         0.0,
         700.0,
         300.0
@@ -614,16 +677,19 @@
   },
   "C_rack_fixed_true": {
     "bodies": [
-      "chassis",
-      "rack",
       "upper_arm_L",
       "lower_arm_L",
       "upright_L",
       "tie_rod_L",
+      "wheel_hub_L",
       "upper_arm_R",
       "lower_arm_R",
       "upright_R",
-      "tie_rod_R"
+      "tie_rod_R",
+      "wheel_hub_R",
+      "ground",
+      "rack",
+      "rack_housing"
     ],
     "bushings": [
       "uca_bushing_L_inner_front",
@@ -637,7 +703,7 @@
     ],
     "connections": [
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_L",
         "kind": "bushing",
         "name": "uca_mount_L_inner_front",
@@ -645,7 +711,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_L",
         "kind": "bushing",
         "name": "uca_mount_L_inner_rear",
@@ -653,7 +719,7 @@
         "point_b": "inner_rear"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_L",
         "kind": "bushing",
         "name": "lca_mount_L_inner_front",
@@ -661,7 +727,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_L",
         "kind": "bushing",
         "name": "lca_mount_L_inner_rear",
@@ -701,7 +767,15 @@
         "point_b": "tie_outer"
       },
       {
-        "body_a": "chassis",
+        "body_a": "upright_L",
+        "body_b": "wheel_hub_L",
+        "kind": "ideal",
+        "name": "wheel_spin_joint_L",
+        "point_a": "spindle",
+        "point_b": "center"
+      },
+      {
+        "body_a": "ground",
         "body_b": "upper_arm_R",
         "kind": "bushing",
         "name": "uca_mount_R_inner_front",
@@ -709,7 +783,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_R",
         "kind": "bushing",
         "name": "uca_mount_R_inner_rear",
@@ -717,7 +791,7 @@
         "point_b": "inner_rear"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_R",
         "kind": "bushing",
         "name": "lca_mount_R_inner_front",
@@ -725,7 +799,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_R",
         "kind": "bushing",
         "name": "lca_mount_R_inner_rear",
@@ -763,6 +837,14 @@
         "name": "tie_upright_joint_R",
         "point_a": "outer",
         "point_b": "tie_outer"
+      },
+      {
+        "body_a": "upright_R",
+        "body_b": "wheel_hub_R",
+        "kind": "ideal",
+        "name": "wheel_spin_joint_R",
+        "point_a": "spindle",
+        "point_b": "center"
       }
     ],
     "constraints": [
@@ -783,6 +865,10 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_L",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "upper_arm_R_outer_joint",
         "type": "BallJoint"
       },
@@ -799,7 +885,15 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_R",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "rack_fixed_to_chassis",
+        "type": "WeldJoint"
+      },
+      {
+        "name": "housing_mount",
         "type": "WeldJoint"
       }
     ],
@@ -1004,6 +1098,10 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_L",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "uca_mount_R_inner_front",
         "type": "BallJoint"
       },
@@ -1036,53 +1134,61 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_R",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "rack_fixed_to_chassis",
+        "type": "WeldJoint"
+      },
+      {
+        "name": "housing_mount",
         "type": "WeldJoint"
       }
     ],
     "mode": "C",
     "points": {
-      "chassis::lca_L_inner_front": [
+      "ground::lca_L_inner_front": [
         -120.0,
         -500.0,
         150.0
       ],
-      "chassis::lca_L_inner_rear": [
+      "ground::lca_L_inner_rear": [
         120.0,
         -500.0,
         150.0
       ],
-      "chassis::lca_R_inner_front": [
+      "ground::lca_R_inner_front": [
         -120.0,
         500.0,
         150.0
       ],
-      "chassis::lca_R_inner_rear": [
+      "ground::lca_R_inner_rear": [
         120.0,
         500.0,
         150.0
       ],
-      "chassis::rack_center": [
+      "ground::rack_center": [
         0.0,
         0.0,
         250.0
       ],
-      "chassis::uca_L_inner_front": [
+      "ground::uca_L_inner_front": [
         -100.0,
         -500.0,
         400.0
       ],
-      "chassis::uca_L_inner_rear": [
+      "ground::uca_L_inner_rear": [
         100.0,
         -500.0,
         400.0
       ],
-      "chassis::uca_R_inner_front": [
+      "ground::uca_R_inner_front": [
         -100.0,
         500.0,
         400.0
       ],
-      "chassis::uca_R_inner_rear": [
+      "ground::uca_R_inner_rear": [
         100.0,
         500.0,
         400.0
@@ -1187,6 +1293,11 @@
         -700.0,
         150.0
       ],
+      "upright_L::spindle": [
+        0.0,
+        -700.0,
+        300.0
+      ],
       "upright_L::tie_outer": [
         50.0,
         -700.0,
@@ -1197,15 +1308,15 @@
         -700.0,
         450.0
       ],
-      "upright_L::wheel_center": [
-        0.0,
-        -700.0,
-        300.0
-      ],
       "upright_R::lower_arm_R_outer": [
         0.0,
         700.0,
         150.0
+      ],
+      "upright_R::spindle": [
+        0.0,
+        700.0,
+        300.0
       ],
       "upright_R::tie_outer": [
         50.0,
@@ -1217,7 +1328,22 @@
         700.0,
         450.0
       ],
-      "upright_R::wheel_center": [
+      "wheel_hub_L::center": [
+        0.0,
+        -700.0,
+        300.0
+      ],
+      "wheel_hub_L::wheel_center": [
+        0.0,
+        -700.0,
+        300.0
+      ],
+      "wheel_hub_R::center": [
+        0.0,
+        700.0,
+        300.0
+      ],
+      "wheel_hub_R::wheel_center": [
         0.0,
         700.0,
         300.0
@@ -1227,21 +1353,24 @@
   },
   "K_rack_fixed_false": {
     "bodies": [
-      "chassis",
-      "rack",
       "upper_arm_L",
       "lower_arm_L",
       "upright_L",
       "tie_rod_L",
+      "wheel_hub_L",
       "upper_arm_R",
       "lower_arm_R",
       "upright_R",
-      "tie_rod_R"
+      "tie_rod_R",
+      "wheel_hub_R",
+      "ground",
+      "rack",
+      "rack_housing"
     ],
     "bushings": [],
     "connections": [
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_L",
         "kind": "ideal",
         "name": "uca_mount_L_inner_front",
@@ -1249,7 +1378,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_L",
         "kind": "ideal",
         "name": "uca_mount_L_inner_rear",
@@ -1257,7 +1386,7 @@
         "point_b": "inner_rear"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_L",
         "kind": "ideal",
         "name": "lca_mount_L_inner_front",
@@ -1265,7 +1394,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_L",
         "kind": "ideal",
         "name": "lca_mount_L_inner_rear",
@@ -1305,7 +1434,15 @@
         "point_b": "tie_outer"
       },
       {
-        "body_a": "chassis",
+        "body_a": "upright_L",
+        "body_b": "wheel_hub_L",
+        "kind": "ideal",
+        "name": "wheel_spin_joint_L",
+        "point_a": "spindle",
+        "point_b": "center"
+      },
+      {
+        "body_a": "ground",
         "body_b": "upper_arm_R",
         "kind": "ideal",
         "name": "uca_mount_R_inner_front",
@@ -1313,7 +1450,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_R",
         "kind": "ideal",
         "name": "uca_mount_R_inner_rear",
@@ -1321,7 +1458,7 @@
         "point_b": "inner_rear"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_R",
         "kind": "ideal",
         "name": "lca_mount_R_inner_front",
@@ -1329,7 +1466,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_R",
         "kind": "ideal",
         "name": "lca_mount_R_inner_rear",
@@ -1367,6 +1504,14 @@
         "name": "tie_upright_joint_R",
         "point_a": "outer",
         "point_b": "tie_outer"
+      },
+      {
+        "body_a": "upright_R",
+        "body_b": "wheel_hub_R",
+        "kind": "ideal",
+        "name": "wheel_spin_joint_R",
+        "point_a": "spindle",
+        "point_b": "center"
       }
     ],
     "constraints": [
@@ -1395,6 +1540,10 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_L",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "uca_mount_R_inner_front",
         "type": "RevoluteJoint"
       },
@@ -1419,8 +1568,16 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_R",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "rack_guide",
         "type": "PrismaticJoint"
+      },
+      {
+        "name": "housing_mount",
+        "type": "WeldJoint"
       }
     ],
     "elements": [],
@@ -1607,6 +1764,10 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_L",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "uca_mount_R_inner_front",
         "type": "RevoluteJoint"
       },
@@ -1631,53 +1792,61 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_R",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "rack_guide",
         "type": "PrismaticJoint"
+      },
+      {
+        "name": "housing_mount",
+        "type": "WeldJoint"
       }
     ],
     "mode": "K",
     "points": {
-      "chassis::lca_L_inner_front": [
+      "ground::lca_L_inner_front": [
         -120.0,
         -500.0,
         150.0
       ],
-      "chassis::lca_L_inner_rear": [
+      "ground::lca_L_inner_rear": [
         120.0,
         -500.0,
         150.0
       ],
-      "chassis::lca_R_inner_front": [
+      "ground::lca_R_inner_front": [
         -120.0,
         500.0,
         150.0
       ],
-      "chassis::lca_R_inner_rear": [
+      "ground::lca_R_inner_rear": [
         120.0,
         500.0,
         150.0
       ],
-      "chassis::rack_center": [
+      "ground::rack_center": [
         0.0,
         0.0,
         250.0
       ],
-      "chassis::uca_L_inner_front": [
+      "ground::uca_L_inner_front": [
         -100.0,
         -500.0,
         400.0
       ],
-      "chassis::uca_L_inner_rear": [
+      "ground::uca_L_inner_rear": [
         100.0,
         -500.0,
         400.0
       ],
-      "chassis::uca_R_inner_front": [
+      "ground::uca_R_inner_front": [
         -100.0,
         500.0,
         400.0
       ],
-      "chassis::uca_R_inner_rear": [
+      "ground::uca_R_inner_rear": [
         100.0,
         500.0,
         400.0
@@ -1782,6 +1951,11 @@
         -700.0,
         150.0
       ],
+      "upright_L::spindle": [
+        0.0,
+        -700.0,
+        300.0
+      ],
       "upright_L::tie_outer": [
         50.0,
         -700.0,
@@ -1792,15 +1966,15 @@
         -700.0,
         450.0
       ],
-      "upright_L::wheel_center": [
-        0.0,
-        -700.0,
-        300.0
-      ],
       "upright_R::lower_arm_R_outer": [
         0.0,
         700.0,
         150.0
+      ],
+      "upright_R::spindle": [
+        0.0,
+        700.0,
+        300.0
       ],
       "upright_R::tie_outer": [
         50.0,
@@ -1812,7 +1986,22 @@
         700.0,
         450.0
       ],
-      "upright_R::wheel_center": [
+      "wheel_hub_L::center": [
+        0.0,
+        -700.0,
+        300.0
+      ],
+      "wheel_hub_L::wheel_center": [
+        0.0,
+        -700.0,
+        300.0
+      ],
+      "wheel_hub_R::center": [
+        0.0,
+        700.0,
+        300.0
+      ],
+      "wheel_hub_R::wheel_center": [
         0.0,
         700.0,
         300.0
@@ -1822,21 +2011,24 @@
   },
   "K_rack_fixed_true": {
     "bodies": [
-      "chassis",
-      "rack",
       "upper_arm_L",
       "lower_arm_L",
       "upright_L",
       "tie_rod_L",
+      "wheel_hub_L",
       "upper_arm_R",
       "lower_arm_R",
       "upright_R",
-      "tie_rod_R"
+      "tie_rod_R",
+      "wheel_hub_R",
+      "ground",
+      "rack",
+      "rack_housing"
     ],
     "bushings": [],
     "connections": [
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_L",
         "kind": "ideal",
         "name": "uca_mount_L_inner_front",
@@ -1844,7 +2036,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_L",
         "kind": "ideal",
         "name": "uca_mount_L_inner_rear",
@@ -1852,7 +2044,7 @@
         "point_b": "inner_rear"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_L",
         "kind": "ideal",
         "name": "lca_mount_L_inner_front",
@@ -1860,7 +2052,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_L",
         "kind": "ideal",
         "name": "lca_mount_L_inner_rear",
@@ -1900,7 +2092,15 @@
         "point_b": "tie_outer"
       },
       {
-        "body_a": "chassis",
+        "body_a": "upright_L",
+        "body_b": "wheel_hub_L",
+        "kind": "ideal",
+        "name": "wheel_spin_joint_L",
+        "point_a": "spindle",
+        "point_b": "center"
+      },
+      {
+        "body_a": "ground",
         "body_b": "upper_arm_R",
         "kind": "ideal",
         "name": "uca_mount_R_inner_front",
@@ -1908,7 +2108,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "upper_arm_R",
         "kind": "ideal",
         "name": "uca_mount_R_inner_rear",
@@ -1916,7 +2116,7 @@
         "point_b": "inner_rear"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_R",
         "kind": "ideal",
         "name": "lca_mount_R_inner_front",
@@ -1924,7 +2124,7 @@
         "point_b": "inner_front"
       },
       {
-        "body_a": "chassis",
+        "body_a": "ground",
         "body_b": "lower_arm_R",
         "kind": "ideal",
         "name": "lca_mount_R_inner_rear",
@@ -1962,6 +2162,14 @@
         "name": "tie_upright_joint_R",
         "point_a": "outer",
         "point_b": "tie_outer"
+      },
+      {
+        "body_a": "upright_R",
+        "body_b": "wheel_hub_R",
+        "kind": "ideal",
+        "name": "wheel_spin_joint_R",
+        "point_a": "spindle",
+        "point_b": "center"
       }
     ],
     "constraints": [
@@ -1990,6 +2198,10 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_L",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "uca_mount_R_inner_front",
         "type": "RevoluteJoint"
       },
@@ -2014,7 +2226,15 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_R",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "rack_fixed_to_chassis",
+        "type": "WeldJoint"
+      },
+      {
+        "name": "housing_mount",
         "type": "WeldJoint"
       }
     ],
@@ -2202,6 +2422,10 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_L",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "uca_mount_R_inner_front",
         "type": "RevoluteJoint"
       },
@@ -2226,53 +2450,61 @@
         "type": "BallJoint"
       },
       {
+        "name": "wheel_spin_joint_R",
+        "type": "RevoluteJoint"
+      },
+      {
         "name": "rack_fixed_to_chassis",
+        "type": "WeldJoint"
+      },
+      {
+        "name": "housing_mount",
         "type": "WeldJoint"
       }
     ],
     "mode": "K",
     "points": {
-      "chassis::lca_L_inner_front": [
+      "ground::lca_L_inner_front": [
         -120.0,
         -500.0,
         150.0
       ],
-      "chassis::lca_L_inner_rear": [
+      "ground::lca_L_inner_rear": [
         120.0,
         -500.0,
         150.0
       ],
-      "chassis::lca_R_inner_front": [
+      "ground::lca_R_inner_front": [
         -120.0,
         500.0,
         150.0
       ],
-      "chassis::lca_R_inner_rear": [
+      "ground::lca_R_inner_rear": [
         120.0,
         500.0,
         150.0
       ],
-      "chassis::rack_center": [
+      "ground::rack_center": [
         0.0,
         0.0,
         250.0
       ],
-      "chassis::uca_L_inner_front": [
+      "ground::uca_L_inner_front": [
         -100.0,
         -500.0,
         400.0
       ],
-      "chassis::uca_L_inner_rear": [
+      "ground::uca_L_inner_rear": [
         100.0,
         -500.0,
         400.0
       ],
-      "chassis::uca_R_inner_front": [
+      "ground::uca_R_inner_front": [
         -100.0,
         500.0,
         400.0
       ],
-      "chassis::uca_R_inner_rear": [
+      "ground::uca_R_inner_rear": [
         100.0,
         500.0,
         400.0
@@ -2377,6 +2609,11 @@
         -700.0,
         150.0
       ],
+      "upright_L::spindle": [
+        0.0,
+        -700.0,
+        300.0
+      ],
       "upright_L::tie_outer": [
         50.0,
         -700.0,
@@ -2387,15 +2624,15 @@
         -700.0,
         450.0
       ],
-      "upright_L::wheel_center": [
-        0.0,
-        -700.0,
-        300.0
-      ],
       "upright_R::lower_arm_R_outer": [
         0.0,
         700.0,
         150.0
+      ],
+      "upright_R::spindle": [
+        0.0,
+        700.0,
+        300.0
       ],
       "upright_R::tie_outer": [
         50.0,
@@ -2407,7 +2644,22 @@
         700.0,
         450.0
       ],
-      "upright_R::wheel_center": [
+      "wheel_hub_L::center": [
+        0.0,
+        -700.0,
+        300.0
+      ],
+      "wheel_hub_L::wheel_center": [
+        0.0,
+        -700.0,
+        300.0
+      ],
+      "wheel_hub_R::center": [
+        0.0,
+        700.0,
+        300.0
+      ],
+      "wheel_hub_R::wheel_center": [
         0.0,
         700.0,
         300.0

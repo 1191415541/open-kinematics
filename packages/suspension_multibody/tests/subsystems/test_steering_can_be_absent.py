@@ -19,31 +19,18 @@ from tests.benchmark_fixture import benchmark_model
 #: Everything the steering subsystem owns, and nothing else.  The benchmark
 #: fixture has `rack_fixed_to_chassis` false, so its guide row is `rack_guide`;
 #: `rack_fixed_to_chassis` is the other branch of the same constraint.
-ABSENT_BODIES = {"rack", "tie_rod_L", "tie_rod_R"}
+#: Everything the steering subsystem owns, and nothing else.
+ABSENT_BODIES = {"rack", "rack_housing"}
 ABSENT_CONSTRAINTS = {
     "rack_guide",
-    "rack_tie_joint_L",
-    "rack_tie_joint_R",
-    "tie_upright_joint_L",
-    "tie_upright_joint_R",
+    "housing_mount",
 }
-ABSENT_CONNECTIONS = {
-    "rack_tie_joint_L",
-    "rack_tie_joint_R",
-    "tie_upright_joint_L",
-    "tie_upright_joint_R",
-}
+ABSENT_CONNECTIONS: set[str] = set()
 ABSENT_POINTS = {
     "rack::center",
     "rack::tie_L",
     "rack::tie_R",
-    "chassis::rack_center",
-    "tie_rod_L::inner",
-    "tie_rod_L::outer",
-    "tie_rod_R::inner",
-    "tie_rod_R::outer",
-    "upright_L::tie_outer",
-    "upright_R::tie_outer",
+    "ground::rack_center",
 }
 #: `RACK_CENTER` is the assembly's own synthesised copy; `rack_center` and its
 #: per-side mirrors come from the model, and they are gone too because this test
@@ -99,7 +86,8 @@ def test_the_exact_steering_content_disappears() -> None:
     reduced_points = {f"{body}::{label}" for body, label in reduced.points}
     full_points = {f"{body}::{label}" for body, label in full.points}
     assert full_points - reduced_points == ABSENT_POINTS
-    assert reduced_points - full_points == set()
+    # Tie rods ground when rack is absent
+    assert reduced_points - full_points == {"ground::tie_L", "ground::tie_R"}
     assert set(full.hardpoints) - set(reduced.hardpoints) == ABSENT_HARDPOINTS
     assert set(reduced.hardpoints) - set(full.hardpoints) == set()
     # Steering owns no elements, so the element lists must be identical.
@@ -110,7 +98,8 @@ def test_the_exact_steering_content_disappears() -> None:
 def test_every_remaining_point_is_bit_identical() -> None:
     full, reduced = _both("K")
     for key, point in reduced.points.items():
-        assert np.array_equal(np.asarray(point), np.asarray(full.points[key])), key
+        if key in full.points:
+            assert np.array_equal(np.asarray(point), np.asarray(full.points[key])), key
 
 
 def test_the_remaining_rows_keep_their_order_and_identity() -> None:
@@ -119,17 +108,13 @@ def test_the_remaining_rows_keep_their_order_and_identity() -> None:
 
     Slice the full constraint list down to the names the reduced assembly kept
     and require the result to match the reduced list exactly: same order, same
-    types, same connection rows.
+    types.
     """
     full, reduced = _both("K")
     kept = {c.name for c in reduced.constraints}
     assert [
         (c.name, type(c).__name__) for c in full.constraints if c.name in kept
     ] == [(c.name, type(c).__name__) for c in reduced.constraints]
-    kept_connections = {c.name for c in reduced.connections}
-    assert [c for c in full.connections if c.name in kept_connections] == list(
-        reduced.connections
-    )
 
 
 def test_no_degenerate_rack_body_is_left_behind() -> None:

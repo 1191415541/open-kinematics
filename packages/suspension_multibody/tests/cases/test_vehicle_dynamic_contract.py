@@ -69,11 +69,22 @@ def test_contract_path_runs_every_tire_model(fixture, kind: str) -> None:
 
 
 def test_nondefault_road_and_initial_state_are_case_inputs(fixture) -> None:
+    """
+    A raised road and a stated initial state are case inputs, not model ones.
+
+    The road is raised by a *physical* bump: 50 mm is a bump, while the 1 m this
+    test used to raise it by is three wheel radii of penetration, and a state
+    given with that much penetration *and* a 10 m/s slip is a corner the tire's
+    relaxation cannot start the integration from.  Measured on this fixture: 1 m
+    with a zero velocity starts, 1 m with 1 m/s starts, 1 m with 10 m/s does not,
+    50 mm with 10 m/s does.  The assertions below are unchanged -- the road and
+    the state still have to reach the solver and still have to carry the wheel.
+    """
     model = fixture._positioned_vehicle(fixture._vehicle())
     default = _run(model, fixture._case(model))
     case = fixture._case(model).model_copy(
         update={
-            "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
+            "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=0.05)),
             "initial_states": fixture._uniform_velocity_initial_states(model),
         }
     )

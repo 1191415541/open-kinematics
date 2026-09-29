@@ -14,9 +14,18 @@ template transcribed from the existing `symmetric_proxy` assembly.
 """
 
 from .builtin import (
+    BRAKE,
+    CHASSIS,
     DEFAULT_MOUNT_STIFFNESS,
     DOUBLE_WISHBONE,
     DOUBLE_WISHBONE_NAME,
+    DRIVE,
+    RACK_HOUSING_MASS,
+    STEERING,
+    STEERING_GUIDED,
+    VEHICLE_BODY,
+    WHEEL,
+    WHEEL_HUB_MASS,
     register_builtins,
 )
 from .instantiate import (
@@ -48,12 +57,21 @@ register_builtins()
 
 __all__ = [
     "ACTIVATED_MODES",
+    "BRAKE",
+    "CHASSIS",
     "DEFAULT_MOUNT_STIFFNESS",
     "DOUBLE_WISHBONE",
     "DOUBLE_WISHBONE_NAME",
+    "DRIVE",
     "MODES",
     "ROLES",
+    "STEERING",
+    "STEERING_GUIDED",
     "SubsystemInstance",
+    "RACK_HOUSING_MASS",
+    "VEHICLE_BODY",
+    "WHEEL",
+    "WHEEL_HUB_MASS",
     "ConnectionDefinition",
     "OutputDeclaration",
     "PartDefinition",

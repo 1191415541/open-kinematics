@@ -284,7 +284,15 @@ def write_builtin_axle_project(root: Path) -> dict[str, Path]:
         "template": "suspension.tpl.json",
         "functional_role": "suspension",
         "placement_role": "front",
-        "hardpoints": {role: list(point) for role, point in COORDINATES.items()},
+        # Only the roles the exported template declares: the rack centre belongs to
+        # the steering template now (requirement 1 -- the suspension owns the tie rods
+        # and the rack does not), and a subsystem may not place a hardpoint its own
+        # template does not declare.
+        "hardpoints": {
+            role: list(point)
+            for role, point in COORDINATES.items()
+            if role in {row["name"] for row in template["hardpoints"]}
+        },
         "property_bindings": {"spring": "spring.json", "damper": "damper.json"},
     }
     chassis_template = {
@@ -436,15 +444,16 @@ def write_vehicle_project(root: Path) -> dict[str, Path]:
     steering_template = _role_template(
         "steering",
         "file_steering",
+        # The rack, its support, and the points the *suspension's* tie rods attach
+        # to: a steering template owns no tie rod (requirement 1 -- the suspension
+        # does), and the rack-side mount is what it declares for them.
         bodies=[
             {"name": "rack"},
-            {"name": "tie_rod_L", "mass": 1.5},
             {"name": "support", "fixed": True},
         ],
         hardpoints=[
             {"name": "rack_center", "owner": "rack", "label": "center"},
-            {"name": "tie_inner", "owner": "tie_rod_L", "label": "inner"},
-            {"name": "tie_outer", "owner": "tie_rod_L", "label": "outer"},
+            {"name": "tie_inner", "owner": "rack", "label": "tie_L"},
         ],
         joints=[
             {
@@ -453,20 +462,6 @@ def write_vehicle_project(root: Path) -> dict[str, Path]:
                 "body_a": "rack",
                 "body_b": "support",
                 "point_a": "rack_center",
-            },
-            {
-                "name": "rack_tie",
-                "type": "spherical",
-                "body_a": "rack",
-                "body_b": "tie_rod_L",
-                "point_a": "tie_inner",
-            },
-            {
-                "name": "tie_upright",
-                "type": "spherical",
-                "body_a": "tie_rod_L",
-                "body_b": "support",
-                "point_a": "tie_outer",
             },
         ],
         ports=[{"name": "rack_center", "role": "rack_center", "owner": "rack"}],
@@ -480,7 +475,6 @@ def write_vehicle_project(root: Path) -> dict[str, Path]:
         {
             "rack_center": [0.0, 0.0, 250.0],
             "tie_inner": [100.0, -400.0, 250.0],
-            "tie_outer": [50.0, -700.0, 250.0],
         },
     )
 

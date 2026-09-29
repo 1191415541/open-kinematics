@@ -1,6 +1,7 @@
 """Full-vehicle topology assembly tests."""
 
 import numpy as np
+import pytest
 
 from suspension_multibody.modeling.primitives import PrismaticJoint
 from suspension_multibody.schema import (
@@ -15,6 +16,7 @@ from suspension_multibody.schema import (
     WheelSpec,
 )
 from suspension_multibody.subsystems.entry import compose_axle, compose_vehicle
+from suspension_multibody.templates import RACK_HOUSING_MASS, WHEEL_HUB_MASS
 
 
 def _axle(name: str, x: float) -> FrontAxleModel:
@@ -60,6 +62,13 @@ def _vehicle() -> VehicleModel:
         ),
         steering=SteeringSystemSpec(ratio=16.0),
     )
+#: What the fixture above has to weigh: its chassis, its four wheels, both axles'
+#: own bodies, and the bodies the axle templates invent -- 方式 A's hub per side and
+#: the steering housing per axle, both declared by the template rather than by the
+#: model.
+_TOTAL_MASS = (
+    1200.0 + 4 * 20.0 + 2 * 9 * 10.0 + 4 * WHEEL_HUB_MASS + 2 * RACK_HOUSING_MASS
+)
 
 
 def test_compose_vehicle_contains_two_axles_and_four_spinning_wheels() -> None:
@@ -81,7 +90,7 @@ def test_compose_vehicle_preserves_chassis_and_wheel_mass() -> None:
     assembly = compose_vehicle(_vehicle())
 
     assert assembly.bodies["chassis"].mass == 1200.0
-    assert assembly.total_mass == 1460.0
+    assert assembly.total_mass == pytest.approx(_TOTAL_MASS, abs=1e-9)
     assert all(assembly.wheel_center_local(name).shape == (3,) for name in assembly.wheel_ids)
 
 
@@ -99,7 +108,7 @@ def test_compose_vehicle_condenses_fixed_wheel_into_mount() -> None:
     assert assembly.wheel_body_names["front_left"] == "front_upright_L"
     assert "wheel_front_left" not in assembly.bodies
     assert assembly.bodies["front_upright_L"].mass == 30.0
-    assert assembly.total_mass == 1460.0
+    assert assembly.total_mass == pytest.approx(_TOTAL_MASS, abs=1e-9)
     assert not any(
         item.name.endswith("wheel_mount_front_left")
         for item in assembly.constraints

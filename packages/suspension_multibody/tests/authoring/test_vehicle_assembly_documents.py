@@ -114,19 +114,20 @@ def test_the_vehicle_document_decides_the_composed_vehicle_roles(
     # The document's own subsystems are the ones the composition reads, by name.
     assert request.steering_template.template.name == "file_steering"
     assert request.chassis_template.template.name == "file_chassis"
-    # And the steering topology is the one that is built: the file names its
-    # tie-rod joints `rack_tie` and `tie_upright`, and the composed vehicle carries
-    # those names on the axle it steers.
-    assert "front_rack_tie" in from_file_names
-    assert "front_tie_upright" in from_file_names
-    assert "front_rack_tie_joint_L" not in from_file_names
+    # And the steering topology is the one that is built: the file declares a
+    # `support` body for its rack to slide in, and that body is what the composed
+    # vehicle carries.  The tie rod names are the *suspension* template's now
+    # (requirement 1 -- the suspension owns the tie rods), so they appear on both
+    # axles whichever steering template is read.
+    assert "front_rack_guide" in from_file_names
+    assert "front_rack_tie_joint_L" in from_file_names
     assert "front_rack_tie_joint_L" in default_names
     # The file's steering subsystem declares a support body, and it is built.
     assert "front_support" in from_file.bodies
     # Both axles of *this* model have a free rack, so both steer and both read the
     # document's template; an axle the model bolts down keeps the built-in fixed
     # template instead, which `vehicle_model_from` states for a file vehicle.
-    assert "rear_rack_tie" in from_file_names
+    assert "rear_support" in from_file.bodies
 
 
 def test_a_vehicle_model_can_take_its_axles_from_files(
@@ -363,9 +364,10 @@ def test_a_bolted_rack_keeps_the_built_in_fixed_template(tmp_path: Path) -> None
     The model decides *whether* a rack is steered; the file decides *how*.
 
     `vehicle_model_from` bolts the rear axle's rack down, because the document
-    declares one steering system.  That axle therefore keeps the built-in fixed
-    template even though the document declares a steering subsystem -- while the
-    front axle, which does steer, reads the document's own.
+    declares one steering system: that rack reaches the assembly as a weld to the
+    chassis, while the front one is guided in the support the document's own steering
+    template declares.  The tie rods are the *suspension* template's (requirement 1),
+    so both axles build them and neither steering template names one.
     """
     from suspension_multibody.authoring.solver import assembly_request_for
     from suspension_multibody.subsystems.entry import compose_vehicle
@@ -379,6 +381,7 @@ def test_a_bolted_rack_keeps_the_built_in_fixed_template(tmp_path: Path) -> None
             model, "K", assembly_request_for(document)
         ).constraints
     }
-    assert "front_rack_tie" in names
+    assert "front_rack_guide" in names
     assert "rear_rack_fixed_to_chassis" in names
-    assert "rear_rack_tie" not in names
+    assert "front_rack_tie_joint_L" in names and "rear_rack_tie_joint_L" in names
+    assert not [name for name in names if name.endswith("rack_tie")]

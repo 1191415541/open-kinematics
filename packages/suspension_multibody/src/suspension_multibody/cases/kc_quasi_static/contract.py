@@ -45,6 +45,7 @@ from ...modeling.primitives.joints import (
     PrismaticJoint,
     RevoluteJoint,
     UniversalJoint,
+    WeldJoint,
 )
 from ...subsystems.capabilities import kernel_axis
 from .convert import (
@@ -134,6 +135,43 @@ def _unit_axis(values) -> list[float]:
 ELASTIC_MODES: frozenset[str] = frozenset({"force_balance", "pad"})
 TIRE_MODES: frozenset[str] = frozenset({"pad"})
 
+#: The hub's spin joint, as 方式 A's suspension template names it.
+_SPIN_JOINT_STEM = "wheel_spin_joint_"
+
+
+def _quasi_static_joints(constraints) -> list:
+    """
+    Return one K/C reading's constraints, with the wheel's spin held.
+
+    方式 A turns the hub on a revolute against the upright, and that is the
+    topology a *dynamic* reading needs: the wheel rolls, and the spin is the
+    degree of freedom the rolling is expressed in.  A K/C reading is a bench
+    reading -- the wheel is mounted rigidly on the suspension and the tire
+    carries the compliance to the road -- so there the spin carries neither load
+    nor stiffness, and leaving it free makes the static KKT singular.  Measured
+    on the compliant C sweep, the free spin stalls the trim at
+    ``force_residual = 1.05e-8`` against a 1e-8 tolerance with a 1e-15 pose
+    step: a residual outside the Jacobian's range, which no Newton step removes
+    and which fails every C load path.
+
+    So the reading states what the bench means and emits the spin joint as the
+    rigid attachment it is on a bench.  The *assembly* keeps the revolute -- this
+    is a reading of the model rather than a change to it -- and the dynamic
+    readings that need the spin free author their own documents.
+    """
+    return [
+        WeldJoint(
+            constraint.body_a,
+            constraint.point_a,
+            constraint.body_b,
+            constraint.point_b,
+            name=constraint.name,
+        )
+        if getattr(constraint, "name", "").startswith(_SPIN_JOINT_STEM)
+        else constraint
+        for constraint in constraints
+    ]
+
 
 def model_document(
     assembly,
@@ -185,7 +223,7 @@ def model_document(
             }
         )
 
-    joint_source = (
+    joint_source = _quasi_static_joints(
         collapse_spherical_pairs(assembly.ideal_constraints)
         if drive_wheels
         else assembly.constraints
@@ -567,6 +605,7 @@ def _driven_coordinates(assembly, *, drive_wheels: bool):
     for a reason with no relation to what the caller asked.  "The assembly has no
     rack axis" now means the axis is *absent*, not that it is neutral or zero.
     """
+    reaction_body = "chassis" if "chassis" in assembly.bodies else "ground"
     coordinates: list[tuple[str, dict[str, object]]] = []
 
     def add(name: str, kind: str, body: str, point_local_mm, axis_local) -> None:
@@ -574,7 +613,7 @@ def _driven_coordinates(assembly, *, drive_wheels: bool):
             "name": name,
             "type": _DRIVEN_KINDS[kind],
             "body_a": body,
-            "body_b": "chassis",
+            "body_b": reaction_body,
             "point_a": _vec3(point_local_mm),
             "point_b": [0.0, 0.0, 0.0],
             "axis_b": _unit_axis(axis_local),
@@ -629,7 +668,13 @@ def has_rack(assembly) -> bool:
 #: are the spellings the built-in topologies use, and the *point* is what decides
 #: -- a body that declares no `wheel_center` is not the carrier, whatever it is
 #: called.
-_WHEEL_CENTRE_BODIES: tuple[str, ...] = ("upright", "knuckle", "hub_carrier", "trailing_arm")
+_WHEEL_CENTRE_BODIES: tuple[str, ...] = (
+    "wheel_hub",
+    "upright",
+    "knuckle",
+    "hub_carrier",
+    "trailing_arm",
+)
 
 
 def wheel_centre_body(assembly, side: str) -> str | None:

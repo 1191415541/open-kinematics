@@ -78,23 +78,24 @@ ROLES: dict[str, RoleSpec] = {
             "lower_rear",
             "lower_outer",
             "wheel_center",
+            "tie_inner",
+            "tie_outer",
         ),
         required_slots=("spring", "damper", "bushing"),
         outputs=("wheel_travel", "camber", "toe", "track_change"),
         note=(
-            "The left/right suspension pair.  It is one role rather than two "
-            "because the anti-roll bar spans both sides and cannot belong to a "
-            "one-sided subsystem."
+            "The left/right suspension pair including arms, uprights, tie rods "
+            "and wheel hubs with wheel spin joints."
         ),
     ),
     "steering": RoleSpec(
         name="steering",
-        required_mounts=("rack_center", "tie_inner", "tie_outer"),
-        required_slots=("rack_axis", "rack_fixed_to_chassis"),
+        required_mounts=("rack_center", "tie_inner"),
+        required_slots=("rack_axis",),
         outputs=("rack_displacement",),
         note=(
-            "May be absent from a single-axle assembly (user decision D5), but "
-            "that is an assembly-level declaration, not a property of the role."
+            "The steering mechanism: rack and rack housing. Tie rods belong to "
+            "the suspension subsystem."
         ),
     ),
     "wheel": RoleSpec(
@@ -115,9 +116,7 @@ ROLES: dict[str, RoleSpec] = {
         required_slots=("chassis_mass", "chassis_inertia"),
         outputs=("chassis_pose",),
         note=(
-            "The axle-side chassis is a fixed body and does not consume its "
-            "MassSpec; the full-vehicle chassis does.  That difference is a "
-            "known, recorded fact rather than something to smooth over."
+            "The vehicle body. Only the full-vehicle assembly carries a chassis."
         ),
     ),
     "brake": RoleSpec(

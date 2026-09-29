@@ -22,6 +22,7 @@ from ..schema import Pose, Vec3
 __all__ = [
     "HARDPOINT_ALIASES",
     "as_array",
+    "body_from_part",
     "body_from_spec",
     "body_without_spec",
     "local_point",
@@ -163,6 +164,64 @@ def body_without_spec(name: str) -> RigidBody:
     return RigidBody(name=name, pose=SE3.identity())
 
 
+def body_from_part(
+    name: str, part: object, *, center_of_mass: np.ndarray | None = None
+) -> RigidBody:
+    """
+    Create a body from the template's own declaration of it.
+
+    A template that declares a mass for a part it *invents* -- the wheel hub, the
+    steering housing -- is saying "this body exists and weighs this", and nothing
+    else in the flow can say it: the model describes the parts a user authors, and
+    a part the topology adds is the template's to weigh.  A template that declares
+    none leaves the body bare, which is right for the arms, the upright and the
+    rack: those are exactly the parts a model is expected to describe, and a
+    template that invented a mass for them would be answering a question nobody
+    asked it.
+
+    ``center_of_mass`` is where the template attaches the part -- the hardpoint its
+    own connections name -- because a body's frame and its mass are separate
+    questions: the frame is the assembly's default (the identity, as for every other
+    body with no spec), while the mass has to sit where the part is.  Leaving it at
+    the frame origin is not a harmless simplification: a free body whose mass is off
+    the axis it turns on carries a gravity moment no constraint can react, so a trim
+    has no equilibrium to find -- and a pair of bodies welded together cannot even
+    share one rigid motion while their centres of mass sit a metre apart.
+
+    The mass is spread over :data:`_PART_RADIUS_OF_GYRATION_MM`, since a declaration
+    of mass alone says nothing about shape and a *point* mass is the one shape no
+    part has: the identity inertia the assembly otherwise defaults to is orders of
+    magnitude off the body's own mass, and that is what ill-conditions the equations
+    the body appears in.
+    """
+    mass = float(getattr(part, "mass", 0.0))
+    if mass <= 0.0:
+        return body_without_spec(name)
+    return RigidBody(
+        name=name,
+        pose=SE3.identity(),
+        mass=mass,
+        inertia=np.eye(3) * mass * _PART_RADIUS_OF_GYRATION_MM**2,
+        center_of_mass=(
+            np.zeros(3)
+            if center_of_mass is None
+            else np.asarray(center_of_mass, dtype=float)
+        ),
+        fixed=bool(getattr(part, "fixed", False)),
+    )
+
+
+#: The radius of gyration an invented part's mass is spread over, in mm.
+#:
+#: The part a template invents is a *light* placeholder: the template is saying the
+#: body exists and carries the mass it declares, and nothing about its shape, so the
+#: mass is spread over a small radius rather than concentrated into a point.  A point
+#: mass is the one shape no part has, and it is what the assembly would otherwise
+#: default to -- an inertia orders of magnitude off the body's own mass, which is
+#: what ill-conditions the equations the body appears in.  A model that knows the
+#: hub's own mass properties declares a spec for it and takes over from here.
+_PART_RADIUS_OF_GYRATION_MM = 8.0
+
 #: Schema body name -> generated body name stem.
 _BODY_ALIASES: dict[str, str] = {
     "uca": "upper_arm",
@@ -179,10 +238,23 @@ _BODY_ALIASES: dict[str, str] = {
 def resolve_body(
     name: str, side: Literal["L", "R"], bodies: Mapping[str, object]
 ) -> str:
-    """Resolve a schema body name to a generated side-specific body."""
+    """
+    Resolve a schema body name to a generated side-specific body.
+
+    A name that spells the chassis resolves to `ground` when the assembly carries
+    no chassis body, and that is the whole point of the fallback: a single-axle
+    assembly has no chassis (requirement 2 -- its inner mounts and everything that
+    used to hang off a fixed chassis attach to `ground`, and a full-vehicle reading
+    maps that ground onto the vehicle body), while a spring, damper or bushing
+    authored against `chassis` keeps its own spelling.  A model does not have to be
+    re-authored to be read as an axle, which is what makes one model serve both
+    assemblies.
+    """
     if name in bodies:
         return name
     normalized = name.strip().lower().replace("-", "_")
+    if normalized in _GROUND_ALIASES and "ground" in bodies:
+        return "ground"
     base = _BODY_ALIASES.get(normalized, normalized)
     candidate = f"{base}_{side}"
     if candidate in bodies:
@@ -194,3 +266,13 @@ def resolve_body(
             if candidate in bodies:
                 return candidate
     raise ValueError(f"unknown force-element body {name!r}")
+
+
+#: The spellings a force element may use for the body an axle does not carry.
+#:
+#: The chassis is the vehicle body: a full-vehicle assembly has one and an axle has
+#: none, so a name in this set is resolved to `ground` only when no such body
+#: exists.  Listed rather than derived, because "this name means the chassis" is a
+#: fact about the schema's vocabulary and not something the name can be asked
+#: about.
+_GROUND_ALIASES: frozenset[str] = frozenset({"chassis", "vehicle_body"})

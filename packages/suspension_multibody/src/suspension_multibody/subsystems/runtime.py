@@ -40,6 +40,7 @@ __all__ = [
     "SubsystemRuntime",
     "diff_against_reference",
     "runtime_from_outputs",
+    "wheel_centre_local",
 ]
 
 #: How a :class:`~.types.ResolvedElement` becomes the runtime object a document
@@ -147,6 +148,28 @@ class SubsystemRuntime:
         reader, and the resulting drift is invisible in a result.
         """
         return self.points[(body, label)].copy()
+
+
+#: The labels a wheel centre is recorded under, in the order a reader tries them.
+_WHEEL_CENTRE_LABELS: tuple[str, ...] = ("wheel_center", "spindle")
+
+
+def wheel_centre_local(assembly: Any, body: str) -> np.ndarray:
+    """
+    Return `body`'s wheel centre, in `body`'s own frame, or refuse by name.
+
+    Which label states it is the topology's: a suspension template that hangs the
+    wheel straight on the upright records it as `wheel_center`, while one that gives
+    the wheel a hub of its own (`方式 A`) records the same point on the upright as
+    `spindle` -- the point its spin joint turns about -- and states the wheel centre
+    on the hub.  A reader that carries the *upright's* pose beside the centre has to
+    ask for the point in the upright's frame, and this is the one place that knows
+    which label that is.
+    """
+    for label in _WHEEL_CENTRE_LABELS:
+        if (body, label) in getattr(assembly, "points", ()):
+            return np.asarray(assembly.point(body, label), dtype=float)
+    raise ValueError(f"the assembly records no wheel centre on {body!r}")
 
 
 def runtime_from_outputs(

@@ -498,34 +498,42 @@ def _initial_body_state(
         spin_local = wheel_to_body @ wheel.spin_axis.as_array()
         spin_local /= np.linalg.norm(spin_local)
         spin_world = rotation @ spin_local
+        rate: float | None = None
         if wheel_name in initial_wheel_speeds:
             # Adams 源结果已经给出主轴刚体的完整角速度。标量轮速只用于
             # 没有显式刚体状态的普通算例，不能覆盖源状态中的进动分量。
             if body_name in explicit_state_bodies:
                 continue
-            omegas[body_name] = spin_world * initial_wheel_speeds[wheel_name]
-            continue
-        if case.initial_forward_speed_mps <= 0.0:
-            continue
-        forward_local = _wheel_forward_local(
-            wheel,
-            rotation,
-            wheel_to_body=wheel_to_body,
-        )
-        forward_world = rotation @ forward_local
-        coefficient = float(
-            np.dot(np.cross(spin_world, np.array([0.0, 0.0, -1.0])), forward_world)
-            * wheel.tire.unloaded_radius
-            * length_scale
-        )
-        if abs(coefficient) <= 1e-12:
-            raise ValueError(f"wheel {wheel_name!r} has no valid rolling axis")
-        omegas[body_name] = spin_world * (
-            -(
-                case.initial_velocity_sign * case.initial_forward_speed_mps
+            rate = float(initial_wheel_speeds[wheel_name])
+        elif case.initial_forward_speed_mps > 0.0:
+            forward_local = _wheel_forward_local(
+                wheel,
+                rotation,
+                wheel_to_body=wheel_to_body,
             )
-            / coefficient
-        )
+            forward_world = rotation @ forward_local
+            coefficient = float(
+                np.dot(
+                    np.cross(spin_world, np.array([0.0, 0.0, -1.0])), forward_world
+                )
+                * wheel.tire.unloaded_radius
+                * length_scale
+            )
+            if abs(coefficient) <= 1e-12:
+                raise ValueError(f"wheel {wheel_name!r} has no valid rolling axis")
+            rate = -(
+                case.initial_velocity_sign * case.initial_forward_speed_mps
+            ) / coefficient
+        if rate is None:
+            continue
+        spun = _spun_bodies(assembly, wheel_name)
+        lead = spun[0]
+        # The wheel and its hub are one rigid pair, so the spin is the *pair's*
+        # angular velocity: the carrier takes it and the wheel takes the carrier's,
+        # which is what keeps the weld satisfied at the initial state.
+        omegas[lead] = omegas[lead] + spin_world * rate
+        for name in spun[1:]:
+            omegas[name] = omegas[lead]
 
     bodies: list[AxleBody] = []
     for name in body_names:
@@ -542,6 +550,24 @@ def _initial_body_state(
             )
         )
     return tuple(bodies), body_frames
+
+
+def _spun_bodies(assembly: VehicleRuntime, wheel_name: str) -> tuple[str, ...]:
+    """
+    Return every body whose angular velocity one wheel's spin sets, carrier first.
+
+    A wheel welded to its carrier -- 方式 A's hub -- has no spin of its own: the two
+    are one rigid pair, so a stated wheel speed is the pair's, and the wheel ends up
+    with the carrier's angular velocity.  Setting only the wheel would violate the
+    weld at the initial state, a run the solver refuses to start rather than
+    integrate.  A wheel in a revolute joint turns by itself, which is the pre-hub
+    topology: there the carrier is not a hub, and its angular velocity is its own.
+    """
+    body_name = assembly.wheel_body_names[wheel_name]
+    carrier = assembly.wheel_centers[wheel_name][0]
+    if carrier != body_name and "wheel_hub" in carrier:
+        return (carrier, body_name)
+    return (body_name,)
 
 
 def _resolve_vehicle_body(
@@ -1235,24 +1261,30 @@ def _build_steering(
     rack = _resolve_steering_rack(steering_spec.rack_body, body_names)
     if assembly.bodies[rack].fixed:
         raise ValueError("the steering rack must be a free body for native actuation")
-    reaction_body = _resolve_named_body(
-        steering_spec.actuator_reaction_body or chassis,
-        body_names,
-        "steering reaction",
-    )
     if steering_spec.actuator_reaction_body is None:
-        try:
-            rack_point = assembly.points[(rack, "center")]
-            # Both axle assemblies expose a chassis rack marker.  The merged
-            # point map can only retain one of them, so use the front assembly
-            # explicitly for the front steering actuator.
-            reaction_point = assembly.axle_assemblies["front"].points[
-                ("chassis", "rack_center")
-            ]
-        except KeyError as exc:
-            raise ValueError("vehicle steering rack markers are incomplete") from exc
-        axis = np.asarray(model.front_axle.rack_axis.as_tuple(), dtype=float)
+        # The rack rides in its guide, and that guide is the reaction the actuator
+        # drives against: read from the joint rather than from a name.  The rack is
+        # guided in the steering housing -- welded to the chassis, so the housing's
+        # marker *is* the chassis marker the old spelling looked for -- while a rack
+        # bolted down states the same thing with a weld, and neither case needs this
+        # module to know what the bodies are called.
+        rack_joint = _rack_guide_joint(assembly, rack)
+        if rack_joint.body_a == rack:
+            rack_point = rack_joint.point_a
+            reaction_body = rack_joint.body_b
+            reaction_point = rack_joint.point_b
+            axis = np.asarray(rack_joint.axis_b, dtype=float)
+        else:
+            rack_point = rack_joint.point_b
+            reaction_body = rack_joint.body_a
+            reaction_point = rack_joint.point_a
+            axis = np.asarray(rack_joint.axis_a, dtype=float)
     else:
+        reaction_body = _resolve_named_body(
+            steering_spec.actuator_reaction_body,
+            body_names,
+            "steering reaction",
+        )
         rack_joints = tuple(
             joint
             for joint in assembly.constraints
@@ -1364,6 +1396,24 @@ def _resolve_named_body(name: str, body_names: tuple[str, ...], role: str) -> st
     if len(candidates) == 1:
         return candidates[0]
     raise ValueError(f"{role} body {name!r} is not uniquely resolvable")
+
+
+def _rack_guide_joint(assembly: VehicleRuntime, rack: str) -> PrismaticJoint:
+    """
+    Return the one prismatic guide the rack is declared in.
+
+    A rack that cannot move is welded rather than guided, and a weld has no axis to
+    prescribe a translation along, so the refusal names the missing guide instead of
+    inventing an axis for it.
+    """
+    guides = tuple(
+        joint
+        for joint in assembly.constraints
+        if isinstance(joint, PrismaticJoint) and rack in (joint.body_a, joint.body_b)
+    )
+    if len(guides) != 1:
+        raise ValueError("vehicle steering rack markers are incomplete")
+    return guides[0]
 
 
 def _resolve_steering_rack(name: str, body_names: tuple[str, ...]) -> str:

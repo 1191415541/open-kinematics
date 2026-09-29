@@ -33,6 +33,7 @@ from typing import Any
 
 import numpy as np
 
+from ..subsystems.runtime import wheel_centre_local
 from .declarations import DeclarationSet, OutputDeclaration
 from .derived import BUILTIN, DerivedOutput, MinimumUnitOutputs
 
@@ -893,13 +894,12 @@ def kc_minimum_unit_outputs(state: Any, assembly: Any, side: str) -> dict[str, A
     if normalized not in {"L", "R"}:
         raise ValueError(f"unknown wheel side {side!r}")
     name = "left" if normalized == "L" else "right"
-    pose = state.pose(f"upright_{normalized}")
+    upright = f"upright_{normalized}"
+    pose = state.pose(upright)
     return {
         _UPRIGHT_ROTATION[name]: np.asarray(pose.rotation, dtype=float),
         _UPRIGHT_TRANSLATION[name]: np.asarray(pose.translation, dtype=float),
-        _WHEEL_CENTER_LOCAL[name]: np.asarray(
-            assembly.point(f"upright_{normalized}", "wheel_center"), dtype=float
-        ),
+        _WHEEL_CENTER_LOCAL[name]: wheel_centre_local(assembly, upright),
     }
 
 

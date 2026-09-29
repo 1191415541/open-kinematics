@@ -62,6 +62,18 @@ FUNCTIONAL_ROLES = frozenset(
 PLACEMENT_ROLES = frozenset(
     {"any", "front", "rear", "front_left", "front_right", "rear_left", "rear_right"}
 )
+#: The bodies a joint may name without the template declaring them: the ones another
+#: role owns.
+#:
+#: A mount states *what it attaches to*, and a template mounts to parts it does not
+#: build.  The arm mounts' far end is the chassis -- the chassis role's body, or the
+#: ground when the assembly carries neither -- and a tie rod's inner end is the rack,
+#: which belongs to the steering role.  Nothing in the document format makes a
+#: template declare its neighbour's bodies, and the ownership itself is stated once
+#: (`subsystems.suspension._FOREIGN_STEMS` states the same set from the other side).
+#: Every other body name is still checked, because a typo in an arm's name is a
+#: model that validates and means something else.
+_ASSEMBLY_SUPPLIED_BODIES = frozenset({"chassis", "ground", "rack", "rack_housing"})
 #: The fields that describe a template's *topology*.  A subsystem or an assembly
 #: override that names any of them is rejected by name rather than by omission:
 #: "you cannot add a body here" is the message the boundary exists to produce.
@@ -203,7 +215,7 @@ class TemplateDocument:
         for joint in payload["joints"]:
             joint_names.append(str(joint["name"]))
             for key in ("body_a", "body_b"):
-                if str(joint[key]) not in body_names:
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES:
                     raise AuthoringError(
                         f"{path}: joint {joint['name']!r} references unknown body "
                         f"{joint[key]!r} in {key}"
@@ -223,7 +235,7 @@ class TemplateDocument:
         for element in payload["elements"]:
             element_names.append(str(element["name"]))
             for key in ("body_a", "body_b"):
-                if str(element[key]) not in body_names:
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES:
                     raise AuthoringError(
                         f"{path}: element {element['name']!r} references unknown body "
                         f"{element[key]!r} in {key}"

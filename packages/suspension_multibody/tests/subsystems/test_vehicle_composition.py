@@ -201,7 +201,10 @@ def test_the_axle_runtimes_are_the_composed_ones() -> None:
         assert hasattr(axle, "constraints")
         # The steering branch of the vehicle layer reads the axle's *chassis
         # rack marker*, and the merged point map can only keep one of the two.
-        assert ("chassis", "rack_center") in axle.points
+        assert (
+            ("chassis", "rack_center") in axle.points
+            or ("ground", "rack_center") in axle.points
+        )
 
 
 def test_the_weld_switch_agrees(monkeypatch) -> None:

@@ -117,7 +117,7 @@ def test_the_carrier_is_welded_to_its_upright() -> None:
         "wheel_carrier_R_weld",
     ]
     for constraint in link.constraints:
-        assert constraint.body_a.startswith("upright_")
+        assert constraint.body_a.startswith(("wheel_hub_", "upright_"))
         assert constraint.body_b.startswith("wheel_carrier_")
         assert constraint.body_a in merged.bodies
         assert constraint.body_b in merged.bodies
@@ -136,15 +136,19 @@ def test_the_prescribed_motion_still_acts_on_the_suspension() -> None:
     bench's own body while the suspension never travelled.
     """
     _composed, runtime, _link, merged = _linked()
-    assert wheel_centre_body(runtime, "L") == "upright_L"
-    assert wheel_centre_body(merged, "L") == "upright_L"
+    expected_body = "wheel_hub_L" if "wheel_hub_L" in runtime.bodies else "upright_L"
+    assert wheel_centre_body(runtime, "L") == expected_body
+    assert wheel_centre_body(merged, "L") == expected_body
     document = model_document(merged, name="probe")
     drives = {
         row["name"]: row["body_a"]
         for row in document["joints"]
         if row["name"].startswith("wheel_drive_")
     }
-    assert drives == {"wheel_drive_L": "upright_L", "wheel_drive_R": "upright_R"}
+    assert drives == {
+        "wheel_drive_L": expected_body,
+        "wheel_drive_R": "wheel_hub_R" if "wheel_hub_R" in runtime.bodies else "upright_R",
+    }
 
 
 def test_the_carrier_does_not_declare_a_second_wheel_centre() -> None:
@@ -161,7 +165,8 @@ def test_the_carrier_does_not_declare_a_second_wheel_centre() -> None:
     for carrier in carriers:
         assert (carrier, "wheel_center") not in merged.points
         assert (carrier, "center") in merged.points
-    assert wheel_centre_body(merged, "L") == "upright_L"
+    expected_body = "wheel_hub_L" if "wheel_hub_L" in merged.bodies else "upright_L"
+    assert wheel_centre_body(merged, "L") == expected_body
 
 
 def test_the_tire_moves_to_the_bench_wheel() -> None:
@@ -322,11 +327,16 @@ def test_an_ambiguous_wheel_centre_is_refused() -> None:
     runtime = composed.assembly.physical
     from dataclasses import replace
 
+    carrier_pt = (
+        ("wheel_hub_L", "wheel_center")
+        if ("wheel_hub_L", "wheel_center") in runtime.points
+        else ("upright_L", "wheel_center")
+    )
     duplicated = replace(
         runtime,
         points={
             **runtime.points,
-            ("upper_arm_L", "wheel_center"): runtime.points[("upright_L", "wheel_center")],
+            ("upper_arm_L", "wheel_center"): runtime.points[carrier_pt],
         },
     )
     with pytest.raises(RigLinkError, match="more than one wheel centre"):

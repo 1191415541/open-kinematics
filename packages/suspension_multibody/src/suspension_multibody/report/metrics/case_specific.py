@@ -82,8 +82,19 @@ def wheel_metrics(state: Any, assembly: Any, side: str) -> dict[str, float]:
     pose = state.pose(body)
     rotation = np.asarray(pose.rotation, dtype=float)
     origin = np.asarray(pose.translation, dtype=float)
-    center_local = np.asarray(assembly.point(body, "wheel_center"), dtype=float)
-    center = origin + rotation @ center_local
+    if (body, "wheel_center") in getattr(assembly, "points", ()):
+        center_local = np.asarray(assembly.point(body, "wheel_center"), dtype=float)
+        center = origin + rotation @ center_local
+    elif (body, "spindle") in getattr(assembly, "points", ()):
+        center_local = np.asarray(assembly.point(body, "spindle"), dtype=float)
+        center = origin + rotation @ center_local
+    elif (hub := f"wheel_hub_{normalized}") in getattr(assembly, "bodies", ()) and (hub, "wheel_center") in getattr(assembly, "points", ()):
+        hub_pose = state.pose(hub)
+        hub_center = np.asarray(assembly.point(hub, "wheel_center"), dtype=float)
+        center = np.asarray(hub_pose.translation, dtype=float) + np.asarray(hub_pose.rotation, dtype=float) @ hub_center
+    else:
+        center_local = np.asarray(assembly.point(body, "wheel_center"), dtype=float)
+        center = origin + rotation @ center_local
     outward = -1.0 if normalized == "L" else 1.0
     lateral_axis_y = float(rotation[1, 1])
     camber_deg = -outward * float(

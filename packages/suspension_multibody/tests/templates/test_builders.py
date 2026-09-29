@@ -65,8 +65,8 @@ def test_k_and_c_modes_activate_the_columns_they_should() -> None:
     """
     k = build_fragment(DOUBLE_WISHBONE, mode="K", properties={}, instance=("axle",))
     c = build_fragment(DOUBLE_WISHBONE, mode="C", properties={}, instance=("axle",))
-    assert (len(k.joints), len(k.forces)) == (13, 0)
-    assert (len(c.joints), len(c.forces)) == (9, 8)
+    assert (len(k.joints), len(k.forces)) == (14, 0)
+    assert (len(c.joints), len(c.forces)) == (10, 8)
 
 
 def test_mode_does_not_change_the_bodies_or_their_points() -> None:

@@ -41,4 +41,6 @@ def test_front_axle_has_two_sides_and_rack() -> None:
         assembly.bodies
     )
     assert "rack" in assembly.bodies
-    assert len(assembly.connections) == 16
+    # 8 arm-mount rows, 2 outer joints, 2 rack-tie joints, 2 tie-upright joints, and
+    # the two wheel spin joints with the wheel-centre row each hub adds.
+    assert len(assembly.connections) == 18

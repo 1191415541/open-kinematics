@@ -210,11 +210,11 @@ def compose_vehicle_runtime(
         # a body called ``chassis``; the vehicle's own chassis is the one that
         # survives, and every other axle body is qualified by its end.
         body_map = {
-            old: model.chassis.name if old == "chassis" else f"{prefix}{old}"
+            old: model.chassis.name if old in ("chassis", "ground") else f"{prefix}{old}"
             for old in axle.bodies
         }
         for old_name, body in axle.bodies.items():
-            if old_name == "chassis":
+            if old_name in ("chassis", "ground"):
                 continue
             new_name = body_map[old_name]
             if new_name in bodies:
@@ -244,9 +244,15 @@ def compose_vehicle_runtime(
             if not wheel.name.startswith(f"{axle_name}_"):
                 continue
             side = "L" if wheel.name.endswith("left") else "R"
+            hub = body_map.get(f"wheel_hub_{side}")
             upright = body_map[f"upright_{side}"]
-            center = points[(upright, "wheel_center")]
-            mount_body = wheel.mount_body or f"upright_{side}"
+            carrier = hub if hub and (hub, "wheel_center") in points else upright
+            center = points[(carrier, "wheel_center")]
+            if wheel.mount_joint_kind == "fixed":
+                default_mount = f"upright_{side}"
+            else:
+                default_mount = f"wheel_hub_{side}" if hub in bodies else f"upright_{side}"
+            mount_body = wheel.mount_body or default_mount
             actual_mount_body = body_map.get(mount_body, mount_body)
             if actual_mount_body not in bodies:
                 raise ValueError(
@@ -259,7 +265,7 @@ def compose_vehicle_runtime(
             )
             _add_wheel(
                 wheel,
-                upright,
+                carrier,
                 center,
                 actual_mount_body,
                 runtime_body,

@@ -504,9 +504,15 @@ def _vehicle_case_matrix(fixture):
     pac2002_adams = fixture._positioned_vehicle(
         fixture._pac2002_model(combined=True, parameter_source="adams_builtin")
     )
+    # The road is raised by a *physical* bump rather than by the 1 m this case was
+    # recorded with: 1 m is three wheel radii of penetration, and a state given
+    # with that much penetration *and* a 10 m/s slip is a corner the tire's
+    # relaxation cannot start the integration from (measured: 1 m with v=0 and
+    # with 1 m/s both start, 1 m with 10 m/s does not, 50 mm with 10 m/s does).
+    # The case is still the non-default one it is named for.
     non_default = fixture._case(base).model_copy(
         update={
-            "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0)),
+            "road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=0.05)),
             "initial_states": fixture._uniform_velocity_initial_states(base),
         }
     )
@@ -901,12 +907,14 @@ _VEHICLE_KC_STIFFNESS = tuple(
 _VEHICLE_KC_WINDOW_S = 2e-2
 _VEHICLE_KC_SAMPLES = 21
 
-#: The four driven wheel coordinates the sweep names, in grid order.
+#: The four driven wheel coordinates the sweep names, in grid order: the bodies
+#: that *declare* the wheel centre, which 方式 A puts on the wheel hub -- the
+#: upright keeps the spindle the hub turns on and no wheel centre of its own.
 _VEHICLE_KC_WHEELS = (
-    "front_upright_L",
-    "front_upright_R",
-    "rear_upright_L",
-    "rear_upright_R",
+    "front_wheel_hub_L",
+    "front_wheel_hub_R",
+    "rear_wheel_hub_L",
+    "rear_wheel_hub_R",
 )
 
 

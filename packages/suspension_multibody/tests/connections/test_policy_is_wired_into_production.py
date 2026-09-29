@@ -61,16 +61,20 @@ def test_an_axle_that_carries_a_brake_is_refused_by_the_rule() -> None:
         )
 
 
-def test_an_axle_without_a_chassis_is_refused() -> None:
+def test_an_axle_without_a_chassis_grounds_its_mounts() -> None:
     """
-    The suspension hangs from a fixed support; without one there is nothing to
-    react against.  The rule states this, and the build now enforces the rule
-    rather than a copy of it.
+    A single axle carries no chassis (requirement 2), and that is legal.
+
+    The rule used to require one, because the suspension had to hang from a fixed
+    support.  The support is the *ground* now: a mount whose far end the assembly
+    does not carry is attached there, fixed, so the axle still has something to react
+    against and no model has to declare a body it does not have.
     """
-    with pytest.raises(RuleViolation, match="missing required"):
-        compose_axle(
-            _model(), request=_request(DEFAULT_AXLE_SUBSYSTEMS - {"chassis"})
-        )
+    assembly = compose_axle(
+        _model(), request=_request(DEFAULT_AXLE_SUBSYSTEMS - {"chassis"})
+    )
+    assert "chassis" not in assembly.bodies
+    assert "ground" in assembly.bodies and assembly.bodies["ground"].fixed
 
 
 def test_an_axle_without_a_suspension_is_refused() -> None:
@@ -83,7 +87,7 @@ def test_an_axle_without_a_suspension_is_refused() -> None:
 def test_the_default_axle_is_accepted() -> None:
     """The rule must not refuse the assembly every existing caller builds."""
     assembly = compose_axle(_model())
-    assert "chassis" in assembly.bodies
+    assert "ground" in assembly.bodies and assembly.bodies["ground"].fixed
 
 
 def test_an_unknown_role_is_refused() -> None:

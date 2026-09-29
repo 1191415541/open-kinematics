@@ -127,23 +127,31 @@ def test_the_two_assemblies_share_one_set_of_subsystem_definitions() -> None:
 
     The vehicle assembly is two axles plus the rest, so a role the axle defines
     and the vehicle does not (or the reverse) would mean two vocabularies for one
-    architecture.  The vehicle's set is the axle's plus brake and drive, exactly.
+    architecture.  The vehicle's set is the axle's plus the body, the brake and the
+    drive, exactly: the chassis is the vehicle's own, because a single axle carries
+    none and hangs its mounts on the ground instead (requirement 2).
     """
     axle = compose_axle(_axle("front", 1400), "K")
     vehicle = compose_vehicle(_vehicle(), "K")
     assert axle.capabilities is not None and vehicle.capabilities is not None
     axle_roles = axle.capabilities.subsystems
     vehicle_roles = vehicle.capabilities.subsystems
-    assert vehicle_roles - axle_roles == {"brake", "drive"}
+    assert vehicle_roles - axle_roles == {"chassis", "brake", "drive"}
     assert axle_roles - vehicle_roles == set()
 
 
 def test_the_vehicle_builds_its_own_wheels_unlike_the_axle() -> None:
     """A single axle gets its wheels from the rig; a vehicle builds them (D9)."""
     vehicle = compose_vehicle(_vehicle(), "K")
-    assert any(name.startswith("wheel_") for name in vehicle.bodies)
+    assert any(name.startswith("wheel_front_") for name in vehicle.bodies)
     axle = compose_axle(_axle("front", 1400), "K")
-    assert not any(name.startswith("wheel_") for name in axle.bodies)
+    # 方式 A gives the axle a *hub* per side, and the wheel itself is still the
+    # vehicle's (or the rig's): a `wheel_<corner>` body on the axle would be one too
+    # many, which is what the corner-named bodies above are.
+    assert {name for name in axle.bodies if name.startswith("wheel_")} == {
+        "wheel_hub_L",
+        "wheel_hub_R",
+    }
 
 
 def test_steering_is_required_on_the_vehicle_side() -> None:

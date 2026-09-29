@@ -57,7 +57,7 @@ def test_bodies_match_the_frozen_snapshot() -> None:
         # come out the same too, or the solve would differ.
         for name, body in assembly.bodies.items():
             assert body.name == name, f"{key} {name}"
-            expected_fixed = name == "chassis"
+            expected_fixed = name in ("chassis", "ground")
             assert body.fixed == expected_fixed, f"{key} {name} fixed"
             assert np.array_equal(body.pose.rotation, np.eye(3)), f"{key} {name} pose"
 
@@ -192,5 +192,5 @@ def test_c_mode_placeholders_are_the_eight_inboard_slots() -> None:
     for element in placeholders:
         assert np.array_equal(element.stiffness, np.zeros((6, 6))), element.name
         assert element.local_pose_a.quaternion[0] == 1.0, element.name
-        assert element.body_a == "chassis", element.name
+        assert element.body_a in ("chassis", "ground"), element.name
         assert element.body_b.startswith(("upper_arm_", "lower_arm_")), element.name

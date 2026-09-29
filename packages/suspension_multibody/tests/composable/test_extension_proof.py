@@ -107,7 +107,9 @@ def test_the_fixture_is_marked_synthetic_and_is_not_a_wishbone_rename() -> None:
     assert set(trailing.bodies) == {"chassis", "upright_L", "upright_R"}
     assert len(trailing.bodies) < len(wishbone.bodies)
     assert len(trailing.constraints) == 2
-    assert len(wishbone.constraints) == 13
+    # 12 suspension joints, the 2 wheel spin joints, and the steering's rack guide
+    # with its housing mount.
+    assert len(wishbone.constraints) == 16
     assert {type(c).__name__ for c in trailing.constraints} == {"RevoluteJoint"}
     # Steering is not merely absent from the name: there is no rack body, no tie
     # rod, and nothing the rig could drive along an axis.

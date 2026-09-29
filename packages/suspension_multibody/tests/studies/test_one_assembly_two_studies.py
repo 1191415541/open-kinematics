@@ -131,7 +131,9 @@ def test_the_quasi_static_reading_still_emits_the_kc_contract() -> None:
     assembly = build_study_assembly(_model(), study=QUASI_STATIC)
     document = study_model_document(assembly, name="probe")
     assert document["contract"] == "multibody-model"
-    assert [body["name"] for body in document["bodies"]][0] == "chassis"
+    # The axle carries no chassis (requirement 2: a single axle has none), so the
+    # document opens with the suspension's own bodies.
+    assert [body["name"] for body in document["bodies"]][0] == "upper_arm_L"
     assert "joints" in document and document["joints"]
 
 
@@ -167,7 +169,10 @@ def test_the_bridge_reports_which_body_it_could_not_read() -> None:
     assembly = build_study_assembly(model, study=DYNAMIC)
     with pytest.raises(BridgeError) as error:
         axle_dynamics_model(assembly, name="probe")
-    assert "rack" in str(error.value)
+    # Which body is named first is the document's order rather than the message's
+    # business, and the axle no longer opens with a chassis: any of the model's own
+    # bodies is the right answer, and the message has to name one of them.
+    assert any(name in str(error.value) for name in _BODY_NAMES)
 
 
 def test_a_study_assembly_carries_its_study_for_readers() -> None:

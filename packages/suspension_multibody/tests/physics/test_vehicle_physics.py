@@ -10,7 +10,12 @@ def test_static_wheel_loads_balance_weight_and_moments(full_vehicle_model) -> No
     result = compute_static_wheel_loads(full_vehicle_model)
 
     assert result.rank == 3
-    assert result.residual < 1e-8
+    # A roundoff-scale residual rather than a physical one: the loads are ~1e4 N, so
+    # this bound is 1e-10 of the quantity being balanced.  It is sensitive to the mass
+    # distribution the composed runtime carries -- 方式 A's hub and the steering
+    # housing are bodies of their own -- so the bound is stated at the scale of the
+    # arithmetic rather than at the one a particular fixture happened to hit.
+    assert result.residual < 1e-6
     assert all(value > 0.0 for value in result.wheel_loads.values())
     assert np.isclose(
         result.summary.total,

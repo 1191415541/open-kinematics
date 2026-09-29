@@ -76,8 +76,15 @@ _WINDOW_S = 2e-2
 _SAMPLES = 21
 _TIMES_S = tuple(np.linspace(0.0, _WINDOW_S, _SAMPLES).tolist())
 
-#: The four driven wheel coordinates, in the order the family names them.
-_WHEELS = ("front_upright_L", "front_upright_R", "rear_upright_L", "rear_upright_R")
+#: The four driven wheel coordinates, in the order the family names them: the
+#: bodies that *declare* the wheel centre, which 方式 A puts on the wheel hub --
+#: the upright keeps the spindle the hub turns on and no wheel centre of its own.
+_WHEELS = (
+    "front_wheel_hub_L",
+    "front_wheel_hub_R",
+    "rear_wheel_hub_L",
+    "rear_wheel_hub_R",
+)
 
 _STIFFNESS = tuple(
     tuple(

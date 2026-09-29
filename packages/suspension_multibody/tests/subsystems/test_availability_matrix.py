@@ -115,7 +115,7 @@ def test_the_vehicle_capability_set_includes_brake_and_drive() -> None:
 
 
 def test_the_two_declarations_differ_exactly_by_brake_and_drive() -> None:
-    assert DEFAULT_VEHICLE_SUBSYSTEMS - DEFAULT_AXLE_SUBSYSTEMS == set(TORQUE_ROLES)
+    assert DEFAULT_VEHICLE_SUBSYSTEMS - DEFAULT_AXLE_SUBSYSTEMS == set(TORQUE_ROLES) | {"chassis"}
     assert DEFAULT_AXLE_SUBSYSTEMS - DEFAULT_VEHICLE_SUBSYSTEMS == set()
 
 

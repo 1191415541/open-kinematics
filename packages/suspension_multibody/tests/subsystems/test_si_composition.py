@@ -70,21 +70,18 @@ def test_the_composed_points_match_the_historical_set(mode: str) -> None:
     assert set(composed.assembly.fragment.points) == set(historical.points)
 
 
-@pytest.mark.parametrize("mode,expected", [("K", 13), ("C", 9)])
+@pytest.mark.parametrize("mode,expected", [("K", 16), ("C", 12)])
 def test_the_active_constraint_count_is_preserved(mode: str, expected: int) -> None:
-    """K has 13 joints and C has 9: C keeps the tie rods, it does not drop them."""
+    """K has 16 joints and C has 12 (including wheel spin joints and housing mount)."""
     historical = compose_axle(_model(), mode)
     composed = si_assembly_for_axle(_model(), request=AssemblyRequest(mode=mode))
     assert len(historical.constraints) == expected
     assert len(composed.assembly.fragment.joints) == expected
 
 
-def test_an_assembly_without_steering_has_no_rack_or_tie_rods() -> None:
+def test_an_assembly_without_steering_has_no_rack_and_grounds_tie_rods() -> None:
     """
-    The optional branch disappears wholesale, not as a degenerate body.
-
-    A floating rack would poison the capability check -- the rig would think the
-    assembly can be steered -- so absence is the only correct representation.
+    Steering mechanism disappears, while tie rods belong to suspension and ground.
     """
     request = AssemblyRequest(
         mode="K",
@@ -93,12 +90,14 @@ def test_an_assembly_without_steering_has_no_rack_or_tie_rods() -> None:
     composed = si_assembly_for_axle(_model(), request=request)
     bodies = set(composed.assembly.fragment.bodies)
     assert "rack" not in bodies
-    assert not any(name.startswith("tie_rod") for name in bodies)
+    assert "rack_housing" not in bodies
+    assert any(name.startswith("tie_rod") for name in bodies)
 
 
 def test_the_composed_assembly_reports_the_roles_it_carries() -> None:
     composed = si_assembly_for_axle(_model())
-    assert composed.assembly.subsystems >= {"chassis", "suspension", "steering"}
+    assert composed.assembly.subsystems >= {"suspension", "steering"}
+    assert "chassis" not in composed.assembly.subsystems
     assert "brake" not in composed.assembly.subsystems
     assert "drive" not in composed.assembly.subsystems
 
@@ -127,10 +126,10 @@ def test_the_fingerprint_ignores_the_subsystem_collection_order() -> None:
     not an input to the result.
     """
     contributions = contributions_for_axle(_model())
-    forward = compose_simulation_assembly(contributions, body_order=tuple(("chassis", "rack")))
+    forward = compose_simulation_assembly(contributions, body_order=tuple(("rack", "upper_arm_L")))
     reversed_contributions = tuple(reversed(contributions))
     backward = compose_simulation_assembly(
-        reversed_contributions, body_order=tuple(("chassis", "rack"))
+        reversed_contributions, body_order=tuple(("rack", "upper_arm_L"))
     )
     assert forward.fingerprint == backward.fingerprint
 

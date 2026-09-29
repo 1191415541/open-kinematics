@@ -123,7 +123,9 @@ def test_the_model_document_declares_the_tires_the_assembly_carries() -> None:
     declared = document["tires"]
     assert [entry["name"] for entry in declared] == ["tire_L", "tire_R"]
     for entry in declared:
-        assert entry["body"] == f"upright_{entry['name'][-1]}"
+        # 方式 A hangs the wheel on a hub of its own, and the tire follows the wheel:
+        # the carrier is the hub, and the upright is what a topology without one uses.
+        assert entry["body"] == f"wheel_hub_{entry['name'][-1]}"
         assert entry["model"] == "native_brush"
         # The vertical branch is the *same law* under a degenerate activation,
         # so the two coefficients the branch cannot use are the neutral values

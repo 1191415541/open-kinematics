@@ -52,12 +52,11 @@ from collections.abc import Iterable, Mapping
 from ..schema import TimeSignal
 from ..templates import (
     ConnectionDefinition,
-    OutputDeclaration,
-    PropertySlot,
     SubsystemInstance,
     Template,
     register,
 )
+from ..templates.builtin import BRAKE
 from .assembly import assemble_from_template
 from .types import WHEELS, SubsystemContext, SubsystemOutput
 
@@ -93,28 +92,8 @@ _BRAKE_MOUNTS: tuple[ConnectionDefinition, ...] = tuple(
 #: parameters rather than referring to a properties file.  `front_brake_bias`
 #: coincides with `DrivelineSpec.front_brake_bias`; the other four are the
 #: torque subset of decision D10 (rotor geometry is the detailed template's).
-SIMPLIFIED_BRAKE = Template(
-    name=SIMPLIFIED_BRAKE_NAME,
-    role="brake",
-    #: Zero parts is the point, not an omission: see the module docstring.
-    parts=(),
-    connections=_BRAKE_MOUNTS,
-    property_slots=(
-        PropertySlot("brake_mu", "-", default=0.4),
-        PropertySlot("piston_area", "mm^2", default=2500.0),
-        PropertySlot("effective_piston_radius", "mm", default=145.0),
-        PropertySlot("front_brake_bias", "-", default=0.6),
-        PropertySlot("max_brake_value", "-", default=0.1),
-    ),
-    outputs=(OutputDeclaration("brake_torque", "N*mm", "kernel"),),
-    suspension_kind="brake_4wdisk",
-    description=(
-        "The simplified 4-wheel-disc brake: no bodies, only the per-wheel brake "
-        "torque amplitude.  Direction is the kernel's, taken from the wheel's "
-        "axial speed sign.  A caliper/rotor template is a sibling under the same "
-        "role."
-    ),
-)
+
+SIMPLIFIED_BRAKE = BRAKE
 
 
 def register_simplified() -> Template:

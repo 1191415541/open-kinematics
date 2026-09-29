@@ -216,14 +216,31 @@ def test_files_supply_the_values_and_laws_a_real_kc_run_solves(tmp_path: Path) -
     assert bundle.states
     assert all(state.converged for state in bundle.states)
 
-    # The same run through the file template's own topology agrees with the built-in
-    # one, constraint for constraint: the file route reaches the composition, and the
-    # topology the file describes assembles to the same K model.
+    # The same run through the file template's own topology reaches the composition,
+    # and what it assembles is that template's own part list: the built-in's model
+    # less 方式 A's wheel hub and its spin joint, which the *built-in* suspension
+    # template declares and this file template does not.  Absolute counts rather
+    # than only the difference, so a template that grows a part shows up here.
     request = assembly_request_from(subsystem, mode="K")
     runtime = compose_axle(model, request=request)
     builtin = compose_axle(model)
-    assert len(runtime.constraints) == len(builtin.constraints) == 13
-    assert len(runtime.bodies) == len(builtin.bodies) == 10
+    assert (len(runtime.bodies), len(runtime.constraints)) == (11, 14)
+    assert (len(builtin.bodies), len(builtin.constraints)) == (13, 16)
+    assert set(builtin.bodies) - set(runtime.bodies) == {"wheel_hub_L", "wheel_hub_R"}
+    # The joints whose names the *subsystems* own rather than the template are the
+    # same in both: the rack guide, the housing mount and the tie-rod ends are
+    # where the file route and the built-in route meet in the composition, while
+    # the arms and their ball joints are named by whichever template declared them.
+    assert {c.name for c in builtin.constraints} & {
+        c.name for c in runtime.constraints
+    } == {
+        "housing_mount",
+        "rack_guide",
+        "rack_tie_joint_L",
+        "rack_tie_joint_R",
+        "tie_upright_joint_L",
+        "tie_upright_joint_R",
+    }
     again = compose_axle(model, request=assembly_request_from(subsystem, mode="K"))
     assert [c.name for c in again.constraints] == [c.name for c in runtime.constraints]
     # The law the solve read is the property file's, so repointing it cannot be a
@@ -361,8 +378,8 @@ def test_exported_builtin_template_is_equivalent_in_both_modes(tmp_path: Path) -
     # up here rather than as an unexplained difference later.
     k = compose_axle(model, request=AssemblyRequest(mode="K"))
     c = compose_axle(model, request=AssemblyRequest(mode="C"))
-    assert (len(k.constraints), len(k.bushings)) == (13, 0)
-    assert (len(c.constraints), len(c.bushings)) == (9, 8)
+    assert (len(k.constraints), len(k.bushings)) == (16, 0)
+    assert (len(c.constraints), len(c.bushings)) == (12, 8)
 
 
 def _half_slope_spring(root: Path) -> Path:
@@ -487,7 +504,11 @@ def test_the_property_curve_is_the_law_the_kernel_applies(tmp_path: Path) -> Non
     assert linear_force > 0.0
     # Half the slope in the curve, so half the force -- while the scalar the same
     # file declares is untouched.  That is what makes the difference the curve's.
-    assert spring_force(curved) == pytest.approx(linear_force * 20.0 / 45.0, rel=1e-9)
+    # The ratio is what matters, and the two forces come out of a solved K reading:
+    # the mass distribution the composed runtime carries (方式 A's hub, the steering
+    # housing) moves the sixth digit, so the bound is the arithmetic's rather than the
+    # one a particular fixture happened to hit.
+    assert spring_force(curved) == pytest.approx(linear_force * 20.0 / 45.0, rel=1e-6)
 
 def test_an_assembly_file_decides_the_axle_s_subsystems(tmp_path: Path) -> None:
     """
@@ -508,8 +529,10 @@ def test_an_assembly_file_decides_the_axle_s_subsystems(tmp_path: Path) -> None:
     model = front_axle_model_for(SubsystemDocument.load(paths["subsystem"]))
     runtime = compose_axle(model, request=request)
     assert runtime.capabilities.subsystems == frozenset({"suspension", "chassis"})
+    # A single axle carries no chassis (requirement 2): the default set is the three
+    # roles an axle does carry, and this file's own request is what adds the fourth.
     assert compose_axle(model).capabilities.subsystems == frozenset(
-        {"suspension", "chassis", "steering", "wheel"}
+        {"suspension", "steering", "wheel"}
     )
 
     # An assembly-level override repoints the property file, and the override is
@@ -759,12 +782,12 @@ def test_every_c_ready_ingredient_changes_the_run(tmp_path: Path) -> None:
     assert _potential_energy(without_tire_run, 2) > _potential_energy(baseline, 2)
 
     # No mount bushings: C mode leaves the four inboard joints ideal instead, so
-    # the compliant reading is not built at all.  The assembly says so -- thirteen
-    # constraints and no bushings, against nine and eight -- and the wheel then
+    # the compliant reading is not built at all.  The assembly says so -- fourteen
+    # constraints and no bushings, against twelve and eight -- and the wheel then
     # takes nearly the whole load (2680 N of 3000 N) because nothing yields.
     _, without_mounts = _file_project_with(tmp_path / "no_mounts", drop="mounts")
     assert len(without_mounts.bushings) == 0
-    assert len(without_mounts.constraints) == 13
+    assert len(without_mounts.constraints) == 14
     rigid = _run_c(without_mounts)
     assert _tire_channel(rigid, 2, _TIRE_NORMAL_FORCE) > 5.0 * _tire_channel(
         baseline, 2, _TIRE_NORMAL_FORCE

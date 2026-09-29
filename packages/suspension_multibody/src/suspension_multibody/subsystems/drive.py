@@ -42,12 +42,11 @@ from collections.abc import Iterable
 from ..schema import DrivelineSpec, TimeSignal
 from ..templates import (
     ConnectionDefinition,
-    OutputDeclaration,
-    PropertySlot,
     SubsystemInstance,
     Template,
     register,
 )
+from ..templates.builtin import DRIVE
 from .assembly import assemble_from_template
 from .types import WHEELS, SubsystemContext, SubsystemOutput
 
@@ -83,27 +82,8 @@ _DRIVE_MOUNTS: tuple[ConnectionDefinition, ...] = tuple(
 #: reads them from there.  Declaring the slots is what satisfies the role
 #: contract; filling them with a wrong-but-plausible number would be worse than
 #: the explicit zero.
-SIMPLIFIED_DRIVE = Template(
-    name=SIMPLIFIED_DRIVE_NAME,
-    role="drive",
-    #: Zero parts is the point, not an omission: see the module docstring.
-    parts=(),
-    connections=_DRIVE_MOUNTS,
-    property_slots=(
-        #: Wheel names, not a number.  `DrivelineSpec.driven_wheels` owns them.
-        PropertySlot("driven_wheels", "-", default=0.0),
-        #: The four-way split, not a number.  `DrivelineSpec.drive_split` owns it.
-        PropertySlot("drive_split", "-", default=0.0),
-        PropertySlot("maximum_drive_torque", "N*mm", default=0.0),
-    ),
-    outputs=(OutputDeclaration("drive_torque", "N*mm", "kernel"),),
-    suspension_kind="driveline",
-    description=(
-        "The simplified powertrain: no bodies, only the per-wheel drive torque.  "
-        "Availability is the full-vehicle assembly's call.  A powertrain template "
-        "with bodies is a sibling under the same role."
-    ),
-)
+
+SIMPLIFIED_DRIVE = DRIVE
 
 
 def register_simplified() -> Template:

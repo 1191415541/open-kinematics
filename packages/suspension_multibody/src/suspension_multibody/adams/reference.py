@@ -13,6 +13,7 @@ from ..cases.kc_quasi_static.convert import MM, NativeKcError, quaternion_to_rot
 from ..report.geometry import _wheel_geometry
 from ..schema import FrontAxleModel, MassSpec
 from ..simulation import SimulationRequest, run_request
+from ..subsystems.runtime import wheel_centre_local
 from .probe import AdamsProfile
 
 #: The K case time grid and solver settings the native contract expands.  They
@@ -124,7 +125,7 @@ def _read_hardpoints(path: Path) -> dict[str, tuple[float, float, float]]:
 def _side_fields(assembly, side: str, position_m, quaternion) -> dict[str, float]:
     """Return the wheel-centre and alignment fields a K/C case reports."""
     rotation = quaternion_to_rotation(quaternion)
-    local = np.asarray(assembly.point(f"upright_{side}", "wheel_center"), dtype=float)
+    local = np.asarray(wheel_centre_local(assembly, f"upright_{side}"), dtype=float)
     geometry = _wheel_geometry(
         np.asarray(position_m, dtype=float) / MM,
         rotation,

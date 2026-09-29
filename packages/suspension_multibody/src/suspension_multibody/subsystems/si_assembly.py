@@ -191,16 +191,18 @@ def axle_contributions_and_order(
     instance = (name,)
     contributions: list[SubsystemContribution] = []
 
-    chassis_output = chassis_subsystem.build(context)
-    context.bodies.update(chassis_output.bodies)
-    contributions.append(
-        SubsystemContribution(
-            role="chassis",
-            output=chassis_output,
-            ports=_ports_for_bodies(instance, chassis_output.bodies),
-            note="fixed body and its connection",
+    chassis_output = SubsystemOutput()
+    if request.carries("chassis"):
+        chassis_output = chassis_subsystem.build(context)
+        context.bodies.update(chassis_output.bodies)
+        contributions.append(
+            SubsystemContribution(
+                role="chassis",
+                output=chassis_output,
+                ports=_ports_for_bodies(instance, chassis_output.bodies),
+                note="fixed body and its connection",
+            )
         )
-    )
 
     side_bodies: dict[str, dict[str, object]] = {}
     for side in _SIDES:
@@ -225,6 +227,8 @@ def axle_contributions_and_order(
     suspension_bodies: dict[str, object] = {}
     for side in _SIDES:
         suspension_bodies.update(side_bodies[side])
+    if "ground" in context.bodies:
+        suspension_bodies["ground"] = context.bodies["ground"]
 
     # The two subsystems are contributed *separately* so that every entity keeps
     # its provenance -- which subsystem produced it is a question a caller asks.

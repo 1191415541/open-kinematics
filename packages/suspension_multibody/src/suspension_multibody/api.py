@@ -78,7 +78,7 @@ from .schema import (
 from .schema.case import DisplacementControl, LoadControl
 from .simulation import CompiledSimulation, SimulationRequest, run_compiled, run_request
 from .simulation.replay import VehicleKCTimeDomainSolver
-from .subsystems.runtime import SubsystemRuntime
+from .subsystems.runtime import SubsystemRuntime, wheel_centre_local
 
 #: The output grid a K/C case is solved on.  The kernel's case layer expands a
 #: start/end/step, so the product API has to state one; two samples is the
@@ -883,7 +883,7 @@ def _wheel_response(
 ) -> np.ndarray:
     """Return global wheel-center translation and rotation-vector response."""
     body = f"upright_{side}"
-    local_center = assembly.point(body, "wheel_center")
+    local_center = wheel_centre_local(assembly, body)
     current_center = state.point_world(body, local_center)
     reference_center = reference_state.point_world(body, local_center)
     reference_pose = reference_state.pose(body)

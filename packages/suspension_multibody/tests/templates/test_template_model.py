@@ -151,11 +151,9 @@ def test_the_builtin_keeps_joint_only_points_joint_in_both_modes() -> None:
         c for c in DOUBLE_WISHBONE.connections if c.joint is not None and c.bushing is None
     ]
     roles = {c.role for c in joint_only}
-    assert {"upper_outer", "lower_outer", "tie_inner", "tie_outer"} <= roles
-    # Nine joint-only points: four per side (two outer, two tie rod ends) plus
-    # the rack guide.  Eight of these survive into C mode, which is why C mode
-    # has nine constraints rather than none.
-    assert len(joint_only) == 9, [c.name for c in joint_only]
+    assert {"upper_outer", "lower_outer", "tie_inner", "tie_outer", "wheel_center"} <= roles
+    # Ten joint-only points: five per side (two arm outer, two tie rod ends, one wheel spin).
+    assert len(joint_only) == 10, [c.name for c in joint_only]
 
 
 def test_template_round_trips_through_json() -> None:

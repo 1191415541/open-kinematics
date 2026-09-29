@@ -24,6 +24,8 @@ semantics stay exactly where they were.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import numpy as np
 
 from ..modeling.primitives.joints import (
@@ -38,7 +40,7 @@ from ..modeling.primitives.joints import (
 )
 from ..modeling.primitives.spatial import SE3
 from ..templates.model import ConnectionDefinition, Template
-from .geometry import body_from_spec, body_without_spec, resolve_body
+from .geometry import body_from_part, body_from_spec, resolve_body
 from .types import (
     Connection,
     ResolvedElement,
@@ -185,9 +187,11 @@ def side_bodies(context: SubsystemContext, side: Side) -> dict[str, RigidBody]:
     template lists every part of the assembly, so a tie rod or a rack appears there
     too, and building those here would make two contributions declare one body --
     refused by name as `duplicate bodies between fragments`, and rightly.  Ownership
-    is stated once in :data:`_FOREIGN_STEMS`.  A declared part with no spec gets
-    default mass properties, which is how a template says "this part exists and is
-    otherwise unspecified".
+    is stated once in :data:`_FOREIGN_STEMS`.  A declared part the model describes
+    is built from that spec; a declared part the model says nothing about is built
+    from the template's own declaration of it, which is how the hub -- a body this
+    subsystem invents -- carries a mass at all (see
+    :func:`~.geometry.body_from_part`).
     """
     specs = context.body_specs
     bodies: dict[str, RigidBody] = {}
@@ -197,11 +201,7 @@ def side_bodies(context: SubsystemContext, side: Side) -> dict[str, RigidBody]:
             continue
         if _stem_of(name) in _FOREIGN_STEMS:
             continue
-        bodies[name] = (
-            body_from_spec(name, specs[name])
-            if name in specs
-            else body_without_spec(name)
-        )
+        bodies[name] = _side_body(name, part, specs, context, side)
     return bodies
 
 
@@ -233,14 +233,17 @@ def side_body_order(request: object) -> tuple[str, ...]:
 
     instance = getattr(request, "instantiated_suspension", None)
     template = instance.template if instance is not None else DOUBLE_WISHBONE
+    carries_chassis = True
     carries_steering = True
     carries = getattr(request, "carries", None)
     if callable(carries):
+        carries_chassis = bool(carries("chassis"))
         carries_steering = bool(carries("steering"))
     return tuple(
         part.name
         for part in template.parts
-        if carries_steering or _stem_of(part.name) not in _STEERING_STEMS
+        if (carries_chassis or part.name != "chassis")
+        and (carries_steering or _stem_of(part.name) not in _STEERING_STEMS)
     )
 
 
@@ -249,10 +252,37 @@ def side_body_order(request: object) -> tuple[str, ...]:
 #: ``chassis`` is the chassis subsystem's, ``rack`` and ``tie_rod`` are steering's.
 #: Stated here rather than inferred, because ownership is a decision about the design
 #: and not something a name can be asked about.
-_FOREIGN_STEMS: frozenset[str] = frozenset({"chassis", "rack", "tie_rod"})
+_FOREIGN_STEMS: frozenset[str] = frozenset({"chassis", "rack", "rack_housing"})
 
 #: The stems that exist only when the assembly carries steering.
-_STEERING_STEMS: frozenset[str] = frozenset({"rack", "tie_rod"})
+_STEERING_STEMS: frozenset[str] = frozenset({"rack", "rack_housing"})
+
+
+def _side_body(
+    name: str,
+    part: object,
+    specs: Mapping[str, object],
+    context: SubsystemContext,
+    side: Side,
+) -> RigidBody:
+    """
+    Build one suspension body: the model's spec for it, or the template's.
+
+    The model wins where it speaks, and the template answers for the parts it
+    invents -- the wheel hub above all, which no caller declares because the
+    template is what puts it there.  See :func:`~.geometry.body_from_part` for what
+    a template's own declaration of a part amounts to, and
+    :meth:`~.types.SubsystemContext.part_placement` for where its mass ends up.
+    """
+    if name in specs:
+        return body_from_spec(name, specs[name])
+    return body_from_part(
+        name,
+        part,
+        center_of_mass=context.part_placement(
+            name, _suspension_template(context).connections, side
+        ),
+    )
 
 
 def _stem_of(name: str) -> str:
@@ -361,8 +391,13 @@ def side_content(context: SubsystemContext, side: Side) -> SubsystemOutput:
         # The support-side label comes from the connection's own declaration; the
         # historical build derives it from the arm's stem, which is the same string
         # and is now stated rather than derived in two places.
+        far_body = connection.far_owner or "chassis"
+        if far_body not in bodies:
+            far_body = "ground"
+            if "ground" not in bodies:
+                bodies["ground"] = RigidBody("ground", fixed=True)
         chassis_label = connection.far_label
-        points[("chassis", chassis_label)] = global_point.copy()
+        points[(far_body, chassis_label)] = global_point.copy()
         column = connection.active_column(context.mode)
         # The connection row is recorded in *every* mode, including a mode where
         # the point constrains nothing: the row is the assembly's accounting of
@@ -380,7 +415,7 @@ def side_content(context: SubsystemContext, side: Side) -> SubsystemOutput:
             joint = _build_joint(
                 joint_kind,
                 name=connection.name,
-                body_a=connection.far_owner or "chassis",
+                body_a=far_body,
                 point_a=global_point,
                 body_b=body,
                 point_b=local,
@@ -392,7 +427,7 @@ def side_content(context: SubsystemContext, side: Side) -> SubsystemOutput:
         elif column == "bushing":
             ideal_constraints.append(
                 BallJoint(
-                    "chassis",
+                    far_body,
                     global_point,
                     body,
                     local,
@@ -409,7 +444,7 @@ def side_content(context: SubsystemContext, side: Side) -> SubsystemOutput:
                     # unchanged by default and a template that declares real
                     # stiffness changes it deliberately.
                     spec=context.mount_bushing_stiffness,
-                    body_a="chassis",
+                    body_a=far_body,
                     body_b=body,
                     local_pose_a=SE3(
                         translation=global_point,
@@ -425,7 +460,7 @@ def side_content(context: SubsystemContext, side: Side) -> SubsystemOutput:
             Connection(
                 connection.name,
                 kind,
-                "chassis",
+                far_body,
                 body,
                 chassis_label,
                 label,
@@ -457,6 +492,109 @@ def side_content(context: SubsystemContext, side: Side) -> SubsystemOutput:
         connections.append(
             Connection(
                 connection.name, "ideal", body, upright, "outer", upright_label
+            )
+        )
+
+    # Tie rod joints: inner connects to rack (if present) or grounds; outer connects to upright.
+    tie_body = f"tie_rod_{side}"
+    if tie_body in bodies:
+        inner_point_global = context.point(side, "tie_inner")
+        tie_inner_local = context.local(tie_body, inner_point_global)
+        points[(tie_body, "inner")] = tie_inner_local.copy()
+
+        if "rack" in bodies:
+            rack_body = "rack"
+            rack_label = f"tie_{side}"
+            rack_point_local = context.local(rack_body, inner_point_global)
+            first, first_local, first_label = rack_body, rack_point_local, rack_label
+            second, second_local, second_label = tie_body, tie_inner_local, "inner"
+        else:
+            # Unmatched: directly connects to ground (or chassis if present)
+            ground_body = "chassis" if "chassis" in bodies else "ground"
+            if "ground" not in bodies and ground_body == "ground":
+                bodies["ground"] = RigidBody("ground", fixed=True)
+            ground_local = context.local(ground_body, inner_point_global)
+            points[(ground_body, f"tie_{side}")] = ground_local.copy()
+            first, first_local, first_label = ground_body, ground_local, f"tie_{side}"
+            second, second_local, second_label = tie_body, tie_inner_local, "inner"
+
+        inner_joint = BallJoint(
+            first,
+            first_local,
+            second,
+            second_local,
+            name=f"rack_tie_joint_{side}",
+        )
+        constraints.append(inner_joint)
+        ideal_constraints.append(inner_joint)
+        connections.append(
+            Connection(
+                f"rack_tie_joint_{side}",
+                "ideal",
+                first,
+                second,
+                first_label,
+                second_label,
+            )
+        )
+
+        outer_point_global = context.point(side, "tie_outer")
+        tie_outer_local = context.local(tie_body, outer_point_global)
+        upright_tie_outer_local = context.local(upright, outer_point_global)
+        points[(tie_body, "outer")] = tie_outer_local.copy()
+        points[(upright, "tie_outer")] = upright_tie_outer_local.copy()
+        outer_joint = BallJoint(
+            tie_body,
+            tie_outer_local,
+            upright,
+            upright_tie_outer_local,
+            name=f"tie_upright_joint_{side}",
+        )
+        constraints.append(outer_joint)
+        ideal_constraints.append(outer_joint)
+        connections.append(
+            Connection(
+                f"tie_upright_joint_{side}",
+                "ideal",
+                tie_body,
+                upright,
+                "outer",
+                "tie_outer",
+            )
+        )
+
+    # Wheel spin joint (方式 A): RevoluteJoint between upright and wheel_hub along spin_axis.
+    hub_body = f"wheel_hub_{side}"
+    if hub_body in bodies:
+        wheel_center_global = context.point(side, "wheel_center")
+        upright_center = context.local(upright, wheel_center_global)
+        hub_center = context.local(hub_body, wheel_center_global)
+        points[(upright, "spindle")] = upright_center.copy()
+        points[(hub_body, "center")] = hub_center.copy()
+        points[(hub_body, "wheel_center")] = hub_center.copy()
+
+        axis_global = np.array([0.0, 1.0, 0.0], dtype=float)
+        axis_upright = bodies[upright].pose.rotation.T @ axis_global
+        axis_hub = bodies[hub_body].pose.rotation.T @ axis_global
+        spin_joint = RevoluteJoint(
+            upright,
+            upright_center,
+            axis_upright,
+            hub_body,
+            hub_center,
+            axis_hub,
+            name=f"wheel_spin_joint_{side}",
+        )
+        constraints.append(spin_joint)
+        ideal_constraints.append(spin_joint)
+        connections.append(
+            Connection(
+                f"wheel_spin_joint_{side}",
+                "ideal",
+                upright,
+                hub_body,
+                "spindle",
+                "center",
             )
         )
 

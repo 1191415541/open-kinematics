@@ -321,10 +321,12 @@ def test_native_vehicle_runs_two_suspensions_and_four_wheels() -> None:
 
     result = run_vehicle_dynamics(model, _case(model))
 
-    # chassis + front rack + 8 front links + rear rack + 8 rear links + 4 wheels.
-    # The welded rear rack is now its own body: the weld reaches the kernel as a
-    # `fixed` joint instead of being fused away here (A1 decision, 2026-09-22).
-    assert len(result.body_names) == 23
+    # chassis + per axle (rack, rack housing, 8 links, 2 wheel hubs, 2 wheels):
+    # the welded rear rack is its own body, and 方式 A's hub is one too -- the weld
+    # reaches the kernel as a `fixed` joint instead of being fused away here
+    # (A1 decision, 2026-09-22), and the wheel spins on the hub rather than on the
+    # upright.
+    assert len(result.body_names) == 29
     assert "rear_rack" in result.body_names
     assert result.steering_state("front_rack").shape == (2, 4)
     assert np.all(result.diagnostics.accepted)
@@ -1462,7 +1464,11 @@ def test_static_trim_accepts_zero_speed_drag_and_roundoff_brake_torque() -> None
                 ratio=16.0,
                 rack_damping=0.0,
                 actuator_mode="prescribed_translation",
-                actuator_reaction_body="chassis",
+                # The rack is prescribed relative to the body it slides in -- the
+                # steering housing, which is welded to the chassis, so naming it is
+                # the same statement about where the rack goes as naming the chassis
+                # (and it is the only body the rack has a guide joint with).
+                actuator_reaction_body="front_rack_housing",
                 actuator_axis_local=Vec3(y=1.0),
             ),
         }

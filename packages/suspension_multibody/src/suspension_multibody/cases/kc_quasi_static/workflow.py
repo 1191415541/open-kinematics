@@ -6,6 +6,7 @@ import numpy as np
 
 from ...axle_dynamics import AxleSolverSettings
 from ...report.geometry import _wheel_geometry
+from ...subsystems.runtime import wheel_centre_local
 from .convert import MM, NativeKcError, quaternion_to_rotation
 
 SIDES = ("L", "R")
@@ -37,12 +38,12 @@ def quaternion_conjugate(q: np.ndarray) -> np.ndarray:
 def wheel_center_world(assembly, side: str, position_m, quaternion) -> np.ndarray:
     """World position of the wheel-centre marker for one side (metres)."""
     rotation = quaternion_to_rotation(quaternion)
-    local = np.asarray(assembly.point(f"upright_{side}", "wheel_center"), dtype=float) * MM
+    local = np.asarray(wheel_centre_local(assembly, f"upright_{side}"), dtype=float) * MM
     return np.asarray(position_m, dtype=float) + rotation @ local
 
 def _side_fields(assembly, side: str, position_m, quaternion) -> dict[str, float]:
     rotation = quaternion_to_rotation(quaternion)
-    local = np.asarray(assembly.point(f"upright_{side}", "wheel_center"), dtype=float)
+    local = np.asarray(wheel_centre_local(assembly, f"upright_{side}"), dtype=float)
     geometry = _wheel_geometry(
         np.asarray(position_m, dtype=float) / MM,
         rotation,

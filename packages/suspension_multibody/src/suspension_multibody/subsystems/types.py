@@ -19,6 +19,7 @@ defined, not what it does.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Mapping
 
@@ -27,10 +28,17 @@ import numpy as np
 from ..modeling.primitives.joints import Constraint, RigidBody
 from ..modeling.primitives.spatial import SE3
 from ..schema import Vec3
-from .geometry import local_point, local_pose, lookup_hardpoint, mirror_point
+from .geometry import (
+    HARDPOINT_ALIASES,
+    local_point,
+    local_pose,
+    lookup_hardpoint,
+    mirror_point,
+)
 
 if TYPE_CHECKING:
     from ..schema import FrontAxleModel, RigidBodySpec
+    from ..templates.model import ConnectionDefinition
 
 __all__ = [
     "DEFAULT_AXLE_SUBSYSTEMS",
@@ -66,7 +74,7 @@ SUBSYSTEM_ROLES: frozenset[str] = frozenset(
 #: has no brake and no drive (requirement 17 / D8); `wheel` is present because
 #: the rig supplies the wheels (D9), not because the axle builds a wheel body.
 DEFAULT_AXLE_SUBSYSTEMS: frozenset[str] = frozenset(
-    {"chassis", "suspension", "steering", "wheel"}
+    {"suspension", "steering", "wheel"}
 )
 
 #: The subsystem set the full-vehicle assembly carries: all six.  Brake and drive
@@ -326,6 +334,35 @@ class SubsystemContext:
     def body_specs(self) -> dict[str, RigidBodySpec]:
         """Return schema body specs by name, for mass properties."""
         return {spec.name: spec for spec in self.model.bodies}
+
+    def part_placement(
+        self, part: str, connections: Iterable[ConnectionDefinition], side: Side
+    ) -> np.ndarray | None:
+        """
+        Return the global point a template's own connections attach `part` at.
+
+        A part the model describes is placed by the model's spec; a part the
+        template *invents* -- the wheel hub, the steering housing -- is placed by
+        where the template attaches it, which is the hardpoint its own connections
+        name.  The answer is where that body's **mass** sits, and it is not
+        cosmetic: a free body whose mass is off the axis it turns on carries a
+        gravity moment no constraint can react, and a welded pair whose two centres
+        of mass sit apart cannot share one rigid motion at all.
+
+        `None` means the template places this part nowhere the model names, which is
+        the ordinary answer for a part the model is expected to describe itself.
+        """
+        for connection in connections:
+            if part not in (connection.owner, connection.far_owner):
+                continue
+            if connection.role not in HARDPOINT_ALIASES:
+                continue
+            try:
+                return self.point(side, connection.role)
+            except ValueError:
+                # A role this model does not place is not where the part sits.
+                continue
+        return None
 
     def lookup(self, side: Side, role: str) -> Vec3:
         """Resolve a hardpoint role on one side through its alias list."""

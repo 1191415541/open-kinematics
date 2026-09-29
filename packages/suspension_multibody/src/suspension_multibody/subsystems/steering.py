@@ -35,18 +35,17 @@ from __future__ import annotations
 import numpy as np
 
 from ..modeling.primitives.joints import (
-    BallJoint,
     Constraint,
     PrismaticJoint,
     RigidBody,
     WeldJoint,
 )
 from ..schema import Vec3
-from ..templates.builtin import STEERING_FIXED, STEERING_GUIDED
+from ..templates.builtin import STEERING_GUIDED
 from ..templates.instantiate import SubsystemInstance, instantiate
 from ..templates.model import ConnectionDefinition, TemplateError
-from .geometry import body_from_spec, body_without_spec
-from .types import SIDES, Connection, Side, SubsystemContext, SubsystemOutput
+from .geometry import body_from_part, body_from_spec
+from .types import SIDES, Side, SubsystemContext, SubsystemOutput
 
 __all__ = ["bodies", "build", "guide", "role", "side_content"]
 
@@ -63,39 +62,36 @@ _GUIDE_JOINTS: dict[str, type] = {"prismatic": PrismaticJoint, "fixed": WeldJoin
 
 
 def _instance(context: SubsystemContext) -> SubsystemInstance:
-    """
-    Return the steering template to read, from the request or the model.
-
-    The model's choice: a rack bolted to the chassis is a weld, a rack that slides
-    along the rack axis is a prismatic joint, and the template that states each
-    case is declared separately.
-    The `rack_housing` exception is *not* a third template -- a model that supplies
-    its own rack housing is a model whose guide is defined by the housing, which is
-    a fact about the geometry rather than about the topology the template states.
-
-    A *file* subsystem's steering template reaches here through the request and
-    decides *how* a steered rack is built.  The model still decides *whether* an
-    axle's rack is steered: an axle whose rack is bolted to the chassis keeps the
-    built-in fixed template, because a bolted rack has no topology to choose -- and
-    that is what lets one file's steering subsystem describe a whole vehicle, whose
-    rear axle is bolted down while its front axle steers.
-    """
+    """Return the steering template to read, from the request or the model."""
     requested = context.request.role_instance("steering")
-    if isinstance(requested, SubsystemInstance) and not (
-        context.model.rack_fixed_to_chassis
-    ):
+    if isinstance(requested, SubsystemInstance):
         return requested
-    template = STEERING_FIXED if context.model.rack_fixed_to_chassis else STEERING_GUIDED
-    return instantiate(template, mode=context.mode)
+    return instantiate(STEERING_GUIDED, mode=context.mode)
 
 
-def _body(context: SubsystemContext, name: str) -> RigidBody:
-    """Build one steering body from its schema spec, if the model declares one."""
+def _body(
+    context: SubsystemContext, part: object, instance: SubsystemInstance
+) -> RigidBody:
+    """
+    Build one steering body: the model's spec for it, or the template's.
+
+    The rack is a part a model describes and the model wins there; the housing is
+    the template's own support -- the rack slides in it and it mounts to the
+    chassis -- so the template is what weighs it (see
+    :func:`~.geometry.body_from_part`).  It is placed at the rack centre, the
+    hardpoint its own declaration attaches it at: a left-side lookup, because the
+    rack centre is one shared point rather than a per-side mount.
+    """
+    name = str(getattr(part, "name"))
     specs = context.body_specs
-    return (
-        body_from_spec(name, specs[name])
-        if name in specs
-        else body_without_spec(name)
+    if name in specs:
+        return body_from_spec(name, specs[name])
+    return body_from_part(
+        name,
+        part,
+        center_of_mass=context.part_placement(
+            name, instance.template.connections, "L"
+        ),
     )
 
 
@@ -125,111 +121,48 @@ def _declared(
 
 def bodies(context: SubsystemContext) -> dict[str, RigidBody]:
     """
-    Declare the rack and the two tie rods, as the template lists them.
+    Declare the rack and rack housing, as the template lists them.
 
-    The bodies are registered in the shared context as they are declared, because
-    the tie rod points are resolved against the rack and the uprights and those
-    have to exist first.  Registration is idempotent, so the assembly can seed
-    whatever it needs before calling in and still get the recorded order.
+    Registration is idempotent, so the assembly can seed whatever it needs
+    before calling in and still get the recorded order.
     """
     if not context.request.carries(role):
         return {}
     instance = _instance(context)
     declared: dict[str, RigidBody] = {}
     for part in instance.template.parts:
-        declared[part.name] = _body(context, part.name)
+        declared[part.name] = _body(context, part, instance)
         context.bodies[part.name] = declared[part.name]
     return declared
 
 
 def side_content(context: SubsystemContext, side: Side) -> SubsystemOutput:
     """
-    Declare one side's tie rod points, ball joints and connection rows.
+    Declare one side's rack connection point for the suspension tie rod.
 
-    Each row is read from the connection the template declares for it: its name
-    is the constraint's name, its `role` locates the hardpoint, its `label` names
-    the point on the tie rod and its `far_label` the point on the far body.  Which
-    end is recorded first is the template's `first_body`, which is the field that
-    exists for exactly this -- the rack-side joint records the rack first and the
-    upright-side joint records the tie rod first, and both are real choices rather
-    than an accident of one build.
+    Tie rods and their joints are owned by the suspension subsystem.
     """
     if not context.request.carries(role):
         return SubsystemOutput()
-    instance = _instance(context)
-    tie = f"tie_rod_{side}"
-    declared = [
-        connection
-        for connection in instance.template.connections
-        if connection.owner == tie
-    ]
-    if not declared:
-        raise TemplateError(
-            f"steering template {instance.template.name!r} declares no joint on "
-            f"{tie!r}; a tie rod with nothing attached is not a steering subsystem"
-        )
-
     points: dict[tuple[str, str], np.ndarray] = {}
-    connections: list[Connection] = []
-    constraints: list[Constraint] = []
-    for connection in declared:
-        far = connection.far_owner or "chassis"
-        global_point = context.point(side, connection.role)
-        own_local = context.local(tie, global_point)
-        far_local = context.local(far, global_point)
-        # `first_body` names the *second* end in the model's own vocabulary -- see
-        # `solver._joint_bodies`, whose rule this reads rather than restates -- so
-        # "far" puts the owner first and "owner" puts the far body first.
-        owner_first = connection.first_body == "far"
-        ends = (
-            ((tie, own_local, connection.label), (far, far_local, connection.far_label))
-            if owner_first
-            else ((far, far_local, connection.far_label), (tie, own_local, connection.label))
-        )
-        (first, first_local, first_label), (second, second_local, second_label) = ends
-        constraints.append(
-            BallJoint(
-                first,
-                first_local,
-                second,
-                second_local,
-                name=connection.name,
-            )
-        )
-        connections.append(
-            Connection(
-                connection.name,
-                "ideal",
-                first,
-                second,
-                first_label or connection.role,
-                second_label or connection.role,
-            )
-        )
-        # Only the far end's point is recorded.  The tie rod's own points are the
-        # joints' geometry, not entries the rest of the assembly looks up, and the
-        # recorded contract carries exactly the two far-side rows per side.
-        points[(far, connection.far_label or connection.role)] = far_local.copy()
-    return SubsystemOutput(
-        points=points,
-        connections=connections,
-        constraints=constraints,
-        ideal_constraints=list(constraints),
-    )
+    if "rack" in context.bodies:
+        global_point = context.point(side, "tie_inner")
+        points[("rack", f"tie_{side}")] = context.local("rack", global_point)
+    return SubsystemOutput(points=points)
 
 
 def guide(context: SubsystemContext) -> SubsystemOutput:
     """
     Contribute the rack's support, the rack centre points, and `RACK_CENTER`.
 
-    The guide's *name* and *kind* are the template's: the fixed and guided cases
-    are two templates, and this reads whichever one the model asked for.  The axis
-    a guided rack slides along is the model's own `rack_axis` expressed in each
-    body's frame, because an axis is geometry rather than topology.
-
-    Split out because the original build order computes the rack centre *after*
-    the per-side tie rod loop, and the assembly consumes pieces in the order they
-    are emitted: emitting the rack centre first would reorder the point table.
+    The rack is guided in `rack_housing`, and the housing mounts to the chassis (or
+    to ground when the assembly has none).  Which *kind* of guide the rack gets is
+    the model's call rather than the template's -- `model.rack_fixed_to_chassis` --
+    and the housing is what it is made against either way: a steered rack slides in
+    its housing, and a rack bolted down cannot move at all, which is the same
+    statement about where the rack sits with its one degree of freedom removed.  The
+    two therefore differ in the joint, not in the bodies, and a rear axle that is
+    not steered does not need a second template to say so.
     """
     if not context.request.carries(role):
         return SubsystemOutput()
@@ -238,53 +171,90 @@ def guide(context: SubsystemContext) -> SubsystemOutput:
     bodies_ = context.bodies
     instance = _instance(context)
     mount = _declared(instance, "rack_center", owner="rack")
-    far = mount.far_owner or "chassis"
     rack_point = context.mirror("L", mount.role)
     rack_point_local = context.local(mount.owner, rack_point)
     constraints: list[Constraint] = []
     ideal_constraints: list[Constraint] = []
+    pts: dict[tuple[str, str], np.ndarray] = {
+        (mount.owner, mount.label or mount.role): rack_point_local,
+    }
 
     if "rack_housing" in bodies_:
-        # 源模型自带齿条外壳时，齿条支承由外壳定义，不再叠加 chassis-rack 导向。
-        rack_guide: Constraint | None = None
-    else:
-        joint_class = _GUIDE_JOINTS.get(mount.joint or "")
-        if joint_class is None:
-            raise TemplateError(
-                f"steering template {instance.template.name!r} declares the rack "
-                f"guide as {mount.joint!r}; a rack guide is "
-                f"{sorted(_GUIDE_JOINTS)}"
-            )
-        if joint_class is WeldJoint:
-            rack_guide = WeldJoint(
+        housing_local = context.local("rack_housing", rack_point)
+        far = "chassis" if "chassis" in bodies_ else "ground"
+        if far not in bodies_ and far == "ground":
+            bodies_["ground"] = RigidBody("ground", fixed=True)
+        far_point_local = context.local(far, rack_point)
+        # The housing carries the rack's guide and is mounted to the chassis; the
+        # rack itself is either guided in that housing or bolted down.  The two are
+        # built against *different* bodies on purpose: a weld from the rack to the
+        # housing that is itself welded to the chassis would say the same thing
+        # twice -- twelve rows of constraint for six degrees of freedom -- and a
+        # redundant pair is exactly what a static solve cannot balance.
+        if model.rack_fixed_to_chassis:
+            rack_guide: Constraint = WeldJoint(
                 far,
-                rack_point,
+                far_point_local,
                 mount.owner,
                 rack_point_local,
+                name=RACK_BOLTED_NAME,
+            )
+        else:
+            rack_guide = PrismaticJoint(
+                "rack_housing",
+                housing_local,
+                _axis_in_body(model, "rack_housing", bodies_),
+                mount.owner,
+                rack_point_local,
+                _axis_in_body(model, mount.owner, bodies_),
                 name=mount.name,
+            )
+        constraints.append(rack_guide)
+        ideal_constraints.append(rack_guide)
+
+        housing_mount = WeldJoint(
+            far,
+            far_point_local,
+            "rack_housing",
+            housing_local,
+            name="housing_mount",
+        )
+        constraints.append(housing_mount)
+        ideal_constraints.append(housing_mount)
+        pts[(far, mount.far_label or mount.role)] = far_point_local.copy()
+    else:
+        # A template that declares no housing guides the rack straight against the
+        # body the connection names, which is the pre-housing topology.
+        far = mount.far_owner or ("chassis" if "chassis" in bodies_ else "ground")
+        if far not in bodies_:
+            far = "ground"
+            if "ground" not in bodies_:
+                bodies_["ground"] = RigidBody("ground", fixed=True)
+        far_point_local = context.local(far, rack_point)
+        if model.rack_fixed_to_chassis:
+            rack_guide = WeldJoint(
+                far,
+                far_point_local,
+                mount.owner,
+                rack_point_local,
+                name=RACK_BOLTED_NAME,
             )
         else:
             rack_guide = PrismaticJoint(
                 far,
-                rack_point,
+                far_point_local,
                 _axis_in_body(model, far, bodies_),
                 mount.owner,
                 rack_point_local,
                 _axis_in_body(model, mount.owner, bodies_),
                 name=mount.name,
             )
-
-    # 现役实现只把 rack_guide 追加到 constraints/ideal_constraints，不进连接表：
-    # 连接表描述的是物理连接点，齿条导轨不算一个。这里保持一致。
-    if rack_guide is not None:
         constraints.append(rack_guide)
         ideal_constraints.append(rack_guide)
+        pts[(far, mount.far_label or mount.role)] = far_point_local.copy()
 
     return SubsystemOutput(
-        points={
-            (mount.owner, mount.label or mount.role): rack_point_local,
-            (far, mount.far_label or mount.role): rack_point.copy(),
-        },
+        points=pts,
         hardpoints={
             "RACK_CENTER": Vec3(
                 x=float(rack_point[0]),
@@ -295,6 +265,10 @@ def guide(context: SubsystemContext) -> SubsystemOutput:
         constraints=constraints,
         ideal_constraints=ideal_constraints,
     )
+
+#: The name a rack bolted to the chassis records: the constraint the recorded
+#: contract has always carried for a rack that cannot move.
+RACK_BOLTED_NAME = "rack_fixed_to_chassis"
 
 
 def build(context: SubsystemContext) -> SubsystemOutput:

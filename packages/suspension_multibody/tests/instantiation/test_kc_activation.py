@@ -1,12 +1,14 @@
 """
 Template instantiation, and the K/C column rule.
 
-The counts here are the ones the real assembly produces, not round numbers: an
-axle in K mode has 13 ideal constraints and no compliance slots, and the same
-axle in C mode still has 9 constraints -- the four outboard ball joints, the four
-tie rod ends and the rack guide -- because those connections declare a joint
-column and no bushing column.  A "C mode activates bushings" rule that discarded
-them would be wrong, and these tests are what says so.
+The counts here are the ones the real assembly produces, not round numbers: the
+suspension template activates 14 ideal joints in K mode -- the four inboard
+revolutes, the four outboard ball joints, the four tie rod ends and the two wheel
+spin joints -- and 10 in C mode with 8 compliance slots, because the outboard ball
+joints, the tie rod ends and the spin joints declare a joint column and no bushing
+column.  A "C mode activates bushings" rule that discarded them would be wrong, and
+these tests are what says so.  The assembly carries two rows more than the template
+in either mode: the steering template's rack guide and housing mount.
 """
 
 from __future__ import annotations
@@ -40,7 +42,7 @@ def _instance(mode: str, **properties: float):
 
 def test_the_builtin_template_carries_the_recorded_column_counts() -> None:
     """
-    The counts the composition entry produces: K 13/0, C 9/8.
+    The counts the composition entry produces: K 14/0, C 10/8.
 
     Checked against a dump of the historical assembly.  K mode carries **no**
     bushing at all: its inboard rear points are inactive, because in K the arm
@@ -50,8 +52,8 @@ def test_the_builtin_template_carries_the_recorded_column_counts() -> None:
     """
     k = _instance("K")
     c = _instance("C")
-    assert (len(k.joints), len(k.bushings)) == (13, 0)
-    assert (len(c.joints), len(c.bushings)) == (9, 8)
+    assert (len(k.joints), len(k.bushings)) == (14, 0)
+    assert (len(c.joints), len(c.bushings)) == (10, 8)
 
 
 def test_only_the_activated_columns_differ_between_modes() -> None:
@@ -86,11 +88,12 @@ def test_only_the_activated_columns_differ_between_modes() -> None:
         "lower_arm_L_outer_joint",
         "rack_tie_joint_L",
         "tie_upright_joint_L",
+        "wheel_spin_joint_L",
         "upper_arm_R_outer_joint",
         "lower_arm_R_outer_joint",
         "rack_tie_joint_R",
         "tie_upright_joint_R",
-        "rack_guide",
+        "wheel_spin_joint_R",
     }
     # The four inboard *front* points are the K/C choice: a revolute in K, a
     # bushing in C.  In K the front revolute's axis already passes through the
@@ -164,20 +167,31 @@ def test_k_activation_reproduces_the_k_assembly() -> None:
     assembly = compose_axle(benchmark_model(), "K")
     instance = _instance("K")
     assembly_names = [c.name for c in assembly.constraints]
-    assert len(assembly_names) == len(instance.joints) == 13
-    # Every K joint the template activates is a constraint of the assembly, and
-    # the two use the same names and the same order.
-    assert [n for n in assembly_names if n in set(instance.joints)] == list(
-        instance.joints
-    )
+    # The assembly carries the suspension template's own activated joints plus the
+    # steering template's two -- its rack guide and the housing mount -- and nothing
+    # else: no row is invented, and none is dropped.
+    assert set(assembly_names) - set(instance.joints) == {"rack_guide", "housing_mount"}
+    assert set(instance.joints) <= set(assembly_names)
+    # The document records the suspension's rows per side, in the template's own
+    # sequence: left, then right.
+    assert [n for n in assembly_names if n in set(instance.joints)] == [
+        n
+        for side in ("L", "R")
+        for n in instance.joints
+        if f"_{side}_" in n or n.endswith(f"_{side}")
+    ]
     assert assembly.element_ids == ()
 
 
-def test_c_activation_keeps_the_nine_joints_the_assembly_has() -> None:
+def test_c_activation_keeps_the_joints_the_assembly_has() -> None:
     assembly = compose_axle(benchmark_model(), "C")
     instance = _instance("C")
-    assert len(assembly.constraints) == 9
-    assert sorted(c.name for c in assembly.constraints) == sorted(instance.joints)
+    # The suspension template's ten C-mode joints plus the steering template's two.
+    assert len(assembly.constraints) == 12
+    assert {c.name for c in assembly.constraints} == set(instance.joints) | {
+        "rack_guide",
+        "housing_mount",
+    }
 
 
 @pytest.mark.parametrize("mode", ["K", "C"])

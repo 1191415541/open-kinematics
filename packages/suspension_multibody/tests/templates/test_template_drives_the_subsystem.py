@@ -48,6 +48,8 @@ _REQUIRED = (
     "lower_front",
     "lower_rear",
     "lower_outer",
+    "tie_inner",
+    "tie_outer",
 )
 
 
@@ -98,7 +100,25 @@ def _single_arm() -> Template:
             "upper_arm_L_outer_joint", "upper_outer", owner="upper_arm_L", label="outer"
         ),
         ConnectionDefinition(
-            "wheel_center_L", "wheel_center", owner="upright_L", label="wheel_center"
+            "rack_tie_joint_L",
+            "tie_inner",
+            "spherical",
+            owner="tie_rod_L",
+            label="inner",
+            far_owner="rack",
+            far_label="tie_L",
+        ),
+        ConnectionDefinition(
+            "tie_upright_joint_L",
+            "tie_outer",
+            "spherical",
+            owner="tie_rod_L",
+            label="outer",
+            far_owner="upright_L",
+            far_label="tie_outer",
+        ),
+        ConnectionDefinition(
+            "wheel_center_L", "wheel_center", owner="wheel_hub_L", label="wheel_center"
         ),
     ]
     # The right side mirrors the left.
@@ -132,9 +152,13 @@ def _single_arm() -> Template:
             PartDefinition("upper_arm_L"),
             PartDefinition("lower_arm_L"),
             PartDefinition("upright_L"),
+            PartDefinition("wheel_hub_L"),
+            PartDefinition("tie_rod_L"),
             PartDefinition("upper_arm_R"),
             PartDefinition("lower_arm_R"),
             PartDefinition("upright_R"),
+            PartDefinition("wheel_hub_R"),
+            PartDefinition("tie_rod_R"),
         ),
         connections=tuple(connections) + tuple(mirrored),
         property_slots=(
@@ -244,7 +268,10 @@ def test_the_solved_model_changes_with_the_template() -> None:
     builtin_bodies = {b["name"] for b in builtin_doc["bodies"]}
     single_bodies = {b["name"] for b in single_doc["bodies"]}
     assert builtin_bodies == single_bodies
-    assert {"chassis", "lower_arm_L", "upright_L"} <= builtin_bodies
+    assert (
+        {"chassis", "lower_arm_L", "upright_L"} <= builtin_bodies
+        or {"ground", "lower_arm_L", "upright_L"} <= builtin_bodies
+    )
 
 
 def test_a_template_that_omits_a_part_builds_no_body() -> None:
@@ -339,16 +366,18 @@ def test_a_template_that_omits_a_part_builds_no_body() -> None:
         connections=template.connections
         + tuple(
             ConnectionDefinition(
-                f"upper_locator_{side}_{label}",
+                f"locator_{side}_{role}",
                 role,
                 owner=f"lower_arm_{side}",
                 label=label,
             )
             for side in ("L", "R")
             for role, label in (
-                ("upper_front", "inner_front"),
-                ("upper_rear", "inner_rear"),
-                ("upper_outer", "outer"),
+                ("upper_front", "upper_inner_front"),
+                ("upper_rear", "upper_inner_rear"),
+                ("upper_outer", "upper_outer"),
+                ("tie_inner", "tie_inner"),
+                ("tie_outer", "tie_outer"),
             )
         ),
     )
@@ -527,7 +556,7 @@ def test_the_steering_template_decides_the_rack_guide(monkeypatch) -> None:
         STEERING_GUIDED,
         connections=tuple(
             replace(connection, name="rack_guide_alt")
-            if connection.role == "rack_center"
+            if connection.name == "rack_guide"
             else connection
             for connection in STEERING_GUIDED.connections
         ),
@@ -538,44 +567,52 @@ def test_the_steering_template_decides_the_rack_guide(monkeypatch) -> None:
     assert "rack_guide" not in names
 
 
-def test_the_steering_template_follows_the_model_s_rack() -> None:
+def test_the_steering_can_be_omitted_and_suspension_grounds_tie_rods() -> None:
     """
-    Which steering template is instantiated is the model's decision.
-
-    A rack bolted to the chassis is a weld named `rack_fixed_to_chassis`; a free
-    rack slides on a prismatic guide named `rack_guide`.  They are different
-    constraints rather than two spellings of one, which is why the two cases are
-    two templates: a template has no spelling for a conditional.
+    When steering is absent, tie rods connect directly to chassis/ground as toe links.
     """
-    free = compose_axle(_model(), "K")
-    welded = compose_axle(
-        _model().model_copy(update={"rack_fixed_to_chassis": True}), "K"
+    with_steering = compose_axle(_model(), "K")
+    without_steering = compose_axle(
+        _model(),
+        "K",
+        request=AssemblyRequest(
+            mode="K", subsystems=frozenset({"suspension", "wheel", "chassis"})
+        ),
     )
-    assert type(_named(free, "rack_guide")).__name__ == "PrismaticJoint"
-    assert type(_named(welded, "rack_fixed_to_chassis")).__name__ == "WeldJoint"
+    assert "rack" in with_steering.bodies
+    assert "rack" not in without_steering.bodies
+    assert "tie_rod_L" in without_steering.bodies
+    assert "tie_rod_R" in without_steering.bodies
 
 
 def test_the_chassis_template_decides_the_chassis_bodies(monkeypatch) -> None:
     """
     The chassis role's bodies are the chassis template's.
 
-    A template that declares a second fixed body produces a second fixed body
-    here.  That is the property that was missing while the body's name was a
-    literal in the chassis function: the declaration could not be changed at all.
+    A template that declares a second body produces a second body here.
     """
     from suspension_multibody.subsystems import chassis as chassis_subsystem
+    from suspension_multibody.subsystems.types import DEFAULT_AXLE_SUBSYSTEMS
     from suspension_multibody.templates.builtin import CHASSIS
 
-    assert "chassis" in compose_axle(_model(), "K").bodies
+    request = AssemblyRequest(mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS | {"chassis"})
+    assert "chassis" in compose_axle(_model(), "K", request).bodies
 
+    # The template's *declaration* decides both the set and the fixedness, so the
+    # second part is declared free while the built-in's own is a fixed support, and
+    # each arrives as declared.
     two_bodies = replace(
         CHASSIS,
-        parts=(CHASSIS.parts[0], replace(CHASSIS.parts[0], name="frame")),
+        parts=(
+            CHASSIS.parts[0],
+            replace(CHASSIS.parts[0], name="frame", fixed=False),
+        ),
     )
     monkeypatch.setattr(chassis_subsystem, "CHASSIS", two_bodies)
-    bodies = compose_axle(_model(), "K").bodies
+    bodies = compose_axle(_model(), "K", request).bodies
     assert "frame" in bodies
-    assert bodies["frame"].fixed is True
+    assert bodies["chassis"].fixed is True
+    assert bodies["frame"].fixed is False
 
 
 def test_the_wheel_template_decides_where_the_tire_hangs(monkeypatch) -> None:
@@ -601,13 +638,13 @@ def test_the_wheel_template_decides_where_the_tire_hangs(monkeypatch) -> None:
     def wheel_bodies(runtime) -> set[str]:
         return {element.wheel_body for element in runtime.elements}
 
-    assert wheel_bodies(compose_axle(model, "K")) == {"upright_L", "upright_R"}
+    assert wheel_bodies(compose_axle(model, "K")) == {"wheel_hub_L", "wheel_hub_R"}
 
     moved = replace(
         WHEEL,
         connections=tuple(
             replace(connection, owner="lower_arm_L")
-            if connection.owner == "upright_L"
+            if connection.owner == "wheel_hub_L"
             else connection
             for connection in WHEEL.connections
         ),

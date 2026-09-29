@@ -92,7 +92,7 @@ class RootRule:
 AXLE_RULE = RootRule(
     kind="axle",
     forbidden=frozenset({"brake", "drive"}),
-    required=frozenset({"suspension", "chassis"}),
+    required=frozenset({"suspension"}),
     wheels_from_rig=True,
     reason=(
         "a single-axle bench assembly carries no brake or drive: the bench loads "
@@ -194,8 +194,8 @@ class AssemblyRule:
 ASSEMBLY_RULES: dict[str, AssemblyRule] = {
     "suspension_axle": AssemblyRule(
         kind="suspension_axle",
-        role_counts={"suspension": 1, "chassis": 1},
-        at_most={"steering": 1},
+        role_counts={"suspension": 1},
+        at_most={"steering": 1, "chassis": 1, "wheel": 1},
         required_placements=frozenset(),
         forbidden_roles=frozenset({"brake", "drive"}),
     ),
