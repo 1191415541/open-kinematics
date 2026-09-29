@@ -1,0 +1,6 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,7 组合装配产物快照落盘（含可重跑脚本 snapshot.py）,TODO,快照覆盖 7 个组合且每段 bodies/points/constraints/elements 非空；snapshot.py 连续两次运行 sha256 相同,uv run --no-sync python .codex-tasks/20260929-assembly-layer-rework/tasks/20260929-01-freeze/snapshot.py --check,,0,枚举口径与生成命令写进快照 _meta；脚本放子任务目录（scratch 会随会话删除）
+2,5 条痛点锚点复核,DONE,R1–R5 各有 file:line 与结论；与既有裁决/测试的冲突已登记,test -f .codex-tasks/20260929-assembly-layer-rework/tasks/20260929-01-freeze/raw/painpoint_anchors.md,2026-09-29,0,两个只读 explorer 提供锚点 + 主代理亲自复核 6 个承重锚点
+3,3 轴与不对称总成的负例原文,DONE,记录两层拒绝的报错原文（契约 schema 层 + check_assembly_shape 层）,test -f .codex-tasks/20260929-assembly-layer-rework/tasks/20260929-01-freeze/raw/triaxle_refusal.md,2026-09-29,0,报错原文照抄非转述；脚本内容随文件记录
+4,门禁与数值门实测值,DONE,日常门禁/三个测试目录/数值门三项的实测值与退出码已记录,test -f .codex-tasks/20260929-assembly-layer-rework/tasks/20260929-01-freeze/raw/baseline_commands.md,2026-09-29,0,本会话逐条实跑；含 2026-09-29 经授权重录的两项基线前后值
+5,快照判据接入后续子任务,TODO,02–07 的 SPEC 均引用 snapshot.py --check 作为“产物是否变化”的判据,grep -l snapshot.py .codex-tasks/20260929-assembly-layer-rework/tasks/*/SPEC.md,,0,属 02–07 的 SPEC 内容；本行只负责提供脚本与用法说明

@@ -204,6 +204,8 @@ GEMINI.md
 !/.codex-tasks/20260928-pad-driven-kc/**
 !/.codex-tasks/20260928-file-driven-authoring/
 !/.codex-tasks/20260928-file-driven-authoring/**
+!/.codex-tasks/20260929-assembly-layer-rework/
+!/.codex-tasks/20260929-assembly-layer-rework/**
 /artifacts/
 /packages/*/artifacts/
 /packages/*/.codex-tasks/
