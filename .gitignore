@@ -206,6 +206,8 @@ GEMINI.md
 !/.codex-tasks/20260928-file-driven-authoring/**
 !/.codex-tasks/20260929-assembly-layer-rework/
 !/.codex-tasks/20260929-assembly-layer-rework/**
+!/.codex-tasks/20260929-multibody-evolution-p2-p5/
+!/.codex-tasks/20260929-multibody-evolution-p2-p5/**
 /artifacts/
 /packages/*/artifacts/
 /packages/*/.codex-tasks/
