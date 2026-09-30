@@ -367,13 +367,20 @@ def _side_name(name: str, side: str) -> str:
     return _SIDE_TOKEN.sub(f"_{side}", name, count=1)
 
 
-def _mirrored_parts(payload: Mapping[str, Any]) -> tuple[PartDefinition, ...]:
+def _mirrored_parts(
+    payload: Mapping[str, Any], *, mirror: bool = True
+) -> tuple[PartDefinition, ...]:
     """
     Build the template's parts, mirrored like its connections.
 
     A part named for the left side gets a right-side twin with the same mass, so
     the mirroring of connections lands on bodies that exist.  An unsided part --
     the chassis, the rack -- is declared once, because it exists once.
+
+    ``mirror`` is the template's own declaration: a file that writes both sides
+    already names its right-hand bodies, and adding twins for them would put two
+    declarations on one name -- the composition refuses that as a duplicate, and
+    rightly.  So a file that mirrors nothing gets its own list back unchanged.
     """
     declared = [
         PartDefinition(
@@ -383,6 +390,8 @@ def _mirrored_parts(payload: Mapping[str, Any]) -> tuple[PartDefinition, ...]:
         )
         for row in payload["bodies"]
     ]
+    if not mirror:
+        return tuple(declared)
     # Two passes, not one: every declared part is listed before its right-side twin.
     # The sequence is a fact about the template -- it is the order the document
     # records its bodies in -- so interleaving the twins would produce a different

@@ -30,7 +30,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..modeling.assembly import Assembly, NestedInstance, SimulationAssembly
 from ..modeling.identity import EntityId
@@ -38,6 +38,9 @@ from ..modeling.instance import FragmentProvenance, ModelFragment
 from ..modeling.ports import GeometryPort, PortRequirement
 from .capabilities import AssemblyCapabilities, capabilities_for
 from .types import SubsystemOutput
+
+if TYPE_CHECKING:
+    from ..connections.links import LinkSpec
 
 __all__ = [
     "SI_ASSEMBLY_NAME",
@@ -89,9 +92,15 @@ class SubsystemContribution:
     needs: tuple[PortRequirement, ...] = ()
     #: Which sides this contribution covers, for per-side port qualification.
     sides: tuple[str, ...] = ()
+    #: How this contribution's matched ports are joined, if it has an opinion.
+    #:
+    #: Empty means "record the binding and build nothing", which is where every
+    #: existing caller stands: the composition stays a record of *which* port met
+    #: *which* requirement until somebody states how the two are joined.  See
+    #: :mod:`suspension_multibody.connections.links`.
+    links: tuple["LinkSpec", ...] = ()
     #: Free-form note recorded in the provenance.
     note: str = ""
-
     def __post_init__(self) -> None:
         if self.role not in SUBSYSTEM_ROLES:
             raise CompositionError(
@@ -188,6 +197,7 @@ def compose_simulation_assembly(
     capabilities: AssemblyCapabilities | None = None,
     name: str = SI_ASSEMBLY_NAME,
     root_kind: str | None = None,
+    pairings: Mapping[str, str] | None = None,
     explicit_bindings: Mapping[str, str] | None = None,
     body_order: Sequence[str] | None = None,
     physical: Any = None,
@@ -217,6 +227,7 @@ def compose_simulation_assembly(
     which entities came from the bench, and the two roles would stop being
     separable.
     """
+    from ..connections.links import build_links, explicit_bindings_from_pairings
     from ..connections.matcher import match_requirements
 
     if not contributions:
@@ -255,8 +266,25 @@ def compose_simulation_assembly(
             )
         )
 
-    report = match_requirements(
-        all_requirements, all_ports, explicit=dict(explicit_bindings or {})
+    # ``pairings`` is the document's spelling -- a requirement role and a port
+    # *name* -- and ``explicit_bindings`` the code's, a role and a port id.  Both
+    # end in one mapping, so there is still exactly one matching channel, and a
+    # pairing stated for a role overrides a binding stated for that same role.
+    explicit = dict(explicit_bindings or {})
+    if pairings:
+        explicit.update(
+            explicit_bindings_from_pairings(pairings, all_ports, instance=instance)
+        )
+    report = match_requirements(all_requirements, all_ports, explicit=explicit)
+
+    # The bindings become entities here.  The match says which two ports meet and
+    # the contributions say what that meeting *is*; a composition whose
+    # contributions state no link produces no rows, so it is what it was.
+    link_rows = build_links(
+        report.bindings,
+        all_ports,
+        [spec for contribution in contributions for spec in contribution.links],
+        instance=instance,
     )
 
     merged = ModelFragment(instance=instance)
@@ -274,6 +302,10 @@ def compose_simulation_assembly(
         for item, body in merged.bodies.items():
             ordered.setdefault(item, body)
         merged = replace(merged, bodies=ordered)
+    if link_rows.rows:
+        # Merged after the body order is applied: a link adds no body, and the
+        # bodies the caller already ordered keep their places.
+        merged = merged.merged_with(link_rows.fragment)
 
     resolved_capabilities = capabilities
     if resolved_capabilities is None:
@@ -303,6 +335,13 @@ def compose_simulation_assembly(
         binding.requirement.role: ",".join(binding.port_ids)
         for binding in report.bindings
     }
+    generated: dict[str, Any] = {
+        "disappeared": report.disappeared,
+        "dropped_outputs": report.dropped_outputs,
+        # The generated rows travel with the assembly, so a caller can audit what
+        # the pairings *built* rather than only which ports they named.
+        "links": link_rows.rows,
+    }
     if rig is not None:
         # The bench's own entities are kept on their own level, and the
         # cross-level connections are generated here, exactly like a nested
@@ -313,7 +352,7 @@ def compose_simulation_assembly(
         name=name,
         assembly=assembly,
         rig=rig if rig is not None else Assembly(name="none", fragment=ModelFragment()),
-        generated={"disappeared": report.disappeared, "dropped_outputs": report.dropped_outputs},
+        generated=generated,
         # No capabilities: the fingerprint is a property of the *model*, and a
         # caller asking for it later -- with or without a capability report --
         # must get the same value.  Passing them here made the same assembly

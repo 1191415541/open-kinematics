@@ -20,7 +20,7 @@ Two things this module deliberately does **not** do:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Literal
 
@@ -29,6 +29,7 @@ from ..modeling.assembly import Assembly, SimulationAssembly
 from ..modeling.identity import EntityId
 from ..modeling.instance import FragmentProvenance, ModelFragment
 from ..modeling.ports import GeometryPort, PortRequirement
+from ..modeling.primitives import RigidBodyState
 from ..schema import FrontAxleModel
 from . import chassis as chassis_subsystem
 from . import steering as steering_subsystem
@@ -45,7 +46,8 @@ from .composition import (
 from .element_build import element_rows
 from .explicit import build_explicit_runtime
 from .runtime import RuntimeOrder, SubsystemRuntime, runtime_from_outputs
-from .types import AssemblyRequest, SubsystemContext, SubsystemOutput
+from .types import AssemblyRequest, Side, SubsystemContext, SubsystemOutput
+from .vehicle_parts import _condense_wheel_end
 
 __all__ = [
     "contributions_for_axle",
@@ -54,6 +56,20 @@ __all__ = [
 
 #: The sides a symmetric axle has, typed as the geometry helpers require.
 _SIDES: tuple[Literal["L", "R"], Literal["L", "R"]] = ("L", "R")
+
+
+def _sides(request: object) -> tuple[Side, ...]:
+    """
+    Return the sides this assembly carries.
+
+    A side is a *declaration* rather than a constant: the default is the
+    symmetric pair, and a caller that declares one side gets a one-sided
+    assembly -- which is what makes a single-wheel axle a topology rather than a
+    model with a hole in it.  Everything that used to iterate the module constant
+    asks here, so "how many sides" has one answer.
+    """
+    declared = getattr(request, "sides", None)
+    return tuple(declared) if declared else _SIDES
 
 
 def _port(instance: tuple[str, ...], local: str, role: str, side: str | None) -> GeometryPort:
@@ -102,7 +118,9 @@ def _ports_for_bodies(
 
 
 def _wheel_centre_needs(
-    instance: tuple[str, ...], bodies: Mapping[str, object]
+    instance: tuple[str, ...],
+    bodies: Mapping[str, object],
+    sides: tuple[str, ...],
 ) -> tuple[PortRequirement, ...]:
     """
     Declare that this assembly needs a wheel centre per side it carries.
@@ -114,7 +132,7 @@ def _wheel_centre_needs(
     and a required port there would refuse a model that is not wrong.
     """
     needs: list[PortRequirement] = []
-    for side in _SIDES:
+    for side in sides:
         if f"upright_{side}" not in bodies:
             continue
         needs.append(
@@ -186,7 +204,7 @@ def axle_contributions_and_order(
         model=model,
         request=request,
         hardpoints=dict(model.hardpoints),
-        side_schema={side: side_hardpoints(model.hardpoints, side) for side in _SIDES},
+        side_schema={side: side_hardpoints(model.hardpoints, side) for side in _sides(request)},
     )
     instance = (name,)
     contributions: list[SubsystemContribution] = []
@@ -205,7 +223,7 @@ def axle_contributions_and_order(
         )
 
     side_bodies: dict[str, dict[str, object]] = {}
-    for side in _SIDES:
+    for side in _sides(request):
         side_bodies[side] = suspension_subsystem.side_bodies(context, side)
         context.bodies.update(side_bodies[side])
 
@@ -215,7 +233,7 @@ def axle_contributions_and_order(
 
     # The recorded order: chassis, rack, then per side arm/arm/upright/tie rod.
     suspension_outputs: list[SubsystemOutput] = []
-    for side in _SIDES:
+    for side in _sides(request):
         for key, point in side_hardpoints(model.hardpoints, side).items():
             values = point.as_array()
             context.hardpoints[f"{key}__{side}"] = type(point)(
@@ -225,10 +243,29 @@ def axle_contributions_and_order(
         context.points.update(suspension_outputs[-1].points)
 
     suspension_bodies: dict[str, object] = {}
-    for side in _SIDES:
+    for side in _sides(request):
         suspension_bodies.update(side_bodies[side])
     if "ground" in context.bodies:
         suspension_bodies["ground"] = context.bodies["ground"]
+
+    # The wheel end comes *before* the suspension's rows are built, and that
+    # order is load-bearing rather than cosmetic: the wheel template's
+    # wheel-centre mount names the body the tire hangs on, and the wheel bodies
+    # this role declares have to be part of `context.bodies` while those rows are
+    # being decided -- otherwise a template that owns its own wheel body would
+    # have its tire placed by the fallback instead.  A role that contributes no
+    # body (the built-in, and therefore every existing model) adds nothing here.
+    if request.carries("wheel"):
+        wheel_output = wheel_subsystem.build(context)
+        context.bodies.update(wheel_output.bodies)
+        contributions.append(
+            SubsystemContribution(
+                role="wheel",
+                output=wheel_output,
+                ports=_ports_for_bodies(instance, wheel_output.bodies),
+                note="wheel and tire references",
+            )
+        )
 
     # The two subsystems are contributed *separately* so that every entity keeps
     # its provenance -- which subsystem produced it is a question a caller asks.
@@ -274,7 +311,7 @@ def axle_contributions_and_order(
                 elements=list(element_rows(model, mode, context, ())),
             ),
             ports=_ports_for_bodies(instance, suspension_bodies),
-            needs=_wheel_centre_needs(instance, suspension_bodies),
+            needs=_wheel_centre_needs(instance, suspension_bodies, _sides(request)),
             note=f"left/right suspension pair, mode {mode}",
         )
     )
@@ -283,7 +320,7 @@ def axle_contributions_and_order(
     guide = SubsystemOutput()
     if steering_bodies:
         steering_outputs = [
-            steering_subsystem.side_content(context, side) for side in _SIDES
+            steering_subsystem.side_content(context, side) for side in _sides(request)
         ]
         guide = steering_subsystem.guide(context)
         context.points.update(
@@ -324,17 +361,7 @@ def axle_contributions_and_order(
             )
         )
 
-    if request.carries("wheel"):
-        wheel_output = wheel_subsystem.build(context)
-        contributions.append(
-            SubsystemContribution(
-                role="wheel",
-                output=wheel_output,
-                ports=_ports_for_bodies(instance, wheel_output.bodies),
-                note="wheel and tire references",
-            )
-        )
-
+    # The recorded sequence: per side, the suspension rows and then that side's
     # The recorded sequence: per side, the suspension rows and then that side's
     # steering rows, with the rack guide last.  Derived from the per-side content
     # rather than written out, so a change to what a subsystem emits on a side is
@@ -350,7 +377,7 @@ def axle_contributions_and_order(
         connection.name for connection in chassis_output.connections
     ]
     recorded_points: list[str] = []
-    for index, side in enumerate(_SIDES):
+    for index, side in enumerate(_sides(request)):
         suspension_output = suspension_outputs[index]
         steering_output = steering_outputs[index] if steering_outputs else None
         for part in (suspension_output, steering_output):
@@ -464,6 +491,22 @@ def si_assembly_for_axle(
         # and need no ground.
         road=model.road,
     )
+    # D2, the axle side: a reading that brings its own wheels does not get a
+    # second, independent wheel body.  The wheel subsystem produced the wheel end
+    # from the same declaration the vehicle reads, and a single-axle reading
+    # condenses it into the body that carries the wheel centre -- the composite
+    # mass goes into the hub through the composition's own `_merge_fixed_wheel`,
+    # so the entity set, the constraint rows and the degrees of freedom are the
+    # ones the frozen K/C and axle-dynamics baselines were recorded against.
+    if _wheel_end_is_supplied(rig):
+        runtime = _condense_wheel_end(
+            runtime,
+            _wheel_end_mounts(
+                runtime,
+                _wheel_bodies(contributions),
+                _declared_wheel_mounts(resolved, runtime),
+            ),
+        )
     reordered = _reorder_bodies(runtime, body_order)
     bench = _rig_assembly(rig, mode=resolved.mode, capabilities=reordered.capabilities)
     if bench is not None:
@@ -554,8 +597,119 @@ def _reorder_bodies(runtime: SubsystemRuntime, order: list[str]) -> SubsystemRun
             ordered[item] = runtime.bodies[item]
     for item, body in runtime.bodies.items():
         ordered.setdefault(item, body)
-    return replace(runtime, bodies=ordered)
+    # The state follows the body table rather than keeping its own order: a
+    # consumer that reads `state.bodies` (the sample layout, the static loads) has
+    # to see the same sequence the document records, and a body that reached one
+    # and not the other is a body in the model and not in the answer.
+    state = None if runtime.state is None else RigidBodyState(ordered)
+    return replace(runtime, bodies=ordered, state=state)
 
+
+
+def _wheel_bodies(contributions: Sequence[SubsystemContribution]) -> tuple[str, ...]:
+    """
+    Return the bodies the wheel subsystem produced for this assembly.
+
+    Membership is read off the contribution rather than guessed from a name, so
+    "which bodies are the wheel end" has one answer: the ones the wheel role
+    emitted.  A template that names its wheel body anything at all is condensed
+    correctly, and a body the model or the suspension declared is never mistaken
+    for one.
+    """
+    return tuple(
+        body
+        for contribution in contributions
+        if contribution.role == wheel_subsystem.role
+        for body in contribution.output.bodies
+    )
+
+
+def _declared_wheel_mounts(
+    request: AssemblyRequest, runtime: SubsystemRuntime
+) -> dict[str, str]:
+    """
+    Return the body each side's wheel centre is placed on, as declared.
+
+    The declaration is the suspension template's own: its `wheel_center`
+    connection names the body the wheel centre belongs to (`wheel_hub_L` for the
+    built-in topology, the upright for one without a hub), and a *file*
+    suspension says the same thing in the same place.  Reading it here rather
+    than searching the emitted points is what makes the answer independent of how
+    a label happens to be spelled -- the file route labels that point `center`
+    while the built-in labels it `wheel_center`, and a search by label would work
+    for one and silently do nothing for the other.
+    """
+    instance = getattr(request, "instantiated_suspension", None)
+    template = getattr(instance, "template", None)
+    connections = getattr(template, "connections", ()) or ()
+    mounts: dict[str, str] = {}
+    for side in _sides(request):
+        for connection in connections:
+            if connection.role != "wheel_center":
+                continue
+            owner = connection.owner
+            if owner.endswith(f"_{side}") and owner in runtime.bodies:
+                mounts[side] = owner
+    return mounts
+
+
+def _wheel_end_mounts(
+    runtime: SubsystemRuntime,
+    wheel_bodies: Sequence[str],
+    declared: Mapping[str, str],
+) -> dict[str, str]:
+    """
+    Return the body each declared wheel body mounts to, by the assembly's own
+    declaration.
+
+    ``declared`` is the suspension template's answer, one body per side, and it
+    wins when it names a body this assembly carries.  The fallback is the emitted
+    points: the body that declares the wheel-centre label on that side.  Two
+    fallback candidates are refused rather than guessed at -- an assembly whose
+    side declares two wheel centres is one the reader of that point already
+    refuses, and picking one here would hide the disagreement.
+    """
+    wheel_end = set(wheel_bodies)
+    mounts: dict[str, str] = {}
+    for wheel_body in wheel_bodies:
+        side = wheel_body.rsplit("_", 1)[-1]
+        from_template = declared.get(side)
+        if from_template is not None and from_template not in wheel_end:
+            mounts[wheel_body] = from_template
+            continue
+        candidates = sorted(
+            name
+            for name in runtime.bodies
+            if name not in wheel_end
+            and name.endswith(f"_{side}")
+            and (name, "wheel_center") in runtime.points
+        )
+        if len(candidates) == 1:
+            mounts[wheel_body] = candidates[0]
+    return mounts
+
+
+def _wheel_end_is_supplied(rig: str | None) -> bool:
+    """
+    Return whether this reading brings the wheels itself.
+
+    The criterion is the *bench's* own declaration -- ``RigSpec.supplies_wheels``
+    -- and not what the wheel subsystem happened to emit.  It used to be read the
+    other way round ("the wheel subsystem produced no wheel body this time"),
+    which stopped meaning anything once both topologies read one wheel
+    declaration: a wheel subsystem that produces a wheel body is now the ordinary
+    case, and the thing that decides whether it survives as a body of its own is
+    who supplies the wheel.
+
+    A composition with no bench is a bare single axle, and a single axle never
+    owns its wheel either (D9): the wheel comes from the bench or from the model,
+    so the axle's own reading condenses it.
+    """
+    if rig is None:
+        return True
+    from ..rigs.bench import bench_capability
+
+    return bench_capability(rig) == "wheel_supplying"
 
 def _explicit_simulation_assembly(
     model: FrontAxleModel,

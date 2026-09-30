@@ -203,14 +203,19 @@ def element_rows(
     the subsystem that owns that content; the slot positions are fixed here.
     """
     rows: list[ResolvedElement] = []
-    for side in ("L", "R"):
+    for side in context.request.sides:
         for kind in ("spring", "damper"):
             rows.extend(suspension_subsystem.elements(context, side, kind))
-        rows.extend(wheel_subsystem.tires(context, side))
+        # The wheel end exists only when this assembly carries the wheel role.
+        # A vehicle composes its axles without it -- the vehicle owns the wheel
+        # ends -- and asking the wheel template for a tire there would declare a
+        # second one for a wheel somebody else already described.
+        if context.request.carries("wheel"):
+            rows.extend(wheel_subsystem.tires(context, side))
         rows.extend(suspension_subsystem.elements(context, side, "bump_stop"))
     rows.extend(suspension_subsystem.global_elements(context))
     if mode == "C":
-        for side in ("L", "R"):
+        for side in context.request.sides:
             rows.extend(suspension_subsystem.compliance_elements(context, side))
         rows.extend(placeholders)
     return rows

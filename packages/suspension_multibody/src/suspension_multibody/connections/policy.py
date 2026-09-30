@@ -22,7 +22,7 @@ change this file and say so in review.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 __all__ = [
     "ASSEMBLY_RULES",
@@ -178,14 +178,24 @@ class AssemblyRule:
 
     kind: str
     #: How many subsystems each functional role carries, exactly.
+    #:
+    #: Only the roles whose number is a fact about the *kind* belong here: a vehicle
+    #: has exactly one body, and how many suspensions it has is a fact about the
+    #: vehicle rather than an axle count a table may fix in advance.
     role_counts: Mapping[str, int]
+    #: Roles that must appear at least this many times, with no ceiling.
+    #:
+    #: This is what lets a file declare three axles.  A mapping rather than a set,
+    #: so a kind can state "at least two" when that is the least a meaningful
+    #: assembly of that kind has.
+    min_counts: Mapping[str, int] = field(default_factory=dict)
     #: ``(functional_role, placement_role)`` that must be present.
-    required_placements: frozenset[tuple[str, str]]
+    required_placements: frozenset[tuple[str, str]] = frozenset()
     #: Roles this category may carry, and at most how many.  An axle's steering is
     #: optional but never doubled, which is a *ceiling* rather than a count.
-    at_most: Mapping[str, int]
+    at_most: Mapping[str, int] = field(default_factory=dict)
     #: Roles this category must not carry at all.
-    forbidden_roles: frozenset[str]
+    forbidden_roles: frozenset[str] = frozenset()
     #: Whether every one of the four wheel ends must be accounted for.
     wheels_complete: bool = False
 
@@ -196,22 +206,18 @@ ASSEMBLY_RULES: dict[str, AssemblyRule] = {
         kind="suspension_axle",
         role_counts={"suspension": 1},
         at_most={"steering": 1, "chassis": 1, "wheel": 1},
-        required_placements=frozenset(),
         forbidden_roles=frozenset({"brake", "drive"}),
     ),
     "full_vehicle": AssemblyRule(
         kind="full_vehicle",
-        role_counts={
-            "suspension": 2,
-            "chassis": 1,
-            "steering": 1,
-            "brake": 1,
-            "drive": 1,
-        },
+        # A file declares how many axles it has, and "two suspensions" written here
+        # would refuse a three-axle truck before the document was even read.  What
+        # stays fixed is the *shape*: one body, one steering, one brake, one drive,
+        # and at least one suspension -- see `min_counts` and the uniqueness check.
+        role_counts={"chassis": 1, "steering": 1, "brake": 1, "drive": 1},
+        min_counts={"suspension": 1},
         at_most={},
-        required_placements=frozenset(
-            {("suspension", "front"), ("suspension", "rear")}
-        ),
+        required_placements=frozenset(),
         forbidden_roles=frozenset(),
         wheels_complete=True,
     ),
@@ -270,6 +276,30 @@ def check_assembly_shape(
                 f"{sorted(pairs)}"
             )
 
+    for role, floor in rule.min_counts.items():
+        found = roles.count(role)
+        if found < floor:
+            raise RuleViolation(
+                f"an assembly of kind {kind!r} requires at least {_word(floor)} "
+                f"{role} subsystem(s), found {found}"
+            )
+
+    # One subsystem per placement: two suspensions at the same placement is a file
+    # that names the same axle twice, and the assembly would carry it twice without
+    # any reader being able to tell which one a wheel came from.  This is the check
+    # that replaces "there are exactly two suspensions, at front and rear".
+    repeated: dict[tuple[str, str], int] = {}
+    for pair in pairs:
+        repeated[pair] = repeated.get(pair, 0) + 1
+    twice = sorted(f"{role} at {placement}" for pair, count in repeated.items()
+                   if count > 1 and pair[0] == "suspension" for role, placement in [pair])
+    if twice:
+        raise RuleViolation(
+            f"an assembly of kind {kind!r} places {twice} more than once; one axle "
+            "is one placement, so a file that names the same one twice does not say "
+            "which suspension a wheel came from"
+        )
+
     # The rule's own order, not an alphabetical one: the first role the rule
     # names is the first thing a missing assembly should be told about.
     for role, expected in rule.role_counts.items():
@@ -289,16 +319,51 @@ def check_assembly_shape(
             )
 
     if rule.wheels_complete:
-        covered: set[str] = set()
-        for role, placement in pairs:
-            if role not in {"suspension", "wheel"}:
-                continue
-            covered.update(_covered_corners(placement))
-        missing = sorted(set(WHEEL_ENDS) - covered)
-        if missing:
+        # The wheel ends come from the file, not from a fixed four-corner list: a
+        # three-axle truck and a single-wheel bench are both vehicles, and the
+        # The wheel ends come from the file, not from a fixed four-corner list: a
+        # three-axle truck and a single-wheel bench are both vehicles, and the question
+        # a reader can answer is "is every wheel I declared carried by a suspension I
+        # declared?" -- which is what this checks.  A missing axle is then a wheel whose
+        # placement no suspension accounts for.
+        #
+        # Both sides answer about the *same* set of ends: a wheel declared at ``any``
+        # stands for every end the assembly declares, and so does a suspension declared
+        # at ``any``.  Reading one side as "every declared end" and the other as the
+        # four corners of a four-wheel car is what would make a three-axle file look
+        # like it had unclaimed wheels.
+        stated = {
+            placement
+            for role, placement in pairs
+            if role in {"suspension", "wheel"} and placement != "any"
+        }
+        ends: set[str] = set()
+        for placement in stated:
+            ends.update(_covered_corners(placement))
+        declared = {
+            placement
+            for role, placement in pairs
+            if role == "wheel"
+        }
+        if not declared:
             raise RuleViolation(
-                f"an assembly of kind {kind!r} must account for all four wheel ends; "
-                f"missing {missing}"
+                f"an assembly of kind {kind!r} declares no wheel subsystem; the "
+                "wheels are what the assembly's load paths end at"
+            )
+        wide = any(placement == "any" for role, placement in pairs if role == "wheel")
+        carried: set[str] = set()
+        for role, placement in pairs:
+            if role != "suspension":
+                continue
+            carried.update(ends if placement == "any" else _covered_corners(placement))
+        unclaimed = sorted(
+            end for end in (ends if wide else declared) if end not in carried
+        )
+        if unclaimed:
+            raise RuleViolation(
+                f"an assembly of kind {kind!r} declares wheel end(s) {unclaimed} that "
+                f"no suspension accounts for; the suspensions are at "
+                f"{sorted(carried) or '(none)'}"
             )
 
 
@@ -322,11 +387,26 @@ def check_assembly_roles(
 
 
 def _covered_corners(placement: str) -> set[str]:
-    """Return the wheel ends one placement accounts for."""
-    if placement == "front":
-        return {"front_left", "front_right"}
-    if placement == "rear":
-        return {"rear_left", "rear_right"}
-    if placement == "any":
-        return set(WHEEL_ENDS)
-    return {placement}
+    """
+    Return the wheel ends one placement accounts for.
+
+    Called by the shape check for every declared suspension, so it answers only for
+    placements that name an axle or an end -- the ``any`` spelling is resolved by the
+    caller, which is the only place that knows every end the assembly declares.
+    """
+    return _ends_of(placement)
+
+
+def _ends_of(placement: str) -> set[str]:
+    """
+    Return the wheel ends a placement name covers.
+
+    A placement that already names an end (``front_left``, ``middle_right``) covers
+    exactly that one; any other placement covers its own left and right.  The test is
+    the ``_left``/``_right`` suffix rather than membership in :data:`WHEEL_ENDS`,
+    because that constant lists the four ends of a *four-corner* vehicle, and a middle
+    axle's ends are real without appearing in it.
+    """
+    if placement.endswith(("_left", "_right")):
+        return {placement}
+    return {f"{placement}_left", f"{placement}_right"}

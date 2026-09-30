@@ -20,7 +20,7 @@
         "properties": {
           "ref": {"type": "string", "minLength": 1},
           "functional_role": {"enum": ["suspension", "steering", "wheel", "chassis", "brake", "drive"]},
-          "placement_role": {"enum": ["any", "front", "rear", "front_left", "front_right", "rear_left", "rear_right"]},
+          "placement_role": {"type": "string", "minLength": 1, "description": "Where this subsystem sits.  The axis words (front, middle, rear, third, ...) are the file's own vocabulary: a three-axle truck names three, and the shape rule checks that each one appears at most once and that every declared wheel end is accounted for, rather than fixing the list here."},
           "overrides": {
             "type": "object",
             "additionalProperties": true,
@@ -34,6 +34,11 @@
                 "additionalProperties": {"type": "string", "minLength": 1}
               }
             }
+          },
+          "pairings": {
+            "description": "Explicit pairings, one per requirement this assignment wants to settle by hand: each entry names a requirement role and the port that must satisfy it.  Optional, and absent means 'match by role and capability', so a file that states nothing keeps the inferred behaviour.  A file that states a pairing makes it the source of truth for that requirement.",
+            "type": "array",
+            "items": {"$ref": "#/$defs/pairing"}
           }
         }
       }
@@ -43,11 +48,11 @@
       "description": "The vehicle-level numbers a full-vehicle assembly needs and its subsystems do not carry: the chassis body, the four wheel ends, the steering system and the driveline.  Each is validated here as an object and in full by the model's own class, so a bound such as 'steering ratio must be positive' has one home rather than two that can disagree.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["chassis", "wheels", "steering"],
+      "required": ["wheels", "steering"],
       "properties": {
         "chassis": {"$ref": "#/$defs/vehicle_part"},
         "wheels": {
-          "type": "array", "minItems": 4, "maxItems": 4,
+          "type": "array", "minItems": 1,
           "items": {"$ref": "#/$defs/vehicle_part"}
         },
         "steering": {"$ref": "#/$defs/vehicle_part"},
@@ -56,6 +61,16 @@
     }
   },
   "$defs": {
+    "pairing": {
+      "description": "One explicit pairing: the requirement being settled and the port name that settles it.  Both ends are required, because a pairing missing either one states nothing that can be acted on.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirement_role", "port"],
+      "properties": {
+        "requirement_role": {"type": "string", "minLength": 1},
+        "port": {"type": "string", "minLength": 1}
+      }
+    },
     "vehicle_part": {
       "description": "One vehicle-level object, in the model's own shape.  The fields are the schema class's; stating them a second time here would let the two sets of bounds drift apart.",
       "type": "object"

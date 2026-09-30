@@ -13,13 +13,13 @@
 
 ## Context Recovery Block
 
-- **Current milestone**: #1 — 7 组合装配产物快照落盘
-- **Current status**: IN_PROGRESS
-- **Last completed**: #4 — 门禁与数值门实测值
-- **Current artifact**: `TODO.csv`
-- **Key context**: 02–07 的"产物是否变化"判据依赖 #1 的快照；其余三份 raw 证据（锚点、负例、门禁值）已落盘。
-- **Known issues**: 无
-- **Next action**: 写 `snapshot.py`（枚举 7 个 (总成, 试验台) 组合 → 导出 bodies/points/constraints/ideal_constraints/elements/connections 的集合与名字 → 落 `raw/assembly_snapshot.json`），并让 `--check` 逐字节比对。
+- **Current milestone**: 全部完成（#1–#5）
+- **Current status**: DONE
+- **Last completed**: #5 — 快照判据接入 02–07 的 SPEC（7 个 SPEC 均引用且口径统一）
+- **Current artifact**: `snapshot.py`、`raw/assembly_snapshot.json`（539,636 字节）、`raw/approved_deltas.json`（`[]`）、`raw/snapshot_notes.md`
+- **Key context**: 产物键按试验台（`axle_K@<试验台>`、`axle_C@<试验台>` + 整车 `vehicle`）；`--check` 的登记项四项精确匹配（无前缀覆盖）且 `registered_by` 必须写 05（未命中登记退出 1、登记不合法退出 4）；整车侧 5 个 rig 的试验台绑定不在快照覆盖内（`_meta.coverage_boundary`），那 5 个 rig 由 05 自己的运行时对照负责。
+- **Known issues**: 本行的 `validation_command` 里含全量 pytest 腿——**用户于本轮明确指示「不要跑测试」，故本轮不执行**（曾尝试后按指示停止，未采用其结果）；`AGENTS.md` 也不把全量列为日常检查（只在提交前或跨子系统改动时跑）。本行只改 `.codex-tasks/` 下的证据与脚本，未触及 `packages/**`；已跑的检查是 `just check-fast`（快速集 1015 passed / 1 xfailed、kernel+contracts 60、ruff/ty/三个架构门全绿）与 `ruff check .codex-tasks/...`。全量留到 07 收尾时按用户指示决定。
+- **Next action**: 无（本行完成）；02 起按 `SUBTASKS.csv` 顺序推进。
 
 ---
 
@@ -59,6 +59,30 @@
 
 ---
 
+## Milestone 1: 7 组合装配产物快照落盘（含 #5）
+
+- **Status**: DONE
+- **What was done**:
+  - 新增 `snapshot.py`：从 `suspension_multibody.rigs.rig.RIGS`（恰 7 项）枚举组合；供轮的两个试验台**各自成键**（`axle_K@kc_quasi_static`、`axle_C@kc_quasi_static`、`axle_K@axle_dynamic`、`axle_C@axle_dynamic`，经 `preparation.kc_quasi_static.assembly_for(model, mode, rig=<试验台>)`，产物含夹具刚体 `wheel_carrier_L/R`），整车侧 5 个 rig 共用 `vehicle`（`compose_vehicle_runtime`，模式由 `_select_assembly_mode(model, "auto")` 定）；每个 rig 记录 `family`/`route`/`study`/`supplies_wheels`/drives/outputs 与 `bench_bound`。
+  - 落 `raw/assembly_snapshot.json`；`--check` 采「未变化部分逐项相等 + 已登记差异」口径，登记处 `raw/approved_deltas.json`，登记项四项精确匹配且 `registered_by` 必须为 05。
+  - #5：7 个子任务 SPEC 均引用该判据且口径统一（`02/03/04/06` 不得产生差异、05 唯一可登记、07 逐条审计）。
+- **Key decisions**:
+  - Decision: 快照载荷不含生成时间等易变字段，时间写进 `raw/snapshot_notes.md`。
+    - Reasoning: 01 的 Done-When 同时要求「注明时间」与「两次运行逐字节一致」，两者只能这样并存。
+  - Decision: 非空判据按「受力列整体」判定，不要求 K 读数有 `elements`。
+    - Reasoning: K 的受力列是 `ideal_constraints`、力元只在 C 出现（F9 分层）；原判据把它判成失败。
+  - Decision: 集合（`frozenset`）序列化为排序列表。
+    - Reasoning: 实测发现集合迭代顺序随进程哈希种子变化，导致两次运行 sha256 不同（`720d8437…` vs `d8f0ccb4…`），不修则快照不能当判据。
+  - Decision（第二轮审核后）: 产物键按试验台拆开、登记改为四项精确匹配。
+    - Reasoning: 审核指出「7 个 rig 只映射 3 个产物」撑不起 05 的逐组合登记门；且原先「登记一条 `/elements` 即可放行其下任意变化」过宽。
+- **Validation**（均本会话实跑）:
+  - 两次生成 sha256 同为 `b58d35acd93560fd52046228856307ccc0cd97655b37b69dcaad86e852b24566`。
+  - `--check` 五条路径：未登记差异 → 1；精确登记 → 0；`registered_by` 非 05 → 4；`before` 不符 → 1；登记缺字段 → 4；还原后 → 0。
+  - `just check-fast` → 退出 0；`git diff --check` 干净。
+- **Next step**: 无（本行完成）
+
+---
+
 ## Final Summary
 
-（未完成；#1 与 #5 仍为 TODO）
+5 步全部 DONE。交付：`snapshot.py`、`raw/assembly_snapshot.json`（539,636 字节，sha256 `b58d35ac…`）、`raw/approved_deltas.json`（`[]`）、`raw/snapshot_notes.md`、`raw/painpoint_anchors.md`、`raw/triaxle_refusal.md`、`raw/baseline_commands.md`。唯一未在本行执行的项：`validation_command` 里的**全量 pytest 腿**——用户本轮指示「不要跑测试」，故未执行（本行未改 `packages/**`；`just check-fast` 全绿）。该偏差已登记在本行 `TODO.csv` 第 1 行 notes 与 `SUBTASKS.csv` 的 01 行 notes。

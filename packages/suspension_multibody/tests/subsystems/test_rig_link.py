@@ -169,34 +169,41 @@ def test_the_carrier_does_not_declare_a_second_wheel_centre() -> None:
     assert wheel_centre_body(merged, "L") == expected_body
 
 
-def test_the_tire_moves_to_the_bench_wheel() -> None:
+def test_the_tire_stays_on_the_assembly_it_belongs_to() -> None:
     """
-    D3: with the bench supplying the wheel, the tire belongs to that wheel.
+    D3, reversed by decision: the bench does **not** re-own the model's tire.
 
-    Leaving it on the upright as well would count the same tire twice, so the
-    element is re-owned rather than duplicated -- and it must still be in the
-    document's tire table, with its stiffness unchanged.
+    The old contract said the tire moves to the bench's carrier, on the argument
+    that leaving it on the upright would count the same tire twice.  The bench
+    supplies the *wheel*, and the wheel end is the assembly's, so the tire is the
+    assembly's too: re-owning it was a rewrite of the model under test, which is
+    what the non-invasiveness rule forbids.  Its owner, its frame offset and its
+    law are therefore exactly what the model put there, and no element belongs to
+    a `wheel_carrier_`.
     """
     _composed, runtime, _link, merged = _linked()
     before = [
-        (e.name, e.wheel_body)
+        (e.name, e.wheel_body, tuple(e.wheel_center_local), e.stiffness, e.unloaded_radius)
         for e in runtime.elements
         if type(e).__name__ == "VerticalTireElement"
     ]
     after = [
-        (e.name, e.wheel_body)
+        (e.name, e.wheel_body, tuple(e.wheel_center_local), e.stiffness, e.unloaded_radius)
         for e in merged.elements
         if type(e).__name__ == "VerticalTireElement"
     ]
     assert before, "the probe model must carry a tire for this test to mean anything"
-    assert len(after) == len(before), "the tire must be re-owned, not duplicated"
-    assert {name for name, _ in after} == {name for name, _ in before}
-    assert all(body.startswith("wheel_carrier_") for _, body in after)
+    assert after == before
+    assert not any(body.startswith("wheel_carrier_") for _, body, *_ in after)
 
     document = model_document(merged, name="probe", drive_mode="pad")
     tire_bodies = {tire["name"]: tire["body"] for tire in document["tires"]}
     assert tire_bodies, "the tires must survive into the document"
-    assert all(body.startswith("wheel_carrier_") for body in tire_bodies.values())
+    assert not any(body.startswith("wheel_carrier_") for body in tire_bodies.values())
+    # The body the model hung it on is still the one that carries the wheel centre.
+    assert all(
+        body == wheel_centre_body(merged, body[-1]) for body in tire_bodies.values()
+    )
 
 
 def test_the_weld_ties_the_two_bodies_at_one_physical_place() -> None:

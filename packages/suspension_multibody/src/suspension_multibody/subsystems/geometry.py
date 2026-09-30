@@ -95,13 +95,44 @@ def mirror_hardpoints(hardpoints: dict[str, Vec3]) -> dict[str, Vec3]:
     return mirrored
 
 
+#: The suffix a model uses to state a right-side hardpoint explicitly.
+_RIGHT_SUFFIX = "__R"
+
+
 def side_hardpoints(
     hardpoints: dict[str, Vec3], side: Literal["L", "R"]
 ) -> dict[str, Vec3]:
-    """Return one side's hardpoints with a common, side-independent key set."""
+    """
+    Return one side's hardpoints with a common, side-independent key set.
+
+    Mirroring is the **default**, not the rule: a hardpoint written ``name__R``
+    states the right side's own coordinates, and that statement wins over the
+    mirror.  A left/right-asymmetric axle is therefore expressible in the model's
+    own table -- one side mirrored where the shorthand is right, the other side
+    declared where it is not -- without giving up the shorthand for the symmetric
+    case.  The rule is the explicit topology's (`subsystems/explicit.py`), stated
+    once here so both routes read one model the same way.
+
+    The ``__R`` keys never appear in the result: the key set stays the same on
+    both sides, which is what lets every consumer look a role up without asking
+    which side it is on.
+    """
+    declared: dict[str, Vec3] = {
+        name[: -len(_RIGHT_SUFFIX)]: point
+        for name, point in hardpoints.items()
+        if name.endswith(_RIGHT_SUFFIX)
+    }
     if side == "L":
-        return dict(hardpoints)
-    return {name: point.mirrored_y() for name, point in hardpoints.items()}
+        return {
+            name: point
+            for name, point in hardpoints.items()
+            if not name.endswith(_RIGHT_SUFFIX)
+        }
+    return {
+        name: declared.get(name, point.mirrored_y())
+        for name, point in hardpoints.items()
+        if not name.endswith(_RIGHT_SUFFIX)
+    }
 
 
 def lookup_hardpoint(hardpoints: dict[str, Vec3], role: str) -> Vec3:

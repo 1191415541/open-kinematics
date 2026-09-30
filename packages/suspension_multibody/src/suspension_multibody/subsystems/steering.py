@@ -89,8 +89,13 @@ def _body(
     return body_from_part(
         name,
         part,
+        # The rack and its housing are side-less, so which side places them does
+        # not matter -- what matters is that the side is one this assembly *has*: a
+        # one-sided corner has no left side to ask, and naming one here would make
+        # a rack impossible on it.  Module subtask 06's rule is that a side is a
+        # declaration, and this is the last consumer that spelt one out.
         center_of_mass=context.part_placement(
-            name, instance.template.connections, "L"
+            name, instance.template.connections, context.request.sides[0]
         ),
     )
 

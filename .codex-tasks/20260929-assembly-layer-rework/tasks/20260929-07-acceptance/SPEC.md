@@ -14,15 +14,17 @@
 2. **逐条实跑 (a)-(g)**（原文见 `EPIC.md` 的 Done-When 代码块）：
    - **(a) 3 轴整车总成**（3 个悬架子系统 + 车身 + 转向 + 车轮 + 制动 + 驱动）装配并跑通一次；**实体清单与文件清单一一对应**；装配路径 `grep` 无 `front_axle`/`rear_axle`。注意 `EPIC.md` **F2** 指出拒绝发生在更早两层（`connections/policy.py` 的 `role_counts`/`required_placements` 与 `assembly.schema.json` 的 placement 枚举与轮数限制），故 07 必须确认这三处前置墙都已打开，而不只是装配函数能跑。
    - **(b) 镜像 vs 左右独立文件**：同一份总成文件，悬架条目分别写「镜像」与「左右独立文件」，两次装配产物**逐项比较点坐标与约束端点**后一致（只比名字集合不构成证据）。
+   - **(b2) 单轮与三轮最小用例**：单轮（单侧悬架）与三轮（两悬架 + 一个单侧）的最小装配用例，**本行独立复跑 06 交付的用例**（不得只引用 06 的结论；承接 `EPIC.md` G1 判据 (b)）。
    - **(c) 单轴与整车共用同一份 wheel 子系统文件**；装配阶段无「删轮胎再建车轮」；单轴 K/C 装配期刚性凝结车轮与轮毂，**自由度拓扑与 `kc_baseline` 逐位不变**（D2）。凝结机制必须是 `EPIC.md` **F5b** 的既有先例（`_merge_fixed_wheel` / `_fuse_welded_bodies`），且与 20260921 Epic A3（整车侧不凝聚）的关系已在 04 的 PROGRESS 里登记。
    - **(d) 试验台非侵入**：接入前后被测 runtime **逐项比较所有权、参数与几何值**后一致；差异只在外加约束/载荷。只比实体名集合不算通过（`_reown_tires` 正是「名字不变、所有权变」）。
    - **(e) 显式配对**：文件写出悬架→车身挂点配对即按配对连；车身刚体改名 `subframe` 后同一文件仍装配。
    - **(f) 零回归**：7 个既有组合的文档与数值门全绿；**所有基线重录都有登记**；无新增 skip/xfail。
-   - **(g) 拖挂铰接**：同一总成内两个车身侧体（牵引车与挂车）经**现有副类型**的铰接副连接并跑通一次；若实测确实需要新的运动副类型，才登记为内核范围、本轮不做（D6：拖挂铰接为**必验**用例）。
+   - **(g) 拖挂铰接**：同一总成内两个车身侧体（牵引车与挂车）经**现有副类型**的铰接副连接并跑通一次（由 03 交付、**本行独立复跑**，不得只引用 03 的用例）；**只有实测证明现有副类型不可行时，才登记为内核范围并提请用户裁决，不得以「登记」代替运行证据**（D6：拖挂铰接为**必验**用例）。
 3. **G1–G6 逐条确认**（`EPIC.md` 的 Done-When 第 1–6 条），每条给出命令、退出码与产物差异。
 4. **终局命令清单**照 `SUBTASKS.csv` 的 `07` 行 `validation_command` 逐条实跑并记录退出码（全量 pytest、架构目录、契约与内核包、ruff、ty、三个数值门）。
 5. **K/C 对标口径**：**不得用不带 `--actual-dir` 的 `kc_parity_check`**——那时它拿冻结快照与自身比较，恒过，不构成证据（`EPIC.md`「数值门为独立项」）。需要 K/C 等价对标时必须先跑 `kc_native_probe.py` + `kc_native_c_probe.py`，再带 `--actual-dir artifacts/kc-native-probe` 判定。
 6. **读数分层未被打穿**：K/C 与动态的差异由**读数**决定而非装配阶段增删零件，沿用 `EPIC.md` **F9** 的现成范式（装配体保留 `RevoluteJoint`、读数文档把它写成刚性连接）。
+7. **`raw/approved_deltas.json` 逐条审计**：01 交付的 `raw/approved_deltas.json` 里每个登记项都必须有**独立于结果字节的物理等价判据**（自由度与约束行数、惯量、轮心与接触点几何、轮胎力路径）；未被登记的差异即失败（`EPIC.md` 验证协议 07 的 (ii)）。审计还要回答三件事：(i) 每条登记与 **05 的 `PROGRESS.md` 逐步记录**逐条对得上（登记不能凭空出现或对不上某一步）；(ii) 登记口径是**四项精确匹配**（`product`/`pointer`/`before`/`after`，**脚本已无前缀覆盖语义**），登记缺字段或 `registered_by` 不是 05 时脚本**直接退出 4**，此类登记不得当作有效登记采信；(iii) **整车侧 5 个 rig**（`vehicle_kc`、`vehicle_dynamic`、`handling`、`ride_four_post`、`ride_random_road`）的试验台绑定**不在 01 快照覆盖范围内**，本行必须确认 05 用了它自己的「接入前后运行时逐项对照」来证明非侵入，而不能只看快照。
 
 ## Non-Goals
 
@@ -36,9 +38,9 @@
 - **写范围**：仅本子任务目录（`raw/`、验收脚本）与会话 scratch；**不改任何生产代码与测试**（除本行自己的验收用例）。
 - **起点对照值是 F8**：快速集 1015 passed / 1 xfailed；`tests/cases` 100；`tests/architecture` 147；`tests/adams` 160/47 skip；kernel+contracts 60；`ruff`/`ty`/三个架构门全绿；数值门 3/3 绿。其中 2026-09-29 **经用户授权**重录的两项（车辆动态快照 `vehicle_dynamics_baseline/sha256.json`、`kc_perf_baseline_native.json`）在验收时作为**已登记**的既有变化，不算新增重录。
 - **`kc_baseline` 逐位不变是硬门**（D2/D7）：用 `kc_native_probe.py` + `kc_native_c_probe.py` 生成 actual 再与冻结快照比对；**`kc_parity_check.py` 不带 `--actual-dir` 时的通过不算证据**。
-- **产物是否变化的判据**：用 `tasks/20260929-01-freeze/snapshot.py --check` 作为「产物是否变化」的判据（**待 01 的 `#1` 完成后跑**；01 的 7 组合快照尚未生成）。本行的默认路径与零回归判定依附于它。
+- **产物是否变化的判据**：用 `tasks/20260929-01-freeze/snapshot.py --check` 作为「产物是否变化」的判据（**01 已交付**：`snapshot.py` 与 `raw/assembly_snapshot.json` 已落盘，直接跑）。口径为「**未变化部分逐项相等 + 已登记差异**」，登记处是 01 交付的 `tasks/20260929-01-freeze/raw/approved_deltas.json`；**未登记的差异必须让 `--check` 非零退出（退出 1）**，登记缺字段或 `registered_by` 不是 05 时脚本**退出 4**。本行的默认路径与零回归判定依附于它。
 - **不得新增 skip/xfail**；`tests/adams` 的 47 个环境 skip 是既有的，不得增长。
-- **凡产物变化必须有登记**，且先给出**独立于结果字节的物理等价判据**（自由度与约束行数、惯量、轮心与接触点几何、轮胎力路径）；质量与质心相同不足以证明等价。
+- **凡产物变化必须有登记**（登记处 `raw/approved_deltas.json`，与 01 的 `--check` 口径一致：未登记的差异即失败），且先给出**独立于结果字节的物理等价判据**（自由度与约束行数、惯量、轮心与接触点几何、轮胎力路径）；质量与质心相同不足以证明等价。
 - **全量回归成本高**，本行作为 Epic 收尾必须跑（`EPIC.md` 验证协议 07 要求 `pytest packages/suspension_multibody/tests -q`）；不相关既有失败独立列明，任何新增失败阻断完成。
 - 证据只记**已执行**的结果；未执行的项留 `TODO`，不得先填结论。
 
@@ -56,8 +58,8 @@
 - [ ] **采信子任务自报**：本行最大的失效模式 → 每条判据独立实跑，子任务报告只用于定位，不作证据。
 - [ ] **弱判据冒充证据**：`kc_parity_check` 不带 `--actual-dir` 恒过；「实体名集合一致」漏掉所有权变化；「只比几何不比分枝」漏掉读数层被打穿 → 每条判据列出可比对的字段（所有权、参数、点坐标、约束端点与类型）。
 - [ ] **全量回归耗时（约 33 分钟）** → 本行为 Epic 收尾，必须跑；中途失败保留原始输出，不重录基线。
-- [ ] **拖挂/3 轴若需新副类型**：属内核范围（ABI 与版本常量），本 Epic 明确不做 → 以登记形式收口，不擅自扩范围（D6）。
-- [ ] **01 快照尚未生成**（`#1` 仍为 `TODO`）→ 「默认路径产物未变」与「零回归」在快照落盘前不可判定；落盘后必须补跑并记录。
+- [ ] **拖挂/3 轴副类型**：拖挂**必须先用现有副类型跑通**；只有实测证明现有副类型不可行（而非推断）时，才登记为内核范围并提请用户裁决（属 ABI 与版本常量，本 Epic 明确不做），不得以「登记」代替运行证据（D6）。
+- [ ] **登记审计的两条硬口径** → 登记必须与差异**四项精确匹配**（`product`/`pointer`/`before`/`after`，**脚本已无前缀覆盖语义**）；每条登记要与 **05 的 `PROGRESS.md` 逐步记录**对得上；登记缺字段或归属不是 05 时脚本退出 **4**，不得当成有效登记放过。
 - [ ] **既有环境 skip 被误判为新增**：`tests/adams` 的 47 个 skip 全是「Adams 参考 artifacts 不在本副本」的环境跳过，作为既有基线核对，不得增长。
 - [ ] **验收脚本本身写错**（枚举组合、比较口径）→ 脚本放本子任务目录并保留原始输出，便于复核。
 
@@ -71,12 +73,12 @@
 
 ## Done-When
 
-- [ ] Done-When (a)-(g) 逐条实跑，每条有命令、退出码与产物差异记录。
+- [ ] Done-When (a)-(g) 逐条实跑（含 (b2) 单轮/三轮最小用例的独立复跑），每条有命令、退出码与产物差异记录。
 - [ ] G1–G6 逐条确认，各附对应证据。
 - [ ] 终局命令清单（照 `SUBTASKS.csv` 的 `07` 行）逐条退出码已记录；`kc_baseline` 逐位未变有 actual 产物比对证据（带 `--actual-dir`）。
 - [ ] 无新增 skip/xfail；`ruff` / `ty` / 三个架构门退出码 0。
 - [ ] 所有基线变化有登记，且附独立于结果字节的物理等价判据；`kc_baseline` 无重录。
-- [ ] 01 快照落盘后默认路径 `snapshot.py --check` 通过。
+- [ ] 01 已交付，默认路径 `snapshot.py --check` 按「未变化部分逐项相等 + 已登记差异」口径通过；`raw/approved_deltas.json` 逐条审计完成——每个登记项都有独立于结果字节的物理等价判据、都与 05 的 `PROGRESS.md` 逐步记录对得上、都按四项精确匹配（脚本无前缀覆盖语义，登记不合法退出 4），未登记的差异即失败；并确认 05 对整车侧 5 个 rig 用了自己的运行时对照（不在 01 快照覆盖内）。
 
 ## Final Validation Command
 
@@ -96,11 +98,11 @@ uv run --no-sync python packages/suspension_multibody/scripts/kc_perf_gate.py --
 > 附加判据（非命令清单的一部分，但必须记录）：
 > - 三个架构门脚本：`legacy_surface_gate.py --check`、`check_module_layering.py --strict --final`、`check_composable_release.py --skip-isolation`。
 > - `kc_baseline` 逐位不变：`kc_native_probe.py` + `kc_native_c_probe.py` → `kc_parity_check.py --check --actual-dir artifacts/kc-native-probe`。**不得用不带 `--actual-dir` 的 `kc_parity_check`（自比较恒过，不构成证据）。**
-> - 产物是否变化：`python .codex-tasks/20260929-assembly-layer-rework/tasks/20260929-01-freeze/snapshot.py --check`（待 01 的 `#1` 完成后跑）。
+> - 产物是否变化：`python .codex-tasks/20260929-assembly-layer-rework/tasks/20260929-01-freeze/snapshot.py --check`（**01 已交付**，直接跑；口径为「未变化部分逐项相等 + 已登记差异」，登记处 `raw/approved_deltas.json`，未登记的差异退出 1、登记缺字段或归属不是 05 退出 4）。
 
 ## Demo Flow
 
-1. **前置**：确认 02–06 均已 `DONE`，且 01 的 `#1` 快照已落盘；否则先记录不可判定项。
+1. **前置**：确认 02–06 均已 `DONE`；01 已交付（`snapshot.py` 与 `raw/assembly_snapshot.json` 已落盘），可直接跑 `--check`；否则先记录不可判定项。
 2. **(a)-(g) 逐条实跑**：每条先跑命令、保存原始输出，再写结论（退出码 + 产物差异），严禁引用子任务报告。
 3. **(f) 零回归**：7 组合文档全绿 + 数值门三项 + `kc_baseline` 逐位比对 + skip/xfail 计数与 F8 对齐。
 4. **基线与差异登记**：逐项列出「文件 + 步骤 + 前后值 + 独立于结果字节的等价判据」。

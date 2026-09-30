@@ -687,14 +687,26 @@ def wheel_centre_body(assembly, side: str) -> str | None:
     A compiler that knows a template's part names cannot compile a topology it has
     not seen -- which is exactly what a fixed set of templates would have hidden.
 
-    The search is by *declaration*: a body carrying a `wheel_center` point is the
-    one the wheel centre belongs to.  The conventional names are tried first so
-    the answer for the built-in topologies is the same as it always was, and the
-    full body list is then searched so a novel name is found too.  Two candidates
-    are refused rather than guessed at: a model with two wheel-carrying bodies per
-    side is ambiguous, and picking one would silently attach the wheel to the
-    wrong part.
+    The search is by *declaration*, and it has two sources, in this order:
+
+    * **the assembly's own wheel-end table**, when it carries one (a vehicle
+      runtime does).  That table is the assembly saying where its wheel ends are,
+      which is a better answer than any search over names -- and the only answer
+      for a topology whose wheel-centre label is not the built-in's (`center`
+      rather than `wheel_center`, which is what a file template writes);
+    * otherwise the emitted points: a body carrying a `wheel_center` point.  The
+      conventional names are tried first so the built-in topologies answer exactly
+      as they always have, and the full body list is then searched so a novel name
+      is found too.
+
+    Ambiguity is refused rather than guessed at, and the message says which bodies
+    were in the running: a side with two wheel ends is a reading that has to name
+    the wheel it drives, and picking one here would attach the wheel to the wrong
+    part without saying so.
     """
+    declared = _declared_wheel_centres(assembly, side)
+    if declared is not None:
+        return declared
     candidates = [f"{stem}_{side}" for stem in _WHEEL_CENTRE_BODIES]
     decided = [name for name in candidates if _carries_wheel_centre(assembly, name)]
     if not decided:
@@ -710,6 +722,50 @@ def wheel_centre_body(assembly, side: str) -> str | None:
             "attach the wheel to the wrong part"
         )
     return decided[0] if decided else None
+
+
+def _declared_wheel_centres(assembly, side: str) -> str | None:
+    """
+    Return the side's wheel-carrying body from the assembly's own table, or `None`.
+
+    ``None`` means "this assembly carries no wheel-end table", which is the
+    ordinary answer for the single-axle runtime the K/C document is authored from:
+    its wheel ends are *places* on its own bodies rather than entries in a table.
+    A table that answers the side with exactly one body decides the question; a
+    table with more than one refuses, because two wheel ends on one side is what a
+    multi-axle assembly looks like and the reading has to say which one it drives.
+    """
+    table = getattr(assembly, "wheel_centers", None)
+    if not isinstance(table, dict) or not table:
+        return None
+    bodies = sorted(
+        {
+            str(body)
+            for name, (body, _point) in table.items()
+            if _wheel_side(str(name)) == side
+        }
+    )
+    if not bodies:
+        return None
+    if len(bodies) > 1:
+        raise NativeKcError(
+            f"side {side} carries more than one wheel end ({', '.join(bodies)}); "
+            "a reading that drives wheel centres has to name the wheel it drives, "
+            "and picking one here would drive the wrong one"
+        )
+    return bodies[0]
+
+
+def _wheel_side(name: str) -> str:
+    """
+    Return the side a wheel-end entry belongs to, from its own name.
+
+    The vocabulary is the document's (`front_left`, `rear_right`, ... -- see
+    `subsystems.types.WHEELS`), so the side is read off the name rather than
+    asked of the body: a wheel end's entry is keyed by the wheel, and the wheel is
+    what the case layer drives.
+    """
+    return "R" if name.endswith("right") else "L"
 
 
 def _carries_wheel_centre(assembly, body: str) -> bool:

@@ -12,6 +12,8 @@
     "allowed_placement_roles": {"type": "array", "items": {"enum": ["any", "front", "rear", "front_left", "front_right", "rear_left", "rear_right"]}, "minItems": 1},
     "description": {"type": "string"},
     "suspension_kind": {"type": "string"},
+    "sides": {"type": "array", "items": {"enum": ["left", "right"]}, "minItems": 1, "uniqueItems": true},
+    "mirror": {"type": "boolean"},
     "bodies": {"type": "array", "items": {"$ref": "#/$defs/body"}},
     "hardpoints": {"type": "array", "items": {"$ref": "#/$defs/hardpoint"}},
     "joints": {"type": "array", "items": {"$ref": "#/$defs/joint"}},

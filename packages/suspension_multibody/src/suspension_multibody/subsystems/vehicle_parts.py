@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import fields, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
 import numpy as np
 
@@ -48,6 +48,7 @@ __all__ = [
     "_add_wheel",
     "_body_from_spec",
     "_condense_welded_bodies",
+    "_condense_wheel_end",
     "_drop_isolated_bodies",
     "_fuse_welded_bodies",
     "_merge_fixed_wheel",
@@ -169,8 +170,12 @@ def _fuse_welded_bodies(assembly: VehicleRuntime) -> VehicleRuntime:
         components.setdefault(find(body), []).append(body)
 
     def component_root(component: list[str]) -> str:
-        if "chassis" in component:
-            return "chassis"
+        # A fused component is named after the vehicle's own chassis when it
+        # carries it: the chassis is the body the assembly called the centre, and
+        # naming the merged component after it keeps the alias map agreeing with
+        # the body list the vehicle already had.
+        if assembly.chassis_name in component:
+            return assembly.chassis_name
         body_b_candidates = [
             weld.body_b
             for weld in welds
@@ -411,7 +416,12 @@ def _drop_isolated_bodies(assembly: VehicleRuntime) -> VehicleRuntime:
     if flag is not None and flag != "" and flag == "0":
         return assembly
 
-    referenced: set[str] = {"chassis"}
+    # The chassis is the assembly's own body, and it is never isolated: it is the
+    # body everything else is measured against, so a runtime that named none has
+    # nothing to protect here and the set simply starts empty.
+    referenced: set[str] = (
+        {assembly.chassis_name} if assembly.chassis_name else set()
+    )
     for constraint in (*assembly.constraints, *assembly.ideal_constraints):
         for attr in ("body_a", "body_b"):
             body = getattr(constraint, attr, None)
@@ -607,4 +617,139 @@ def _merge_fixed_wheel(
         mass=total_mass,
         inertia=composite_inertia,
         center_of_mass=composite_com,
+    )
+
+
+def _condense_wheel_end(
+    runtime: Any, mounts: Mapping[str, str]
+) -> Any:
+    """
+    Fold each declared wheel body into the body it mounts to.
+
+    Decision D2's condensation, and it goes through the **existing** mechanism:
+    ``_merge_fixed_wheel`` is the composition's own composite-mass routine, so a
+    condensed wheel and a fixed vehicle wheel are the same statement about the
+    same physics -- the wheel's mass, centre of mass and inertia are folded into
+    its mount by the parallel-axis rule, and no independent wheel body is left
+    behind.  Nothing here rewrites a number: what changes is which body carries
+    it.
+
+    The entity set, the constraint rows and the degrees of freedom are all the
+    invariants this has to keep, so:
+
+    * the wheel body disappears, and the *only* rows removed are the ones naming
+      it -- a row interior to a body that no longer exists would otherwise
+      constrain a body that is not there;
+    * its wheel-centre point is carried over to the mount when the mount does not
+      declare one, because the reader that drives the wheel centre asks for that
+      point by name;
+    * the elements it owned follow it to the mount, with their local centre
+      re-expressed in the mount's frame.  That is a change of *frame*, not of
+      geometry: the world point the tire acts at is the same one.
+
+    ``mounts`` maps each wheel body to its mount, and it is the caller's because
+    the caller is the party that knows which bodies the wheel subsystem
+    produced.
+    """
+    pairs = {body: mount for body, mount in mounts.items() if body != mount}
+    if not pairs:
+        return runtime
+    bodies = dict(runtime.bodies)
+    wheels = {body: bodies[body] for body in pairs if body in bodies}
+    for wheel_body, mount in pairs.items():
+        if mount not in bodies:
+            raise ValueError(
+                f"wheel body {wheel_body!r} mounts to {mount!r}, which this "
+                "assembly does not carry"
+            )
+        if wheel_body not in wheels:
+            continue
+        wheel = wheels[wheel_body]
+        _merge_fixed_wheel(
+            bodies[mount],
+            bodies,
+            mount,
+            wheel_origin=np.asarray(wheel.pose.translation, dtype=float),
+            wheel_rotation=np.asarray(wheel.pose.rotation, dtype=float),
+            wheel_mass=float(wheel.mass),
+            wheel_inertia=np.asarray(wheel.inertia, dtype=float),
+        )
+        del bodies[wheel_body]
+
+    # Every point the wheel end declared follows it to its mount, under its own
+    # label: one body's points are the places on it, and a label that disappeared
+    # would be a place the reading can no longer name.  `wheel_center` keeps its
+    # spelling because that is what the reader looks for; a label the mount already
+    # uses is left with the mount's own value, which is the one the assembly
+    # declared first.
+    points: dict[tuple[str, str], np.ndarray] = {
+        key: point for key, point in runtime.points.items() if key[0] not in pairs
+    }
+    for wheel_body, mount in pairs.items():
+        if wheel_body not in wheels:
+            continue
+        wheel = wheels[wheel_body]
+        for (body, label), point in runtime.points.items():
+            if body != wheel_body or (mount, label) in points:
+                continue
+            world = wheel.pose.transform_point(np.asarray(point, dtype=float))
+            points[(mount, label)] = local_point(bodies, mount, world)
+
+    elements = tuple(
+        _reown_wheel_end_element(element, wheels, bodies, pairs)
+        for element in runtime.elements
+    )
+    constraints = tuple(
+        row for row in runtime.constraints if not _names_a_condensed_body(row, pairs)
+    )
+    ideal_constraints = tuple(
+        row
+        for row in runtime.ideal_constraints
+        if not _names_a_condensed_body(row, pairs)
+    )
+    connections = tuple(
+        replace(
+            connection,
+            body_a=pairs.get(connection.body_a, connection.body_a),
+            body_b=pairs.get(connection.body_b, connection.body_b),
+        )
+        for connection in runtime.connections
+    )
+    return replace(
+        runtime,
+        bodies=bodies,
+        state=RigidBodyState(bodies),
+        points=points,
+        elements=elements,
+        constraints=constraints,
+        ideal_constraints=ideal_constraints,
+        connections=connections,
+    )
+
+
+def _reown_wheel_end_element(
+    element: Any,
+    wheels: Mapping[str, RigidBody],
+    bodies: Mapping[str, RigidBody],
+    pairs: Mapping[str, str],
+) -> object:
+    """Return one element with a condensed owner replaced by the mount."""
+    owner = getattr(element, "wheel_body", None)
+    if owner not in pairs or owner not in wheels:
+        return element
+    mount = pairs[owner]
+    local_center = getattr(element, "wheel_center_local", None)
+    if local_center is None:
+        return element
+    world = wheels[owner].pose.transform_point(np.asarray(local_center, dtype=float))
+    return replace(
+        element,
+        wheel_body=mount,
+        wheel_center_local=local_point(bodies, mount, world),
+    )
+
+def _names_a_condensed_body(row: object, pairs: Mapping[str, str]) -> bool:
+    """Return whether a constraint row names a body that was condensed away."""
+    return bool(
+        {getattr(row, "body_a", None), getattr(row, "body_b", None)} & set(pairs)
     )

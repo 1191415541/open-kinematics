@@ -59,8 +59,14 @@ TWIN_ENDED_ELEMENTS = frozenset({"spring", "damper", "bump_stop", "anti_roll_bar
 FUNCTIONAL_ROLES = frozenset(
     {"suspension", "steering", "wheel", "chassis", "brake", "drive"}
 )
+#: Where a subsystem may sit.  The *shape* is what is fixed -- a placement must be a
+#: name, not an arbitrary string -- while which axes exist is the file's own
+#: declaration, so a three-axle truck needs no entry here and a typo is still
+#: caught by the shape rule naming the placement it does not recognise.
 PLACEMENT_ROLES = frozenset(
-    {"any", "front", "rear", "front_left", "front_right", "rear_left", "rear_right"}
+    {"any", "front", "rear", "middle", "third"}
+    | {"front_left", "front_right", "rear_left", "rear_right"}
+    | {"middle_left", "middle_right", "third_left", "third_right"}
 )
 #: The bodies a joint may name without the template declaring them: the ones another
 #: role owns.
@@ -165,7 +171,71 @@ class TemplateDocument:
         _check_contract(payload, target, validate_template)
         _check_role(str(payload["functional_role"]), "any", target)
         cls._check_topology(target, payload)
+        cls._check_sides(target, payload)
         return cls(target, copy.deepcopy(payload))
+
+    @staticmethod
+    def _check_sides(path: Path, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a symmetry declaration that describes half a topology.
+
+        One side plus the mirror is the ordinary form, and writing both sides is
+        the other one: a file states which sides it writes and whether the side it
+        does not write is mirrored from it.  The two answers are only meaningful
+        together -- "I write one side and I mirror nothing" describes an axle with
+        one corner, which is a legal *assembly* but never a legal template.
+        """
+        declared = payload.get("sides", ("left",))
+        if not isinstance(declared, (list, tuple)) or not declared:
+            raise AuthoringError(f"{path}: sides must be a non-empty list of sides")
+        unknown = sorted({str(side) for side in declared} - {"left", "right"})
+        if unknown:
+            raise AuthoringError(f"{path}: unknown side(s) {unknown}; sides are left, right")
+        if len(set(declared)) != len(declared):
+            raise AuthoringError(f"{path}: duplicate side(s) {sorted(declared)}")
+        both = set(map(str, declared)) == {"left", "right"}
+        mirrors = bool(payload.get("mirror", True))
+        # The two answers are checked against each other, because only two of the
+        # four combinations describe something the conversion can build:
+        #
+        # * **left + mirror** -- the shorthand: the file writes the left side, the
+        #   conversion mirrors it into the right one.  This is what every existing
+        #   template does, and mirroring *writes from* the left, so "right +
+        #   mirror" is not a variant of it: it would declare the right side and
+        #   then produce no left one at all -- an assembly half of whose bodies
+        #   nobody wrote;
+        # * **both sides, no mirror** -- the file spells both sides out, so a twin
+        #   of either would name a body twice.
+        if mirrors and not both and set(map(str, declared)) != {"left"}:
+            raise AuthoringError(
+                f"{path}: sides is {sorted(map(str, declared))} with mirror true; the "
+                "mirror writes the right side from the left one, so a mirrored file "
+                "declares sides: [left].  A file that writes the right side has to "
+                "write the left one too, and state mirror: false"
+            )
+        if mirrors and both:
+            raise AuthoringError(
+                f"{path}: sides is both sides with mirror true; a file that writes "
+                "both sides mirrors nothing -- set mirror: false"
+            )
+
+    @property
+    def declared_sides(self) -> tuple[str, ...]:
+        """Return the sides this template writes, in the file's own spelling."""
+        return tuple(str(side) for side in self.payload.get("sides", ("left",)))
+
+    @property
+    def mirrors(self) -> bool:
+        """
+        Return whether the side this file does not write is mirrored from it.
+
+        True is the ordinary answer, and the reason the file format is usable for a
+        symmetric axle: one side is written once and the other is its mirror.  A
+        file that writes both sides says so -- and then nothing is mirrored,
+        because mirroring a side that is already declared would produce two
+        descriptions of one body.
+        """
+        return bool(self.payload.get("mirror", True))
 
     @staticmethod
     def _check_topology(path: Path, payload: Mapping[str, Any]) -> None:
@@ -647,6 +717,14 @@ class AssemblyEntry:
     placement_role: str
     overrides: Mapping[str, Any]
     subsystem: SubsystemDocument
+    #: Explicit pairings this entry states: requirement role -> port name.
+    #:
+    #: Optional, and empty means "let the matcher infer", which is what every
+    #: assembly file written before the pairing section said.  It lives on the
+    #: *entry* rather than on the document because a requirement belongs to the
+    #: subsystem that declares it, and a document-wide table would let two
+    #: entries state the same requirement role and disagree.
+    pairings: Mapping[str, str] = MappingProxyType({})
 
     def effective(self) -> EffectiveSubsystem:
         """Return this entry's effective subsystem, overrides applied."""
@@ -702,12 +780,33 @@ class AssemblyDocument:
                     f"{target}: override for {row['ref']!r} may only restate "
                     f"{sorted(OVERRIDE_KEYS)}; found {illegal}"
                 )
+            stated = row.get("pairings", [])
+            pairings = {
+                str(item["requirement_role"]): str(item["port"]) for item in stated
+            }
+            if len(pairings) != len(stated):
+                repeated = sorted(
+                    {
+                        str(item["requirement_role"])
+                        for item in stated
+                        if [str(other["requirement_role"]) for other in stated].count(
+                            str(item["requirement_role"])
+                        )
+                        > 1
+                    }
+                )
+                raise AuthoringError(
+                    f"{target}: the pairings for {row['ref']!r} state "
+                    f"{repeated} more than once; one requirement gets one pairing, "
+                    "or the file does not say which port is meant"
+                )
             entry = AssemblyEntry(
                 ref=str(row["ref"]),
                 functional_role=functional,
                 placement_role=placement,
                 overrides=MappingProxyType(overrides),
                 subsystem=subsystem,
+                pairings=MappingProxyType(pairings),
             )
             # Resolve once here so an unreachable property file, an unknown
             # hardpoint or a topology-shaped override fails while loading the

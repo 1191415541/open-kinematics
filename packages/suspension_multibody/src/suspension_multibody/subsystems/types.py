@@ -156,11 +156,48 @@ class AssemblyRequest:
     #: `steering` without anything noticing, which a mapping would accept
     #: silently.
     #:
-    #: The wheel role is absent on purpose: its wheel centre is a per-side mount
-    #: and the role owns no body on an axle, so the file format has no body to
-    #: hang one on -- see `subsystems/wheel.py`.
+    #: The wheel role is here too, and it is the one that changed: the wheel
+    #: subsystem now produces the wheel end itself (the wheel body and the tire,
+    #: see `subsystems/wheel.py`), so a file's wheel subsystem *is* a wheel
+    #: topology and there is a body to hang its wheel centre on.  Before that it
+    #: owned no body on an axle, and the role had nothing a file could describe.
     steering_template: object | None = None
     chassis_template: object | None = None
+    wheel_template: object | None = None
+    #: Explicit pairings a document states: requirement role -> port name, from
+    #: the assembly file's own ``pairings`` section.  Empty means "match by role
+    #: and capability", which is what every existing assembly file gets.
+    #:
+    #: Deliberately absent from any dump: ``api.py`` hashes
+    #: ``model.model_dump(mode="json")`` for ``Provenance.model_hash``, and this
+    #: is a property of the *assembly request*, not of the geometry.  A pairing
+    #: that reached a model dump would change every recorded model hash and every
+    #: recorded result byte for a file that states one.
+    pairings: Mapping[str, str] = field(default_factory=dict)
+
+    #: The sides this assembly carries.  The default is the symmetric pair, and a
+    #: caller that declares one side gets a **one-sided** assembly: a single-wheel
+    #: corner is a topology, not a symmetric axle with a hole in it.  A side is
+    #: declared rather than assumed because the model's own hardpoint table may
+    #: state one side explicitly (`name__R`), in which case the left/right pair is
+    #: two declarations rather than one mirror.
+    sides: tuple[Side, ...] = SIDES
+
+    def __post_init__(self) -> None:
+        if not self.sides:
+            # An assembly with no sides is not a smaller assembly: its body order
+            # would list the parts of the sides it has and its element rows would
+            # span none, which is two answers to one question.  Refused here, where
+            # the request is stated, rather than composed into something odd.
+            raise ValueError(
+                "an assembly request must carry at least one side; the sides are "
+                f"{list(SIDES)}"
+            )
+        unknown = sorted(set(self.sides) - set(SIDES))
+        if unknown:
+            raise ValueError(
+                f"unknown side(s) {unknown}; the sides are {list(SIDES)}"
+            )
 
     def carries(self, role: str) -> bool:
         """Return whether this assembly carries a subsystem role."""
@@ -239,6 +276,7 @@ _ROLE_TEMPLATE_FIELD: dict[str, str] = {
     "suspension": "suspension_template",
     "steering": "steering_template",
     "chassis": "chassis_template",
+    "wheel": "wheel_template",
 }
 
 

@@ -493,8 +493,15 @@ def test_full_vehicle_requires_both_suspensions_and_chassis(tmp_path: Path) -> N
         AssemblyDocument.load(assembly)
 
 
-def test_full_vehicle_rejects_two_front_axles(tmp_path: Path) -> None:
-    """Two suspensions at the front is a count the rule must not accept."""
+def test_full_vehicle_rejects_two_suspensions_at_one_placement(tmp_path: Path) -> None:
+    """
+    Two suspensions at the front is the shape rule's to refuse.
+
+    What the rule fixes is not "a vehicle has two axles" -- a three-axle truck has
+    three -- but that one placement names one subsystem.  A file that names the front
+    axle twice does not say which suspension a front wheel came from, and the message
+    has to be that rather than a count.
+    """
     _template(tmp_path)
     _chassis_template(tmp_path)
     _suspension_subsystem(tmp_path, "front", "front")
@@ -514,7 +521,7 @@ def test_full_vehicle_rejects_two_front_axles(tmp_path: Path) -> None:
             ],
         },
     )
-    with pytest.raises(AuthoringError, match="requires one rear suspension"):
+    with pytest.raises(AuthoringError, match="more than once"):
         AssemblyDocument.load(assembly)
 
 

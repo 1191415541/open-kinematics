@@ -43,7 +43,12 @@ class AerodynamicDragSpec(StrictModel):
 class WheelSpec(StrictModel):
     """One wheel-end rotational body and its tire parameters."""
 
-    name: Literal["front_left", "front_right", "rear_left", "rear_right"]
+    #: The wheel's own name.  Deliberately not a four-corner ``Literal``: which wheel
+    #: ends exist is the assembly's declaration, and a three-axle truck names six.  The
+    #: *four-corner* requirement of a full vehicle is stated once, in
+    #: :meth:`VehicleModel._topology`, so widening this field does not relax it -- an
+    #: existing vehicle model still has to name exactly the four corners it always did.
+    name: str = Field(min_length=1)
     body: str
     center_local: Vec3
     steering_axis: Vec3 = Vec3(x=0.0, y=1.0, z=0.0)

@@ -233,6 +233,7 @@ def side_body_order(request: object) -> tuple[str, ...]:
 
     instance = getattr(request, "instantiated_suspension", None)
     template = instance.template if instance is not None else DOUBLE_WISHBONE
+    sides = tuple(getattr(request, "sides", ())) or ("L", "R")
     carries_chassis = True
     carries_steering = True
     carries = getattr(request, "carries", None)
@@ -244,7 +245,20 @@ def side_body_order(request: object) -> tuple[str, ...]:
         for part in template.parts
         if (carries_chassis or part.name != "chassis")
         and (carries_steering or _stem_of(part.name) not in _STEERING_STEMS)
+        # A one-sided assembly lists one side: the sequence is a fact about what
+        # this assembly carries, and a part the assembly has no side for is not in
+        # it.  The composition refuses a body order naming bodies no contribution
+        # produced, and rightly -- this is the place that knows the difference.
+        and (_described_side(part.name) in (None, *sides))
     )
+
+
+def _described_side(name: str) -> str | None:
+    """Return the side a part name describes, or ``None`` for a side-less part."""
+    for side in ("L", "R"):
+        if name.endswith(f"_{side}"):
+            return side
+    return None
 
 
 #: The stems this subsystem does **not** build, though the template lists them.

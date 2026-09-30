@@ -41,3 +41,25 @@
 ## Final Summary（未开工）
 
 （`TODO.csv` 的 6 步全部为 `TODO`；本子任务尚未开工，未执行任何步骤、未产生任何证据）
+
+## 2026-09-29 计划修订（复核后）
+
+- **改了 `SPEC.md` 的 Goals 4 与 Constraints（产物判据）、Deliverables（`raw/rig_product_diff.md`）、Risk 两条、Done-When 两条、Final Validation 说明、Demo Flow 第 5 步，以及 `TODO.csv` 第 5 行**：`snapshot.py --check` 统一改为「未变化部分逐项相等 + 已登记差异」口径，登记处是 01 交付的 `tasks/20260929-01-freeze/raw/approved_deltas.json`，**未登记的差异必须让 `--check` 非零退出**。
+- **为什么**：01 的交付口径已确定为「已登记差异不算变化」，若 05 只写「差异已登记」而不落 `approved_deltas.json`，`--check` 的退出码与证据就会脱节；同时必须写明 **05 是唯一被允许改变既有产物的行**，否则 04/06 的「零变化」与 05 的「允许变化」边界不清。
+- **不影响其它行 id**：改动只落在 05；开关锚点由 `si_assembly.py:493-518` 修正为 `:521`（`RIG_ENTITIES_SWITCH` 实测定义在此），应用点 `:467-482` 不变。
+
+## 2026-09-29 计划修订（第二轮复核后）
+
+- **改动**：凡提到 `approved_deltas.json` 的位置（Goals 4、Constraints 的产物判据与「允许改变产物」条、Risk 两条、Deliverables 的 `raw/rig_product_diff.md`、Done-When 两条、Final Validation Command 说明、Demo Flow 第 5 步）统一补上完整登记口径——**四项精确匹配**（`product`/`pointer`/`before`/`after`，`product` 形如 `axle_K@kc_quasi_static`、`vehicle` 或 `rig:<名字>`，**没有前缀覆盖规则**）、登记项须带 `reason`/`registered_by`/`evidence` 且 `registered_by` 必须以 **05** 开头、**缺字段或归属不符退出 4、差异未命中登记退出 1**；并补**覆盖边界**：整车侧 5 个 rig 的试验台绑定不在 01 快照覆盖内，必须由本行自己的「接入前后运行时逐项对照」证明非侵入。所有「待 01 的 `#1` 完成后跑」「01 快照尚未生成」改为「**01 已交付**（`snapshot.py` 与 `raw/assembly_snapshot.json` 已落盘），直接跑」。
+- **为什么**：第二轮复核指出登记口径写得太粗——只写「差异已登记」在**没有前缀覆盖规则**的脚本下会被判成未命中（退出 1），而缺字段或 `registered_by` 不是 05 会直接退出 4；同时 01 的快照对整车侧 5 个 rig 只记录与试验台无关的装配体，本行若只看快照会漏掉这 5 个 rig 的非侵入证据。
+- **影响的行 id**：05 的 #5（`TODO.csv` 第 5 行的 acceptance 补四项精确匹配与 `registered_by` 以 05 开头，notes 补退出码语义、整车侧 5 个 rig 覆盖边界，并把「待 01 的 #1 完成后跑」改为「01 已交付、直接跑」；`SPEC.md` 的产物判据与登记口径、覆盖边界随本节生效）；`SPEC.md` 的 Goals 4、Constraints、Risk、Deliverables、Done-When、Final Validation Command、Demo Flow。行数仍为 6、status 全为 `TODO`。
+
+---
+
+## 2026-09-29 落地（DONE）
+
+`_reown_tires`、`_is_replaced_tire` 与其调用点删除，`merge_rig_link` 改为纯追加（被测方任何实体都不替换、不重挂）。`test_rig_link.py` 的契约按 D3 反转为 `test_the_tire_stays_on_the_assembly_it_belongs_to`。
+
+非侵入由本行自证：新增 `tests/subsystems/test_the_rig_is_not_invasive.py`（10 条）——两个供轮台逐项指纹对照（既有实体的质量/惯量/质心/位姿/点几何/约束/力元逐字相等，新增恰好是 `wheel_carrier_L/R` 的两个体、四点、两焊缝）、焊缝即轮心夹具（`point_a == point_b`）、7 个 rig 全覆盖（含 01 快照未覆盖的 5 个整车台）。
+
+产物差异**为空**：冻结夹具不声明 `tires`，`_reown_tires` 本就空转；`snapshot.py --check` 零差异 → `raw/approved_deltas.json` 保持 `[]`，无需登记项。`RigSpec.supplies_wheels` 未改写，故「既有 rig 声明的解释规则登记」不适用。`dynamic_hash_sentinel --check` 26 artifact 逐字节一致。证据：`raw/rig_immutability.md`。

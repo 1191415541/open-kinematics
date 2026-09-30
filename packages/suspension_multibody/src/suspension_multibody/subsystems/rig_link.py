@@ -14,11 +14,13 @@ What the link is, and why this shape:
   the bench means by a carrier: the body it moves to apply travel.  Welding it
   instead would lock the travel the bench exists to apply, and a K sweep would be
   immobilised (the static trim then fails outright);
-* the **tire moves to the carrier**.  D3: when the bench supplies the wheel, the
-  tire belongs to the bench's wheel, not to the upright, and leaving it on the
-  upright would count the same tire twice.  Its stiffness is unchanged and its
-  ``wheel_center_local`` becomes zero, because the carrier's origin *is* the wheel
-  centre -- this is a change of owner and not of physics;
+* **the assembly is not rewritten.**  D3: the bench is an external excitation and
+  a clamp, not a second owner.  It adds its own carrier and ties that carrier to
+  the body carrying the wheel centre; every body, point, constraint and element
+  the model already had stays exactly as it was, with the same owner, the same
+  numbers and the same geometry.  The tire is the model's own and stays on the
+  body the model put it on -- moving it to the carrier was a change of owner the
+  physics never needed, and the immutability rule now forbids it.
 * the carrier gets **no** ``wheel_center`` point.  The driven coordinate is read
   from whichever body declares that point, and declaring it twice would make the
   lookup ambiguous -- the assembly's own reader refuses exactly that, on purpose.
@@ -34,12 +36,12 @@ question the run answers.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import numpy as np
 
 from ..modeling.assembly import Assembly
-from ..modeling.primitives import SE3, RigidBody, WeldJoint
+from ..modeling.primitives import SE3, RigidBody, RigidBodyState, WeldJoint
 from .runtime import SubsystemRuntime
 from .types import Connection
 
@@ -72,7 +74,8 @@ class RigLink:
     points: dict[tuple[str, str], np.ndarray]
     #: The welds attaching each carrier to its upright.
     constraints: tuple[Any, ...]
-    #: The tire elements, re-owned by the carrier.
+    #: The bench's own force elements.  Empty today: the wheel end -- and with it
+    #: the tire -- belongs to the assembly, and this module adds none of its own.
     elements: tuple[object, ...]
     #: Connection rows, for the assembly's own accounting.
     connections: tuple[Connection, ...]
@@ -226,10 +229,6 @@ def link_wheel_supplying_rig(
                 point_b="center",
             )
         )
-        # D3: the tire belongs to the bench's wheel.  Re-owning it is a change of
-        # body, not of stiffness or radius, so the force path is the same one the
-        # model already described.
-        elements.extend(_reown_tires(runtime, upright, carrier_name))
 
     return RigLink(
         bodies=bodies,
@@ -238,49 +237,39 @@ def link_wheel_supplying_rig(
         elements=tuple(elements),
         connections=tuple(connections),
     )
-
-
 def merge_rig_link(runtime: SubsystemRuntime, link: RigLink) -> SubsystemRuntime:
     """
     Return the runtime with the bench's entities merged in.
 
+    Purely additive, and that is the contract rather than an accident: the bench
+    contributes bodies, points, constraints and connections of its **own**, and
+    nothing the assembly had is replaced or re-owned.  A merge that rewrote the
+    model would make "the bench is in the model" a statement about which question
+    the run answers.
+
     The welds go into both constraint columns: a weld is an ideal joint, and the
     two columns exist to answer "what does this model look like in K" and "in C",
-    not to distinguish rigid from compliant.  The tire elements *replace* the ones
-    they re-own, so the same tire cannot appear twice.
+    not to distinguish rigid from compliant.
     """
     if link.is_empty:
         return runtime
-    reowned = {id(element) for element in link.elements}
-    kept = [
-        element
-        for element in runtime.elements
-        if id(element) not in reowned and not _is_replaced_tire(element, link)
-    ]
+    merged_bodies = {**runtime.bodies, **link.bodies}
     return replace(
         runtime,
-        bodies={**runtime.bodies, **link.bodies},
+        bodies=merged_bodies,
+        # The state is rebuilt, not carried over.  A `replace` that left the old
+        # state in place would publish a body table the state does not know about,
+        # and the two are read as one thing: `api` lays a contract sample out
+        # against `state.bodies` and `_reorder_bodies` orders `bodies`.  A bench's
+        # carrier that reached one and not the other is a body that exists in the
+        # model and not in the answer.
+        state=RigidBodyState(merged_bodies),
         points={**runtime.points, **link.points},
         constraints=(*runtime.constraints, *link.constraints),
         ideal_constraints=(*runtime.ideal_constraints, *link.constraints),
         connections=(*runtime.connections, *link.connections),
-        elements=(*kept, *link.elements),
+        elements=(*runtime.elements, *link.elements),
     )
-
-
-def _is_replaced_tire(element: object, link: RigLink) -> bool:
-    """
-    Return whether a tire the runtime holds is superseded by a re-owned one.
-
-    Matched by name rather than by identity, because the re-owned element is a new
-    object with the same name: the tire *is* the same tire, owned by somebody else.
-    """
-    if type(element).__name__ != "VerticalTireElement":
-        return False
-    names = {getattr(candidate, "name", "") for candidate in link.elements}
-    return getattr(element, "name", "") in names
-
-
 def _upright_for(runtime: SubsystemRuntime, side: str) -> str | None:
     """
     Return the body carrying one side's wheel centre, if there is one.
@@ -310,39 +299,3 @@ def _unloaded_radius(runtime: SubsystemRuntime, upright: str) -> float:
         if getattr(element, "wheel_body", None) == upright:
             return float(getattr(element, "unloaded_radius", 0.0) or 0.0)
     return 0.0
-
-
-def _reown_tires(
-    runtime: SubsystemRuntime, upright: str, carrier: str
-) -> tuple[object, ...]:
-    """
-    Return the upright's tires, re-owned by the bench's carrier.
-
-    A tire is a force element between its body and the road, so moving it from the
-    upright to the carrier leaves the force path intact: the carrier sits at the
-    wheel centre, and the wheel centre it acts at is the same physical point.
-
-    ``wheel_center_local`` becomes the **zero vector**, and that is load-bearing:
-    the point is expressed in the owning body's frame, and the carrier's frame
-    origin *is* the wheel centre.  Keeping the upright-local offset would place the
-    contact patch at the wheel centre plus that offset, measured from a frame that
-    already sits there -- a wrong contact point, and therefore a wrong wheel load.
-    """
-    reowned: list[object] = []
-    for element in runtime.elements:
-        if type(element).__name__ != "VerticalTireElement":
-            continue
-        if getattr(element, "wheel_body", None) != upright:
-            continue
-        # The class-name check above narrows the runtime object to the tire
-        # element; the cast states that to the type checker rather than leaving it
-        # to a suppression comment.
-        tire = cast("Any", element)
-        reowned.append(
-            replace(
-                tire,
-                wheel_body=carrier,
-                wheel_center_local=np.zeros(3, dtype=float),
-            )
-        )
-    return tuple(reowned)

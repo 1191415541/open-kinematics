@@ -137,8 +137,12 @@ def runtime_template_from(document: TemplateDocument) -> Template:
     template rather than half of one.
     """
     payload = document.payload
-    parts = _mirrored_parts(payload)
-    connections = _mirrored_connections(_connections_from(payload))
+    parts = _mirrored_parts(payload, mirror=document.mirrors)
+    connections = _mirrored_connections(
+        _connections_from(payload), mirror=document.mirrors
+    )
+    if not document.mirrors:
+        connections = _per_side_roles(connections)
     slots = _slots_from(payload, connections, _slot_connections(payload, connections))
     outputs = tuple(
         OutputDeclaration(
@@ -226,6 +230,10 @@ def _connections_from(payload: Mapping[str, Any]) -> tuple[ConnectionDefinition,
     connections: list[ConnectionDefinition] = []
     for row in payload["hardpoints"]:
         point = str(row["name"])
+        # The side this point is *on*, taken from its owner rather than assumed:
+        # a file that writes both sides declares right-hand points, and naming
+        # them after the left side would give one connection two names.
+        point_side = "R" if str(row.get("owner", "")).endswith("_R") else _MODEL_SIDE
         # A mount with no owner is one that sits on a body another role declares;
         # the file states it without an owner rather than with an empty one.
         owner = str(row.get("owner", ""))
@@ -270,7 +278,7 @@ def _connections_from(payload: Mapping[str, Any]) -> tuple[ConnectionDefinition,
             far_label = (
                 str(joint["far_label"])
                 if joint.get("far_label")
-                else (f"{point}_{_MODEL_SIDE}" if far_owner else "")
+                else (f"{point}_{point_side}" if far_owner else "")
             )
         connections.append(
             ConnectionDefinition(
@@ -279,7 +287,7 @@ def _connections_from(payload: Mapping[str, Any]) -> tuple[ConnectionDefinition,
                 # it; only a point that constrains nothing falls back to its own
                 # role-and-side name.  The *role* is separate and deliberately the
                 # same on both sides.
-                name=_connection_name(point, joint, bushing_by_point),
+                name=_connection_name(point, joint, bushing_by_point, side=point_side),
                 role=point,
                 joint=joint_type,
                 bushing=bushing_by_point.get(point),
@@ -299,7 +307,7 @@ def _connections_from(payload: Mapping[str, Any]) -> tuple[ConnectionDefinition,
 
 
 def _mirrored_connections(
-    connections: tuple[ConnectionDefinition, ...],
+    connections: tuple[ConnectionDefinition, ...], *, mirror: bool = True
 ) -> tuple[ConnectionDefinition, ...]:
     """
     Expand the connections a file declares on one side into both sides.
@@ -310,7 +318,13 @@ def _mirrored_connections(
     and columns, and its far end mirrored the same way; a far end that is itself
     unsided stays shared, which is what keeps a rack guide one guide rather than
     two.
+
+    ``mirror`` is the template's own declaration, and a file that writes both sides
+    gets its connections back unchanged: the right-hand ones are already there, and
+    a twin of a right-hand connection would name a body nobody declared.
     """
+    if not mirror:
+        return tuple(connections)
     mirrored: list[ConnectionDefinition] = []
     for connection in connections:
         mirrored.append(connection)
@@ -335,6 +349,66 @@ def _mirrored_connections(
     return tuple(mirrored)
 
 
+def _per_side_roles(
+    connections: tuple[ConnectionDefinition, ...],
+) -> tuple[ConnectionDefinition, ...]:
+    """
+    Take the side token out of a both-sides file's *role* names.
+
+    A role is side-independent by design: ``upper_outer`` is the same role on both
+    sides, and the composition resolves it against that side's hardpoints.  A file
+    that writes both sides therefore has to name its right-hand declarations
+    somehow -- and the convention is the model's own, ``<role>_R``, which is what
+    ``geometry.side_hardpoints`` already reads on the model's side of the same
+    question.
+
+    Removing the token here is what makes the two ways of writing one file land on
+    the *same* connection: the mirrored route's twin keeps the role and gains a
+    side token on its name, and this route's declaration states the token and gets
+    it taken off the role.  Without this, a both-sides file would compose a right
+    side whose roles nobody can look up.
+
+    Only a connection whose owner carries that same token is rewritten, so a role
+    that merely ends in ``_L`` on an unsided body is left alone.
+    """
+    # A role another connection on the same body already carries: stripping a
+    # token must not merge two points into one, so those names are left as written.
+    taken = {
+        (connection.owner, connection.role)
+        for connection in connections
+        if not connection.role.endswith(("_L", "_R"))
+    }
+    rewritten: list[ConnectionDefinition] = []
+    for connection in connections:
+        token = next(
+            (side for side in ("_L", "_R") if connection.owner.endswith(side)), None
+        )
+        if token is None:
+            rewritten.append(connection)
+            continue
+        role = (
+            connection.role[: -len(token)]
+            if connection.role.endswith(token)
+            else connection.role
+        )
+        if role != connection.role and (connection.owner, role) in taken:
+            role = connection.role
+        rewritten.append(
+            replace(
+                connection,
+                role=role,
+                # The label carries the same token for the same reason: it names
+                # a point that exists once per side.  Only a label ending in the
+                # owner's own side token is touched, and a label that stops doing
+                # so keeps its spelling.
+                label=connection.label[: -len(token)]
+                if connection.label.endswith(token)
+                else connection.label,
+            )
+        )
+    return tuple(rewritten)
+
+
 def _mirrored_name(name: str, side: str) -> str:
     """
     Return a per-side name for something that exists once per side.
@@ -349,15 +423,31 @@ def _mirrored_name(name: str, side: str) -> str:
 
 
 def _connection_name(
-    point: str, joint: Mapping[str, Any] | None, bushing_by_point: Mapping[str, str]
+    point: str,
+    joint: Mapping[str, Any] | None,
+    bushing_by_point: Mapping[str, str],
+    *,
+    side: str = _MODEL_SIDE,
 ) -> str:
-    """Return the name a connection records, taken from the declaration that owns it."""
+    """
+    Return the name a connection records, taken from the declaration that owns it.
+
+    A point that carries no joint of its own and feeds no bushing still needs a
+    name the contract can record, and the name is per-side because the point is:
+    the fallback takes the side the point is on, so a both-sides file does not name
+    its right-hand points after the left one.
+    """
     if joint is not None:
         return str(joint["name"])
     bushing = bushing_by_point.get(point)
     if bushing is not None:
         return bushing
-    return f"{point}_{_MODEL_SIDE}"
+    # The point's own name may already spell its side (a both-sides file writes it
+    # that way); the token is taken off and the point's *side* appended, so the two
+    # routes land on one name: `upper_rear` + R and `upper_rear_R` + R are the same
+    # connection.
+    base = point[:-2] if point.endswith(("_L", "_R")) else point
+    return f"{base}_{side}"
 
 
 def _slot_connections(
@@ -537,6 +627,38 @@ def assembly_request_from(
     )
 
 
+def _sides_from_file(assembly: AssemblyDocument) -> tuple[str, ...] | None:
+    """
+    Return the sides an assembly document declares, or `None` if it declares none.
+
+    A template says which sides it writes and whether the other is mirrored from
+    it, so the assembly's sides are the union over the entries that *say*
+    something.  Only an explicit `sides` counts as saying something, and that is
+    load-bearing rather than tidy: a side-less role's template -- the chassis, a
+    simplified brake -- has no sides to declare, so letting it vote would widen a
+    one-corner document back to a pair and make the declaration unable to express
+    what it exists for.  `None` means no entry said anything, which is the
+    ordinary case, and the request's own default is what it means.
+    """
+    side_of = {"left": "L", "right": "R"}
+    declared: list[str] = []
+    for entry in assembly.entries:
+        template = getattr(entry.subsystem, "template", None)
+        payload = getattr(template, "payload", None) or {}
+        if template is None or not ({"sides", "mirror"} & set(payload)):
+            continue
+        if getattr(template, "mirrors", True):
+            sides = ("L", "R")
+        else:
+            sides = tuple(
+                side_of[str(name)] for name in getattr(template, "declared_sides", ("left",))
+            )
+        for side in sides:
+            if side not in declared:
+                declared.append(side)
+    return tuple(declared) or None
+
+
 def assembly_request_for(
     document: AssemblyDocument | SimulationAssembly,
     *,
@@ -586,16 +708,22 @@ def assembly_request_for(
             templates[f"{role}_template"] = role_instance_from(
                 entry.subsystem, mode=mode, overrides=entry.overrides
             )
-    return AssemblyRequest(mode=mode, subsystems=roles, **templates)
+    sides = _sides_from_file(assembly)
+    if sides is None:
+        return AssemblyRequest(mode=mode, subsystems=roles, **templates)
+    return AssemblyRequest(mode=mode, subsystems=roles, sides=sides, **templates)
 
 
 #: The roles a document may describe whose template reaches the composition
 #: directly.  The suspension is not here because an axle document supplies it as
 #: `suspension_template` and a vehicle document supplies two of them, which one
-#: field cannot hold; the steering and chassis roles have one entry each.  The
-#: wheel role is absent for the same reason as in `AssemblyRequest`: its wheel
-#: centre is a per-side mount on a body the wheel template does not own.
-_FILE_ROLE_TEMPLATES: tuple[str, ...] = ("steering", "chassis")
+#: field cannot hold; the steering, chassis and wheel roles have one entry each.
+#: The wheel role used to be absent because its wheel centre is a per-side mount
+#: on a body the wheel template did not own -- which stopped being true when the
+#: wheel subsystem became the wheel end's producer: a file's wheel subsystem
+#: describes its own wheel body, so the mount has somewhere to hang and the
+#: template belongs on the request like any other role's.
+_FILE_ROLE_TEMPLATES: tuple[str, ...] = ("steering", "chassis", "wheel")
 
 
 def vehicle_model_with_file_axles(

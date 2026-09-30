@@ -66,7 +66,9 @@ from ..schema import (
 )
 from ..simulation.preparation import PreparedSimulation
 from ..simulation.request import SimulationRequest
+from ..subsystems.assembler import VehicleFacts
 from ..subsystems.vehicle_assembly import VehicleRuntime, compose_vehicle_runtime
+from ..subsystems.vehicle_model_adapter import vehicle_facts_for
 
 _WHEEL_NAMES = ("front_left", "front_right", "rear_left", "rear_right")
 _ROAD_KIND = {
@@ -182,11 +184,21 @@ class _BodyFrame:
     center_of_mass_m: np.ndarray
 
 
-def _select_assembly_mode(model: VehicleModel, requested: str) -> str:
-    """Select a topology without silently replacing physical connections."""
-    has_physical_bushings = bool(
-        model.front_axle.bushings or model.rear_axle.bushings
-    )
+def _select_assembly_mode(
+    model: VehicleModel, requested: str, *, facts: VehicleFacts | None = None
+) -> str:
+    """
+    Select a topology without silently replacing physical connections.
+
+    The compliance question is put to the *assembly's* facts rather than to a
+    named axle: which axles a vehicle places, and which of them declares
+    bushings, is what the entry list says, and the adapter that produces the
+    entry list is where the facts are derived.  A caller that already holds them
+    hands them in; otherwise this reads them once.
+    """
+    if facts is None:
+        facts = vehicle_facts_for(model)
+    has_physical_bushings = facts.has_physical_bushings
     if requested == "auto":
         return "C" if has_physical_bushings else "K"
     if requested == "K" and has_physical_bushings:
@@ -202,12 +214,25 @@ def _select_assembly_mode(model: VehicleModel, requested: str) -> str:
     return requested
 
 
-def _validate_steering_topology(model: VehicleModel) -> None:
-    """Reject an unactuated rear steering rack instead of freezing it."""
-    if not model.rear_axle.rack_fixed_to_chassis:
+def _validate_steering_topology(facts: VehicleFacts) -> None:
+    """
+    Reject a second steerable rack instead of freezing it silently.
+
+    One steering system steers one axle: the first placement drives the rack and
+    every other axle's rack is bolted, which is what the native model can
+    represent.  Which placements are which is a fact about the assembly, so this
+    names the offending placements instead of reading an axle field.
+    """
+    steered, *trailing = facts.axles or ("",)
+    unbolted = sorted(
+        placement
+        for placement in trailing
+        if not facts.rack_fixed_to_chassis.get(placement, False)
+    )
+    if unbolted:
         raise ValueError(
-            "native vehicle dynamics supports the front rack only; "
-            "rear_axle.rack_fixed_to_chassis must be true"
+            f"native vehicle dynamics actuates the rack of {steered!r} only; "
+            f"rack_fixed_to_chassis must be true on {', '.join(unbolted)}"
         )
 
 
@@ -218,9 +243,14 @@ def prepare_vehicle_run(
     if case.vehicle is not model and case.vehicle.model_dump() != model.model_dump():
         raise ValueError("case.vehicle must describe the supplied VehicleModel")
     length_scale = _length_scale(model.units)
-    _validate_units(model, case)
-    _validate_steering_topology(model)
-    assembly_mode = _select_assembly_mode(model, case.suspension_mode)
+    # One read of the assembly's facts, taken before anything is assembled: the
+    # facts say which axles this vehicle places, whether any of them is compliant
+    # and which of their racks are bolted.  Every question below is answered from
+    # here, so this module stops reaching for a named axle field of its own.
+    facts = vehicle_facts_for(model)
+    _validate_units(model, case, facts)
+    _validate_steering_topology(facts)
+    assembly_mode = _select_assembly_mode(model, case.suspension_mode, facts=facts)
     # The composed runtime, which is what every other reader builds from.  Its
     # fields are the historical assembly's, in the same order and with the same
     # meaning (that is deliberate), so this module's readers work unchanged.
@@ -253,7 +283,7 @@ def prepare_vehicle_run(
     springs, dampers, bump_stops, bushings = _build_elements(
         assembly, body_frames, length_scale
     )
-    static_rotation_gauges = _build_static_rotation_gauges(model, assembly)
+    static_rotation_gauges = _build_static_rotation_gauges(model, assembly, facts)
     gauge_active = (
         _uses_horizontal_static_gauge(case, road)
         and not assembly.bodies[model.chassis.name].fixed
@@ -331,22 +361,34 @@ def _length_scale(units: UnitSystem) -> float:
     return 1.0e-3 if units == UnitSystem.ENGINEERING else 1.0
 
 
-def _validate_units(model: VehicleModel, case: VehicleDynamicCase) -> None:
+def _validate_units(
+    model: VehicleModel, case: VehicleDynamicCase, facts: VehicleFacts
+) -> None:
     if model.coordinate_system.value != "vehicle":
         raise ValueError("native vehicle dynamics requires vehicle coordinates")
     if model.units == UnitSystem.SI and "gravity" not in case.solver.model_fields_set:
         raise ValueError(
             "SI vehicle dynamics requires gravity to be specified explicitly in m/s^2"
         )
-    for name, axle in (("front", model.front_axle), ("rear", model.rear_axle)):
-        if axle.units != model.units:
-            raise ValueError(f"{name} axle units must match VehicleModel.units")
+    for placement, units in facts.axle_units.items():
+        if units != model.units:
+            raise ValueError(
+                f"{placement} axle units must match VehicleModel.units"
+            )
 
 
 def _build_static_rotation_gauges(
-    model: VehicleModel, assembly: VehicleRuntime
+    model: VehicleModel, assembly: VehicleRuntime, facts: VehicleFacts
 ) -> tuple[tuple[str, tuple[float, float, float]], ...]:
-    """Map declared static-only axes to the composed vehicle body names."""
+    """
+    Map declared static-only axes to the composed vehicle body names.
+
+    The chassis body is the model's, and every *axle* body's axis comes from the
+    assembly's facts, already spelled the way this vehicle spells that body.  The
+    naming is deliberately not re-derived here: an entry's prefix and the bodies
+    the vehicle takes over are what decide a body's name, and deriving it a
+    second time would be a second answer to what the body is called.
+    """
     gauges: list[tuple[str, tuple[float, float, float]]] = []
 
     def add(body: str, axis) -> None:
@@ -361,17 +403,15 @@ def _build_static_rotation_gauges(
             raise ValueError(
                 f"multiple static rotation gauges reference body {body!r}"
             )
-        gauges.append((body, tuple(float(value) for value in axis.as_tuple())))
+        gauges.append((body, tuple(float(value) for value in axis)))
 
-    add(model.chassis.name, model.chassis.static_rotation_axis_local)
-    for axle_name, axle_model in (
-        ("front", model.front_axle),
-        ("rear", model.rear_axle),
-    ):
-        prefix = f"{axle_name}_"
-        for body in axle_model.bodies:
-            name = model.chassis.name if body.name == "chassis" else f"{prefix}{body.name}"
-            add(name, body.static_rotation_axis_local)
+    chassis_axis = model.chassis.static_rotation_axis_local
+    add(
+        model.chassis.name,
+        None if chassis_axis is None else chassis_axis.as_tuple(),
+    )
+    for body, axis in facts.static_rotation_axes:
+        add(body, axis)
     for wheel in model.wheels:
         add(
             assembly.wheel_body_names[wheel.name],
