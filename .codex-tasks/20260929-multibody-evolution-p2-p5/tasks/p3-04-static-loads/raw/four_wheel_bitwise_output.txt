@@ -1,0 +1,116 @@
+before file md5: e8ee0b870a9ebde39034fb7b9582081e
+before module has _WHEELS: True
+after module has _WHEELS: False
+
+=== static (gravity=9810.0) ===
+  OK  rank/bool              before=3 after=3
+  OK  unique(rank==N)        before=False after=False
+  OK  residual               before=3eb0000000000000 after=3eb0000000000000
+  OK  total_mass             before=409701a53bf7ca49 after=409701a53bf7ca49
+  OK  center_of_mass         before=0000000000000000000000000000000040328e91cd8e44da after=0000000000000000000000000000000040328e91cd8e44da
+  OK  load front_left        before=414b8ce86e9feb2e after=414b8ce86e9feb2e
+  OK  load front_right       before=414b8ce86e9feb2d after=414b8ce86e9feb2d
+  OK  load rear_left         before=414b8ce86e9feb2d after=414b8ce86e9feb2d
+  OK  load rear_right        before=414b8ce86e9feb2d after=414b8ce86e9feb2d
+  OK  support front_left     before=4095e00000000000c0877000000000000000000000000000 after=4095e00000000000c0877000000000000000000000000000
+  OK  support front_right    before=4095e0000000000040877000000000000000000000000000 after=4095e0000000000040877000000000000000000000000000
+  OK  support rear_left      before=c095e00000000000c0877000000000000000000000000000 after=c095e00000000000c0877000000000000000000000000000
+  OK  support rear_right     before=c095e0000000000040877000000000000000000000000000 after=c095e0000000000040877000000000000000000000000000
+  OK  summary.total          before=416b8ce86e9feb2e after=416b8ce86e9feb2e
+  OK  wheel name set         before=['front_left', 'front_right', 'rear_left', 'rear_right'] after=['front_left', 'front_right', 'rear_left', 'rear_right']
+  np.array_equal on wheel-load vectors: True
+
+=== accel_x (gravity=9810.0) ===
+  OK  rank/bool              before=3 after=3
+  OK  unique(rank==N)        before=False after=False
+  OK  residual               before=3eb7100000000000 after=3eb7100000000000
+  OK  total_mass             before=409701a53bf7ca49 after=409701a53bf7ca49
+  OK  center_of_mass         before=0000000000000000000000000000000040328e91cd8e44da after=0000000000000000000000000000000040328e91cd8e44da
+  OK  load front_left        before=414b8360d792eb4e after=414b8360d792eb4e
+  OK  load front_right       before=414b8360d792eb4c after=414b8360d792eb4c
+  OK  load rear_left         before=414b967005aceb0f after=414b967005aceb0f
+  OK  load rear_right        before=414b967005aceb0f after=414b967005aceb0f
+  OK  support front_left     before=4095e00000000000c0877000000000000000000000000000 after=4095e00000000000c0877000000000000000000000000000
+  OK  support front_right    before=4095e0000000000040877000000000000000000000000000 after=4095e0000000000040877000000000000000000000000000
+  OK  support rear_left      before=c095e00000000000c0877000000000000000000000000000 after=c095e00000000000c0877000000000000000000000000000
+  OK  support rear_right     before=c095e0000000000040877000000000000000000000000000 after=c095e0000000000040877000000000000000000000000000
+  OK  summary.total          before=416b8ce86e9feb2e after=416b8ce86e9feb2e
+  OK  wheel name set         before=['front_left', 'front_right', 'rear_left', 'rear_right'] after=['front_left', 'front_right', 'rear_left', 'rear_right']
+  np.array_equal on wheel-load vectors: True
+
+=== accel_y (gravity=9810.0) ===
+  OK  rank/bool              before=3 after=3
+  OK  unique(rank==N)        before=False after=False
+  OK  residual               before=3ea1e00000000000 after=3ea1e00000000000
+  OK  total_mass             before=409701a53bf7ca49 after=409701a53bf7ca49
+  OK  center_of_mass         before=0000000000000000000000000000000040328e91cd8e44da after=0000000000000000000000000000000040328e91cd8e44da
+  OK  load front_left        before=414b9eb25562d9e2 after=414b9eb25562d9e2
+  OK  load front_right       before=414b7b1e87dcfc76 after=414b7b1e87dcfc76
+  OK  load rear_left         before=414b9eb25562d9e2 after=414b9eb25562d9e2
+  OK  load rear_right        before=414b7b1e87dcfc76 after=414b7b1e87dcfc76
+  OK  support front_left     before=4095e00000000000c0877000000000000000000000000000 after=4095e00000000000c0877000000000000000000000000000
+  OK  support front_right    before=4095e0000000000040877000000000000000000000000000 after=4095e0000000000040877000000000000000000000000000
+  OK  support rear_left      before=c095e00000000000c0877000000000000000000000000000 after=c095e00000000000c0877000000000000000000000000000
+  OK  support rear_right     before=c095e0000000000040877000000000000000000000000000 after=c095e0000000000040877000000000000000000000000000
+  OK  summary.total          before=416b8ce86e9feb2c after=416b8ce86e9feb2c
+  OK  wheel name set         before=['front_left', 'front_right', 'rear_left', 'rear_right'] after=['front_left', 'front_right', 'rear_left', 'rear_right']
+  np.array_equal on wheel-load vectors: True
+
+=== accel_z (gravity=9810.0) ===
+  OK  rank/bool              before=3 after=3
+  OK  unique(rank==N)        before=False after=False
+  OK  residual               before=0000000000000000 after=0000000000000000
+  OK  total_mass             before=409701a53bf7ca49 after=409701a53bf7ca49
+  OK  center_of_mass         before=0000000000000000000000000000000040328e91cd8e44da after=0000000000000000000000000000000040328e91cd8e44da
+  OK  load front_left        before=414a256eb8d6eb74 after=414a256eb8d6eb74
+  OK  load front_right       before=414a256eb8d6eb74 after=414a256eb8d6eb74
+  OK  load rear_left         before=414a256eb8d6eb74 after=414a256eb8d6eb74
+  OK  load rear_right        before=414a256eb8d6eb74 after=414a256eb8d6eb74
+  OK  support front_left     before=4095e00000000000c0877000000000000000000000000000 after=4095e00000000000c0877000000000000000000000000000
+  OK  support front_right    before=4095e0000000000040877000000000000000000000000000 after=4095e0000000000040877000000000000000000000000000
+  OK  support rear_left      before=c095e00000000000c0877000000000000000000000000000 after=c095e00000000000c0877000000000000000000000000000
+  OK  support rear_right     before=c095e0000000000040877000000000000000000000000000 after=c095e0000000000040877000000000000000000000000000
+  OK  summary.total          before=416a256eb8d6eb74 after=416a256eb8d6eb74
+  OK  wheel name set         before=['front_left', 'front_right', 'rear_left', 'rear_right'] after=['front_left', 'front_right', 'rear_left', 'rear_right']
+  np.array_equal on wheel-load vectors: True
+
+=== accel_xy (gravity=9810.0) ===
+  OK  rank/bool              before=3 after=3
+  OK  unique(rank==N)        before=False after=False
+  OK  residual               before=3eb1e00000000000 after=3eb1e00000000000
+  OK  total_mass             before=409701a53bf7ca49 after=409701a53bf7ca49
+  OK  center_of_mass         before=0000000000000000000000000000000040328e91cd8e44da after=0000000000000000000000000000000040328e91cd8e44da
+  OK  load front_left        before=414c14f825a82e96 after=414c14f825a82e96
+  OK  load front_right       before=414bcdd08a9c73bd after=414bcdd08a9c73bd
+  OK  load rear_left         before=414bdbca9b5a2f4c after=414bdbca9b5a2f4c
+  OK  load rear_right        before=414b94a3004e7475 after=414b94a3004e7475
+  OK  support front_left     before=4095e00000000000c0877000000000000000000000000000 after=4095e00000000000c0877000000000000000000000000000
+  OK  support front_right    before=4095e0000000000040877000000000000000000000000000 after=4095e0000000000040877000000000000000000000000000
+  OK  support rear_left      before=c095e00000000000c0877000000000000000000000000000 after=c095e00000000000c0877000000000000000000000000000
+  OK  support rear_right     before=c095e0000000000040877000000000000000000000000000 after=c095e0000000000040877000000000000000000000000000
+  OK  summary.total          before=416bd4cd92fb5185 after=416bd4cd92fb5185
+  OK  wheel name set         before=['front_left', 'front_right', 'rear_left', 'rear_right'] after=['front_left', 'front_right', 'rear_left', 'rear_right']
+  np.array_equal on wheel-load vectors: True
+
+=== moon (gravity=1620.0) ===
+  OK  rank/bool              before=3 after=3
+  OK  unique(rank==N)        before=False after=False
+  OK  residual               before=3e00000000000000 after=3e00000000000000
+  OK  total_mass             before=409701a53bf7ca49 after=409701a53bf7ca49
+  OK  center_of_mass         before=0000000000000000000000000000000040328e91cd8e44da after=0000000000000000000000000000000040328e91cd8e44da
+  OK  load front_left        before=412232cd33ef8182 after=412232cd33ef8182
+  OK  load front_right       before=412232cd33ef8182 after=412232cd33ef8182
+  OK  load rear_left         before=412232cd33ef8182 after=412232cd33ef8182
+  OK  load rear_right        before=412232cd33ef8182 after=412232cd33ef8182
+  OK  support front_left     before=4095e00000000000c0877000000000000000000000000000 after=4095e00000000000c0877000000000000000000000000000
+  OK  support front_right    before=4095e0000000000040877000000000000000000000000000 after=4095e0000000000040877000000000000000000000000000
+  OK  support rear_left      before=c095e00000000000c0877000000000000000000000000000 after=c095e00000000000c0877000000000000000000000000000
+  OK  support rear_right     before=c095e0000000000040877000000000000000000000000000 after=c095e0000000000040877000000000000000000000000000
+  OK  summary.total          before=414232cd33ef8182 after=414232cd33ef8182
+  OK  wheel name set         before=['front_left', 'front_right', 'rear_left', 'rear_right'] after=['front_left', 'front_right', 'rear_left', 'rear_right']
+  np.array_equal on wheel-load vectors: True
+
+== production consumer path (vehicle/service.py:40 shape) ==
+  compute_static_wheel_loads(model).wheel_loads = {'front_left': '414b8ce86e9feb2e', 'front_right': '414b8ce86e9feb2d', 'rear_left': '414b8ce86e9feb2d', 'rear_right': '414b8ce86e9feb2d'}
+
+DIFFERENCES: none

@@ -34,6 +34,17 @@ from .compile import (
     compile_plan,
     default_emitters,
 )
+from .element_blocks import (
+    ELEMENT_BLOCK_SIZE,
+    ELEMENT_CURVE_SLOTS,
+    ELEMENT_ROTATIONAL_TORQUE,
+    ElementBlockError,
+    ElementBlockRow,
+    TorquePairing,
+    pair_torque_bodies,
+    rotational_torque_block,
+    torque_element_row,
+)
 from .model_view import MM, ModelView, ViewError, view_of
 from .plan import DEFAULT_TIMES_S, KcStudyInputs, SolvePlan, plan_for
 
@@ -42,6 +53,15 @@ __all__ = [
     "MM",
     "PAYLOAD_SCHEMA",
     "CompilationError",
+    "ELEMENT_BLOCK_SIZE",
+    "ELEMENT_CURVE_SLOTS",
+    "ELEMENT_ROTATIONAL_TORQUE",
+    "ElementBlockError",
+    "ElementBlockRow",
+    "TorquePairing",
+    "pair_torque_bodies",
+    "rotational_torque_block",
+    "torque_element_row",
     "Emitter",
     "EmitterRegistry",
     "KcStudyInputs",

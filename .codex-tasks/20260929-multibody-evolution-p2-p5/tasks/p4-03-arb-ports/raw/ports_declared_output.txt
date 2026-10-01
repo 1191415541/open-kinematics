@@ -1,0 +1,17 @@
+template-declared ports (templates/builtin.py):
+  arb_mount_L    role=arb_mount    owner=lower_arm_L    labels=['L']
+  arb_mount_R    role=arb_mount    owner=lower_arm_R    labels=['R']
+
+assembly product port set (names containing 'arb_mount'):
+  suspension:arb_mount_L
+      id    = axle/arb_mount_L
+      role  = arb_mount
+      owner = axle/lower_arm_L
+      labels= ['L']
+  suspension:arb_mount_R
+      id    = axle/arb_mount_R
+      role  = arb_mount
+      owner = axle/lower_arm_R
+      labels= ['R']
+
+total ports offered by the axle contributions: 17

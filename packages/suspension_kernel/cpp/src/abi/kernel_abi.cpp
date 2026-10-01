@@ -854,8 +854,8 @@ int run_model(
 // The check therefore fires on a one-sided bump: change one of the two and the
 // library stops compiling, instead of exporting a version symbol that
 // contradicts its own structure.
-constexpr int kAxleInputFieldAbiVersion = 16;
-constexpr int kVehicleInputFieldAbiVersion = 31;
+constexpr int kAxleInputFieldAbiVersion = 17;
+constexpr int kVehicleInputFieldAbiVersion = 32;
 static_assert(
     axle_kernel::kAxleKernelAbiVersion == kAxleInputFieldAbiVersion,
     "the axle constant in version.hpp and AxleInput::abi_version disagree"

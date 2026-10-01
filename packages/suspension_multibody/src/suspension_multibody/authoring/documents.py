@@ -57,7 +57,7 @@ MODES: tuple[str, ...] = ("K", "C")
 #: one point, and the file states one point for it.
 TWIN_ENDED_ELEMENTS = frozenset({"spring", "damper", "bump_stop", "anti_roll_bar"})
 FUNCTIONAL_ROLES = frozenset(
-    {"suspension", "steering", "wheel", "chassis", "brake", "drive"}
+    {"suspension", "steering", "wheel", "chassis", "brake", "drive", "anti_roll_bar"}
 )
 #: Where a subsystem may sit.  The *shape* is what is fixed -- a placement must be a
 #: name, not an arbitrary string -- while which axes exist is the file's own

@@ -8,6 +8,13 @@ numbers*, so this compares them key by key on shared inputs -- including the
 
 The last test is the completeness check: the classification table must name all 27
 functions, so a function cannot be left behind by the move.
+
+`wheel_load_metrics` is subtask p3-05's subject: its table is now generated from
+the placements the wheel-end names state, so it publishes the historical axle
+spellings *beside* the placement-driven `normal_load_axle_{placement}` ones.  The
+wheel-load tests below therefore pin the historical names and their values as a
+subset of what the table emits -- the addition is checked, not assumed -- rather
+than as an equality of the whole table.
 """
 
 from __future__ import annotations
@@ -90,6 +97,24 @@ class FakeResult:
 class FakeDiagnosedResult(FakeResult):
     diagnostics = FakeDiagnostics()
 
+#: The historical channels `wheel_load_metrics` published before its table became
+#: placement-driven, with the values the four-corner loads above give.  Written out
+#: rather than derived from the function, so the compatibility claim is checked
+#: against an independent list.
+LEGACY_LOAD_CHANNELS: dict[str, float] = {
+    "normal_load_front_left": 100.0,
+    "normal_load_front_right": 120.0,
+    "normal_load_rear_left": 80.0,
+    "normal_load_rear_right": 90.0,
+    "normal_load_total": 390.0,
+    "normal_load_front_axle": 220.0,
+    "normal_load_rear_axle": 170.0,
+    "normal_load_left_side": 180.0,
+    "normal_load_right_side": 210.0,
+    "load_transfer_front_minus_rear": 50.0,
+    "load_transfer_right_minus_left": 30.0,
+}
+
 
 LOADS = {
     "front_left": 100.0,
@@ -150,7 +175,55 @@ def test_the_wheel_load_metrics_are_restated_value_for_value() -> None:
     values = builtin.minimum_unit_outputs(result, wheel_loads=LOADS)
     legacy = wheel_load_metrics(LOADS)
     assert legacy, "the legacy reader should produce the aggregate keys"
+    # Every name the table emits is a declared output, and the declared output
+    # evaluates to the same number.
     for name, expected in legacy.items():
+        _compare(name, values, expected)
+
+
+def test_the_wheel_load_metrics_still_publish_every_historical_channel() -> None:
+    """
+    The compatibility gate for p3-05: the old names survive with the old values.
+
+    The table is now generated from the placements the wheel ends state, so the
+    names it emits are a property of the loads rather than a constant in the
+    module.  That is exactly the change that could quietly drop a name a consumer
+    reads, so the historical channel set is written out independently here and
+    compared value for value -- not merely "the same keys exist somewhere".
+    """
+    assert len(LEGACY_LOAD_CHANNELS) == 11
+    legacy = wheel_load_metrics(LOADS)
+    assert {name: legacy[name] for name in LEGACY_LOAD_CHANNELS} == LEGACY_LOAD_CHANNELS
+    # The placement-driven spelling is an addition beside them, not a rename of
+    # them: both are published, carrying the same total.
+    assert legacy["normal_load_axle_front"] == LEGACY_LOAD_CHANNELS["normal_load_front_axle"]
+    assert legacy["normal_load_axle_rear"] == LEGACY_LOAD_CHANNELS["normal_load_rear_axle"]
+    assert set(legacy) == set(LEGACY_LOAD_CHANNELS) | {
+        "normal_load_axle_front",
+        "normal_load_axle_rear",
+    }
+
+
+def test_the_declared_load_outputs_are_exactly_the_report_channel_table() -> None:
+    """
+    The two halves of the wheel-load table agree, name for name.
+
+    `report/metrics/vehicle.py` publishes a channel table and `outputs/builtin.py`
+    declares the derived outputs for it.  The declaration cannot import the report
+    (a report derives *from* a run's outputs, it is not one of them), so the two
+    are written twice; this is what keeps the second copy from drifting -- a name
+    in one and not the other fails here, not in a review.
+    """
+    result = SimpleNamespace(times_s=np.array([0.0, 1.0]))
+    values = builtin.minimum_unit_outputs(result, wheel_loads=LOADS)
+    declared = sorted(output.name for output in builtin.DERIVED_OUTPUTS if output.reads == (
+        "wheel_load_front_left",
+        "wheel_load_front_right",
+        "wheel_load_rear_left",
+        "wheel_load_rear_right",
+    ))
+    assert sorted(wheel_load_metrics(LOADS)) == declared
+    for name, expected in wheel_load_metrics(LOADS).items():
         _compare(name, values, expected)
 
 

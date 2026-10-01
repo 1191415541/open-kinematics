@@ -1,0 +1,20 @@
+body_names[:6]: ('chassis', 'front_upper_arm_L', 'front_lower_arm_L', 'front_upright_L', 'front_tie_rod_L', 'front_wheel_hub_L')
+tire_names: ('front_left', 'front_right', 'rear_left', 'rear_right')
+
+wheel_speed(front_wheel_hub_L) via bus  = [ 0. 12.  0.]
+                via block    = [ 0. 12.  0.]
+identical: True
+
+body_acceleration(chassis) via bus = [0. 0. 0.]
+                          via block = [0. 0. 0.]
+identical: True
+
+tire_vertical_load(front_left) via bus = [0.], via block col4 = 0.0
+identical: True
+
+no entity named: BusError: channel 'wheel_speed' reads one wheel and none was named; its block is indexed by wheel, so the read would have landed on 'chassis' had it been guessed
+unknown channel: BusError: unknown measurement channel 'nope'; the bus offers wheel_speed, body_acceleration, tire_vertical_load
+
+original doc unchanged: True
+written doc           : 42.0
+motor write path      : {'body_wrench': {'front_wheel_hub_L': {'moment': 1234.0}}}

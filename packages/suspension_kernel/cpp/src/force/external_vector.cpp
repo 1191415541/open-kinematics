@@ -97,6 +97,14 @@ void external_force_vector(
         energy_storage, record_energy, brush_only, internal_force_scale,
         dissipation, potential
     );
+    // The rotational actuators sit after the anti-roll bars, the other couple
+    // family, and before the tire loop: their law reads only the state, so the
+    // order is free, and keeping the two couple families together is what makes
+    // the assembly read the same way the model is laid out.
+    assemble_rotational_torque_forces(
+        model, state, input, torque, energy_rates, record_energy, brush_only,
+        external_power
+    );
     assemble_steering_forces(
         model, state, input, force, torque, energy_rates, record_energy,
         brush_only, external_power

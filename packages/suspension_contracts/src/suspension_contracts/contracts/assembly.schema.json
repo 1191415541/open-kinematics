@@ -19,7 +19,7 @@
         "required": ["ref", "functional_role", "placement_role"],
         "properties": {
           "ref": {"type": "string", "minLength": 1},
-          "functional_role": {"enum": ["suspension", "steering", "wheel", "chassis", "brake", "drive"]},
+          "functional_role": {"enum": ["suspension", "steering", "wheel", "chassis", "brake", "drive", "anti_roll_bar"]},
           "placement_role": {"type": "string", "minLength": 1, "description": "Where this subsystem sits.  The axis words (front, middle, rear, third, ...) are the file's own vocabulary: a three-axle truck names three, and the shape rule checks that each one appears at most once and that every declared wheel end is accounted for, rather than fixing the list here."},
           "overrides": {
             "type": "object",

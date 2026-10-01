@@ -407,6 +407,8 @@ std::size_t element_wrench_rows_per_element(int type) {
     case kElementWrenchDamper:
 
     case kElementWrenchBumpStop:
+
+    case kElementWrenchRotationalTorque:
         return 2;
 
     case kElementWrenchDriveBrake:
@@ -441,6 +443,8 @@ std::size_t element_wrench_element_count(
     case kElementWrenchBushing: return counts.bushings;
 
     case kElementWrenchAntiRoll: return counts.anti_rolls;
+
+    case kElementWrenchRotationalTorque: return counts.rotational_torques;
 
     case kElementWrenchSteering: return counts.steering;
 

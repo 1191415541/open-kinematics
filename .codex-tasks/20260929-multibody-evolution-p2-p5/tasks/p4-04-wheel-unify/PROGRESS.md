@@ -4,16 +4,17 @@
 
 ## Session Start
 
-- **Date**: （未开工；本文件为规划轮产物）
+- **Date**: 2026-10-01
 - **Task name**: p4-04-wheel-unify
 - **Task dir**: `.codex-tasks/20260929-multibody-evolution-p2-p5/tasks/p4-04-wheel-unify/`
 - **Spec**: 见 `SPEC.md`
-- **Plan**: 见 `TODO.csv`（6 步）
+- **Plan**: 见 `TODO.csv`（6 步，全部 `DONE`）
 - **Environment**: Python 3.12 / uv / pytest
+- **Status**: **DONE**
 
 ## Context Recovery Block
 
-- **Current milestone**: #1 — 读阶段一 04 的实际交付，落盘实测结论与（若需调整的）判据文本并提请父 Epic 修订父表
+- **Current milestone**: #6 — 终局与验收（全 6 步完成）
 - **Current status**: NOT_STARTED
 - **Last completed**: 无（本子任务尚未开工）
 - **Current artifact**: `SPEC.md` / `TODO.csv`（规划产物）
@@ -34,6 +35,26 @@
 
 ---
 
-## Final Summary（未开工）
+## Final Summary
 
-本子任务**尚未开工**。`SPEC.md` 与 `TODO.csv` 是规划产物：未执行任何步骤、未修改任何生产代码或测试、未产生任何证据（`raw/` 为空）。所有 `TODO.csv` 行保持 `TODO`，`completed_at` 为空，`retry_count` 为 `0`。开工时按 `TODO.csv` 顺序展开，并把每一步的实际命令、退出码与产物落到 `raw/`（只记已执行的结果）。
+p4-04 **DONE**。
+
+**第 1 步（硬性）**：阶段一 04（含 04b）的 `PROGRESS.md` 与 `raw/` 已读，
+实测结论落 `raw/stage1_04_intake.md`——**剩余项清单为空**：阶段一 04 已把这四项全部兑现
+（`wheel_template` 字段、`_ROLE_TEMPLATE_FIELD` 表项、`_FILE_ROLE_TEMPLATES` 放开 wheel、
+类型过滤移除）。故本行按 SPEC 收缩为**独立复验**，未重做阶段一 04 的任何动作，未改父表。
+
+**独立复验**（`raw/stage1_04_reverification.md`，不采信阶段一自报）：
+单轴与整车的轮端**只有一条产出路径**——`subsystems/wheel.py`（模块指纹
+`6313b9c8…1729`），模块内只有 **1** 处 `instantiate(`，由 `template_instance` 调用，
+无覆盖时落到内置 `WHEEL`（`wheel_on_hub`）。父行的
+`! grep -rn VerticalTireElement …/assembler.py` **exit=0**；
+`grep -c isinstance …/assembler.py` = **0**（过滤机制本身不存在）。
+
+**本行的唯一生产改动**：`assembler.py` 的两处**注释措辞**（`:36` / `:94`）。
+首跑那条 grep 时退出码是 1——注释里写出了被移除的类名，使这条「按名字 grep」的机械判据
+**恒假报警、失去判别力**。改写后 exit=0，注释仍完整解释「什么被移除、为什么」。
+逻辑零改动。
+
+**未做**：未跑 `tests/architecture` 整目录、`tests/adams`、`tests/cases`、
+`case_parity_check.py`、`kc_perf_gate.py`（归 p4-05 与 Epic 收尾）。未重录任何基线。

@@ -1,5 +1,5 @@
 """
-The six subsystem roles, and what each one promises.
+The seven subsystem roles, and what each one promises.
 
 A *role* is the interface a subsystem is assembled through; a *template* is one
 implementation of it.  Keeping them apart is what lets a simplified brake
@@ -65,7 +65,7 @@ class RoleSpec:
     note: str = ""
 
 
-#: The six roles, keyed by name.  See `EPIC.md` G2 for the availability matrix
+#: The seven roles, keyed by name.  See `EPIC.md` G2 for the availability matrix
 #: (which roles each assembly carries).
 ROLES: dict[str, RoleSpec] = {
     "suspension": RoleSpec(
@@ -123,31 +123,54 @@ ROLES: dict[str, RoleSpec] = {
         name="brake",
         required_mounts=("wheel_center", "spin_axis"),
         required_slots=(
-            "brake_mu",
             "piston_area",
-            "effective_piston_radius",
-            "front_brake_bias",
-            "max_brake_value",
+            "effective_radius",
+            "friction_coeff",
+            "rotor_inertia",
         ),
         outputs=("brake_torque",),
         has_torque_channel=True,
         note=(
             "Only the full-vehicle assembly carries a brake (user decision D8).  "
-            "The simplified template owns no bodies and emits a per-wheel torque; "
-            "a detailed template may add calipers and rotors under this same role."
+            "The simplified template owns no bodies and emits one torque element "
+            "per wheel; a detailed template may add calipers and rotors under "
+            "this same role.  The slot set is the standardized one of the "
+            "roadmap's 2.1 section: the source document's own demand scaling is "
+            "a module constant, and the front/rear split is no longer a slot "
+            "because one element per wheel states its own share."
         ),
     ),
     "drive": RoleSpec(
         name="drive",
         required_mounts=("wheel_center", "spin_axis"),
-        required_slots=("driven_wheels", "drive_split", "maximum_drive_torque"),
+        required_slots=("gear_ratio", "efficiency", "max_torque"),
         outputs=("drive_torque",),
         has_torque_channel=True,
         note=(
             "Only the full-vehicle assembly carries a drive (user decision D8).  "
-            "The simplified template declares a distribution and emits a "
-            "per-wheel torque; a detailed template may add powertrain bodies and "
-            "a differential under this same role."
+            "The simplified template emits one torque element per driven wheel; a "
+            "detailed template may add powertrain bodies and a differential under "
+            "this same role.  `driven_wheels`/`drive_split` are no longer slots: "
+            "with one element per wheel a wheel is driven because it has an "
+            "element, and `DrivelineSpec` still owns the split's validation."
+        ),
+    ),
+    "anti_roll_bar": RoleSpec(
+        name="anti_roll_bar",
+        required_mounts=(
+            "chassis_mount_L",
+            "chassis_mount_R",
+            "droplink_mount_L",
+            "droplink_mount_R",
+        ),
+        required_slots=("torsional_stiffness",),
+        outputs=("anti_roll_torque",),
+        note=(
+            "The anti-roll bar is a subsystem of its own rather than a pair of "
+            "elements on the suspension: it spans both sides of one axle, so "
+            "neither side's template can own it.  The simplified template carries "
+            "a torsion bar and one droplink per side and states its four mounts.  "
+            "`has_torque_channel` stays false: the bar feeds no wheel torque."
         ),
     ),
 }
@@ -155,7 +178,15 @@ ROLES: dict[str, RoleSpec] = {
 
 def _check_roles() -> None:
     """Reject a role table that cannot be trusted, where it is written."""
-    expected = {"suspension", "steering", "wheel", "chassis", "brake", "drive"}
+    expected = {
+        "suspension",
+        "steering",
+        "wheel",
+        "chassis",
+        "brake",
+        "drive",
+        "anti_roll_bar",
+    }
     if set(ROLES) != expected:
         missing = sorted(expected - set(ROLES))
         extra = sorted(set(ROLES) - expected)
@@ -192,5 +223,5 @@ def get_role(name: str) -> RoleSpec:
 
 
 def role_names() -> tuple[str, ...]:
-    """Return the six role names in a stable order."""
+    """Return the seven role names in a stable order."""
     return tuple(sorted(ROLES))

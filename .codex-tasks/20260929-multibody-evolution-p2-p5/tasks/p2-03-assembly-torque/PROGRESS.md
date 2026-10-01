@@ -4,33 +4,50 @@
 
 ## Session Start
 
-- **Date**: （未开工；本文件为规划轮产物）
+- **Date**: 2026-10-01
 - **Task name**: p2-03-assembly-torque
 - **Task dir**: `.codex-tasks/20260929-multibody-evolution-p2-p5/tasks/p2-03-assembly-torque/`
 - **Spec**: 见 `SPEC.md`
-- **Plan**: 见 `TODO.csv`（6 步）
+- **Plan**: 见 `TODO.csv`（6 步，全部 DONE）
 - **Environment**: Python 3.12 / uv / pytest
 
 ## Context Recovery Block
 
-- **Current milestone**: #1 — 在 `modeling/primitives/` 声明力矩元素
-- **Current status**: NOT_STARTED
-- **Last completed**: 无（本子任务尚未开工）
-- **Current artifact**: `SPEC.md` / `TODO.csv`（规划产物）
+- **Current milestone**: 完成（6/6）
+- **Current status**: DONE
+- **Last completed**: 第 6 步——既有元素类型装配产物对照与数值门
+- **Current artifact**: `raw/element_declaration.md`、`raw/port_pairing.md`、`raw/min_assembly_torque.md`、`raw/legacy_elements_parity.md`、`raw/run_log.md`
 - **Key context**:
-  - 依赖 p2-02（`SUBTASKS.csv` `p2-03` `depends_on`）：内核元素类型与 ABI 编组必须先落地，本行才有可编进内核输入的目标类型。
-  - 前置 `S1`：阶段一 Epic 01–07 全部 `DONE`；**阶段一未完成之前本 Epic 任何一行不得置 `IN_PROGRESS`**（`EPIC.md` 行 67–75）。
-  - **`subsystems/element_build.py` 三段串行**（`EPIC.md` 行 216）：本行占**构造分派段**，p4-04 占**轮胎段**，p3-02 只读。三段不得并行。
-  - **判据 (b) 的核心约束**：施力体与反力体必须由 `Port` / `Connection` 配对决定，**不得硬编码 `upright`/`chassis` 字符串**（`EPIC.md` 行 233 与行 241 (b)；G2 判据行 81）。
-  - **分层方向**：本行在 `modeling/primitives/` 新增声明，`modeling/` 不得反向导入作者层或 `subsystems/`（`EPIC.md` 行 226）。
+  - 依赖 p2-02（内核元素类型与 ABI 编组）已落地：`ELEMENT_ROTATIONAL_TORQUE = 7`、参数槽 128/129/130/133/137、`kElementBlockSize = 216`、ABI 17/32/1。本行只消费，未改内核任何文件、未改版本常量。
+  - **编译层落点实测复核**：SPEC 列出的三个候选（`cases/kc_quasi_static/contract.py:436-446`、`cases/axle_dynamic.py:188`、`studies/bridge.py:119-126`）都是**合同文档**发射点，而内核的文档读取器按类型名拒绝本族（实测原文：`model document: element "probe" has unsupported type "rotational_torque"`；同一批的对照条 bushing 因「缺 stiffness/damping」被拒，说明拒绝是本族专属而非文档格式问题）。内核能消费本族的唯一输入是 `mb_core_run` 的 `ElementBlock`。故落点取新模块 `compilation/element_blocks.py`。
+  - `subsystems/element_build.py` 三段串行：本行占构造分派段（`:74-75`），轮胎段 `_tire`（`:140`）与分支（`:70-71`）在 `git diff` 中均为 context 行。
 - **Known issues**:
-  - **编译层的具体落点 `EPIC.md` 未给锚点**：F1（行 111）只给消费点 `cases/vehicle_dynamic.py:579/582` 的契约表；本行需要的编译层入口路径属**开工时复核项**，不得凭印象补。
-  - **新增测试的目录 `SUBTASKS.csv` 未列**：`notes` 只写写范围；候选是 `tests/modeling/` 与 `tests/subsystems/`（见本行 `validation_command`），开工时按项目现有布局确认。
-  - 契约 schema 若需新增元素类型字段，必须与阶段一 03 的放置段改动**串行**（`EPIC.md` 行 218）。
-- **Next action**: 先读 `packages/suspension_multibody/src/suspension_multibody/subsystems/element_build.py:60-71`（构造分派段，`EPIC.md` 行 241 (a) 给的锚点）与 `modeling/primitives/elements.py:567`/`:593` 两个既有元素类的形态，再确认 p2-02 的内核元素类型是否已落地，然后在分派段加分支并跑 `tests/modeling` + `tests/subsystems`。
+  - **`subsystems/types.py::ELEMENT_KINDS`（`:102-109`）未登记本族，是已知缺口**（该文件不在本行写范围）。当前无生产代码校验 `row.kind` 于该元组，故不影响运行；**移交 p2-04**。
+  - **内核的合同文档读取器不认识本族**：`cpp/src/cases/contract_model.cpp:830` 的 fall-through 与 `cpp/src/contract/contract_registry.cpp:36-40` 的 `kElements` 名单都缺本族。属内核范围（p2-02），本行只登记，未改。
+  - **`just check-fast` 整体退出码为 1，原因在 `lint`**：`uv run --all-packages ruff check .` 报 17 个错误，**全部落在 `.codex-tasks/` 下其它行遗留的探针脚本**（p2-01 的 `raw/rear_steer_probe.py`、p3-01 的 `probe_*.py`），非本行文件。本行文件的 ruff 退出码 0；`ruff check --exclude .codex-tasks .` 与 `git ls-files -z -- '*.py' | xargs -0 ruff check` 均 `All checks passed!`。`check-fast` 的其余部件（type-check、三条架构门、`test-fast` 1130 passed/1 xfailed、kernel 41 passed、contracts 32 passed）全部退出码 0。
+  - `dynamic_hash_sentinel.py --check` 内部打印的 `acceptance exit : 1` 与 9 个 `FAILED` 用例名是冻结基线的既有状态（与 p2-01 记录、p2-02 `raw/kernel_torque_evidence.md:119-135` 完全一致），脚本自身判定为 `OK: ... byte-for-byte`、退出码 0、combined sha256 逐字符一致。
 
----
+## 交付
 
-## Final Summary（未开工）
+| 项 | 位置 |
+|---|---|
+| 元素声明 | `modeling/primitives/elements.py:633 RotationalTorqueParameters`、`:707 RotationalTorqueElement` |
+| 构造分支 | `subsystems/element_build.py:74-75`（`if row.kind == "rotational_torque": return _rotational_torque(row)`），构造器 `:195` |
+| 编译层 | 新模块 `compilation/element_blocks.py`（`:65` kind、`:71-81` 参数槽、`:133 pair_torque_bodies`、`:211 torque_element_row`、`:231 rotational_torque_block`） |
+| 配对决定点 | `compilation/element_blocks.py:200-208`（`reaction_body=port.owner.local`，与 `connections/links.py:203` 同一规则；未改 `connections/`） |
+| 新增测试 | `tests/modeling/test_rotational_torque_element.py`、`tests/subsystems/test_rotational_torque_element.py` |
 
-本子任务**尚未开工**。`SPEC.md` 与 `TODO.csv` 是规划产物：未执行任何步骤、未修改任何生产代码或测试、未产生任何证据（`raw/` 为空）。所有 `TODO.csv` 行保持 `TODO`，`completed_at` 为空，`retry_count` 为 `0`。开工时按 `TODO.csv` 顺序展开，并把每一步的实际命令、退出码与产物落到 `raw/`（只记已执行的结果）。
+四改三新，185 增 0 删；`git diff --numstat` 与 `git status --short` 全文见 `raw/run_log.md`。
+
+## 四条验收命令的真实退出码
+
+1. `pytest tests/modeling tests/subsystems -q -p no:cacheprovider` → **0**（224 passed）
+2. `pytest tests/architecture -q -p no:cacheprovider` → **0**（147 passed，590.05 s）
+3. `check_module_layering.py --strict --final` → **0**（`OK: layering matches the recorded baseline`）
+4. `dynamic_hash_sentinel.py --check` → **0**，combined sha256 = `fdfd5a6ba50970571ac31eb278cf5c713964a43ba77cd74fc1011ec8651eebc9`；`git status --short -- tests/data/` 为空
+
+数值门另两项：`case_parity_check.py`（无参数）→ 0，`kc_perf_gate.py --check` → 0。
+
+## Next action
+
+无（本行完成）。移交项见上面 `Known issues` 的两条：`ELEMENT_KINDS` 缺口归被派发的后续行，内核文档读取器缺本族归 p2-02 的后续处置。

@@ -27,6 +27,8 @@ from ..modeling.primitives import (
     BumpStopElement,
     BushingElement,
     LinearSpringElement,
+    RotationalTorqueElement,
+    RotationalTorqueParameters,
     StaticDamperElement,
     VerticalTireElement,
 )
@@ -69,6 +71,8 @@ def build_element(row: ResolvedElement) -> object:
         return _tire(row, cast(VerticalTire, row.spec))
     if row.kind == "bushing":
         return _bushing(row)
+    if row.kind == "rotational_torque":
+        return _rotational_torque(row)
     raise ValueError(f"unsupported element kind {row.kind!r}")
 
 
@@ -185,6 +189,23 @@ def _bushing(row: ResolvedElement) -> BushingElement:
         force_curves=spec.force_curves,
         force_curve_interpolation=spec.force_curve_interpolation,
         rotation_coordinates=spec.rotation_coordinates,
+    )
+
+
+def _rotational_torque(row: ResolvedElement) -> RotationalTorqueElement:
+    """
+    Build one declared rotational torque.
+
+    The two bodies come from the row verbatim.  Which one is the driven side is
+    decided where the row was built -- from the port pairing that resolved the two
+    ends -- and never here: a rule here that read either name would be the
+    name-based identity guess the assembly layer is not allowed to have.
+    """
+    return RotationalTorqueElement(
+        name=row.name,
+        body_a=cast(str, row.body_a),
+        body_b=cast(str, row.body_b),
+        parameters=cast(RotationalTorqueParameters, row.spec),
     )
 
 

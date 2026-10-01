@@ -1,0 +1,72 @@
+=== GATE 1: legacy_surface_gate.py --check ===
+mode      : migration
+findings  : 0
+
+OK: no unregistered Python boundary violation
+exit=0
+
+=== GATE 1b: legacy_surface_gate.py --check --final ===
+mode      : final
+findings  : 0
+
+OK: no unregistered Python boundary violation
+exit=0
+
+=== GATE 2: check_composable_release.py --skip-isolation ===
+release probe: E:\тс╪Ч\open-kinematics
+scratch      : C:\Users\zzy11\AppData\Local\Temp\suspension-release-5jb3ci7e
+
+[PASS] migration list: 0 retained legacy imports (0 production, 0 test) and 4 retired packages gone
+[PASS] documentation roots: 16 documented modules present, 4 retired ones absent
+[PASS] documentation examples: 3 example(s) executed: E-1, E-2, E-3
+
+OK: 3 release checks passed
+exit=0
+
+=== GATE 3: pytest tests/api tests/architecture ===
+........................................................................ [ 37%]
+........................................................................ [ 74%]
+.................................................                        [100%]
+193 passed in 621.82s (0:10:21)
+exit=0
+
+=== GATE 5: direct run_contract owners (grep, production + tests) ===
+packages/suspension_multibody/src/suspension_multibody/kernel/__init__.py:30:__all__ = ["KernelContractError", "ContractRun", "contract_version", "run_contract"]
+packages/suspension_multibody/src/suspension_multibody/kernel/__init__.py:186:def run_contract(
+packages/suspension_multibody/src/suspension_multibody/simulation/backend.py:7:from ..kernel import ContractRun, run_contract
+packages/suspension_multibody/src/suspension_multibody/simulation/backend.py:24:        return run_contract(
+packages/suspension_multibody/tests/architecture/legacy_surface_gate.py:70:    "run_contract",
+packages/suspension_multibody/tests/architecture/test_legacy_surface_gate.py:330:        "from suspension_kernel import run_contract\n\n"
+packages/suspension_multibody/tests/architecture/test_legacy_surface_gate.py:333:        "    return run_contract(model, case)\n",
+packages/suspension_multibody/tests/architecture/test_legacy_surface_gate.py:358:        "from suspension_multibody.kernel import run_contract\n\n"
+packages/suspension_multibody/tests/architecture/test_legacy_surface_gate.py:360:        "    return run_contract(model, case)\n",
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:53:    return name.startswith("run_") and name.endswith("_contract") and name != "run_contract"
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:108:        "direct_kernel_run_contract",
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:150:                if bound_name == "run_contract" and module and module.endswith(".kernel"):
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:152:                        add("direct_kernel_run_contract", bound_name, node)
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:173:                if imported_name == "run_contract" and alias.name.endswith(
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:174:                    ".kernel.run_contract"
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:177:                        add("direct_kernel_run_contract", imported_name, node)
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:188:            if called_name == "run_contract":
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:190:                    add("direct_kernel_run_contract", called_name, node)
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:289:            "from suspension_multibody.kernel import run_contract\n"
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:292:            "    return run_contract(model, case)\n",
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:296:    assert any(finding.rule == "direct_kernel_run_contract" for finding in findings)
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:304:            "from suspension_multibody.kernel import run_contract\n"
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:307:            "    return run_contract(model, case)\n",
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:312:    assert {finding.rule for finding in findings} == {"direct_kernel_run_contract"}
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:321:        and node.func.id == "run_contract"
+packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py:329:        if finding.rule == "direct_kernel_run_contract"
+packages/suspension_multibody/tests/architecture/test_unified_simulation_boundaries.py:141:    for call in ("run_request", "run_contract", "suspension_kernel_run", "load_library"):
+packages/suspension_multibody/tests/outputs/test_bypass.py:55:    "run_contract",
+packages/suspension_multibody/tests/outputs/test_bypass.py:95:        "from suspension_multibody.kernel import run_contract\n"
+packages/suspension_multibody/tests/outputs/test_bypass.py:97:        "    return run_contract(result)\n",
+packages/suspension_multibody/tests/outputs/test_bypass.py:102:    assert any("run_contract" in item for item in found)
+packages/suspension_multibody/tests/simulation/test_compilers.py:340:    monkeypatch.setattr(backend_module, "run_contract", raise_partial)
+
+=== GATE 5b: __init__ public counts ===
+__all__        : 18
+_PUBLIC_NAMES  : 17
+simulate in __all__: True
+_PUBLIC_NAMES[simulate]: ('.api', 'simulate')
+FrontAxleModel in __all__: True

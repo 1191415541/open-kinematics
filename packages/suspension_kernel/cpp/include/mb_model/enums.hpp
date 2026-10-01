@@ -80,4 +80,22 @@ enum VehicleBushingRotationCoordinates {
 // this same number, so the two cannot disagree.
 enum { VEHICLE_PAC2002_PARAMETER_COUNT = 226 };
 
+// The driver signal a rotational actuator's magnitude follows (subtask p2-08).
+//
+// The family used to apply the unit demand, so a block's `stiffness` was the
+// amplitude itself.  A source other than the unit demand makes the couple follow
+// the real-time driver signal instead: the element's magnitude becomes
+// `min(stiffness * demand, max_torque)` at whatever the driver asked for on that
+// sample, which is what lets one element be a brake or a motor rather than a
+// pre-computed torque table.  `Unit` is zero on purpose -- it is what every block
+// written before this field carries, so an old block keeps its old meaning.
+enum TorqueDemandSource {
+    //: The block's `stiffness` is the amplitude; no driver signal is read.
+    TORQUE_DEMAND_UNIT = 0,
+    //: The case's per-tire `wheel_torque` column: the driver's throttle demand.
+    TORQUE_DEMAND_WHEEL = 1,
+    //: The case's per-tire `brake_torque` column: the driver's brake demand.
+    TORQUE_DEMAND_BRAKE = 2
+};
+
 } // extern "C"

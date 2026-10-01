@@ -4,34 +4,92 @@
 
 ## Session Start
 
-- **Date**: （未开工；本文件为规划轮产物）
+- **Date**: 2026-09-29
 - **Task name**: p3-04-static-loads
 - **Task dir**: `.codex-tasks/20260929-multibody-evolution-p2-p5/tasks/p3-04-static-loads/`
 - **Spec**: 见 `SPEC.md`
-- **Plan**: 见 `TODO.csv`（7 步，全部 `TODO`）
+- **Plan**: 见 `TODO.csv`（7 步，全部 `DONE`）
 - **Environment**: Python 3.12 / uv / pytest（`uv run --no-sync`）
 
 ## Context Recovery Block
 
-- **Current milestone**: #1 — `_WHEELS` 删除且静平衡按实际接触点集合构造方程（解的存在性由载荷相容性判定、唯一性由 `rank(A) == N` 判定：`rank(A) < N` 取最小范数解并标记「解不唯一」，残差超容差才报错点名）
-- **Current status**: NOT_STARTED
-- **Last completed**: 无（本子任务尚未开工）
-- **Current artifact**: `SPEC.md` / `TODO.csv`（规划产物）
+- **Current milestone**: #7 — 依赖方向与零回归自证（全部完成）
+- **Current status**: DONE
+- **Last completed**: 步骤 7（`check_module_layering --strict --final`、`legacy_surface_gate --check`、
+  `check_composable_release --skip-isolation`、`dynamic_hash_sentinel --check` 全部退出码 0；
+  快速集 `1162 passed, 1 xfailed`；未新增 skip/xfail）
+- **Current artifact**: `raw/` 下 10 个文件（4 篇证据 + 2 个 probe 脚本 + 2 份 probe 输出 +
+  改造前文件存档）
 - **Key context**:
-  - 父行 `depends_on = p3-03`（`SUBTASKS.csv` 的 `p3-04`；两者都依赖 p3-02）；跨阶段顺序为「阶段三在第一阶段完成后开工」（`EPIC.md` 行 211），且**前置 S1**——阶段一 Epic 01–07 全部 `DONE` 之前本行不得置 `IN_PROGRESS`（`EPIC.md` 前置一节：19 行实施行受此约束，四个只读冻结行不受限）
-  - **生产写范围与 p3-03 不相交，但测试写范围相交**（`EPIC.md` 行 228）：本行写 `vehicle/static_loads.py`，p3-03 写 `vehicle/roll_centers.py`；`tests/physics/test_vehicle_physics.py` **归 p3-03**，本行**不改它**，静平衡断言全部写入**新建**的 `tests/physics/test_static_loads.py`（`tests/vehicle/` 下同理新建）。**两行硬串行**（`SUBTASKS.csv` 的 `p3-04.depends_on = p3-03`，**不得并行**；测试文件已按文件级切分，但文件级切分不是并行的理由）。
-  - **4 轮逐位一致是本行硬门**（`SUBTASKS.csv` 的 `p3-04` `notes`、`EPIC.md` 行 255(c)）：因为 `static_loads.py` 有**真实生产调用者** `vehicle/service.py:40`（F8 `EPIC.md` 行 128），本行是阶段三唯一「改在用链路」的行。
-  - **p3-05 依赖本行**（`SUBTASKS.csv` 的 `p3-05.depends_on=p3-04`）：报表要消费本行的广义静平衡字段，故本行**必须冻结输出字段形状**（`raw/static_loads_contract.md`）。
-  - **F8（`EPIC.md` 行 128）**：`_WHEELS` 在 `static_loads.py:28`；3×4 平衡矩阵与 `lstsq` 在 `:79-95`；四点不张成抛 `ValueError` 在 `:98`；唯一生产调用点是 `vehicle/service.py:40`。
-  - **G4 判据（`EPIC.md` 行 89 与行 259(b)，路线图 `docs/multibody_architecture_evolution.md:188`）**：**单轮（N = 1）在载荷相容输入下必须可解、在载荷不相容输入下报错点名，不得一律写成报错**——本行必须给「可解数值例」与「不可解报错例」各一个用例。**可判定边界分两层：解是否存在由载荷相容性（残差 `‖A x − b‖` 在容差内）判定；解是否唯一由 `rank(A) == N` 判定**。`rank(A) < N` 时取最小范数解并标记「解不唯一」（4 轮 `rank = 3 < 4` 是常态）；**`rank(A) < 3` 只表示三条平衡方程不独立，与存在性、唯一性无关，不得据此报错**；**单轮方程相容时 `rank(A) = 1 = N`，解唯一，不得标成「解不唯一」**。同一单轮几何的矩阵秩不随载荷改变，用秩无法区分两例（2026-09-29 第三轮复审修订）。
+  - **改造后的形状**：`vehicle/static_loads.py` 现在有两个入口。
+    `compute_static_wheel_loads(vehicle, *, acceleration, gravity, road_z)`（旧签名逐字未变，
+    `vehicle/service.py:40` 走这里）只做装配，真正求解在
+    `compute_static_wheel_loads_for_assembly(assembly, *, ...)`（新增，任意 N）。
+  - **接触点来源（实测确定）**：装配值的 `VehicleRuntime.wheel_centers`
+    （`_support_points`，`static_loads.py:265`）。集合与顺序都是车辆自己的：
+    两轴车 4 点、三轴车 6 点、单轮台架 1 点。
+  - **两个判定分开**：存在性 = 载荷相容 = `residual <= residual_tolerance`
+    （容差 = `1e-9 * max(|total_mass*(gravity+accel_z)|, 1.0)`）；
+    唯一性 = `rank(A) == N`，结果字段 `unique`。`rank(A) < 3` 不报错、不参与判定。
+  - **报错**：`IncompatibleStaticLoadsError`（`ValueError` 子类）取代旧的
+    `ValueError("four wheel support points do not span force/moment balance")`；
+    消息含残差实测值、容差、接触点数 N，不含秩。
+  - **4 轮逐位一致**：硬门已实跑通过（`raw/four_wheel_bitwise.md`，
+    `DIFFERENCES: none`，6 个工况逐字段 `struct.pack('>d')` 比较）。
+  - **给 p3-05**：输出字段形状冻结在 `raw/static_loads_contract.md`。注意
+    `result.summary` 仍只支持恰好四角（`report/wheel_loads.py` 归 p3-05），
+    三轴/单轮请直接读 `wheel_loads`。
 - **Known issues**:
-  - **接触点来源未定**：实际接触点集合从哪个既有事实面取尚未实测确定；若必须改 `vehicle/service.py` 才能传接触点，按 `SPEC.md` 登记为范围外并回退给主代理裁决。
-  - **`lstsq` 最小范数解口径**：N=4 必须保持今天的解；N>4 的求解口径允许变化但须说明（说明独立于结果字节：自由度、约束行数、接触点几何、力路径，`EPIC.md` 行 228）。
-  - **报错语义已改**：今天 `static_loads.py:97-98` 的 `ValueError` 判据实测是 `rank < 3`，语义是「四点不张成」；新的报错语义是「**载荷不相容（残差超容差）**」，判据是**残差**。既有测试若断言旧消息，须检查语义等价性并登记理由；改测试只改本行新建的文件，**不得动 p3-03 的 `tests/physics/test_vehicle_physics.py`**。
-- **Next action**: 先读 `packages/suspension_multibody/src/suspension_multibody/vehicle/static_loads.py` 全文件（含 `:39-40 rank/residual` 字段、`:95-98` 的 `lstsq` 与抛错段）与 `.../vehicle/service.py:40` 的调用点，确认今天的输入（四轮名常量 + 偏移）与输出形状；随后**先落盘 4 轮的改造前逐位基准**（`raw/four_wheel_bitwise.md` 前半），再改 `_WHEELS` 与方程构造，并按「**解的存在性看残差**（在容差内即求解）/ **解的唯一性看 `rank(A) == N`**（`rank(A) < N` 取最小范数解并标记「解不唯一」；`rank(A) < 3` 只表示方程不独立）/ 残差超容差才报错点名（消息含残差实测值与容差）」实现，最后在新建的 `tests/physics/test_static_loads.py` 里补 3 轴 6 点与单轮两例（载荷相容可解例 + 载荷不相容报错例）。
+  - `uv run --no-sync ruff check .` 最终退出码 **0**（`All checks passed!`）。更早一轮为 1，
+    2 个发现均在 `.codex-tasks/.../tasks/p2-07-doc-route/raw/document_route_probe.py:3`
+    （`E401` + `F401`）：属 p2-07 的文件，本行不碰，其归属者随后自行修好。
+  - 执行期间遇到两次**并发写入干扰**（都与本行改动无关，重跑即恢复）：
+    另一个写入者重建 native kernel 时 `tests/vehicle/test_pac2002_contact_mass.py` 收集期抛
+    `NativeKernelUnavailableError`；另一个写入者改 `subsystems/*.py` 与 `templates/builtin.py` 时
+    `test_import_boundaries.py::test_every_ordered_pair_of_entry_points_imports` 报 19 个
+    `SyntaxError: keyword argument repeated: note`。后者重跑 **`56 passed`**，即该文件已通过。
 
----
+## Final Summary
 
-## Final Summary（未开工）
+7 步全部完成，`TODO.csv` 全 `DONE`。
 
-本子任务**尚未开工**。`SPEC.md` 与 `TODO.csv` 是规划产物：未执行任何步骤、未修改任何生产代码或测试、未产生任何证据（`raw/` 为空）。所有 `TODO.csv` 行保持 `TODO`，`completed_at` 为空，`retry_count` 为 `0`。开工时按 `TODO.csv` 顺序展开，并把每一步的实际命令、退出码与产物落到 `raw/`（只记**已执行**的结果，不存虚构结果；口径见 `EPIC.md` 行 355）。
+**做了什么**
+
+1. `vehicle/static_loads.py`：
+   - 删除 `_WHEELS` 四轮名字常量；
+   - 静平衡方程改由装配值 `wheel_centers` 的**数据**构造（N 个接触点 = N 个未知量、3 条方程）；
+   - 新增 `compute_static_wheel_loads_for_assembly`（N 点求解的正式入口）；
+   - 新增结果字段 `unique`（`rank(A) == N`）与 `residual_tolerance`；
+   - 新增 `IncompatibleStaticLoadsError`，判据改为**残差超容差**，消息含残差、容差与 N；
+   - 容差 = `1e-9 × max(竖直载荷, 1 N)`，与点数、结果字节无关。
+2. 新建 `tests/physics/test_static_loads.py`（436 行、9 个用例）：三轴 6 点两例、
+   单轮可解例、单轮不可解报错例两例、秩无法区分两例的显式断言、4 轮最小范数解回归例、
+   接触点 == 装配轮端表的断言、`VehicleModel` 入口仍工作的断言。**未改**
+   `tests/physics/test_vehicle_physics.py`。
+
+**验证（全部实跑，原始输出见 `raw/`）**
+
+| 项 | 结果 |
+|---|---|
+| `pytest tests/physics tests/vehicle -q -p no:cacheprovider` | **0**：`102 passed, 1 xfailed` |
+| `dynamic_hash_sentinel.py --check` | **0**：`OK: dynamic output matches the frozen baseline byte-for-byte` |
+| grep `_WHEELS = ("front_left"` 于 `vehicle/`（取反） | **0**：零命中 |
+| `ruff check .` | **0**：`All checks passed!` |
+| `ty check .` | **0**：`All checks passed!` |
+| `check_module_layering.py --strict --final` | 0：0 环 |
+| `legacy_surface_gate.py --check` | 0：findings 0 |
+| `check_composable_release.py --skip-isolation` | 0：3 项通过 |
+| 快速集（除 adams/architecture/cases） | 0：`1162 passed, 1 xfailed` |
+| `pytest suspension_kernel/tests suspension_contracts/tests` | 0：`73 passed` |
+| 4 轮逐位比较 | `DIFFERENCES: none`（6 工况 × 全字段双精度字节） |
+
+**未做**：`tests/architecture/` 全目录、`tests/adams/`、`tests/cases/`、
+`just gate-numeric` 的 `case_parity_check.py` 与 `kc_perf_gate.py`、全量 `just test-all`
+—— 理由均为 `AGENTS.md` 的触发条件不满足，逐条写在 `raw/run_log.md` 末尾。
+
+**基线**：未重录 `tests/data/**`、`dynamic_hash_baseline.json`、`kc_perf_baseline_native.json`；
+未新增 skip/xfail。
+
+**未改的禁止面**：`vehicle/service.py`、`vehicle/roll_centers.py`、
+`tests/physics/test_vehicle_physics.py`、`report/wheel_loads.py`、`report/metrics/vehicle.py`、
+`outputs/builtin.py`、`packages/suspension_kernel/**`、`EPIC.md`、`SUBTASKS.csv`、父 `PROGRESS.md`。

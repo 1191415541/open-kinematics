@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from .api import run_case, run_dynamic_case
+    from .api import run_case, run_dynamic_case, simulate
     from .axle_dynamics import AxleDynamicsResult
     from .io.artifacts import read_artifact, write_artifact
     from .results.vehicle import VehicleDynamicsResult
@@ -56,6 +56,8 @@ _PUBLIC_NAMES: dict[str, tuple[str, str]] = {
     "run_case": (".api", "run_case"),
     "run_dynamic_case": (".api", "run_dynamic_case"),
     "run_vehicle_dynamics": (".vehicle.service", "run_vehicle_dynamics"),
+    "open_bus": (".signal_bus", "open_bus"),
+    "simulate": (".api", "simulate"),
     "write_artifact": (".io.artifacts", "write_artifact"),
 }
 
@@ -72,10 +74,12 @@ __all__ = [
     "load_model",
     "load_vehicle_dynamic_case",
     "load_vehicle_model",
+    "open_bus",
     "read_artifact",
     "run_case",
     "run_dynamic_case",
     "run_vehicle_dynamics",
+    "simulate",
     "write_artifact",
 ]
 

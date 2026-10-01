@@ -1,0 +1,21 @@
+=== the single template source ===
+wheel subsystem module      : E:\тс╪Ч\open-kinematics\packages\suspension_multibody\src\suspension_multibody\subsystems\wheel.py
+module sha256               : 6313b9c8898f8d4b2ec0b35539d45f42c2c3c00bfdb6ddd3b9d01ebda3091729
+
+=== the accessor every caller goes through ===
+def template_instance(context: SubsystemContext) -> SubsystemInstance:
+def _requested(context: SubsystemContext) -> object | None:
+    """Return the wheel template the request carries, or ``None``."""
+    return getattr(context.request, "wheel_template", None)
+
+
+=== the template it resolves to when no request overrides it ===
+name                        : wheel_on_hub
+parts                       : []
+registry holds one 'wheel'  : True
+
+=== is there any second wheel-template producer in the file? ===
+  'WHEEL'            occurrences: 2
+  'template_instance' occurrences: 6
+  '_requested'       occurrences: 2
+  'instantiate('     occurrences: 1

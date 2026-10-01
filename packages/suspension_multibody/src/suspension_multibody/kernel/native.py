@@ -30,8 +30,8 @@ __all__ = ["NativeKernelUnavailableError", "native_build_metadata", "load_librar
 _LIBRARY_STEM = "suspension_kernel"
 _NATIVE_DIR = Path(__file__).resolve().parent.parent / "native"
 
-_NATIVE_KERNEL_ABI_VERSION = 16
-_NATIVE_VEHICLE_KERNEL_ABI_VERSION = 31
+_NATIVE_KERNEL_ABI_VERSION = 17
+_NATIVE_VEHICLE_KERNEL_ABI_VERSION = 32
 _NATIVE_CORE_ABI_VERSION = 1
 
 

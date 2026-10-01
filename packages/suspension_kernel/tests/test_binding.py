@@ -37,10 +37,11 @@ CONTRACT_SYMBOLS = (
     "suspension_kernel_capabilities",
 )
 
-# Bumped with the force-element split (2026-09-26): `AxleInput`'s fused spring
-# group became three, and `VehicleInput` embeds `AxleInput` by value.
-EXPECTED_ABI = 16
-EXPECTED_VEHICLE_ABI = 31
+# Bumped with the rotational actuator (p2-02, 2026-10-01): the element surface
+# gained one more family.  `VehicleInput` embeds `AxleInput` by value, so the
+# vehicle constant moves with the axle's.
+EXPECTED_ABI = 17
+EXPECTED_VEHICLE_ABI = 32
 
 
 def _exported_abi_versions() -> dict[str, int]:

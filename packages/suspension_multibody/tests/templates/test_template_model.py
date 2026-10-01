@@ -54,8 +54,11 @@ def _satisfying(role: str, name: str = "ok") -> Template:
     )
 
 
-def test_six_roles_are_declared() -> None:
+def test_seven_roles_are_declared() -> None:
+    # `anti_roll_bar` joined the table in stage four: the bar spans both sides of
+    # one axle, so it cannot be owned by either side's suspension template.
     assert role_names() == (
+        "anti_roll_bar",
         "brake",
         "chassis",
         "drive",

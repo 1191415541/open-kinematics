@@ -269,6 +269,18 @@ class ContractModel {
   double inertia_scale() const { return length_scale_ * length_scale_; }
   double moment_scale() const { return length_scale_; }
 
+  /// The rotational-torque elements the document declared, as the uniform
+  /// element blocks the generic reader consumes.
+  ///
+  /// A block rather than a per-field table because this family has no
+  /// `AxleInput` route: `kernel_contract_run.cpp` reads these straight through
+  /// `read_element_blocks`.  The reference quaternion is left as the document
+  /// wrote it, including all four slots at zero for "no reference pose", which
+  /// is what the generic reader accepts for this family.
+  const std::vector<ElementBlock>& rotational_torques() const {
+    return rotational_torques_;
+  }
+
 
  private:
   std::string name_;
@@ -406,6 +418,17 @@ class ContractModel {
   std::vector<double> anti_roll_reference_;
   std::vector<double> anti_roll_stiffness_;
   std::vector<double> anti_roll_damping_;
+
+  /// The second couple family: a rotational actuator.  Unlike every family
+  /// above it is not flattened into `AxleInput` at all.
+  ///
+  /// `AxleInput` has no per-family arrays for it, and this build must not add
+  /// any: that structure is the frozen C ABI, and a new field in it is an ABI
+  /// release.  So the document reader keeps the whole `ElementBlock` instead --
+  /// exactly the shape the generic block reader already accepts -- and
+  /// `kernel_contract_run.cpp` hands those blocks to `read_element_blocks`
+  /// after `build_model` has run.  One family, one route, no second input form.
+  std::vector<ElementBlock> rotational_torques_;
 
   std::vector<int> aero_body_;
   std::vector<double> aero_point_;

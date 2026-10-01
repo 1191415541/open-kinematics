@@ -3,6 +3,14 @@ General metrics for explicit multibody vehicle results.
 
 Moved here from ``metrics/vehicle.py``, which 08 deletes.  The wall-time key is
 read off the decoded result; nothing here reaches into the kernel.
+
+The wheel-load table is **not** defined here.  ``report.wheel_loads`` owns it --
+it is generated there from the placements the run's own wheel ends state, so a
+three-axle vehicle gets ``normal_load_axle_middle`` without this module naming an
+axle -- and this module publishes that one table rather than a second copy of it.
+The historical aggregate spellings (``normal_load_front_axle``,
+``load_transfer_front_minus_rear``, ...) are part of that table's output, so the
+values here are unchanged on a four-wheel vehicle.
 """
 
 from __future__ import annotations
@@ -12,35 +20,14 @@ from typing import Any
 
 import numpy as np
 
+from ..wheel_loads import wheel_load_channels
 from .axle import compute_axle_metrics
 from .common import peak, rms
 
-_WHEELS = ("front_left", "front_right", "rear_left", "rear_right")
-
 
 def wheel_load_metrics(loads: Mapping[str, float]) -> dict[str, float]:
-    """Return stable derived metrics for four finite vehicle wheel loads."""
-    missing = set(_WHEELS) - set(loads)
-    extra = set(loads) - set(_WHEELS)
-    if missing or extra:
-        raise ValueError("wheel loads must contain exactly the four vehicle corners")
-    values = {name: float(loads[name]) for name in _WHEELS}
-    if any(not np.isfinite(value) for value in values.values()):
-        raise ValueError("wheel loads must be finite")
-    front = values["front_left"] + values["front_right"]
-    rear = values["rear_left"] + values["rear_right"]
-    left = values["front_left"] + values["rear_left"]
-    right = values["front_right"] + values["rear_right"]
-    return {
-        **{f"normal_load_{name}": value for name, value in values.items()},
-        "normal_load_total": front + rear,
-        "normal_load_front_axle": front,
-        "normal_load_rear_axle": rear,
-        "normal_load_left_side": left,
-        "normal_load_right_side": right,
-        "load_transfer_front_minus_rear": front - rear,
-        "load_transfer_right_minus_left": right - left,
-    }
+    """Return the wheel-load channel table for however many wheel ends there are."""
+    return wheel_load_channels(loads)
 
 
 def _embedded_wheel_loads(result: Any) -> Mapping[str, float] | None:

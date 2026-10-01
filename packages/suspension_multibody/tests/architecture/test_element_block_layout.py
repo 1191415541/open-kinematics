@@ -34,6 +34,7 @@ FAMILIES = {
     "AERODYNAMIC_DRAG": "ELEMENT_AERODYNAMIC_DRAG",
     "DAMPER": "ELEMENT_DAMPER",
     "BUMP_STOP": "ELEMENT_BUMP_STOP",
+    "ROTATIONAL_TORQUE": "ELEMENT_ROTATIONAL_TORQUE",
 }
 
 #: The slot run each family declares, as `(first, last_exclusive)`.
@@ -48,9 +49,17 @@ FAMILIES = {
 # slot left; `kElementBlockSize` grew to 216 to hold them.  The elastic
 # structure's preload reuses a retired damper slot inside the spring's own run, so
 # no family reaches past its neighbours.
+#
+# The rotational actuator (p2-02, 2026-10-01) had no room to append either: the
+# slots past the bump-stop run are 210..215, six fewer than the ten it needs, and
+# widening the block is an ABI change for every caller.  It takes 128..137 instead,
+# out of the tail the bushing's band declared but never wrote -- the bushing's own
+# fields end at its reference quaternion (111..114), which is why its run stops at
+# 116 here.  The C++ `static_assert`s pin both halves of that claim.
 FAMILY_RUNS = {
     "SPRING": (0, 16),
-    "BUSHING": (16, 144),
+    "BUSHING": (16, 116),
+    "ROTATIONAL_TORQUE": (128, 144),
     "ANTI_ROLL": (144, 154),
     "TIRE": (154, 168),
     "AERODYNAMIC_DRAG": (168, 176),

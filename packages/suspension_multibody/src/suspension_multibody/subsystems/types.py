@@ -67,7 +67,7 @@ MODES: tuple[Mode, Mode] = ("K", "C")
 #: The six subsystem roles a single-axle assembly can carry.  `wheel` rather
 #: than `tire`: the wheel subsystem covers both the wheel body and the tire.
 SUBSYSTEM_ROLES: frozenset[str] = frozenset(
-    {"suspension", "steering", "wheel", "chassis", "brake", "drive"}
+    {"suspension", "steering", "wheel", "chassis", "brake", "drive", "anti_roll_bar"}
 )
 
 #: The subsystem set a single-axle suspension assembly carries by default.  It
@@ -99,6 +99,13 @@ WHEELS: tuple[str, str, str, str] = (
 
 #: Element declarations a subsystem may return.  `front_axle` maps each kind to
 #: its constructor; a new kind is a new branch there, not a new import here.
+#:
+#: ``rotational_torque`` is the family the brake and drive subsystems emit
+#: (subtask p2-03 landed the construction branch at
+#: ``subsystems/element_build.py:74-75`` and registered it in
+#: ``modeling/primitives/elements.py``); it was missing from this tuple because
+#: p2-03's write scope did not include this file.  Listing it here is what makes
+#: "one of `ELEMENT_KINDS`" true for the row a brake element is.
 ELEMENT_KINDS = (
     "spring",
     "damper",
@@ -106,6 +113,7 @@ ELEMENT_KINDS = (
     "anti_roll_bar",
     "tire",
     "bushing",
+    "rotational_torque",
 )
 
 

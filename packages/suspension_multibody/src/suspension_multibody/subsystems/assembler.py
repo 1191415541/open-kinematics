@@ -33,9 +33,11 @@ could not name its chassis anything else.
 composed *without* the wheel role (``_AXLE_ROLES_IN_A_VEHICLE``): the wheel
 subsystem's contribution **is** the wheel end, and the vehicle's own wheel ends
 are the ones its entries name.  Saying that as a role rather than deleting the
-axle's tires afterwards is what removed the ``VerticalTireElement`` filter that
-used to stand here -- same physics, but decided by what an assembly *carries*
-instead of by a type test at the assembly stage.
+axle's tires afterwards is what removed the filter that used to stand here --
+same physics, but decided by what an assembly *carries* instead of by a type
+test on the vertical tire element at the assembly stage.  The removed element
+class is named in `subsystems/element_build.py`, which still builds it; this
+module names it nowhere, so a grep for it here can only mean it came back.
 """
 
 from __future__ import annotations
@@ -90,8 +92,8 @@ __all__ = [
 #: The wheel role's entire contribution is the wheel end -- the wheel body and
 #: the tire -- and for a vehicle those are the vehicle's, named by its entries.
 #: Composing an axle with the role would have the axle describe a wheel end that
-#: the vehicle then has to un-describe, which is what the deleted
-#: ``VerticalTireElement`` filter was doing.
+#: the vehicle then has to un-describe, which is what the deleted type filter
+#: was doing.
 _AXLE_ROLES_IN_A_VEHICLE: frozenset[str] = DEFAULT_AXLE_SUBSYSTEMS - {"wheel"}
 
 @dataclass(frozen=True)

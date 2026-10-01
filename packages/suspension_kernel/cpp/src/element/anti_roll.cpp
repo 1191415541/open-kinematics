@@ -84,6 +84,116 @@ void assemble_anti_roll_forces(
     }
 }
 
+// The rotational actuator's couple.  It sits beside the anti-roll bar because it
+// is the same *kind* of wrench -- a pure couple with no application point -- but
+// its magnitude is not the bar's elastic response: it is an external demand, and
+// only its direction comes from the state.
+//
+// What this row does **not** read, and why that is deliberate: the demand a brake
+// or a drive really carries is a function of the longitudinal slip, and the slip
+// is a tire-layer quantity.  `tire_output` -- which is where the slip would come
+// from -- is not available at this assembly point: `assemble_tire_forces` has
+// written it, but the coupling between "the tire is slipping" and "the actuator
+// should stop growing" is p2-03's work, and it is the demand *channel* that has
+// to carry the value here.  So this row expresses the locked-wheel behaviour with
+// the one thing it can assert on its own: the magnitude is capped by
+// `max_torque`, so a demand that keeps rising past the cap does not keep raising
+// the couple.  Nothing here reads `tire_output`, and nothing here may: an element
+// law that reached into the tire block would be a layering violation.
+//
+// The sign law is `drive_brake.cpp`'s, verbatim: the couple opposes the real-time
+// relative angular rate along the axis, and a rate inside `kEps` of zero gets no
+// couple at all rather than a full-strength one of arbitrary sign.  That third
+// branch is what makes a stationary pair stay stationary instead of being
+// accelerated by the sign of a rounding error.
+void assemble_rotational_torque_forces(
+    const Model& model,
+    const State& state,
+    const SampleInput& input,
+    std::vector<Vec3>& torque,
+    EnergyRates* energy_rates,
+    bool record_energy,
+    bool brush_only,
+    double& external_power
+) {
+    ElementWrenchSink* const sink = active_element_wrench_sink();
+    for (std::size_t index = 0;
+         index < model.rotational_torques.size() && !brush_only; ++index) {
+        const RotationalTorque& actuator = model.rotational_torques[index];
+        const Vec3 axis_world =
+            normalized(rotate(state.q[actuator.a], actuator.axis_a));
+        const Vec3 relative_omega = actuator.b >= 0
+            ? state.omega[actuator.b] - state.omega[actuator.a]
+            : state.omega[actuator.a] * (-1.0);
+        const double rate = dot(axis_world, relative_omega);
+        // The driver demand (p2-08).  `TORQUE_DEMAND_UNIT` is the block's own
+        // `stiffness` and is what every block written before this channel meant;
+        // the other two sources read the case's per-tire driver signal at this
+        // sample, so the element follows the pedal rather than a pre-computed
+        // torque table.  A source that names no tire is refused by the reader, so
+        // `demand_tire` indexes a real column here.
+        double demand = 1.0;
+        if (actuator.demand_source == TORQUE_DEMAND_WHEEL) {
+            demand = slot_value(input.torque, actuator.demand_tire);
+        } else if (actuator.demand_source == TORQUE_DEMAND_BRAKE) {
+            demand = slot_value(input.brake_torque, actuator.demand_tire);
+        }
+        const double magnitude =
+            std::min(actuator.stiffness * demand, actuator.max_torque);
+        // The slip branch.  A locked wheel keeps slipping while it is held, so
+        // the couple must not fall to zero just because the pair stopped turning:
+        // with a tire bound to the element, a slip large enough to have saturated
+        // the tire holds the couple at its demanded magnitude in the direction
+        // that opposes the slip.  Without a bound tire this branch is inert and
+        // the law is exactly the rate-only one it always was.
+        const double slip = actuator.demand_tire >= 0 &&
+                actuator.demand_source != TORQUE_DEMAND_UNIT &&
+                static_cast<std::size_t>(actuator.demand_tire) < state.tire_sx.size()
+            ? state.tire_sx[static_cast<std::size_t>(actuator.demand_tire)]
+            : 0.0;
+        double tau = 0.0;
+        if (rate > kEps) {
+            tau = -magnitude;
+        } else if (rate < -kEps) {
+            tau = magnitude;
+        } else if (slip > kEps) {
+            tau = -magnitude;
+        } else if (slip < -kEps) {
+            tau = magnitude;
+        }
+        // End 0 is the reaction body and end 1 the actuator body, the same
+        // convention the anti-roll bar above uses, so the two couple families
+        // address their rows identically.
+        if (sink != nullptr && actuator.b >= 0) {
+            sink->open(kElementWrenchRotationalTorque, index, 0, actuator.a,
+                       actuator.b, actuator.b,
+                       state.r[actuator.b].x, state.r[actuator.b].y,
+                       state.r[actuator.b].z);
+        }
+        add_torque_on_body(torque, model, actuator.b, axis_world * tau, sink);
+        if (sink != nullptr) {
+            sink->open(kElementWrenchRotationalTorque, index, 1, actuator.a,
+                       actuator.b, actuator.a,
+                       state.r[actuator.a].x, state.r[actuator.a].y,
+                       state.r[actuator.a].z);
+        }
+        add_torque_on_body(torque, model, actuator.a, axis_world * (-tau), sink);
+        if (record_energy) {
+            // The couple's own power about the axis: `tau` is applied to `b` and
+            // `-tau` to `a`, so the sum of the two is `tau*rate`.  A couple that
+            // opposes the rate removes energy, which is why this is negative
+            // whenever the sign law above fired.  It is booked like the
+            // drive/brake actuator's power because it is one: an external demand
+            // driving the pair, not a conservative internal force.
+            const double actuator_power = tau * rate;
+            external_power += actuator_power;
+            if (energy_rates != nullptr) {
+                energy_rates->drive_power += actuator_power;
+            }
+        }
+    }
+}
+
 // K4 (epic §3.1): the spring/damper/bump-stop loop extracted from
 // `external_force_vector`.  The loop body is the original text.
 // `dissipation`, `potential` and `energy_rates` are passed by reference on

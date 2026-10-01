@@ -165,8 +165,10 @@ def test_native_build_metadata_keeps_safe_optimization_flags() -> None:
     metadata = native_build_metadata()
     flags = tuple(str(flag) for flag in metadata["flags"])
 
-    assert metadata["abi_version"] == 16
-    assert metadata["vehicle_abi_version"] == 31
+    # Bumped with the rotational actuator (p2-02, 2026-10-01); see
+    # `test_packaging.py` for why the axle and vehicle constants move together.
+    assert metadata["abi_version"] == 17
+    assert metadata["vehicle_abi_version"] == 32
     assert metadata["configuration"] == "Release"
     assert "-ffast-math" not in flags
     assert "-fno-fast-math" in flags

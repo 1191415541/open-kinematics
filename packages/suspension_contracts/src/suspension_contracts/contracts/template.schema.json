@@ -8,7 +8,7 @@
     "document": {"const": "template"},
     "schema_version": {"const": 1},
     "name": {"type": "string", "minLength": 1},
-    "functional_role": {"enum": ["suspension", "steering", "wheel", "chassis", "brake", "drive"]},
+    "functional_role": {"enum": ["suspension", "steering", "wheel", "chassis", "brake", "drive", "anti_roll_bar"]},
     "allowed_placement_roles": {"type": "array", "items": {"enum": ["any", "front", "rear", "front_left", "front_right", "rear_left", "rear_right"]}, "minItems": 1},
     "description": {"type": "string"},
     "suspension_kind": {"type": "string"},

@@ -1,0 +1,63 @@
+### three axle, static
+  contact points N = 6
+  names            = ['front_left', 'front_right', 'middle_left', 'middle_right', 'rear_left', 'rear_right']
+  rank(A)          = 3
+  unique(rank==N)  = False
+  residual         = 1.955777406692505e-08
+  tolerance        = np.float64(0.00400853318553198)
+  total_mass       = 408.617042358
+  weight           = 4008533.18553198
+  load front_left     = 668088.8642553301
+  load front_right    = 668088.8642553301
+  load middle_left    = 668088.8642553301
+  load middle_right   = 668088.8642553301
+  load rear_left      = 668088.8642553301
+  load rear_right     = 668088.8642553301
+  sum of loads     = 4008533.1855319804
+
+### three axle, longitudinal acceleration 1000 m/s^2
+  contact points N = 6
+  names            = ['front_left', 'front_right', 'middle_left', 'middle_right', 'rear_left', 'rear_right']
+  rank(A)          = 3
+  unique(rank==N)  = False
+  residual         = 9.569339454174042e-08
+  tolerance        = np.float64(0.00400853318553198)
+  total_mass       = 408.617042358
+  weight           = 4008533.18553198
+  load front_left     = 660770.0941290087
+  load front_right    = 660770.0941290086
+  load middle_left    = 668088.8642553302
+  load middle_right   = 668088.8642553301
+  load rear_left      = 675407.6343816515
+  load rear_right     = 675407.6343816515
+  sum of loads     = 4008533.1855319804
+
+### single contact point under the centre of mass, static
+  contact points N = 1
+  names            = ['single_left']
+  rank(A)          = 1
+  unique(rank==N)  = True
+  residual         = 0.0
+  tolerance        = np.float64(0.00073675886425533)
+  total_mass       = 75.102840393
+  weight           = 736758.86425533
+  load single_left    = 736758.86425533
+  sum of loads     = 736758.86425533
+
+### single contact point under the centre of mass, lateral acceleration 1000 m/s^2
+  raised           : IncompatibleStaticLoadsError
+  residual         = 7330852.1179
+  tolerance        = 0.00073675886425533
+  contact_points   = 1
+  message          : the static loads are incompatible with the 1 contact point(s) of this vehicle: the residual of the three equilibrium equations is 7330852.1179 and the tolerance is 0.00073675886425533; no set of vertical reactions at those points balances the force and the moments
+
+### single contact point 700 mm off the centre of mass, longitudinal -3000 m/s^2 and lateral 2000 m/s^2
+  raised           : IncompatibleStaticLoadsError
+  residual         = 21992556.3537
+  tolerance        = 0.00073675886425533
+  contact_points   = 1
+  message          : the static loads are incompatible with the 1 contact point(s) of this vehicle: the residual of the three equilibrium equations is 21992556.3537 and the tolerance is 0.00073675886425533; no set of vertical reactions at those points balances the force and the moments
+
+### the rank of both single-contact-point matrices ###
+  under the centre of mass: A = [[1.0], [0.0], [0.0]] rank = 1
+  700 mm off it: A = [[1.0], [0.0], [-503.3098588841543]] rank = 1

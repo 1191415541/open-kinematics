@@ -27,6 +27,7 @@ from .joints import RigidBodyState
 from .spatial import (
     SE3,
     cross3,
+    normalize_quaternion,
     quaternion_to_matrix,
     quaternion_to_rotation_vector,
 )
@@ -46,6 +47,13 @@ class ForceEvaluation:
 
 class ElementError(ValueError):
     """Raised when a force element is singular or invalid."""
+
+
+#: The rate above which the direction of the couple is decided.  The native law
+#: uses its own `kEps` for this, and a pair whose rate is inside it gets no couple
+#: rather than a full-strength one of arbitrary sign; the two values have to agree
+#: or the Python reading and the kernel would disagree about a stationary pair.
+_RATE_EPSILON = 1e-12
 
 
 def _curve_value(curve: tuple[tuple[float, float], ...], coordinate: float) -> float:
@@ -618,6 +626,149 @@ class AntiRollBarElement:
             tangent=np.array(
                 [[self.stiffness, -self.stiffness], [-self.stiffness, self.stiffness]]
             ),
+        )
+
+
+@dataclass(frozen=True)
+class RotationalTorqueParameters:
+    """
+    The parameters one rotational torque carries.
+
+    ``stiffness`` is the demand-to-magnitude gain: the couple's amplitude is
+    ``min(stiffness * demand, max_torque)``.  The native law currently applies the
+    *unit* demand (its own comment marks the demand channel as not wired yet), so
+    ``stiffness`` is the amplitude itself and ``max_torque`` is the cap on it.
+    ``damping`` is carried for the ABI slot and is not read by the sign law yet.
+    ``axis_a`` is the couple's axis in ``body_a``'s local frame.  The reference
+    quaternion is kept for the ABI's round trip; the law never reads it.
+
+    The class is the ``spec`` a :class:`~suspension_multibody.subsystems.types.ResolvedElement`
+    carries, the way a bushing's matrix or an anti-roll bar's schema record is.
+    """
+
+    stiffness: float
+    #: The amplitude cap: the couple never exceeds this.
+    max_torque: float
+    #: Viscous coefficient, carried for the ABI slot; the sign law ignores it.
+    damping: float = 0.0
+    #: The couple's axis, in ``body_a``'s local frame.  Stored normalized.
+    axis_a: np.ndarray = field(default_factory=lambda: np.array([0.0, 1.0, 0.0]))
+    #: ``body_a``'s reference orientation, for the ABI's round trip only.
+    reference_quaternion: np.ndarray = field(
+        default_factory=lambda: np.array([1.0, 0.0, 0.0, 0.0])
+    )
+    #: Which driver signal sets the couple's magnitude (subtask p2-08), as the
+    #: kernel's ``TorqueDemandSource`` numbers them: 0 means the unit demand, in
+    #: which case ``stiffness`` is the amplitude -- the meaning every element
+    #: built before this field had.  The other two make the couple follow the
+    #: case's own per-tire driver signal, which is what turns the element into a
+    #: brake or a motor rather than a pre-computed torque.
+    demand_source: int = 0
+    #: Which tire's column the demand source reads; -1 means "no tire" and is
+    #: only legal for the unit demand.  A couple's own two bodies do not name a
+    #: tire, so an element that follows a driver states which one it belongs to.
+    demand_tire: int = -1
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("stiffness", self.stiffness),
+            ("max_torque", self.max_torque),
+            ("damping", self.damping),
+        ):
+            if not np.isfinite(value) or value < 0.0:
+                raise ElementError(
+                    f"rotational torque {label} must be finite and non-negative"
+                )
+        axis = np.asarray(self.axis_a, dtype=float)
+        if axis.shape != (3,) or not np.all(np.isfinite(axis)):
+            raise ElementError("rotational torque axis must be three finite values")
+        norm = float(np.linalg.norm(axis))
+        if norm < 1e-12:
+            # The same floor the native reader applies: an axis without a direction
+            # would leave the couple's sign undecidable rather than merely unscaled.
+            raise ElementError("rotational torque axis must have a direction")
+        reference = normalize_quaternion(self.reference_quaternion)
+        object.__setattr__(self, "axis_a", axis / norm)
+        object.__setattr__(self, "reference_quaternion", reference)
+
+    @property
+    def magnitude(self) -> float:
+        """Return the couple's amplitude, capped as the native law caps it."""
+        return min(self.stiffness, self.max_torque)
+
+    def couple(self, relative_rate: float) -> float:
+        """
+        Return the couple about ``axis_a`` for a relative angular rate.
+
+        The law is the native one: the couple opposes the real-time relative rate,
+        and a rate inside the kernel's ``kEps`` gets no couple at all rather than a
+        full-strength one of arbitrary sign.  A value of zero therefore means "the
+        pair is not turning" and not "the actuator is off", which is the
+        distinction a stationary pair depends on.
+        """
+        amplitude = self.magnitude
+        if relative_rate > _RATE_EPSILON:
+            return -amplitude
+        if relative_rate < -_RATE_EPSILON:
+            return amplitude
+        return 0.0
+
+
+@dataclass(frozen=True)
+class RotationalTorqueElement:
+    """
+    A pure couple about one body-fixed axis, driven by a relative angular rate.
+
+    This is an *external* actuator, not an elastic member: it carries no stored
+    energy and its magnitude is a demand, so :meth:`evaluate` reports zero energy
+    and no tangent.  The two ends are the native element's two ends, named the
+    same way because the sign convention is the same one:
+
+    * ``body_b`` -- the driven body, which receives the couple ``+tau`` about the
+      world axis;
+    * ``body_a`` -- the reaction body, which receives ``-tau``, so the element adds
+      no net moment to the model.
+
+    Which body plays which end is *not* decided here.  The caller states it from
+    the port pairing that resolved the two ends; this class has no rule that reads
+    a body name and infers a role.
+    """
+
+    name: str
+    #: The reaction end: the native element's ``body_a``.
+    body_a: str
+    #: The driven end: the native element's ``body_b``.
+    body_b: str
+    parameters: RotationalTorqueParameters
+
+    def couple(self, relative_rate: float) -> float:
+        """Return the couple applied to ``body_b`` about the axis."""
+        return self.parameters.couple(relative_rate)
+
+    def axis_world(self, state: RigidBodyState) -> np.ndarray:
+        """Return the couple's axis in global coordinates, from ``body_a``'s pose."""
+        return state.pose(self.body_a).rotation @ self.parameters.axis_a
+
+    def evaluate(
+        self, state: RigidBodyState, *, relative_rate: float = 0.0
+    ) -> ForceEvaluation:
+        """
+        Evaluate the couple at one state.
+
+        ``relative_rate`` is passed in rather than read from ``state`` because a
+        :class:`~.joints.RigidBodyState` carries poses only: the rate along the
+        axis is ``axis_world . (omega_b - omega_a)``, and the caller that holds the
+        velocities is the one that can state it.
+        """
+        moment = self.couple(relative_rate) * self.axis_world(state)
+        moment_on_b = np.concatenate((np.zeros(3), moment))
+        moment_on_a = np.concatenate((np.zeros(3), -moment))
+        return ForceEvaluation(
+            name=self.name,
+            # An external demand is not a stored elastic energy; the work it does
+            # is booked by the kernel's energy ledger, not by the element.
+            energy=0.0,
+            body_wrenches_global={self.body_a: moment_on_a, self.body_b: moment_on_b},
         )
 
 

@@ -254,17 +254,16 @@ def body_from_part(
 _PART_RADIUS_OF_GYRATION_MM = 8.0
 
 #: Schema body name -> generated body name stem.
-_BODY_ALIASES: dict[str, str] = {
-    "uca": "upper_arm",
-    "upper": "upper_arm",
-    "lca": "lower_arm",
-    "lower": "lower_arm",
-    "wheel": "upright",
-    "knuckle": "upright",
-    "spindle": "upright",
-    "tie": "tie_rod",
-    "tierod": "tie_rod",
-}
+# The alias table that used to sit here is gone (stage four).  It mapped a
+# model's vocabulary onto this library's body names -- `wheel`/`knuckle`/`spindle`
+# onto `upright`, `uca` onto `upper_arm` -- which is exactly the "guess an
+# identity from a name" rule the assembly layer forbids.  Its job is now done by
+# *declarations*: which member carries a wheel end, or an anti-roll bar's
+# droplink, is stated by the suspension template's own ports and connections
+# (`templates/builtin.py::_PORTS`, `::_CONNECTIONS`), and a subsystem reads the
+# declaration instead of matching a spelling.  A model that names a body is
+# naming a body this assembly carries; if it does not, that is an error to report
+# rather than a name to translate.
 
 def resolve_body(
     name: str, side: Literal["L", "R"], bodies: Mapping[str, object]
@@ -286,14 +285,13 @@ def resolve_body(
     normalized = name.strip().lower().replace("-", "_")
     if normalized in _GROUND_ALIASES and "ground" in bodies:
         return "ground"
-    base = _BODY_ALIASES.get(normalized, normalized)
-    candidate = f"{base}_{side}"
+    candidate = f"{normalized}_{side}"
     if candidate in bodies:
         return candidate
     for suffix in ("_l", "_r", " left", " right"):
         if normalized.endswith(suffix):
             stem = normalized[: -len(suffix)].rstrip()
-            candidate = f"{_BODY_ALIASES.get(stem, stem)}_{side}"
+            candidate = f"{stem}_{side}"
             if candidate in bodies:
                 return candidate
     raise ValueError(f"unknown force-element body {name!r}")

@@ -1,0 +1,19 @@
+wrote .codex-tasks\20260929-multibody-evolution-p2-p5\tasks\p3-05-dynamic-channels\raw\four_wheel_after.json
+{
+  "ok": true,
+  "channels": {
+    "normal_load_front_left": "100.0",
+    "normal_load_front_right": "120.0",
+    "normal_load_rear_left": "80.0",
+    "normal_load_rear_right": "90.0",
+    "normal_load_total": "390.0",
+    "normal_load_axle_front": "220.0",
+    "normal_load_front_axle": "220.0",
+    "normal_load_axle_rear": "170.0",
+    "normal_load_rear_axle": "170.0",
+    "normal_load_left_side": "180.0",
+    "normal_load_right_side": "210.0",
+    "load_transfer_front_minus_rear": "50.0",
+    "load_transfer_right_minus_left": "30.0"
+  }
+}

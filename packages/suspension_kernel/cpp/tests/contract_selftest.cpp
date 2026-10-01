@@ -129,6 +129,11 @@ int main() {
   check(contract_element_known("spring"), "elastic element known");
   check(contract_element_known("damper"), "dissipative element known");
   check(contract_element_known("bump_stop"), "unilateral element known");
+  check(contract_element_known("anti_roll_bar"), "anti-roll bar element known");
+  // The couple family the document route gained in p2-07: one name in this
+  // table and one branch in `ContractModel::read`, and the two have to agree or
+  // a document that names it is refused before its branch is ever reached.
+  check(contract_element_known("rotational_torque"), "rotational torque element known");
   // The fused name is gone, so a document that still uses it is refused.
   check(!contract_element_known("spring_damper"), "fused element name rejected");
   check(!contract_element_known("sprocket"), "unknown element rejected");
@@ -136,7 +141,7 @@ int main() {
   check(contract_case_family_known("ride_four_post"), "four-post case family known");
   check(!contract_case_family_known("rally"), "unknown case family rejected");
   check(contract_registry_size(0) == 10, "ten joint types registered");
-  check(contract_registry_size(1) == 10, "ten element types registered");
+  check(contract_registry_size(1) == 11, "eleven element types registered");
   check(contract_registry_size(2) == 4, "four tire models registered");
   check(contract_registry_size(3) == 8, "eight case families registered");
 

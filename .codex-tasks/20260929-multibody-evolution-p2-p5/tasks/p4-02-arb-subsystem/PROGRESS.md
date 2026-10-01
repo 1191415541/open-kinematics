@@ -4,33 +4,75 @@
 
 ## Session Start
 
-- **Date**: （未开工；本文件为规划轮产物）
+- **Date**: 2026-10-01
 - **Task name**: p4-02-arb-subsystem
 - **Task dir**: `.codex-tasks/20260929-multibody-evolution-p2-p5/tasks/p4-02-arb-subsystem/`
 - **Spec**: 见 `SPEC.md`
-- **Plan**: 见 `TODO.csv`（6 步）
+- **Plan**: 见 `TODO.csv`（6 步，全部 `DONE`）
 - **Environment**: Python 3.12 / uv / pytest
+- **Status**: **DONE**
 
 ## Context Recovery Block
 
-- **Current milestone**: #1 — 同步 `templates/roles.py` 与三份契约 schema 的 `functional_role` enum
-- **Current status**: NOT_STARTED
-- **Last completed**: 无（本子任务尚未开工）
-- **Current artifact**: `SPEC.md` / `TODO.csv`（规划产物）
-- **Key context**:
-  - `depends_on = p4-01`；p4-01 交付的 F11/F12/F13 实测清单是本行**唯一**改动依据。
-  - **`templates/roles.py` 与 `templates/builtin.py` 是共享注册文件，不得与 p2-04 并行（p2-04 在前）**（`EPIC.md:215`）；三份契约 schema 的 `functional_role` enum 与角色集合及硬断言同属本行，p2 的任何行不得增删角色名（`EPIC.md:227`）。
-  - **F12 全清单漏一处即失败**（`EPIC.md:139`、`EPIC.md:316`）：`roles.py:158-162` 的集合硬断言与三份 schema enum 是前置墙，漏改即在 import 期抛 `RoleSpecError` 或契约 schema 拒绝。
-  - **两套 ARB 物理不得混淆**（`EPIC.md:137`、`EPIC.md:317`）：Python `AntiRollBarElement` 是 z 位移差力偶力元，native 扭杆 ABI 是另一套物理；选型必须给理由。
-  - 全局前置 `S1`：阶段一 01–07 全部 `DONE`；**未完成之前不得置 `IN_PROGRESS`**（`EPIC.md:75`）。
-- **Known issues**:
-  - 尚未开工，故 F12 清单各项锚点为**待复核**；任何锚点过期只在本行 `raw/` 与本节记录，不改父文件。
-  - 阶段二 p2-04 若尚未 `DONE`，本行不得开工（共享注册文件冲突）。
-  - `suspension.py:682-695` 的硬编码跨接是今天防倾杆唯一入口；删除前必须先有端口通道（依赖 p4-03 的语义化端口）。
-- **Next action**: 先读 `templates/roles.py:70` 与 `:158-162`、三份契约 schema 的 `functional_role` enum（`template.schema.json:11`、`subsystem.schema.json:8`、`assembly.schema.json:22`），确认 p2-04 已落地、共享文件无并发写入，然后按 `raw/role_table_sync.md`（p4-01 交付）逐项同步角色表并跑 `tests/templates` 与 `packages/suspension_contracts/tests`。
+- **Current milestone**: #6 — 终局与验收（全 6 步完成）
+- **Last completed**: 五份证据落 `raw/`，三条判据命令 + ruff/ty 实跑通过
+- **Current artifact**: `raw/`（role_sync_manifest / arb_topology / arb_ports_declared /
+  upright_grep / role_assertion_update / run_log + 可复跑探针）
+
+## 交付物
+
+| 文件 | 性质 |
+|---|---|
+| `src/suspension_multibody/templates/roles.py` | 新增 `anti_roll_bar` RoleSpec；`_check_roles` 的 expected 集合改七元 |
+| `src/suspension_multibody/templates/builtin.py` | 新增 `ANTI_ROLL_BAR` 模板（4 部件 + 4 端口）、`ANTI_ROLL_BAR_NAME`、`__all__`、`BUILTINS` |
+| `src/suspension_multibody/subsystems/anti_roll_bar.py` | **新增**子系统模块 |
+| `src/suspension_multibody/subsystems/suspension.py` | 删 `upright_L`/`upright_R` 硬编码，改读模板声明 |
+| F12 的 8 处同步点 | 角色名集合逐项加入新角色 |
+| `tests/subsystems/test_anti_roll_bar_subsystem.py` | **新增**，6 用例 |
+| `tests/templates/test_template_model.py` | 角色断言六→七并改名 |
+
+## 五条判据的落点
+
+| `EPIC.md:263` 判据 | 证据文件 | 结果 |
+|---|---|---|
+| (a) 角色与模板按 F12 全清单同步 | `raw/role_sync_manifest.md` | 13 处逐项落地；import 期无 `RoleSpecError` |
+| (b) 扭杆+吊杆选型理由与 native 关系 | `raw/arb_topology.md` | 选**弹性连杆力元**；native 扭杆与 `RotationalTorqueElement` 各自说明为何不用 |
+| (c) 4 个端口暴露 | `raw/arb_ports_declared.md` | 四名逐字声明；缺一即注册失败 |
+| (d) `upright_L`/`upright_R` 删除 | `raw/upright_grep.md` | grep 退出 0（零命中）；端体改读模板声明 |
+| (e) 角色断言同步 + 理由 | `raw/role_assertion_update.md` | 六→七并改名，理由逐条登记 |
+
+## 两处刻意的判断（记录下来，便于复核）
+
+1. **`DEFAULT_AXLE_SUBSYSTEMS` / `DEFAULT_VEHICLE_SUBSYSTEMS` 不加新角色**：
+   两个集合描述「某装配实际建了什么」，加进去会让没声明防倾杆的整车装配**谎报能力**
+   （`EPIC.md:232` 的同源错误）；且 `done-when` 的同步点清单里没有这两项。
+   理由写在 `raw/role_sync_manifest.md`。
+2. **不用 `RotationalTorqueElement` 表示扭杆**：它是被驱动的执行器（幅值来自 demand，
+   无势能，方向由速率定），而扭杆是弹性构件。用它会把物理说错。理由写在
+   `raw/arb_topology.md` 与模块 docstring。
+
+## 过程中的一处自身缺陷（诚实记账）
+
+端口首版把 `droplink_mount` 的 `owner` 误写为 `torsion_bar`（从 `chassis_mount` 复制），
+导致 `droplink_bodies()` 返回两个扭杆半体。新增的
+`test_the_subsystem_declares_a_bar_half_and_a_droplink_per_side` 立即失败并指出：
+改为 `droplink` 后通过。该断言确在起作用。
+
+## 未做（明确记账）
+
+- **未改 `si_assembly.py` 的端口合成段**：把模板声明接到装配产物端口集合是 **p4-03** 的
+  写范围（`SUBTASKS.csv` 的 `p4-03` 明写）。本行只保证**防倾杆一侧的四个端口已声明**。
+- **未跑** `tests/architecture/` 整目录、`tests/adams/`、`just gate-numeric` 的
+  `case_parity_check.py` 与 `kc_perf_gate.py`。数值门三项归 p4-05 与 Epic 收尾。
+- 未重录任何基线；`tests/data/` 无改动；无新增 skip/xfail。
 
 ---
 
-## Final Summary（未开工）
+## Final Summary
 
-本子任务**尚未开工**。`SPEC.md` 与 `TODO.csv` 是规划产物：未执行任何步骤、未修改任何生产代码或测试、未产生任何证据（`raw/` 为空）。所有 `TODO.csv` 行保持 `TODO`，`completed_at` 为空，`retry_count` 为 `0`。开工时按 `TODO.csv` 顺序展开，并把每一步的实际命令、退出码与产物落到 `raw/`（只记已执行的结果）。
+p4-02 **DONE**。`anti_roll_bar` 成为独立角色与独立子系统：模板 `anti_roll_bar_simplified`
+声明 `torsion_bar_L/R` 与 `droplink_L/R` 四个部件，暴露
+`chassis_mount_L/R`、`droplink_mount_L/R` 四个端口（各自带左右标签，缺一无法注册）。
+悬架模块里 `upright_L`/`upright_R` 两个硬编码体名删除，改从**悬架模板自己的连接声明**
+读出轮端体——换模板即换答案，声明里没有轮端体则点名拒绝，不再按名字猜。
+`grep` 在 `suspension.py` 零命中；内建双叉臂的杆元件（端体、作用点、刚度）**与改造前逐位相同**。

@@ -32,6 +32,15 @@ void assemble_bushing_forces( const Model& model, const State& state, std::vecto
 
 void assemble_anti_roll_forces( const Model& model, const State& state, std::vector<Vec3>& torque, std::vector<double>* anti_roll_component_output, EnergyRates* energy_rates, EnergyStorage* energy_storage, bool record_energy, bool brush_only, double internal_force_scale, double& dissipation, double& potential );
 
+// The rotational actuators' couple.  A pure couple like the anti-roll bar's --
+// it takes no force buffer and no component-output ledger -- but its magnitude
+// comes from a driver demand rather than from an elastic response, so it needs
+// the sampled input the steering actuators and the drive/brake torques read:
+// the demand is `min(stiffness * demand, max_torque)` at the driver signal's own
+// sample value, and with a tire bound to the element the couple opposes that
+// tire's real-time longitudinal slip once the pair has stopped turning.
+void assemble_rotational_torque_forces( const Model& model, const State& state, const SampleInput& input, std::vector<Vec3>& torque, EnergyRates* energy_rates, bool record_energy, bool brush_only, double& external_power );
+
 void assemble_spring_forces( const Model& model, const State& state, std::vector<Vec3>& force, std::vector<Vec3>& torque, std::vector<double>* spring_component_output, std::vector<double>* damper_component_output, std::vector<double>* bump_stop_component_output, EnergyRates* energy_rates, EnergyStorage* energy_storage, bool record_energy, bool brush_only, double internal_force_scale, double& dissipation, double& potential );
 
 void assemble_steering_forces( const Model& model, const State& state, const SampleInput& input, std::vector<Vec3>& force, std::vector<Vec3>& torque, EnergyRates* energy_rates, bool record_energy, bool brush_only, double& external_power );
@@ -70,6 +79,15 @@ void external_force_spring_directional( const Model& model, const State& state, 
 void external_force_bushing_directional( const Model& model, const State& state, const DirectionalState& direction, double internal_force_scale, std::vector<Vec3>& force, std::vector<Vec3>& torque, bool& smooth);
 
 void external_force_anti_roll_directional( const Model& model, const State& state, const DirectionalState& direction, double internal_force_scale, std::vector<Vec3>& torque, bool& smooth);
+
+// The rotational actuators of the directional pass.  Same law as the scalar
+// path's `assemble_rotational_torque_forces`, differentiated: the magnitude is a
+// constant for one step (the demand is sampled at the step's own time, not a
+// function of the state), so only the axis and the sign branch carry a
+// derivative -- which is what `d_dot(axis, relative omega)` supplies.  It takes
+// the same sampled input the scalar path does, because the two have to read the
+// same driver demand or the residual and the Jacobian would disagree.
+void external_force_rotational_torque_directional( const Model& model, const State& state, const SampleInput& input, const DirectionalState& direction, std::vector<Vec3>& torque, bool& smooth);
 
 void external_force_steering_directional( const Model& model, const State& state, const SampleInput& input, const DirectionalState& direction, std::vector<Vec3>& force, std::vector<Vec3>& torque, bool& smooth);
 

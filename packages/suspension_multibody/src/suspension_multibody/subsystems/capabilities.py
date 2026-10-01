@@ -33,10 +33,10 @@ __all__ = [
     "kernel_axis",
 ]
 
-#: The six subsystem role names an assembly may carry.  Deliberately `wheel`
+#: The subsystem role names an assembly may carry.  Deliberately `wheel`
 #: rather than `tire`, matching `templates.roles`.
 ALL_SUBSYSTEMS: frozenset[str] = frozenset(
-    {"suspension", "steering", "wheel", "chassis", "brake", "drive"}
+    {"suspension", "steering", "wheel", "chassis", "brake", "drive", "anti_roll_bar"}
 )
 
 #: The document-level names of the wheel travel coordinates.

@@ -1,0 +1,223 @@
+{
+  "assembly_four_wheel": {
+    "loads": {
+      "front_left": "3611088.8642553305",
+      "front_right": "3611088.86425533",
+      "rear_left": "3611088.86425533",
+      "rear_right": "3611088.86425533"
+    },
+    "metrics": {
+      "channels": {
+        "load_transfer_front_minus_rear": "9.313225746154785e-10",
+        "load_transfer_right_minus_left": "-9.313225746154785e-10",
+        "normal_load_front_axle": "7222177.728510661",
+        "normal_load_front_left": "3611088.8642553305",
+        "normal_load_front_right": "3611088.86425533",
+        "normal_load_left_side": "7222177.728510661",
+        "normal_load_rear_axle": "7222177.72851066",
+        "normal_load_rear_left": "3611088.86425533",
+        "normal_load_rear_right": "3611088.86425533",
+        "normal_load_right_side": "7222177.72851066",
+        "normal_load_total": "14444355.457021322"
+      },
+      "ok": true
+    },
+    "summary": {
+      "extra": {},
+      "fields": {
+        "front_axle": "7222177.728510661",
+        "front_rear_delta": "9.313225746154785e-10",
+        "left_side": "7222177.728510661",
+        "rear_axle": "7222177.72851066",
+        "right_left_delta": "-9.313225746154785e-10",
+        "right_side": "7222177.72851066",
+        "total": "14444355.457021322",
+        "wheel_loads": "{'front_left': 3611088.8642553305, 'front_right': 3611088.86425533, 'rear_left': 3611088.86425533, 'rear_right': 3611088.86425533}"
+      },
+      "ok": true
+    },
+    "wheel_loads": {
+      "front_left": "3611088.8642553305",
+      "front_right": "3611088.86425533",
+      "rear_left": "3611088.86425533",
+      "rear_right": "3611088.86425533"
+    }
+  },
+  "assembly_single_wheel": {
+    "loads": {
+      "single_left": "12508758.86425533"
+    },
+    "metrics": {
+      "error": "ValueError: wheel loads must contain exactly the four vehicle corners",
+      "ok": false
+    },
+    "summary": {
+      "error": "ValueError: wheel loads must contain exactly the four vehicle corners",
+      "ok": false
+    },
+    "wheel_loads": {
+      "single_left": "12508758.86425533"
+    }
+  },
+  "assembly_three_axle": {
+    "loads": {
+      "front_left": "2630088.8642553305",
+      "front_right": "2630088.8642553305",
+      "middle_left": "2630088.8642553305",
+      "middle_right": "2630088.8642553305",
+      "rear_left": "2630088.8642553305",
+      "rear_right": "2630088.8642553305"
+    },
+    "metrics": {
+      "error": "ValueError: wheel loads must contain exactly the four vehicle corners",
+      "ok": false
+    },
+    "summary": {
+      "error": "ValueError: wheel loads must contain exactly the four vehicle corners",
+      "ok": false
+    },
+    "wheel_loads": {
+      "front_left": "2630088.8642553305",
+      "front_right": "2630088.8642553305",
+      "middle_left": "2630088.8642553305",
+      "middle_right": "2630088.8642553305",
+      "rear_left": "2630088.8642553305",
+      "rear_right": "2630088.8642553305"
+    }
+  },
+  "derived_load_output_names": [
+    "load_transfer_front_minus_rear",
+    "load_transfer_right_minus_left",
+    "normal_load_front_axle",
+    "normal_load_front_left",
+    "normal_load_front_right",
+    "normal_load_left_side",
+    "normal_load_rear_axle",
+    "normal_load_rear_left",
+    "normal_load_rear_right",
+    "normal_load_right_side",
+    "normal_load_total"
+  ],
+  "derived_load_output_reads": {
+    "load_transfer_front_minus_rear": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ],
+    "load_transfer_right_minus_left": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ],
+    "normal_load_front_axle": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ],
+    "normal_load_front_left": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ],
+    "normal_load_front_right": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ],
+    "normal_load_left_side": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ],
+    "normal_load_rear_axle": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ],
+    "normal_load_rear_left": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ],
+    "normal_load_rear_right": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ],
+    "normal_load_right_side": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ],
+    "normal_load_total": [
+      "wheel_load_front_left",
+      "wheel_load_front_right",
+      "wheel_load_rear_left",
+      "wheel_load_rear_right"
+    ]
+  },
+  "fake_four_wheel": {
+    "loads": {
+      "front_left": "100.0",
+      "front_right": "120.0",
+      "rear_left": "80.0",
+      "rear_right": "90.0"
+    },
+    "metrics": {
+      "channels": {
+        "load_transfer_front_minus_rear": "50.0",
+        "load_transfer_right_minus_left": "30.0",
+        "normal_load_front_axle": "220.0",
+        "normal_load_front_left": "100.0",
+        "normal_load_front_right": "120.0",
+        "normal_load_left_side": "180.0",
+        "normal_load_rear_axle": "170.0",
+        "normal_load_rear_left": "80.0",
+        "normal_load_rear_right": "90.0",
+        "normal_load_right_side": "210.0",
+        "normal_load_total": "390.0"
+      },
+      "ok": true
+    },
+    "summary": {
+      "extra": {},
+      "fields": {
+        "front_axle": "220.0",
+        "front_rear_delta": "50.0",
+        "left_side": "180.0",
+        "rear_axle": "170.0",
+        "right_left_delta": "30.0",
+        "right_side": "210.0",
+        "total": "390.0",
+        "wheel_loads": "{'front_left': 100.0, 'front_right': 120.0, 'rear_left': 80.0, 'rear_right': 90.0}"
+      },
+      "ok": true
+    }
+  },
+  "rename_experiment": {
+    "loads": {
+      "bogie_left": "250.0",
+      "bogie_right": "150.0",
+      "rear_left": "100.0",
+      "rear_right": "100.0"
+    },
+    "metrics": {
+      "error": "ValueError: wheel loads must contain exactly the four vehicle corners",
+      "ok": false
+    },
+    "summary": {
+      "error": "ValueError: wheel loads must contain exactly the four vehicle corners",
+      "ok": false
+    }
+  }
+}

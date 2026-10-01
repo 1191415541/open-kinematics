@@ -24,10 +24,11 @@ from __future__ import annotations
 
 import os
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from itertools import product
 from pathlib import Path
-from typing import Any, Iterable, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Mapping
 
 import numpy as np
 from suspension_contracts import pack_container
@@ -56,7 +57,7 @@ from .report.metrics import (
     compute_common_metrics,
 )
 from .results import TimeSeriesResult, TimeSeriesSample
-from .rigs import compose, get_rig
+from .rigs import compose, get_rig, rig_names
 from .schema import (
     BushingResult,
     CaseSpec,
@@ -76,9 +77,21 @@ from .schema import (
     WheelResponse,
 )
 from .schema.case import DisplacementControl, LoadControl
-from .simulation import CompiledSimulation, SimulationRequest, run_compiled, run_request
+from .simulation import (
+    CompiledSimulation,
+    SimulationRequest,
+    SimulationRun,
+    run_compiled,
+    run_request,
+)
 from .simulation.replay import VehicleKCTimeDomainSolver
 from .subsystems.runtime import SubsystemRuntime, wheel_centre_local
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    # Named for the annotations only.  The entry loads them lazily where they are
+    # used, so importing `api` does not drag the authoring document layer in.
+    from .authoring.documents import AssemblyDocument, SimulationAssembly
+
 
 #: The output grid a K/C case is solved on.  The kernel's case layer expands a
 #: start/end/step, so the product API has to state one; two samples is the
@@ -96,6 +109,217 @@ _TIMES_S = (0.0, 1e-3)
 _LEFT_MARKER = "wheel_center_L"
 _RIGHT_MARKER = "wheel_center_R"
 
+#: The two sections a K/C case document states its reading with, and the mode each
+#: one is.  A document that carries a `k` sweep is a K reading and one that carries
+#: a `c` load-path set is a C reading; naming the two here is what lets the reading
+#: follow from the documents instead of from a second parameter.
+_READINGS: tuple[tuple[str, Literal["K", "C"]], ...] = (("k", "K"), ("c", "C"))
+
+#: The assembly kind and family a document-driven K/C run supports.  A vehicle
+#: document is a different family with a different preparation, and it is refused
+#: by name rather than quietly run as an axle.
+_DOCUMENT_ASSEMBLY = "suspension_axle"
+_DOCUMENT_FAMILY = "kc_quasi_static"
+#: The device under test the request names.  The *assembly kind* above is what the
+#: document declares and this is the name the routing dimensions are keyed by; the
+#: two are different vocabularies, and writing one where the other belongs reaches
+#: no compiler at all.
+_DOCUMENT_ASSEMBLY_NAME = "axle"
+
+
+def simulate(
+    assembly_document: str | Path | AssemblyDocument | SimulationAssembly,
+    case_document: Mapping[str, Any],
+) -> SimulationRun:
+    """
+    Run one assembly document against one case document.
+
+    This is the document-driven door onto the same run `run_case` authors.  The
+    assembly document is read by the assembler that already builds an assembly
+    from a file, that assembly's own model document is emitted by the assembly
+    layer's emitter, and the model/case pair is submitted through the existing
+    document runner into the one kernel submission point.  Nothing here solves,
+    picks a device under test, or owns a second implementation of the physical
+    assembly -- that is what this entry exists to *not* be.
+
+    ``assembly_document`` is a path to an assembly file, a loaded
+    :class:`~suspension_multibody.authoring.documents.AssemblyDocument`, or an
+    already-bound
+    :class:`~suspension_multibody.authoring.documents.SimulationAssembly`.  The
+    rig the assembly names is what drives it, so that rig has to state the bench
+    it is (its ``bench`` field); a rig bound to no bench has nothing to drive
+    with and is refused by name.
+
+    ``case_document`` is the case contract document itself, and it states the
+    reading: a case carrying a ``k`` section is a K run and one carrying a ``c``
+    section is a C one.  The mode is derived from the document rather than taken
+    as a parameter because it is a property of the run, and a document carrying
+    both sections -- or neither -- is refused rather than guessed at.  An
+    already-authored *contract model* document is not accepted here: it does not
+    say which assembly it belongs to, so a pair of contract documents goes to
+    :func:`~suspension_multibody.simulation.runner.run_request`, which takes the
+    pair as it stands.
+
+    The returned :class:`~suspension_multibody.simulation.runner.SimulationRun`
+    carries the neutral raw result (``.status``, ``.raw``) alongside the compiled
+    submission it came from, which is the same object every other entry returns.
+    """
+    case = _documented_case(case_document)
+    family = _documented_text(case, "family")
+    mode, drive_wheels = _documented_reading(case)
+    simulation = _documented_assembly(assembly_document)
+    kind = simulation.assembly.assembly_kind
+    if kind != _DOCUMENT_ASSEMBLY:
+        raise ValueError(
+            f"simulate runs a {_DOCUMENT_ASSEMBLY!r} assembly document, and "
+            f"{simulation.assembly.path} declares {kind!r}; the vehicle reading "
+            "has its own family preparation and is not documented yet"
+        )
+    if family != _DOCUMENT_FAMILY:
+        raise ValueError(
+            f"simulate runs the {_DOCUMENT_FAMILY!r} family, which is the one "
+            f"this assembly document can be read by; the case document names "
+            f"{family!r}"
+        )
+    bench = simulation.rig.bench
+    if bench is None:
+        raise ValueError(
+            f"{simulation.rig.path}: this rig declares no 'bench', so there is "
+            "nothing to drive and measure the assembly; a rig runs through one "
+            f"of the registered benches {list(rig_names())}"
+        )
+    # The bench answers two questions the documents do not: which bench drives,
+    # and -- through the route it declares -- which family reads the model.  The
+    # two have to be one answer, or the rig and the case would describe two runs.
+    route = get_rig(bench).route
+    if route != family:
+        raise ValueError(
+            f"the rig {simulation.rig.path} drives through bench {bench!r}, "
+            f"which routes to family {route!r}, and the case document asks for "
+            f"{family!r}; name the bench that takes the reading you want"
+        )
+    # The assembly the documents are written from is the one the *family
+    # preparation* builds, reached through the composition layer: the document
+    # route and the object route must not become two descriptions of one axle.
+    from .authoring.solver import assembly_request_for, front_axle_model_for
+    from .preparation.kc_quasi_static import assembly_for
+
+    request = assembly_request_for(simulation.assembly, mode=mode)
+    suspensions = [
+        entry
+        for entry in simulation.assembly.entries
+        if entry.functional_role == "suspension"
+    ]
+    model = front_axle_model_for(
+        suspensions[0].subsystem,
+        name=f"{simulation.assembly.name}_axle",
+        overrides=suspensions[0].overrides,
+    )
+    runtime = assembly_for(model, mode=mode, rig=bench, request=request)
+    name = str(case.get("name") or simulation.name)
+    model_emitted = model_document(
+        runtime,
+        name=name,
+        drive_wheels=drive_wheels,
+        drive_mode=_optional_text(case, "drive_mode"),
+    )
+    # The document bypass in `simulation.preparation` is what carries a pair of
+    # authored documents through the family compiler without a second preparation,
+    # and the element facts are asked for around the submission for the same reason
+    # the object route asks for them: a caller comparing the two routes has to be
+    # comparing one run, not one run with and one without its component table.
+    with _element_wrench_facts():
+        return run_request(
+            SimulationRequest(
+                assembly=_DOCUMENT_ASSEMBLY_NAME,
+                rig=bench,
+                family=family,
+                study=get_rig(bench).study or "",
+                model=model_emitted,
+                case=case,
+                name=name,
+            )
+        )
+
+
+def _documented_case(case_document: Any) -> dict[str, Any]:
+    """Return the case document one run is asked for, refusing a non-document."""
+    if not isinstance(case_document, Mapping):
+        raise TypeError(
+            "simulate takes a case contract document (a mapping) and got "
+            f"{type(case_document).__name__}"
+        )
+    return dict(case_document)
+
+
+def _documented_text(case: Mapping[str, Any], key: str) -> str:
+    """Return one required text field of a case document, naming it if absent."""
+    value = case.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            f"a case document must name its {key!r}; this one carries {value!r}"
+        )
+    return value.strip().lower()
+
+
+def _optional_text(case: Mapping[str, Any], key: str) -> str | None:
+    """Return one optional text field of a case document, or `None`."""
+    value = case.get(key)
+    if value is None:
+        return None
+    return str(value).strip().lower() or None
+
+
+def _documented_reading(case: Mapping[str, Any]) -> tuple[Literal["K", "C"], bool]:
+    """
+    Return the K/C reading a case document asks for, read off the document.
+
+    Exactly one of the two sections decides it: a `k` section is a driven grid and
+    a `c` section is a load path set, so a document carrying both describes two
+    runs and one carrying neither describes one with nothing to solve.  Both are
+    refused rather than resolved by precedence, because a silent precedence would
+    make the document mean something other than what it says.
+    """
+    present = [pair for pair in _READINGS if pair[0] in case]
+    if len(present) != 1:
+        named = ", ".join(name for name, _ in _READINGS)
+        carried = sorted(name for name, _ in _READINGS if name in case)
+        raise ValueError(
+            f"a case document states its reading with exactly one of [{named}]; "
+            f"this one carries {carried or 'neither'}"
+        )
+    _, mode = present[0]
+    return mode, mode == "K"
+
+
+def _documented_assembly(assembly_document: Any) -> SimulationAssembly:
+    """
+    Return the rig-bound assembly a document names, loading it when it is a file.
+
+    The accepted spellings are the ones the authoring layer already owns, and
+    nothing else.  A bare mapping is deliberately *not* among them: a contract
+    model document does not say which assembly it belongs to, and filling that in
+    would be guessing the device under test -- the one thing the document route
+    exists to stop being necessary.
+    """
+    from .authoring.documents import AssemblyDocument, SimulationAssembly
+
+    if isinstance(assembly_document, SimulationAssembly):
+        return assembly_document
+    if isinstance(assembly_document, AssemblyDocument):
+        # A rig reference is what makes an assembly simulatable, and it is stated
+        # in the document, so the bound form is rebuilt from the document's own
+        # path rather than from the value handed in.
+        return SimulationAssembly.load(assembly_document.path)
+    if isinstance(assembly_document, (str, Path)):
+        return SimulationAssembly.load(assembly_document)
+    raise TypeError(
+        "simulate takes an assembly document: a path, an AssemblyDocument, or a "
+        f"rig-bound SimulationAssembly; got {type(assembly_document).__name__}. "
+        "An already-authored contract model document goes to "
+        "simulation.runner.run_request, which submits the pair as it stands"
+    )
+
 
 def run_case(
     model: FrontAxleModel,
@@ -106,6 +330,14 @@ def run_case(
 ) -> ResultBundle:
     """
     Run one validated model/case and optionally write result files.
+
+    ``FrontAxleModel`` and ``CaseSpec`` are the Python spelling of a run: this
+    entry authors the two contract documents from them and submits them through
+    the K/C plan compiler and the compiled runner.  ``simulate`` is the
+    document-driven door onto the same run, but it reaches the submission from a
+    file-built assembly instead of from an object, so the two entries share the
+    submission environment and the one kernel submission point rather than a
+    call path.
 
     ``inputs`` carries the hashes of the files a file-driven run read, and is
     written beside the result when an output directory is given.  It is optional
@@ -585,6 +817,35 @@ def _k_drives(
     return drives
 
 
+@contextmanager
+def _element_wrench_facts():
+    """
+    Ask the kernel for its element facts for the duration of one submission.
+
+    The component table and the busiest reporting reads are decoded from the
+    kernel's own ``element_wrench`` channel, so a run that reports element loads
+    has to ask for it.  The switch is set around the submission rather than
+    exported as a process default: the channel is a *fact* surface these paths
+    need, not something every solve should pay for, and a run that does not ask
+    for it leaves the result document at its original contract version.
+
+    Both submission points in this module go through here, which is what makes
+    "the object route and the document route reach the kernel the same way" a
+    property of one function rather than a claim about two.
+    """
+    from .results.element_wrench import ELEMENT_WRENCH_SWITCH
+
+    previous = os.environ.get(ELEMENT_WRENCH_SWITCH)
+    os.environ[ELEMENT_WRENCH_SWITCH] = "1"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(ELEMENT_WRENCH_SWITCH, None)
+        else:
+            os.environ[ELEMENT_WRENCH_SWITCH] = previous
+
+
 def _compile_plan_run(
     *,
     rig: str,
@@ -637,22 +898,8 @@ def _compile_plan_run(
         layout={"document_order": ["model", "case"], "payload_order": ["model", "case"]},
         metadata=metadata,
     )
-    from .results.element_wrench import ELEMENT_WRENCH_SWITCH
-
-    # The component table is decoded from the kernel's own facts, so this run
-    # asks for them.  The switch is set around the call rather than exported as a
-    # process default: the channel is a *fact* surface this reporting path needs,
-    # not something every solve should pay for, and a run that does not ask for it
-    # leaves the result document at its original contract version.
-    previous = os.environ.get(ELEMENT_WRENCH_SWITCH)
-    os.environ[ELEMENT_WRENCH_SWITCH] = "1"
-    try:
+    with _element_wrench_facts():
         return run_compiled(compiled).raw
-    finally:
-        if previous is None:
-            os.environ.pop(ELEMENT_WRENCH_SWITCH, None)
-        else:
-            os.environ[ELEMENT_WRENCH_SWITCH] = previous
 
 
 def _run_k(

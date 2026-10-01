@@ -146,6 +146,48 @@ struct AntiRollBar {
     double stiffness{0.0}, damping{0.0};
 };
 
+/// Rotational actuator: a pure couple about one body-fixed axis.
+///
+/// Unlike the anti-roll bar, whose couple is its own elastic and dissipative
+/// response to a relative angle, this element's magnitude is an *external*
+/// demand -- a driver signal -- and only its direction comes from the state: it
+/// opposes the real-time relative angular rate, so engaging it slows the pair
+/// down rather than pushing it.  `max_torque` caps the magnitude, which is how
+/// "the actuator cannot keep growing its effort once the pair has locked" is
+/// expressed while the demand continues to rise.
+struct RotationalTorque {
+    /// The body the couple is applied to.
+    int a{-1};
+    /// The body the equal-and-opposite reaction is applied to; -1 means the
+    /// reaction has no body and is dropped, which is the ground reference.
+    int b{-1};
+    /// The couple's axis, expressed in body `a`'s local frame.
+    Vec3 axis_a{0, 1, 0};
+    /// Body `a`'s reference orientation.  Kept for the reader's round-trip and
+    /// for a later demand channel that needs the axis at the reference pose.
+    Quat reference{};
+    /// The demand-to-magnitude gain.  With a demand source other than the unit
+    /// demand this is a gain on the driver's own signal; with the unit demand it
+    /// *is* the magnitude, which is what every block written before the demand
+    /// channel meant.
+    double stiffness{0.0};
+    /// Viscous coefficient.  Read and carried; the sign law below is what the
+    /// couple's direction comes from on this step.
+    double damping{0.0};
+    /// The magnitude cap: the couple never exceeds this.
+    double max_torque{0.0};
+    /// Which driver signal sets the magnitude.  ``TORQUE_DEMAND_UNIT`` (the
+    /// default, and what every previously written block carries) means the
+    /// couple is ``min(stiffness, max_torque)`` with no driver in the loop;
+    /// ``TORQUE_DEMAND_WHEEL`` and ``TORQUE_DEMAND_BRAKE`` read the case's
+    /// per-tire driver demand instead.
+    int demand_source{TORQUE_DEMAND_UNIT};
+    /// Which tire's column the demand source reads.  -1 means "no tire", which
+    /// only the unit source may leave unset.
+    int demand_tire{-1};
+};
+
+
 struct Tire {
     int body{-1};
     // `body` is the spinning wheel body that receives the contact wrench.
@@ -317,6 +359,10 @@ struct Model {
     std::vector<BumpStop> bump_stops;
     std::vector<Bushing> bushings;
     std::vector<AntiRollBar> anti_roll_bars;
+    // The rotational actuators, beside the anti-roll bars: both apply a pure
+    // couple, and keeping them adjacent is what makes the two couple families
+    // read as one pair of laws.
+    std::vector<RotationalTorque> rotational_torques;
     std::vector<Tire> tires;
     std::vector<AerodynamicDrag> aerodynamic_drags;
     std::vector<SteeringActuator> steering_actuators;

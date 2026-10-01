@@ -1,0 +1,36 @@
+
+===== [double_wishbone] entry A: compute_vehicle_roll_centers =====
+CONSTRUCTED: front center=array([ 1.13686838e-13, -1.80000000e+02]) left_ic=array([-1166.66666667,   100.        ]) right_ic=array([1166.66666667,  100.        ])
+CONSTRUCTED: rear center=array([ 1.13686838e-13, -1.80000000e+02]) left_ic=array([-1166.66666667,   100.        ]) right_ic=array([1166.66666667,  100.        ])
+----- [double_wishbone] entry B: compose_axle(mode='K') -----
+ASSEMBLED: bodies=['ground', 'lower_arm_L', 'lower_arm_R', 'rack', 'rack_housing', 'tie_rod_L', 'tie_rod_R', 'upper_arm_L', 'upper_arm_R', 'upright_L', 'upright_R', 'wheel_hub_L', 'wheel_hub_R'] constraints=16
+
+===== [five_link] entry A: compute_vehicle_roll_centers =====
+CONSTRUCT REFUSED: ValueError: missing hardpoint for roll-center role upper_front
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\vehicle\roll_centers.py:43 in compute_vehicle_roll_centers: left_ic = _instant_center(axle, "L")
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\vehicle\roll_centers.py:83 in _instant_center: _hardpoint(axle, "upper_front", side) + _hardpoint(axle, "upper_rear", side)
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\vehicle\roll_centers.py:78 in _hardpoint: raise ValueError(f"missing hardpoint for roll-center role {role}")
+----- [five_link] entry B: compose_axle(mode='K') -----
+ASSEMBLY REFUSED: ValueError: missing required front-axle hardpoint for upper_front
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\subsystems\types.py:407 in lookup: return lookup_hardpoint(self.side_schema[side], role)
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\subsystems\geometry.py:146 in lookup_hardpoint: raise ValueError(f"missing required front-axle hardpoint for {role}")
+
+===== [macpherson] entry A: compute_vehicle_roll_centers =====
+CONSTRUCT REFUSED: ValueError: missing hardpoint for roll-center role upper_front
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\vehicle\roll_centers.py:43 in compute_vehicle_roll_centers: left_ic = _instant_center(axle, "L")
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\vehicle\roll_centers.py:83 in _instant_center: _hardpoint(axle, "upper_front", side) + _hardpoint(axle, "upper_rear", side)
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\vehicle\roll_centers.py:78 in _hardpoint: raise ValueError(f"missing hardpoint for roll-center role {role}")
+----- [macpherson] entry B: compose_axle(mode='K') -----
+ASSEMBLY REFUSED: ValueError: missing required front-axle hardpoint for upper_front
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\subsystems\types.py:407 in lookup: return lookup_hardpoint(self.side_schema[side], role)
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\subsystems\geometry.py:146 in lookup_hardpoint: raise ValueError(f"missing required front-axle hardpoint for {role}")
+
+===== [twist_beam] entry A: compute_vehicle_roll_centers =====
+CONSTRUCT REFUSED: ValueError: missing hardpoint for roll-center role upper_front
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\vehicle\roll_centers.py:43 in compute_vehicle_roll_centers: left_ic = _instant_center(axle, "L")
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\vehicle\roll_centers.py:83 in _instant_center: _hardpoint(axle, "upper_front", side) + _hardpoint(axle, "upper_rear", side)
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\vehicle\roll_centers.py:78 in _hardpoint: raise ValueError(f"missing hardpoint for roll-center role {role}")
+----- [twist_beam] entry B: compose_axle(mode='K') -----
+ASSEMBLY REFUSED: ValueError: missing required front-axle hardpoint for upper_front
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\subsystems\types.py:407 in lookup: return lookup_hardpoint(self.side_schema[side], role)
+    at E:\杂件\open-kinematics\packages\suspension_multibody\src\suspension_multibody\subsystems\geometry.py:146 in lookup_hardpoint: raise ValueError(f"missing required front-axle hardpoint for {role}")

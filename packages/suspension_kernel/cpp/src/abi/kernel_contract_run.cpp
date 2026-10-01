@@ -429,6 +429,32 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   if (!compute_effective_body_inertia(built, error)) {
     return fail(error_buffer, error_capacity, 2, "tire inertia: " + error);
   }
+  // The rotational-torque family is the one element family `AxleInput` carries
+  // no field for, and it has to stay that way: a new field on that structure is
+  // an ABI release.  So `ContractModel` kept the family as the uniform
+  // `ElementBlock` the generic reader already accepts, and it is appended here,
+  // after `build_model` has built the model the document's other families
+  // describe.  Reading it through the same reader the C ABI uses is what makes
+  // the two routes agree on what one element means.
+  //
+  // The two input forms stay mutually exclusive: these blocks never touch
+  // `input.axle.elements`, so `build_model`'s guard sees the per-family tables
+  // only.  `read_element_blocks` refuses a null curve array when blocks are
+  // supplied, and this family declares no curve slot at all
+  // (`curve_slots = 0`), so the array is real but nothing in it is read.
+  if (!model.rotational_torques().empty()) {
+    const std::vector<ElementBlock>& torque_blocks = model.rotational_torques();
+    std::vector<ElementCurveReference> torque_curves(
+        torque_blocks.size() * kElementCurveSlots);
+    for (ElementCurveReference& slot : torque_curves) {
+      slot.values = nullptr;
+      slot.count = 0;
+    }
+    if (!read_element_blocks(torque_blocks.data(), torque_blocks.size(),
+                             torque_curves.data(), 0, nullptr, built, error)) {
+      return fail(error_buffer, error_capacity, 2, "model element: " + error);
+    }
+  }
   // The registration order is the one the vehicle entry point established; the
   // stages whose counts are zero return immediately, so a family that does not
   // use tires or springs pays nothing for their presence here.
@@ -588,6 +614,7 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   element_wrench_counts.bump_stops = bump_stop_count;
   element_wrench_counts.bushings = bushing_count;
   element_wrench_counts.anti_rolls = anti_roll_count;
+  element_wrench_counts.rotational_torques = built.rotational_torques.size();
   element_wrench_counts.steering = built.steering_actuators.size();
   element_wrench_counts.tires = tire_count;
   element_wrench_counts.bodies = bodies;

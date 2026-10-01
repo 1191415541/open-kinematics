@@ -4,33 +4,68 @@
 
 ## Session Start
 
-- **Date**: （未开工；本文件为规划轮产物）
+- **Date**: 2026-10-01
 - **Task name**: p4-03-arb-ports
 - **Task dir**: `.codex-tasks/20260929-multibody-evolution-p2-p5/tasks/p4-03-arb-ports/`
 - **Spec**: 见 `SPEC.md`
-- **Plan**: 见 `TODO.csv`（5 步）
+- **Plan**: 见 `TODO.csv`（5 步，全部 `DONE`）
 - **Environment**: Python 3.12 / uv / pytest
+- **Status**: **DONE**
 
 ## Context Recovery Block
 
-- **Current milestone**: #1 — 悬架声明语义化端口（含 `arb_mount_L/R`）与端口合成段改造
-- **Current status**: NOT_STARTED
-- **Last completed**: 无（本子任务尚未开工）
-- **Current artifact**: `SPEC.md` / `TODO.csv`（规划产物）
-- **Key context**:
-  - `depends_on = p4-02`；防倾杆的 4 个端口由 p4-02 交付，本行才可能让它「插得上」。
-  - **F13 现状**（`EPIC.md:141`）：悬架今天声明**零个 port**（`builtin.py:397 DOUBLE_WISHBONE` 的 `ports`/`needs` 皆为空元组）；端口在装配期运行期合成（`subsystems/si_assembly.py:71 _ports_for_bodies`、`:104 _wheel_centre_needs`）；`arb_mount`/`droplink_mount`/`chassis_mount` 在源码与测试里**不存在**。所以本行是「先造出语义化端口」。
-  - **`_BODY_ALIASES` 归本行收口**：`subsystems/geometry.py:226`（含 `"wheel": "upright"`，消费 `:258/265`），F16 修正项（`EPIC.md:147`），不单独扩范围。
-  - **插接只经阶段一 02 的 `match_requirements`**，不得另立第二条推断路径；不得出现按名字猜身份的规则（`EPIC.md:233`）。
-  - 全局前置 `S1`：阶段一 01–07 全部 `DONE`（含 02 配对机制与 03 通用装配引擎）；**未完成之前不得置 `IN_PROGRESS`**（`EPIC.md:75`）。
-- **Known issues**:
-  - 尚未开工，故 F13/F16 各锚点为**待复核**；任何锚点过期只在本行 `raw/` 与本节记录，不改父文件。
-  - 与 p4-02 的边界：本行开工前先跑 p4-02 的验收命令确认 4 端口已声明；边界不符即停工回报，不自行扩范围。
-  - `_ports_for_bodies` 改为声明后可能改变既有装配产物；需逐项对照并在必要时登记。
-- **Next action**: 先读 `subsystems/si_assembly.py:71 _ports_for_bodies` 与 `:104 _wheel_centre_needs` 的现状，以及 `subsystems/geometry.py:226 _BODY_ALIASES` 与其消费点 `:258/265`；确认 p4-02 的 4 端口已落地，然后在悬架的端口**声明**里加入 `arb_mount_L/R` 并跑 `tests/subsystems`、`tests/connections`、`tests/authoring` 与契约包测试。
+- **Current milestone**: #5 — 终局与验收（全 5 步完成）
+- **Last completed**: 四份证据落 `raw/`，判据命令 + ruff/ty 实跑通过
+- **Current artifact**: `raw/`（ports_declared / pairing_cases / body_aliases_disposition / run_log + 可复跑探针）
+- **Key context**: 前置 p4-02 已交付防倾杆模板的 4 个端口声明与悬架硬编码体名的删除；
+  本行把**悬架一侧**的对接面（`arb_mount_L/R`）变成模板声明，并删掉别名表。
+
+## 交付物
+
+| 文件 | 性质 |
+|---|---|
+| `templates/builtin.py` | 新增 `_PORTS`（`arb_mount_L/R` 声明），挂到 `DOUBLE_WISHBONE.ports` |
+| `subsystems/suspension.py` | 新增 `declared_ports(context)`，返回模板声明的端口 |
+| `subsystems/si_assembly.py` | 新增 `_declared_ports(...)`，并把声明端口并入悬架贡献；`Any` 导入 |
+| `subsystems/geometry.py` | **删除** `_BODY_ALIASES` 整表与其两处使用 |
+| `tests/subsystems/test_arb_mount_ports.py` | **新增**，6 用例 |
+
+## 四条判据的落点
+
+| 判据 | 证据文件 | 结果 |
+|---|---|---|
+| (a) 悬架声明含 `arb_mount_L/R` 且产物含这两个名字 | `raw/ports_declared.md` | 产物实测 `axle/arb_mount_L` (owner `axle/lower_arm_L`) 等 |
+| (b) 配对段决定插接位置（双叉臂/麦弗逊各一断言） | `raw/pairing_cases.md` | 双叉臂 → `lower_arm_L`；麦弗逊 → `strut_L`；左右不乱 |
+| (c) `_BODY_ALIASES` 收口并登记 | `raw/body_aliases_disposition.md` | **整表删除**，494 passed 无一条依赖它 |
+| 缺失配对行为有定义 | `raw/pairing_cases.md` 用例 3/4 | 无候选点名拒绝；owner 不在本装配则跳过 |
+
+## 两处刻意的判断（记录下来，便于复核）
+
+1. **`_ports_for_bodies` 的合成端口保留不删**，声明的端口与之**并列**。
+   理由：删除会让既有按 `role="body"` 绑定的消费者失去端口，收益为零；
+   本行的目标是「让语义化端口存在并到达产物」，不是「消灭 body 端口」。
+2. **`_BODY_ALIASES` 整表删除**（而非只删 `wheel→upright`）：其余别名
+   （`uca`/`lca`/`tie` 等）是同一类**按名字猜身份**的规则，而它们的身份现在由声明回答。
+   删除后 494 条测试全过，证明无人依赖——这是实测，不是推断。
+
+## 未做（明确记账）
+
+- **未把 `anti_roll_bar` 接进 `si_assembly.py` 的角色派发链**。本行 TODO 第 1 行的范围是
+  「悬架声明语义化端口与端口合成段改造」；让防倾杆子系统在装配里真的被构造（即给它一个
+  `SubsystemContribution` 派发分支）属收尾范围（p4-04/p4-05）。本行交付的是
+  **端口侧对接面已就位**：`arb_mount_L/R` 在产物里，防倾杆的 4 个端口也能与之配对。
+- 麦弗逊的 `arb_mount` 声明建在**测试**里：本行写范围只允许动 `builtin.py` 的端口段，
+  新增整个模板超范围；最小声明足以证明「换拓扑即换落点」。
+- **未跑** `just gate-numeric` 的 `case_parity_check.py` 与 `kc_perf_gate.py`：
+  本行不改求解路径，归 p4-05 与 Epic 收尾。未重录任何基线。
 
 ---
 
-## Final Summary（未开工）
+## Final Summary
 
-本子任务**尚未开工**。`SPEC.md` 与 `TODO.csv` 是规划产物：未执行任何步骤、未修改任何生产代码或测试、未产生任何证据（`raw/` 为空）。所有 `TODO.csv` 行保持 `TODO`，`completed_at` 为空，`retry_count` 为 `0`。开工时按 `TODO.csv` 顺序展开，并把每一步的实际命令、退出码与产物落到 `raw/`（只记已执行的结果）。
+p4-03 **DONE**。`arb_mount_L` / `arb_mount_R` 成为悬架模板**声明的**语义端口
+（双叉臂落在下臂），经 `si_assembly.py::_declared_ports` 到达装配产物
+（实测 `axle/arb_mount_L`，owner `axle/lower_arm_L`，各带左右标签）。
+配对走既有 `match_requirements`：左需求只落左端口；无候选时点名拒绝。
+同一角色在麦弗逊上落在减振筒外筒，证明落点由声明决定而非模块写死。
+`geometry.py` 的别名表整表删除（含 `wheel→upright`），494 条测试未有一条依赖它。

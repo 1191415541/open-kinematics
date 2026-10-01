@@ -827,6 +827,92 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
             number_or_default(*parameters, "damping", 0.0) * force_per_length_scale());
         continue;
       }
+      if (*type_name == "rotational_torque") {
+        // The couple family the document route used to refuse.  Unlike every
+        // branch around it, this one does not flatten into an `AxleInput`
+        // table: the frozen ABI has no per-family array for it, so the document
+        // becomes the same uniform `ElementBlock` the generic reader already
+        // understands and the entry point hands it over after `build_model`.
+        // The parameter slots below are therefore the block's own, named by
+        // `mb_input/types.hpp`, and the key names are the ones
+        // `element_reader.cpp` fills those slots from.
+        const std::string* body_a = element.find_string("body_a");
+        const std::string* body_b = element.find_string("body_b");
+        const Json* parameters = element.find("parameters");
+        if (body_a == nullptr || body_b == nullptr || parameters == nullptr ||
+            !parameters->is_object()) {
+          return fail(error, "rotational torque " + quote(*element_name) +
+                                  " has no bodies or parameters");
+        }
+        const auto index_a = body_lookup.find(*body_a);
+        const auto index_b = body_lookup.find(*body_b);
+        if (index_a == body_lookup.end() || index_b == body_lookup.end()) {
+          return fail(error, "rotational torque " + quote(*element_name) +
+                                  " names an unknown body");
+        }
+        double axis[3] = {0.0, 1.0, 0.0};
+        double stiffness = 0.0;
+        double damping = 0.0;
+        double max_torque = 0.0;
+        if (!optional_vec3(*parameters, "axis_a", axis, axis) ||
+            !optional_number(*parameters, "stiffness", stiffness) ||
+            !optional_number(*parameters, "damping", damping) ||
+            !optional_number(*parameters, "max_torque", max_torque)) {
+          return fail(error, "rotational torque " + quote(*element_name) +
+                                  " has malformed parameters");
+        }
+        // Both gains and the cap are moments, so they follow the document's
+        // length unit the way the anti-roll bar's coefficients do.  The axis
+        // and the reference orientation are dimensionless.
+        stiffness *= length_scale_;
+        damping *= length_scale_;
+        max_torque *= length_scale_;
+        const double axis_norm = std::sqrt(
+            axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
+        // The reader's own rules, restated here so a bad document is named at
+        // the field rather than reported as "invalid rotational torque
+        // parameters" two layers later.
+        if (!std::isfinite(stiffness) || !std::isfinite(damping) ||
+            !std::isfinite(max_torque) || stiffness < 0.0 || damping < 0.0 ||
+            max_torque < 0.0 || !std::isfinite(axis_norm) ||
+            axis_norm < 1e-12) {
+          return fail(error, "rotational torque " + quote(*element_name) +
+                                  " has invalid parameters");
+        }
+        ElementBlock block{};
+        block.kind = ELEMENT_ROTATIONAL_TORQUE;
+        block.body_a = index_a->second;
+        block.body_b = index_b->second;
+        block.parameters[ELEMENT_ROTATIONAL_TORQUE_STIFFNESS] = stiffness;
+        block.parameters[ELEMENT_ROTATIONAL_TORQUE_DAMPING] = damping;
+        for (std::size_t entry = 0; entry < 3; ++entry) {
+          block.parameters[ELEMENT_ROTATIONAL_TORQUE_AXIS_A + entry] = axis[entry];
+        }
+        // The reference orientation is optional and an absent one stays *zero*
+        // rather than becoming the identity: zero is the spelling the block
+        // reader accepts for "no reference pose" in this family, and the law
+        // never reads it.  Defaulting it here would make the two routes mean
+        // different blocks for the same document.
+        if (const Json* reference = parameters->find("reference_quaternion");
+            reference != nullptr) {
+          if (!reference->is_array() || reference->items.size() != 4) {
+            return fail(error, "rotational torque " + quote(*element_name) +
+                                    " has a malformed reference_quaternion");
+          }
+          for (std::size_t entry = 0; entry < 4; ++entry) {
+            double value = 0.0;
+            if (!number_at(reference->items[entry], value)) {
+              return fail(error, "rotational torque " + quote(*element_name) +
+                                      " has a malformed reference_quaternion");
+            }
+            block.parameters[
+                ELEMENT_ROTATIONAL_TORQUE_REFERENCE_QUATERNION + entry] = value;
+          }
+        }
+        block.parameters[ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE] = max_torque;
+        rotational_torques_.push_back(block);
+        continue;
+      }
       if (*type_name != "bushing") {
         return fail(error, "element " + quote(*element_name) + " has unsupported type " +
                                 quote(*type_name));

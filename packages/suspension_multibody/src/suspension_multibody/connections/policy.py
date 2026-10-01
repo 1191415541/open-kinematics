@@ -45,7 +45,15 @@ __all__ = [
 ROOT_KINDS: tuple[str, ...] = ("axle", "vehicle")
 
 #: The six subsystem roles, in the vocabulary the templates use.
-ROLES: tuple[str, ...] = ("suspension", "steering", "wheel", "chassis", "brake", "drive")
+ROLES: tuple[str, ...] = (
+    "suspension",
+    "steering",
+    "wheel",
+    "chassis",
+    "brake",
+    "drive",
+    "anti_roll_bar",
+)
 
 
 class RuleViolation(ValueError):

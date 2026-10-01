@@ -393,6 +393,8 @@ void write_physics_output(
         element_wrench_counts.bump_stops = model.bump_stops.size();
         element_wrench_counts.bushings = model.bushings.size();
         element_wrench_counts.anti_rolls = model.anti_roll_bars.size();
+        element_wrench_counts.rotational_torques =
+            model.rotational_torques.size();
         element_wrench_counts.steering = model.steering_actuators.size();
         element_wrench_counts.tires = model.tires.size();
         element_wrench_counts.bodies = model.bodies.size();

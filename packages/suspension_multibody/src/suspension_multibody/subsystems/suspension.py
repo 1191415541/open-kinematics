@@ -693,20 +693,69 @@ def elements(
     return []
 
 
+def declared_ports(context: SubsystemContext) -> tuple[object, ...]:
+    """
+    Return the ports this axle's suspension template declares.
+
+    A template states what a neighbour may attach to and which member carries it
+    -- the anti-roll bar's mount is the case that needs it, because whether it
+    lands on the lower arm or on a strut's outer tube is a property of the
+    topology.  Reading them here is what lets the assembly offer those ports
+    instead of synthesizing one per emitted body and saying nothing about what a
+    neighbour may plug into.
+    """
+    return tuple(_suspension_template(context).ports)
+
+
 def global_elements(context: SubsystemContext) -> list[ResolvedElement]:
-    """Declare the anti-roll bar, which spans both sides and is emitted once."""
-    return [
-        ResolvedElement(
-            kind="anti_roll_bar",
-            name=spec.name,
-            spec=spec,
-            body_a="upright_L",
-            point_a=context.local("upright_L", spec.left_link_point.as_array()),
-            body_b="upright_R",
-            point_b=context.local("upright_R", spec.right_link_point.as_array()),
+    """
+    Declare the anti-roll bar, which spans both sides and is emitted once.
+
+    The two wheel-end bodies are read off the suspension template's own
+    declarations -- nothing here names a body.  The former body-name literals
+    this function carried are gone; see `_wheel_end_body`.  A model that declares
+    no bar is answered without reading a wheel end at all, so a template that
+    declares none is only refused when a bar actually needs one.
+    """
+    rows: list[ResolvedElement] = []
+    for spec in context.model.anti_roll_bars:
+        left = _wheel_end_body(context, "L")
+        right = _wheel_end_body(context, "R")
+        rows.append(
+            ResolvedElement(
+                kind="anti_roll_bar",
+                name=spec.name,
+                spec=spec,
+                body_a=left,
+                point_a=context.local(left, spec.left_link_point.as_array()),
+                body_b=right,
+                point_b=context.local(right, spec.right_link_point.as_array()),
+            )
         )
-        for spec in context.model.anti_roll_bars
-    ]
+    return rows
+
+
+def _wheel_end_body(context: SubsystemContext, side: Side) -> str:
+    """
+    Return the wheel-end body of one side, from the template's declaration.
+
+    A side's wheel end is the body its spin joint's far end attaches to: that
+    connection declares the wheel end as a body the template hangs a point on,
+    so reading it here is reading the template rather than matching a name.  A
+    template that attaches its spin joint to a differently named body answers
+    differently with no change here, and one that declares no such body is
+    refused by name instead of being guessed at.
+    """
+    for connection in _suspension_template(context).connections:
+        if connection.role != "wheel_center" or not connection.far_owner:
+            continue
+        if connection.owner.endswith(f"_{side}") or connection.name.endswith(f"_{side}"):
+            return connection.far_owner
+    raise ValueError(
+        f"the suspension template {_suspension_template(context).name!r} declares no "
+        f"wheel-end body for side {side!r}: the anti-roll bar attaches to the wheel "
+        "end, and no connection names one"
+    )
 
 
 def compliance_elements(

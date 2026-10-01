@@ -49,8 +49,11 @@ def test_wheel_contains_current_platform_native_kernel(tmp_path: Path) -> None:
         assert library_path in archive.namelist()
         assert metadata_path in archive.namelist()
         metadata = json.loads(archive.read(metadata_path))
-    assert metadata["abi_version"] == 16
-    assert metadata["vehicle_abi_version"] == 31
+    # Bumped with the rotational actuator (p2-02, 2026-10-01): the element
+    # surface gained one more family, and `VehicleInput` embeds `AxleInput` by
+    # value, so the vehicle constant moves with the axle's.
+    assert metadata["abi_version"] == 17
+    assert metadata["vehicle_abi_version"] == 32
     assert metadata["source"] == "cpp/axle_dynamics/axle_kernel.cpp"
 
 

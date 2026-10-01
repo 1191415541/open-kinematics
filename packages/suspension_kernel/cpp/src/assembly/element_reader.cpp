@@ -351,6 +351,65 @@ bool read_element_blocks(
             continue;
         }
 
+        if (block.kind == ELEMENT_ROTATIONAL_TORQUE) {
+            RotationalTorque actuator;
+            actuator.a = block.body_a;
+            actuator.b = block.body_b;
+            actuator.stiffness =
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_STIFFNESS];
+            actuator.damping =
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_DAMPING];
+            actuator.axis_a = Vec3{
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_AXIS_A],
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_AXIS_A+1],
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_AXIS_A+2]
+            };
+            actuator.reference = Quat{
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_REFERENCE_QUATERNION],
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_REFERENCE_QUATERNION+1],
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_REFERENCE_QUATERNION+2],
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_REFERENCE_QUATERNION+3]
+            };
+            actuator.max_torque =
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE];
+            // The demand channel (p2-08).  The two integer slots say which driver
+            // signal sets the magnitude and which tire's column it reads.  A
+            // source that is not the unit demand needs a tire, and a tire without
+            // a source would never be read: both are refused here rather than
+            // silently producing a couple that follows nothing.  The tire's own
+            // range is checked by the law, which returns a zero demand for a
+            // column this model does not have -- the reader cannot check it
+            // against `model.tires` because a block of this family may be read
+            // before the tire blocks are.
+            actuator.demand_source = block.ints[ELEMENT_INT_TORQUE_DEMAND_SOURCE];
+            actuator.demand_tire = block.ints[ELEMENT_INT_TORQUE_TIRE];
+            if (actuator.demand_source < TORQUE_DEMAND_UNIT ||
+                actuator.demand_source > TORQUE_DEMAND_BRAKE) {
+                error = "unknown rotational torque demand source";
+                return false;
+            }
+            if (actuator.demand_source != TORQUE_DEMAND_UNIT &&
+                actuator.demand_tire < 0) {
+                error = "a driven rotational torque needs the tire it follows";
+                return false;
+            }
+            // Same rules as the anti-roll bar above: body `a` is required by the
+            // shared range check, the axis must have a direction, and a negative
+            // gain or cap would make the sign law below meaningless.  The
+            // reference quaternion is optional -- a block that leaves it at zero
+            // means "no reference pose", which is the identity for this family
+            // because its law never reads the reference.
+            if (norm(actuator.axis_a) < 1e-12 ||
+                actuator.stiffness < 0.0 || actuator.damping < 0.0 ||
+                actuator.max_torque < 0.0) {
+                error = "invalid rotational torque parameters";
+                return false;
+            }
+            actuator.axis_a = normalized(actuator.axis_a);
+            model.rotational_torques.push_back(actuator);
+            continue;
+        }
+
         if (block.kind == ELEMENT_AERODYNAMIC_DRAG) {
             AerodynamicDrag drag;
             // A drag acts on one body; the block's second body slot is unused and

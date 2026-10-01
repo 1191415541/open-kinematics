@@ -72,7 +72,12 @@ enum ElementKind {
     // are appended so no existing kind moved, and `ELEMENT_SPRING` keeps its
     // value: it now describes the elastic structure only.
     ELEMENT_DAMPER = 5,
-    ELEMENT_BUMP_STOP = 6
+    ELEMENT_BUMP_STOP = 6,
+    // A rotational actuator: a pure couple about one body-fixed axis whose
+    // magnitude a driver demand sets, whose direction follows the real-time
+    // relative angular rate, and which saturates at `MAX_TORQUE`.  Appended for
+    // the same reason as the pair above: no existing kind moved.
+    ELEMENT_ROTATIONAL_TORQUE = 7
 };
 
 /// Curve slot roles a family may use, indexed within its own slot list.
@@ -208,9 +213,13 @@ enum ElementParameter {
     ELEMENT_SPRING_POINT_A = 10,
     ELEMENT_SPRING_POINT_B = 13,
 
-    // Bushing: 16..143.  Two 6x6 matrices dominate the run; the attachment
+    // Bushing: 16..115.  Two 6x6 matrices dominate the run; the attachment
     // geometry follows, which is what makes a bushing expressible completely by
-    // its block.
+    // its block.  The band was declared as 16..143 when this family was appended
+    // -- runs are eight-aligned so they can grow without moving their
+    // neighbours -- but its own fields end at 114, and 116..143 has never been
+    // occupied by anything.  The rotational-torque run below claims part of that
+    // tail rather than widening the uniform block.
     ELEMENT_BUSHING_STIFFNESS_6X6 = 16,
     ELEMENT_BUSHING_DAMPING_6X6 = 52,
     ELEMENT_BUSHING_PRELOAD_6 = 88,
@@ -266,7 +275,36 @@ enum ElementParameter {
     ELEMENT_BUMP_STOP_DIRECTION = 202,
     ELEMENT_BUMP_STOP_DAMPING = 203,
     ELEMENT_BUMP_STOP_POINT_A = 204,
-    ELEMENT_BUMP_STOP_POINT_B = 207
+    ELEMENT_BUMP_STOP_POINT_B = 207,
+
+    // Rotational torque: 128..137, taken from the unused tail of the band the
+    // bushing declares.  The bushing's own fields end at 114 (its reference
+    // quaternion, four doubles from 111); every field of its band from 115 to
+    // 143 has never been written by anything, because the band was declared
+    // generously.  This family claims the eight-aligned slice 128..137 of that
+    // padding, which is the same move `ELEMENT_SPRING_PRELOAD` makes when it
+    // reuses a retired damper slot inside the spring's own run.
+    //
+    // Why not simply append after the bump-stop run: the uniform block's width
+    // is part of the ABI, and the Python mirror in the product pins
+    // `kElementBlockSize` at 216.  The slots past the bump-stop run are
+    // 210..215 -- six, fewer than the ten this family needs -- so appending
+    // would mean widening the block, and a wider block is a change every caller
+    // of the C ABI would have to recompile for.  Reusing declared padding keeps
+    // every existing family's slots and the block's shape byte-identical.
+    //
+    // The `static_assert`s below pin both halves of the claim: the bushing's
+    // real fields stay clear of this slice, and this slice stays clear of every
+    // other family's run.
+    ELEMENT_ROTATIONAL_TORQUE_STIFFNESS = 128,
+    ELEMENT_ROTATIONAL_TORQUE_DAMPING = 129,
+    // Three consecutive doubles: the axis in body `a`'s frame.
+    ELEMENT_ROTATIONAL_TORQUE_AXIS_A = 130,
+    // Four consecutive doubles: body `a`'s reference orientation.
+    ELEMENT_ROTATIONAL_TORQUE_REFERENCE_QUATERNION = 133,
+    // The amplitude cap: the couple never exceeds this, which is how "a locked
+    // pair stops growing its brake torque" is stated as a parameter.
+    ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE = 137
 };
 
 /// Index into an element's integer block.
@@ -276,7 +314,21 @@ enum ElementInteger {
     ELEMENT_INT_ROTATION_COORDINATES = 2,
     ELEMENT_INT_CURVE_INTERPOLATION = 3,
     ELEMENT_INT_DRIVE_TORQUE_BODY = 4,
-    ELEMENT_INT_DRIVE_TORQUE_REACTION_BODY = 5
+    ELEMENT_INT_DRIVE_TORQUE_REACTION_BODY = 5,
+    // The rotational actuator's demand channel, two slots so the family is no
+    // longer a fixed-amplitude couple.  ELEMENT_INT_TORQUE_DEMAND_SOURCE says
+    // which driver signal sets the magnitude: 0 for the unit demand (the block's
+    // stiffness is then the amplitude, which is what every block written before
+    // this field meant), 1 for the case's wheel_torque column, 2 for its
+    // brake_torque column.  Both columns are per-tire per-sample driver demands,
+    // so the magnitude becomes min(stiffness * demand, max_torque) at the
+    // driver's own value rather than a pre-computed torque.
+    ELEMENT_INT_TORQUE_DEMAND_SOURCE = 6,
+    // Which tire's column the source above reads.  A source other than the unit
+    // demand needs it, because a couple's own two bodies do not name a tire; -1
+    // means "no tire" and is refused for those sources rather than silently
+    // reading column 0.
+    ELEMENT_INT_TORQUE_TIRE = 7
 };
 
 /// The one layout table both entry points read.
@@ -298,8 +350,13 @@ inline constexpr ElementLayout kElementLayouts[] = {
     {ELEMENT_BUSHING, ELEMENT_BUSHING_STIFFNESS_6X6, ELEMENT_BUSHING_DAMPING_6X6,
      ELEMENT_BUSHING_PRELOAD_6, ELEMENT_BUSHING_POINT_A,
      /*curve_slots=*/1, /*int_count=*/2},
+    // The two families that apply a pure couple rather than a pair of forces.
     {ELEMENT_ANTI_ROLL, ELEMENT_ANTI_ROLL_STIFFNESS, ELEMENT_ANTI_ROLL_DAMPING,
      ELEMENT_ANTI_ROLL_AXIS_A, ELEMENT_ANTI_ROLL_REFERENCE_QUATERNION,
+     /*curve_slots=*/0, /*int_count=*/0},
+    {ELEMENT_ROTATIONAL_TORQUE, ELEMENT_ROTATIONAL_TORQUE_STIFFNESS,
+     ELEMENT_ROTATIONAL_TORQUE_DAMPING, ELEMENT_ROTATIONAL_TORQUE_AXIS_A,
+     ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE,
      /*curve_slots=*/0, /*int_count=*/0},
     {ELEMENT_TIRE, ELEMENT_TIRE_STIFFNESS, ELEMENT_TIRE_DAMPING,
      ELEMENT_TIRE_BRUSH_STIFFNESS_LONGITUDINAL,
@@ -455,6 +512,25 @@ static_assert(
 static_assert(
     ELEMENT_BUSHING_REFERENCE_QUATERNION + 4 <= ELEMENT_ANTI_ROLL_STIFFNESS,
     "the bushing and anti-roll runs must not overlap"
+);
+// The rotational-torque family takes the unused tail of the bushing's declared
+// band (see the run's own comment in `enum ElementParameter`), so the pin is
+// against the bushing's *last used* field rather than against the end of the
+// band it declares.
+static_assert(
+    ELEMENT_BUSHING_REFERENCE_QUATERNION + 4 <=
+        ELEMENT_ROTATIONAL_TORQUE_STIFFNESS,
+    "the bushing's fields and the rotational-torque run must not overlap"
+);
+static_assert(
+    ELEMENT_ROTATIONAL_TORQUE_AXIS_A + 3 <=
+        ELEMENT_ROTATIONAL_TORQUE_REFERENCE_QUATERNION,
+    "the rotational-torque axis and reference quaternion must not overlap"
+);
+static_assert(
+    ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE < ELEMENT_ANTI_ROLL_STIFFNESS,
+    "the rotational-torque run must stay inside the block and clear of "
+    "the anti-roll run"
 );
 static_assert(
     ELEMENT_ANTI_ROLL_REFERENCE_QUATERNION + 4 <= ELEMENT_TIRE_STIFFNESS,

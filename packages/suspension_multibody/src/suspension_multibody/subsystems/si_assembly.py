@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from typing import Literal
+from typing import Any, Literal
 
 from ..connections.policy import check_root
 from ..modeling.assembly import Assembly, SimulationAssembly
@@ -148,6 +148,38 @@ def _wheel_centre_needs(
             )
         )
     return tuple(needs)
+
+
+def _declared_ports(
+    instance: tuple[str, ...],
+    declarations: Sequence[Any],
+    bodies: Mapping[str, object],
+) -> dict[str, GeometryPort]:
+    """
+    Offer the ports one subsystem's template *declares*.
+
+    A template states what a neighbour may attach to and where it lands (its
+    port's ``owner``); this turns those declarations into the assembly's ports.
+    A declaration whose owner is not a body this assembly emitted is skipped
+    rather than offered with a dangling owner: the claim would be false.
+
+    This is the counterpart of :func:`_ports_for_bodies`.  That one derives a
+    port per emitted body, which says "here is a body" but says nothing about
+    what a neighbour may plug into; a semantic port such as an anti-roll bar's
+    mount has to be declared, because which member carries it is a property of
+    the topology and not of the body list.
+    """
+    from ..templates.ports import declaration_to_port
+
+    ports: dict[str, GeometryPort] = {}
+    for declaration in declarations:
+        if declaration.owner and declaration.owner not in bodies:
+            continue
+        port = declaration_to_port(declaration, instance=instance)
+        if isinstance(port, GeometryPort):
+            ports[declaration.name] = port
+    return ports
+
 
 
 def contributions_for_axle(
@@ -310,7 +342,14 @@ def axle_contributions_and_order(
                 # sequence.  Passing them twice would duplicate four rows.
                 elements=list(element_rows(model, mode, context, ())),
             ),
-            ports=_ports_for_bodies(instance, suspension_bodies),
+            ports={
+                **_ports_for_bodies(instance, suspension_bodies),
+                **_declared_ports(
+                    instance,
+                    suspension_subsystem.declared_ports(context),
+                    suspension_bodies,
+                ),
+            },
             needs=_wheel_centre_needs(instance, suspension_bodies, _sides(request)),
             note=f"left/right suspension pair, mode {mode}",
         )

@@ -17,6 +17,8 @@ from .elements import (
     GravityElement,
     LinearSpringElement,
     PointWrenchElement,
+    RotationalTorqueElement,
+    RotationalTorqueParameters,
     StaticDamperElement,
     VerticalTireElement,
 )
@@ -59,6 +61,8 @@ __all__ = [
     "GravityElement",
     "LinearSpringElement",
     "PointWrenchElement",
+    "RotationalTorqueElement",
+    "RotationalTorqueParameters",
     "StaticDamperElement",
     "VerticalTireElement",
     "Array",

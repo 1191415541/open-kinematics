@@ -435,6 +435,105 @@ void external_force_anti_roll_directional(
     }
 }
 
+// The rotational actuators of the directional pass.  Same law and same sign
+// branches as the scalar path's `assemble_rotational_torque_forces`, with the
+// couple's axis and its rate carried as dual numbers.
+//
+// The magnitude is a constant for one step -- it is the demand, not a function
+// of the state, until p2-03 wires the demand channel in -- so the only
+// derivatives are the axis's (through `d_rotate`) and the rate's (through
+// `d_dot`).  The sign branch's non-smoothness is detected the way
+// `assemble_directional_drive_torques` detects it: the branch flips either
+// exactly at zero or within the perturbation the Jacobian columns use, and in
+// both cases the analytic tangent is not the finite-difference one, so `smooth`
+// is cleared and the caller falls back.
+void external_force_rotational_torque_directional(
+    const Model& model,
+    const State& state,
+    const SampleInput& input,
+    const DirectionalState& direction,
+    std::vector<Vec3>& torque,
+    bool& smooth) {
+    for (std::size_t index = 0; index < model.rotational_torques.size();
+         ++index) {
+        const RotationalTorque& actuator = model.rotational_torques[index];
+        const bool body_a_active =
+            directional_body_active(direction, actuator.a);
+        const bool body_b_active = actuator.b >= 0 &&
+            directional_body_active(direction, actuator.b);
+        if (!body_a_active && !body_b_active) continue;
+        const DVec3 axis_world = d_normalized(
+            d_rotate(
+                state.q[actuator.a], actuator.axis_a,
+                direction.dtheta[actuator.a]
+            ),
+            smooth
+        );
+        const DVec3 omega_a{
+            {state.omega[actuator.a].x, direction.domega[actuator.a].x},
+            {state.omega[actuator.a].y, direction.domega[actuator.a].y},
+            {state.omega[actuator.a].z, direction.domega[actuator.a].z}
+        };
+        // A reaction body of -1 is the ground: it has no angular velocity, so
+        // the relative rate is the actuator body's own, negated.
+        const DVec3 omega_b = actuator.b >= 0
+            ? DVec3{
+                {state.omega[actuator.b].x, direction.domega[actuator.b].x},
+                {state.omega[actuator.b].y, direction.domega[actuator.b].y},
+                {state.omega[actuator.b].z, direction.domega[actuator.b].z}
+            }
+            : DVec3{};
+        const DirectionalScalar rate = d_dot(axis_world, omega_b - omega_a);
+        // The same driver demand the scalar path reads, sampled at this step's
+        // own time: `TORQUE_DEMAND_UNIT` is the block's own stiffness, the other two follow
+        // case's per-tire signal.  It is a constant for one step, so it carries no
+        // derivative of its own.
+        double demand = 1.0;
+        if (actuator.demand_source == TORQUE_DEMAND_WHEEL) {
+            demand = slot_value(input.torque, actuator.demand_tire);
+        } else if (actuator.demand_source == TORQUE_DEMAND_BRAKE) {
+            demand = slot_value(input.brake_torque, actuator.demand_tire);
+        }
+        const double magnitude =
+            std::min(actuator.stiffness * demand, actuator.max_torque);
+        // The slip branch, at the same values the scalar path reads.  Its
+        // selection is non-smooth exactly where the rate branch's is, so it folds
+        // into the same `smooth` decision below rather than carrying a derivative
+        // of its own.
+        const double slip = actuator.demand_tire >= 0 &&
+                actuator.demand_source != TORQUE_DEMAND_UNIT &&
+                static_cast<std::size_t>(actuator.demand_tire) < state.tire_sx.size()
+            ? state.tire_sx[static_cast<std::size_t>(actuator.demand_tire)]
+            : 0.0;
+        constexpr double kJacobianStep = 1e-7;
+        const double trial_rate =
+            rate.value + kJacobianStep*rate.derivative;
+        if (
+            std::abs(rate.value) <= kEps ||
+            rate.value*trial_rate <= 0.0 ||
+            (std::abs(rate.value) <= kEps && std::abs(slip) > kEps)
+        ) {
+            smooth = false;
+        }
+        // Word-for-word the scalar path's branch, and the same one
+        // `assemble_directional_drive_torques` uses for the brake: a rate inside
+        // `kEps` of zero gets no couple in either pass, so the residual and the
+        // Jacobian agree about a stationary pair.
+        double tau = 0.0;
+        if (rate.value > kEps) {
+            tau = -magnitude;
+        } else if (rate.value < -kEps) {
+            tau = magnitude;
+        } else if (slip > kEps) {
+            tau = -magnitude;
+        } else if (slip < -kEps) {
+            tau = magnitude;
+        }
+        add_directional_torque(torque, model, actuator.b, axis_world*tau);
+        add_directional_torque(torque, model, actuator.a, -(axis_world*tau));
+    }
+}
+
 // K4 (epic MODULES.md section 3.2): The steering actuators of the directional pass: the prescribed target and its rate, the
 // axis reference, the elastic and damping terms and the reaction wrench.
 void external_force_steering_directional(
@@ -633,6 +732,11 @@ DirectionalElementForces assemble_directional_elements(
 
         external_force_anti_roll_directional(
             model, state, direction, internal_force_scale, torque, smooth
+        );
+        // The rotational actuators, in the same slot the scalar bus puts them
+        // in: right after the anti-roll bars, the other couple family.
+        external_force_rotational_torque_directional(
+            model, state, input, direction, torque, smooth
         );
 
         external_force_steering_directional(

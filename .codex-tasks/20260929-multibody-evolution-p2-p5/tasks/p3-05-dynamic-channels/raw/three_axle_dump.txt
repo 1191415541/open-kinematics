@@ -1,0 +1,69 @@
+== three_axle
+  load front_left       2630088.8642553305
+  load front_right      2630088.8642553305
+  load middle_left      2630088.8642553305
+  load middle_right     2630088.8642553305
+  load rear_left        2630088.8642553305
+  load rear_right       2630088.8642553305
+  channels:
+    normal_load_front_left           2630088.8642553305
+    normal_load_front_right          2630088.8642553305
+    normal_load_middle_left          2630088.8642553305
+    normal_load_middle_right         2630088.8642553305
+    normal_load_rear_left            2630088.8642553305
+    normal_load_rear_right           2630088.8642553305
+    normal_load_total                15780533.185531983
+    normal_load_axle_front           5260177.728510661
+    normal_load_front_axle           5260177.728510661
+    normal_load_axle_middle          5260177.728510661
+    normal_load_middle_axle          5260177.728510661
+    normal_load_axle_rear            5260177.728510661
+    normal_load_rear_axle            5260177.728510661
+    normal_load_left_side            7890266.592765992
+    normal_load_right_side           7890266.592765992
+    load_transfer_front_minus_rear   0.0
+    load_transfer_right_minus_left   0.0
+  summary.total          15780533.185531983
+  summary.axle_loads     {'front': 5260177.728510661, 'middle': 5260177.728510661, 'rear': 5260177.728510661}
+  summary.side_loads     {'left': 7890266.592765992, 'right': 7890266.592765992}
+  summary.placements     ('front', 'middle', 'rear')
+  summary.front_rear_delta 0.0
+  summary.front_axle          5260177.728510661
+  summary.middle_axle         5260177.728510661
+  summary.rear_axle           5260177.728510661
+  summary.single_axle         AttributeError: this summary carries no 'single' placement; it carries front, middle, rear
+  summary.right_side          7890266.592765992
+== single_wheel
+  load single_left      12508758.86425533
+  channels:
+    normal_load_single_left          12508758.86425533
+    normal_load_total                12508758.86425533
+    normal_load_axle_single          12508758.86425533
+    normal_load_single_axle          12508758.86425533
+    normal_load_left_side            12508758.86425533
+  summary.total          12508758.86425533
+  summary.axle_loads     {'single': 12508758.86425533}
+  summary.side_loads     {'left': 12508758.86425533}
+  summary.placements     ('single',)
+  summary.front_rear_delta 0.0
+  summary.front_axle          AttributeError: this summary carries no 'front' placement; it carries single
+  summary.middle_axle         AttributeError: this summary carries no 'middle' placement; it carries single
+  summary.rear_axle           AttributeError: this summary carries no 'rear' placement; it carries single
+  summary.single_axle         12508758.86425533
+  summary.right_side          AttributeError: this summary carries no 'right' side; it carries left
+== rename experiment (bogie / trailer)
+  normal_load_bogie_left           250.0
+  normal_load_bogie_right          150.0
+  normal_load_trailer_left         100.0
+  normal_load_trailer_right        100.0
+  normal_load_total                600.0
+  normal_load_axle_bogie           400.0
+  normal_load_bogie_axle           400.0
+  normal_load_axle_trailer         200.0
+  normal_load_trailer_axle         200.0
+  normal_load_left_side            350.0
+  normal_load_right_side           250.0
+  load_transfer_bogie_minus_trailer 200.0
+  load_transfer_right_minus_left   -100.0
+  summary.placements ('bogie', 'trailer')
+  summary.bogie_axle 400.0

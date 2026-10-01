@@ -1,0 +1,33 @@
+p5-03 结构门与判据命令（实测原文）
+
+$ uv run --no-sync pytest packages/suspension_multibody/tests/api packages/suspension_multibody/tests/outputs packages/suspension_multibody/tests/results -q -p no:cacheprovider
+133 passed in 5.90s
+exit=0
+
+$ uv run --no-sync python packages/suspension_multibody/tests/architecture/legacy_surface_gate.py --check
+mode      : migration
+findings  : 0
+
+OK: no unregistered Python boundary violation
+exit=0
+
+$ uv run --no-sync pytest packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py -q -p no:cacheprovider
+5 passed in 3.77s
+exit=0
+
+$ uv run --no-sync python packages/suspension_multibody/scripts/dynamic_hash_sentinel.py --check
+OK: dynamic output matches the frozen baseline byte-for-byte
+exit=0
+
+$ uv run --no-sync ruff check .
+All checks passed!
+exit=0
+
+$ uv run --no-sync ty check .
+All checks passed!
+exit=0
+
+$ git status --short -- packages/suspension_multibody/tests/data/
+（空）
+
+allowlist 未改（mode="strict"、零条目）：本行未新增任何白名单项。

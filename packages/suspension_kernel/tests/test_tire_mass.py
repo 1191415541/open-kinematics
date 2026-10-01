@@ -87,12 +87,16 @@ FROZEN_TIRE_OFFSETS = {
 APPENDED_TIRE_OFFSETS = {"mass": 2096, "inertia": 2104}
 FROZEN_TIRE_SIZE = 2176
 
-#: The frozen ABI version constants.  The force-element split moves the axle and
+#: The frozen ABI version constants.  The force-element split moved the axle and
 #: vehicle versions together, because ``VehicleInput`` embeds ``AxleInput`` by
 #: value; the generic core surface is untouched, which is why it stays at 1.
+#:
+#: The rotational actuator (p2-02, 2026-10-01) moved the same pair for the same
+#: reason: the element surface gained a family, and the vehicle structure embeds
+#: the axle one.
 FROZEN_ABI_VERSIONS = {
-    "kAxleKernelAbiVersion": 16,
-    "kVehicleKernelAbiVersion": 31,
+    "kAxleKernelAbiVersion": 17,
+    "kVehicleKernelAbiVersion": 32,
     "kCoreKernelAbiVersion": 1,
 }
 

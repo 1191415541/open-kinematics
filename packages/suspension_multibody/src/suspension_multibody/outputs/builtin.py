@@ -331,32 +331,91 @@ def contact_field(view: MinimumUnitOutputs, *, field: str) -> float | int | bool
     raise ValueError(f"unknown contact field {field!r}")
 
 
+#: The side suffixes a wheel end's name carries, in the order one placement's own
+#: total is accumulated -- the aggregate the legacy table summed as
+#: ``front_left + front_right``.
+_LOAD_SIDES: tuple[str, str] = ("left", "right")
+
+
 def _loads(view: MinimumUnitOutputs) -> dict[str, float]:
-    """Read the four corner loads, applying the legacy finiteness rule."""
+    """Read the declared wheel-end loads, applying the legacy finiteness rule."""
     values = {wheel: float(view[f"wheel_load_{wheel}"]) for wheel in _WHEELS}
     if any(not np.isfinite(value) for value in values.values()):
         raise ValueError("wheel loads must be finite")
     return values
 
 
-def load_scalar(view: MinimumUnitOutputs, *, field: str) -> float:
-    """Return one `wheel_load_metrics` entry, per corner or aggregated."""
-    values = _loads(view)
-    front = values["front_left"] + values["front_right"]
-    rear = values["rear_left"] + values["rear_right"]
-    left = values["front_left"] + values["rear_left"]
-    right = values["front_right"] + values["rear_right"]
-    table: dict[str, float] = {
-        **{f"normal_load_{wheel}": value for wheel, value in values.items()},
-        "normal_load_total": front + rear,
-        "normal_load_front_axle": front,
-        "normal_load_rear_axle": rear,
-        "normal_load_left_side": left,
-        "normal_load_right_side": right,
-        "load_transfer_front_minus_rear": front - rear,
-        "load_transfer_right_minus_left": right - left,
+def _load_placement(wheel: str) -> str:
+    """Return the placement a declared wheel-end name states."""
+    for side in _LOAD_SIDES:
+        if wheel.endswith(f"_{side}"):
+            return wheel[: -len(side) - 1]
+    raise ValueError(
+        f"declared wheel end {wheel!r} does not state a side; a wheel end is "
+        f"named <placement>_<side>, with the side one of {list(_LOAD_SIDES)}"
+    )
+
+
+def _load_sum(values: list[float]) -> float:
+    """Return the values added left to right, the order the legacy table used."""
+    total = values[0]
+    for value in values[1:]:
+        total += value
+    return total
+
+
+def _load_channel_table(values: Mapping[str, float]) -> dict[str, float]:
+    """
+    Return the wheel-load channels for the declared wheel ends.
+
+    The table is *generated* from the placements the wheel-end names state, so
+    each placement contributes ``normal_load_axle_{placement}`` beside the
+    historical ``normal_load_{placement}_axle`` spelling; nothing here names an
+    axle.  This mirrors `report/wheel_loads.py` rather than importing it, because
+    a report derives *from* a run's outputs and is not one of them; the two halves
+    are compared value for value in `tests/metrics/test_outputs_match_legacy.py`,
+    so a drift between them fails instead of passing as a second opinion.
+
+    The sums are accumulated the way the legacy table did them -- a placement
+    left then right, a side in placement order, the vehicle in placement order --
+    so the four-corner values stay bit-identical.
+    """
+    placements: dict[str, dict[str, float]] = {}
+    for wheel, value in values.items():
+        placement = _load_placement(wheel)
+        placements.setdefault(placement, {})[wheel[len(placement) + 1 :]] = value
+    axles = {
+        placement: _load_sum([ends[side] for side in _LOAD_SIDES if side in ends])
+        for placement, ends in placements.items()
     }
-    return table[field]
+    sides = {
+        side: _load_sum([ends[side] for ends in placements.values() if side in ends])
+        for side in _LOAD_SIDES
+        if any(side in ends for ends in placements.values())
+    }
+    channels: dict[str, float] = {
+        f"normal_load_{wheel}": value for wheel, value in values.items()
+    }
+    channels["normal_load_total"] = _load_sum(list(axles.values()))
+    for placement, total in axles.items():
+        channels[f"normal_load_axle_{placement}"] = total
+        channels[f"normal_load_{placement}_axle"] = total
+    for side, total in sides.items():
+        channels[f"normal_load_{side}_side"] = total
+    order = tuple(axles)
+    if len(order) > 1:
+        # The first placement to the last: `front` to `rear` on a two-axle vehicle.
+        channels[f"load_transfer_{order[0]}_minus_{order[-1]}"] = (
+            axles[order[0]] - axles[order[-1]]
+        )
+    if len(sides) == len(_LOAD_SIDES):
+        channels["load_transfer_right_minus_left"] = sides["right"] - sides["left"]
+    return channels
+
+
+def load_scalar(view: MinimumUnitOutputs, *, field: str) -> float:
+    """Return one `wheel_load_metrics` entry, per wheel end or aggregated."""
+    return _load_channel_table(_loads(view))[field]
 
 
 def steering_peak(view: MinimumUnitOutputs, *, absolute: bool = True) -> float:
@@ -621,18 +680,35 @@ def _contact_outputs() -> list[DerivedOutput]:
     ]
 
 
+def _load_channel_names() -> tuple[str, ...]:
+    """
+    Return the wheel-load channels the declared wheel ends produce.
+
+    Generated by the same rule as `_load_channel_table`, so another axle
+    placement adds its channels by declaring its wheel ends rather than by an
+    entry written here.  `_WHEELS` is still the declared four corners -- see
+    `RIG_OUTPUTS` -- so this is a two-placement list today.
+    """
+    placements: list[str] = []
+    for wheel in _WHEELS:
+        placement = _load_placement(wheel)
+        if placement not in placements:
+            placements.append(placement)
+    names = [f"normal_load_{wheel}" for wheel in _WHEELS]
+    names.append("normal_load_total")
+    for placement in placements:
+        names.append(f"normal_load_axle_{placement}")
+        # The historical spelling of the same total, generated rather than kept.
+        names.append(f"normal_load_{placement}_axle")
+    names.extend(f"normal_load_{side}_side" for side in _LOAD_SIDES)
+    if len(placements) > 1:
+        names.append(f"load_transfer_{placements[0]}_minus_{placements[-1]}")
+    names.append("load_transfer_right_minus_left")
+    return tuple(names)
+
+
 def _load_outputs() -> list[DerivedOutput]:
     reads = tuple(f"wheel_load_{wheel}" for wheel in _WHEELS)
-    names = (
-        *(f"normal_load_{wheel}" for wheel in _WHEELS),
-        "normal_load_total",
-        "normal_load_front_axle",
-        "normal_load_rear_axle",
-        "normal_load_left_side",
-        "normal_load_right_side",
-        "load_transfer_front_minus_rear",
-        "load_transfer_right_minus_left",
-    )
     return [
         DerivedOutput(
             name=name,
@@ -644,7 +720,7 @@ def _load_outputs() -> list[DerivedOutput]:
             legacy="report.metrics.vehicle.wheel_load_metrics",
             description=f"wheel load {name}",
         )
-        for name in names
+        for name in _load_channel_names()
     ]
 
 

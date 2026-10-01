@@ -54,12 +54,15 @@ __all__ = [
 #: The name the composed single-axle SI assembly carries.
 SI_ASSEMBLY_NAME = "axle"
 
-#: The six roles, in the order the *recorded* body list has always used.
+#: The subsystem roles, in the order the *recorded* body list has always used.
 #:
 #: Order still matters for the output document -- the contract lists bodies in a
 #: sequence -- but it no longer decides whether the build succeeds: a subsystem
 #: may now be asked for its entities in any order, because requirements are
 #: resolved by port after all contributions are in hand.
+#:
+#: `anti_roll_bar` is appended rather than slotted in, so the recorded order of
+#: the six roles that were already here is unchanged.
 SUBSYSTEM_ROLES: tuple[str, ...] = (
     "chassis",
     "suspension",
@@ -67,6 +70,7 @@ SUBSYSTEM_ROLES: tuple[str, ...] = (
     "wheel",
     "brake",
     "drive",
+    "anti_roll_bar",
 )
 
 
@@ -310,7 +314,7 @@ def compose_simulation_assembly(
     resolved_capabilities = capabilities
     if resolved_capabilities is None:
         resolved_capabilities = capabilities_for(
-            subsystems=frozenset(roles) & {"suspension", "steering", "wheel", "chassis", "brake", "drive"},
+            subsystems=frozenset(roles) & set(SUBSYSTEM_ROLES),
             body_names=frozenset(merged.bodies),
         )
 

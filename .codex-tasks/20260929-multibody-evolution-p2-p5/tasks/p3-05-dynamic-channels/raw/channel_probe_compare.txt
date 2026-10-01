@@ -1,0 +1,47 @@
+== fake_four_wheel
+  OK   metrics.load_transfer_front_minus_rear before=50.0                       after=50.0
+  OK   metrics.load_transfer_right_minus_left before=30.0                       after=30.0
+  OK   metrics.normal_load_front_axle     before=220.0                      after=220.0
+  OK   metrics.normal_load_front_left     before=100.0                      after=100.0
+  OK   metrics.normal_load_front_right    before=120.0                      after=120.0
+  OK   metrics.normal_load_left_side      before=180.0                      after=180.0
+  OK   metrics.normal_load_rear_axle      before=170.0                      after=170.0
+  OK   metrics.normal_load_rear_left      before=80.0                       after=80.0
+  OK   metrics.normal_load_rear_right     before=90.0                       after=90.0
+  OK   metrics.normal_load_right_side     before=210.0                      after=210.0
+  OK   metrics.normal_load_total          before=390.0                      after=390.0
+  OK   summary.front_axle                 before=220.0                      after=220.0
+  OK   summary.front_rear_delta           before=50.0                       after=50.0
+  OK   summary.left_side                  before=180.0                      after=180.0
+  OK   summary.rear_axle                  before=170.0                      after=170.0
+  OK   summary.right_left_delta           before=30.0                       after=30.0
+  OK   summary.right_side                 before=210.0                      after=210.0
+  OK   summary.total                      before=390.0                      after=390.0
+  OK   summary.wheel_loads                before={'front_left': 100.0, 'front_right': 120.0, 'rear_left': 80.0, 'rear_right': 90.0} after={'front_left': 100.0, 'front_right': 120.0, 'rear_left': 80.0, 'rear_right': 90.0}
+  OK   legacy channel order before=['load_transfer_front_minus_rear', 'load_transfer_right_minus_left', 'normal_load_front_axle', 'normal_load_front_left', 'normal_load_front_right', 'normal_load_left_side', 'normal_load_rear_axle', 'normal_load_rear_left', 'normal_load_rear_right', 'normal_load_right_side', 'normal_load_total'] after=['load_transfer_front_minus_rear', 'load_transfer_right_minus_left', 'normal_load_front_axle', 'normal_load_front_left', 'normal_load_front_right', 'normal_load_left_side', 'normal_load_rear_axle', 'normal_load_rear_left', 'normal_load_rear_right', 'normal_load_right_side', 'normal_load_total']
+  OK   legacy channels missing after: []
+== assembly_four_wheel
+  OK   metrics.load_transfer_front_minus_rear before=9.313225746154785e-10      after=9.313225746154785e-10
+  OK   metrics.load_transfer_right_minus_left before=-9.313225746154785e-10     after=-9.313225746154785e-10
+  OK   metrics.normal_load_front_axle     before=7222177.728510661          after=7222177.728510661
+  OK   metrics.normal_load_front_left     before=3611088.8642553305         after=3611088.8642553305
+  OK   metrics.normal_load_front_right    before=3611088.86425533           after=3611088.86425533
+  OK   metrics.normal_load_left_side      before=7222177.728510661          after=7222177.728510661
+  OK   metrics.normal_load_rear_axle      before=7222177.72851066           after=7222177.72851066
+  OK   metrics.normal_load_rear_left      before=3611088.86425533           after=3611088.86425533
+  OK   metrics.normal_load_rear_right     before=3611088.86425533           after=3611088.86425533
+  OK   metrics.normal_load_right_side     before=7222177.72851066           after=7222177.72851066
+  OK   metrics.normal_load_total          before=14444355.457021322         after=14444355.457021322
+  OK   summary.front_axle                 before=7222177.728510661          after=7222177.728510661
+  OK   summary.front_rear_delta           before=9.313225746154785e-10      after=9.313225746154785e-10
+  OK   summary.left_side                  before=7222177.728510661          after=7222177.728510661
+  OK   summary.rear_axle                  before=7222177.72851066           after=7222177.72851066
+  OK   summary.right_left_delta           before=-9.313225746154785e-10     after=-9.313225746154785e-10
+  OK   summary.right_side                 before=7222177.72851066           after=7222177.72851066
+  OK   summary.total                      before=14444355.457021322         after=14444355.457021322
+  OK   summary.wheel_loads                before={'front_left': 3611088.8642553305, 'front_right': 3611088.86425533, 'rear_left': 3611088.86425533, 'rear_right': 3611088.86425533} after={'front_left': 3611088.8642553305, 'front_right': 3611088.86425533, 'rear_left': 3611088.86425533, 'rear_right': 3611088.86425533}
+  OK   legacy channel order before=['load_transfer_front_minus_rear', 'load_transfer_right_minus_left', 'normal_load_front_axle', 'normal_load_front_left', 'normal_load_front_right', 'normal_load_left_side', 'normal_load_rear_axle', 'normal_load_rear_left', 'normal_load_rear_right', 'normal_load_right_side', 'normal_load_total'] after=['load_transfer_front_minus_rear', 'load_transfer_right_minus_left', 'normal_load_front_axle', 'normal_load_front_left', 'normal_load_front_right', 'normal_load_left_side', 'normal_load_rear_axle', 'normal_load_rear_left', 'normal_load_rear_right', 'normal_load_right_side', 'normal_load_total']
+  OK   legacy channels missing after: []
+
+moved channels: 0
+OK: every pre-existing channel kept its name, order and value

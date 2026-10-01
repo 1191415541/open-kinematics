@@ -1,0 +1,17 @@
+AntiRollBarElement rows: 1
+  name='arb'
+  left_body='upright_L'   left_point=[   0. -700.  100.]
+  right_body='upright_R'  right_point=[  0. 700. 100.]
+  stiffness=1000.0
+
+declared ports (read off the template):
+  chassis_mount_L    role=chassis_mount_L    owner=torsion_bar_L   labels=['L'] kind=geometry
+  chassis_mount_R    role=chassis_mount_R    owner=torsion_bar_R   labels=['R'] kind=geometry
+  droplink_mount_L   role=droplink_mount_L   owner=droplink_L      labels=['L'] kind=geometry
+  droplink_mount_R   role=droplink_mount_R   owner=droplink_R      labels=['R'] kind=geometry
+
+arb.PORTS: ('chassis_mount_L', 'chassis_mount_R', 'droplink_mount_L', 'droplink_mount_R')
+
+the bar's own element for the built-in wishbone is UNCHANGED:
+  body_a / body_b are still the wheel-end bodies the template derives,
+  the points are the same two link points, and the stiffness is the model's.

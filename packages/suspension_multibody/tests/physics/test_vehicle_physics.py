@@ -53,14 +53,29 @@ def test_positive_lateral_acceleration_transfers_load_to_negative_y_side(
 
 
 def test_front_and_rear_roll_centers_are_finite_and_symmetric(full_vehicle_model) -> None:
+    """
+    Both axles report a finite roll centre on the vehicle centreline.
+
+    The height is solved from the axle's own force-to-generalized-displacement
+    derivative matrix (see ``vehicle/roll_centers``); the value asserted here is the
+    one the double-wishbone fixture's geometry produces, and it is pinned so a change
+    to the construction shows up as a number rather than as a shape that still fits.
+    """
     centers = compute_vehicle_roll_centers(full_vehicle_model)
 
     assert set(centers) == {"front", "rear"}
     for result in centers.values():
         assert np.all(np.isfinite(result.center))
         assert np.isclose(result.center[0], 0.0, atol=1e-8)
+        # The fixture's wishbone arms slope the same way on both sides, so the two
+        # force lines meet at the same height the arm-line construction gave: -180 mm
+        # below the road plane.
+        assert np.isclose(result.center[1], -180.0, atol=1e-4)
         assert np.isclose(
-            result.left_instant_center[0], -result.right_instant_center[0]
+            result.left_contact_patch_slope, -result.right_contact_patch_slope, atol=1e-9
+        )
+        assert np.isclose(
+            result.left_contact_patch[1], -result.right_contact_patch[1], atol=1e-9
         )
 
 

@@ -46,6 +46,9 @@ enum ElementWrenchType {
   // its meaning: it now counts only the elastic structure.
   kElementWrenchDamper = 8,
   kElementWrenchBumpStop = 9,
+  // The rotational actuator.  Appended for the same reason as the pair above:
+  // no existing code moved, and every code above keeps its value.
+  kElementWrenchRotationalTorque = 10,
 };
 
 /// One past the highest frozen code: how many type codes the channel defines,
@@ -53,7 +56,8 @@ enum ElementWrenchType {
 /// every such table instead of overflowing one -- the damper/bump-stop split did
 /// exactly that to the sink's `group_`, which is why this is a name rather than
 /// a literal.
-inline constexpr int kElementWrenchCodeCount = kElementWrenchBumpStop + 1;
+inline constexpr int kElementWrenchCodeCount =
+    kElementWrenchRotationalTorque + 1;
 
 /// The element counts a sample's rows are laid out from.  They are the counts
 /// of the model the solver runs, so the ABI (which sizes the block) and the
@@ -69,14 +73,15 @@ struct ElementWrenchCounts {
   std::size_t tires = 0;
   std::size_t bodies = 0;
   std::size_t drags = 0;
+  std::size_t rotational_torques = 0;
 };
 
 /// Records per sample: two per spring, damper, bump stop, bushing, anti-roll
-/// bar and steering actuator (one per end), one per tire for its contact
-/// wrench, four per tire for its drive/brake torques (drive, its reaction,
-/// brake, its reaction), and one per body plus one per aerodynamic drag for
-/// the external sources.  A body's row carries its declared wrench and its
-/// gravity; a drag's row carries the drag force at its application point.
+/// bar, rotational torque and steering actuator (one per end), one per tire for
+/// its contact wrench, four per tire for its drive/brake torques (drive, its
+/// reaction, brake, its reaction), and one per body plus one per aerodynamic
+/// drag for the external sources.  A body's row carries its declared wrench and
+/// its gravity; a drag's row carries the drag force at its application point.
 std::size_t element_wrench_record_count(const ElementWrenchCounts& counts);
 
 /// The process-wide recorder.  It is a single object because the row layout and

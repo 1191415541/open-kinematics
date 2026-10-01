@@ -34,9 +34,9 @@ const JointEntry kJoints[] = {
 // that still uses it is refused by name instead of being read as one of the
 // three.
 const char* const kElements[] = {
-    "spring",           "damper",          "bump_stop",       "bushing",
-    "anti_roll_bar",    "aerodynamic_drag", "steering_actuator", "wheel_torque",
-    "point_wrench",     "gravity",
+    "spring",           "damper",          "bump_stop",        "bushing",
+    "anti_roll_bar",    "aerodynamic_drag", "steering_actuator", "rotational_torque",
+    "wheel_torque",     "point_wrench",     "gravity",
 };
 
 const char* const kTires[] = {"vertical_linear", "fiala", "pac2002", "native_brush"};

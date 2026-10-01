@@ -29,9 +29,12 @@ from .model import (
     PropertySlot,
     Template,
 )
+from .ports import PortDeclaration
 from .registry import register
 
 __all__ = [
+    "ANTI_ROLL_BAR",
+    "ANTI_ROLL_BAR_NAME",
     "BRAKE",
     "BUILTINS",
     "CHASSIS",
@@ -357,6 +360,24 @@ _CONNECTIONS: tuple[ConnectionDefinition, ...] = (
     ConnectionDefinition("rack_center_L", "rack_center"),
 )
 
+#: The suspension's own semantic ports.  These are *declarations*, not names the
+#: assembly synthesizes from body names at build time: what a neighbour can plug
+#: into is a property of the template, so a template that hangs its anti-roll bar
+#: somewhere else states that here and the assembly follows.
+#:
+#: `arb_mount_<side>` is where an anti-roll bar's droplink attaches.  On the
+#: double wishbone that is the **lower arm**, the member that carries the wheel
+#: end's vertical travel on this topology.
+_PORTS: tuple[PortDeclaration, ...] = tuple(
+    PortDeclaration(
+        name=f"arb_mount_{side}",
+        role="arb_mount",
+        owner=f"lower_arm_{side}",
+        labels=frozenset({side}),
+    )
+    for side in ("L", "R")
+)
+
 #: Property slots the template asks a properties file to fill.  The defaults are
 #: the simplified template's own numbers: a template may carry its values
 #: directly, which is what the current assembly does.
@@ -402,6 +423,7 @@ DOUBLE_WISHBONE = Template(
     elastic_slots=("spring", "damper", "bushing"),
     property_slots=_PROPERTY_SLOTS,
     outputs=_OUTPUTS,
+    ports=_PORTS,
     suspension_kind="double_wishbone",
     description=(
         "The built-in double-wishbone template: arms rotate on a single inboard revolute "
@@ -602,15 +624,31 @@ BRAKE = Template(
     parts=(),
     connections=_BRAKE_MOUNTS,
     property_slots=(
-        PropertySlot("brake_mu", "-", default=0.4),
+        # The standardized slot set of the roadmap's 2.1 section.  Three of the
+        # four carry the recorded Adams simple-brake values, so this template is
+        # still the transcribed `SFORCE/31-34` model rather than a blank one.
+        # `rotor_inertia` is new: the landed kernel law does not read an inertia
+        # (the couple goes on the wheel body the model already gives one to), so
+        # the default is a derived figure and says so -- a solid steel disc,
+        # 0.28 m outside diameter, 12 mm thick, 7850 kg/m^3, 0.5*m*r^2.
+        #
+        # The retired names map one for one: `brake_mu` -> `friction_coeff`,
+        # `effective_piston_radius` -> `effective_radius`, and `piston_area`
+        # unchanged.  `max_brake_value` became a module constant
+        # (`brake.DEMAND_SCALE`): it is the source document's normalization of
+        # its driver input, not a property of the brake.  `front_brake_bias` is
+        # gone: one element per wheel states its own share, so the front/rear
+        # split is no longer a parameter of this role.
         PropertySlot("piston_area", "mm^2", default=2500.0),
-        PropertySlot("effective_piston_radius", "mm", default=145.0),
-        PropertySlot("front_brake_bias", "-", default=0.6),
-        PropertySlot("max_brake_value", "-", default=0.1),
+        PropertySlot("effective_radius", "mm", default=145.0),
+        PropertySlot("friction_coeff", "-", default=0.4),
+        PropertySlot("rotor_inertia", "kg*m^2", default=0.0568),
     ),
     outputs=(OutputDeclaration("brake_torque", "N*mm", "kernel"),),
     suspension_kind="brake_4wdisk",
-    description="The simplified torque-only brake template under the brake role.",
+    description=(
+        "The simplified torque-element brake template under the brake role."
+    ),
 )
 
 _DRIVE_MOUNTS: tuple[ConnectionDefinition, ...] = tuple(
@@ -625,14 +663,95 @@ DRIVE = Template(
     parts=(),
     connections=_DRIVE_MOUNTS,
     property_slots=(
-        PropertySlot("driven_wheels", "-", default=0.0),
-        PropertySlot("drive_split", "-", default=0.0),
-        PropertySlot("maximum_drive_torque", "N*mm", default=0.0),
+        # The standardized slot set of the roadmap's 2.1 section.  `max_torque`
+        # is the motor's torque and the other two are the transfer to the wheel:
+        # the element's wheel torque is `max_torque * gear_ratio * efficiency *
+        # share * drive_input`, so an identity transfer (1.0/1.0) is what makes
+        # one element reproduce the recorded wheel torque value for value.  The
+        # retired `driven_wheels`/`drive_split`/`maximum_drive_torque` slots are
+        # gone: with one element per wheel the driven set is the set of wheels
+        # that have an element, the share is the element's own, and
+        # `DrivelineSpec` still validates both.
+        PropertySlot("gear_ratio", "-", default=1.0),
+        PropertySlot("efficiency", "-", default=1.0),
+        PropertySlot("max_torque", "N*mm", default=0.0),
     ),
     outputs=(OutputDeclaration("drive_torque", "N*mm", "kernel"),),
     suspension_kind="driveline",
-    description="The simplified torque-only powertrain template under the drive role.",
+    description=(
+        "The simplified torque-element powertrain template under the drive role."
+    ),
 )
+
+#: side.  The bar is a real body rather than a bare element because the bar itself
+#: is what twists, and the droplink is what carries the wheel end's travel into
+#: it; keeping them as bodies is what lets the assembly point at each one.
+_ANTI_ROLL_BAR_PARTS: tuple[PartDefinition, ...] = tuple(
+    PartDefinition(name)
+    for name in ("torsion_bar_L", "torsion_bar_R", "droplink_L", "droplink_R")
+)
+
+#: The four mounts, each attached to the part it actually hangs on.  The two
+#: chassis mounts are where the bar pivots on the sprung mass; the two droplink
+#: mounts are where the bars meet their droplinks.  `labels` keeps a left port
+#: from ever satisfying a right requirement.
+_ANTI_ROLL_BAR_PORTS: tuple[PortDeclaration, ...] = tuple(
+    PortDeclaration(
+        name=f"{mount}_{side}",
+        role=f"{mount}_{side}",
+        owner=f"{owner}_{side}",
+        labels=frozenset({side}),
+    )
+    for mount, owner in (
+        ("chassis_mount", "torsion_bar"),
+        ("droplink_mount", "droplink"),
+    )
+    for side in ("L", "R")
+)
+
+#: The bar's own connections: the chassis mount is the revolute the bar half
+#: turns in, and the droplink mount is the ball joint between bar half and
+#: droplink.  Both are declared per side so the two sides are built from the same
+#: statement rather than mirrored by hand.
+_ANTI_ROLL_BAR_CONNECTIONS: tuple[ConnectionDefinition, ...] = tuple(
+    ConnectionDefinition(
+        f"{mount}_{side}",
+        f"{mount}_{side}",
+        joint=joint,
+        owner=f"{owner}_{side}",
+        label=mount,
+    )
+    for mount, owner, joint in (
+        ("chassis_mount", "torsion_bar", "revolute"),
+        ("droplink_mount", "droplink", "spherical"),
+    )
+    for side in ("L", "R")
+)
+
+
+#: The name the anti-roll bar template registers under.
+ANTI_ROLL_BAR_NAME = "anti_roll_bar_simplified"
+
+
+ANTI_ROLL_BAR = Template(
+    name=ANTI_ROLL_BAR_NAME,
+    role="anti_roll_bar",
+    parts=_ANTI_ROLL_BAR_PARTS,
+    connections=_ANTI_ROLL_BAR_CONNECTIONS,
+    ports=_ANTI_ROLL_BAR_PORTS,
+    property_slots=(
+        # The bar's torsional rate, in the wheel-end travel units the element law
+        # reads: the couple is `torsional_stiffness * (right rise - left rise)`.
+        PropertySlot("torsional_stiffness", "N/mm", default=0.0),
+    ),
+    outputs=(OutputDeclaration("anti_roll_torque", "N*mm", "kernel"),),
+    suspension_kind="anti_roll_bar",
+    description=(
+        "The simplified anti-roll bar: a torsion-bar half and a droplink per "
+        "side, with the four mounts the bar and its droplinks attach through."
+    ),
+)
+
 
 #: Every template the package registers at import, in registration order.
 BUILTINS: tuple[Template, ...] = (
@@ -642,6 +761,7 @@ BUILTINS: tuple[Template, ...] = (
     WHEEL,
     BRAKE,
     DRIVE,
+    ANTI_ROLL_BAR,
 )
 
 

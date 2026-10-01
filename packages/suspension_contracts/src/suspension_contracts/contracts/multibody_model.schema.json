@@ -139,8 +139,8 @@
         "type": {
           "enum": [
             "spring", "damper", "bump_stop", "bushing", "anti_roll_bar",
-            "aerodynamic_drag", "steering_actuator", "wheel_torque",
-            "point_wrench", "gravity"
+            "aerodynamic_drag", "steering_actuator", "rotational_torque",
+            "wheel_torque", "point_wrench", "gravity"
           ]
         },
         "body_a": {"type": "string"},
