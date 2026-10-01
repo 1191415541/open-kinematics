@@ -15,8 +15,9 @@ without re-deriving anything.  Those references never reach the contract.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 
 import numpy as np
 
@@ -51,6 +52,7 @@ from ..modeling.primitives import (
     PointCoincidence,
     PrismaticJoint,
     RevoluteJoint,
+    RotationalTorqueElement,
     StaticDamperElement,
     UniversalJoint,
     VerticalTireElement,
@@ -180,6 +182,17 @@ class PreparedVehicleRun:
     source_model: VehicleModel = field(compare=False, repr=False)
     source_case: VehicleDynamicCase = field(compare=False, repr=False)
 
+    #: The normalized driver demands a case's *elements* follow (subtask p2-09).
+    #:
+    #: Empty unless the model declares ``DrivelineSpec.torque_demand``: a model
+    #: that declares one gets a torque element per declared wheel end, whose
+    #: magnitude the kernel reads from these tables, and the corresponding
+    #: Newton-metre table above is then left empty for those wheels -- a wheel
+    #: is stated in one unit system or the other, and the kernel refuses a case
+    #: that states both.
+    wheel_demand: dict[str, tuple[float, ...]] = field(default_factory=dict)
+    brake_demand: dict[str, tuple[float, ...]] = field(default_factory=dict)
+
 
 @dataclass(frozen=True)
 class _BodyFrame:
@@ -285,6 +298,15 @@ def prepare_vehicle_run(
     wheel_torque, brake_torque = _build_wheel_torque_signals(
         model, case, times, length_scale
     )
+    wheel_demand, brake_demand = _build_demand_signals(model, case, times)
+    # The unit systems are alternatives, so a wheel an element drives or brakes
+    # stops appearing in the Newton-metre tables: the evidence for it is the
+    # element, and leaving a zero there would be a statement the kernel reads as
+    # "this wheel also gets zero newton-metres" rather than as "no table".
+    for wheel in wheel_demand:
+        wheel_torque.pop(wheel, None)
+    for wheel in brake_demand:
+        brake_torque.pop(wheel, None)
     solver = _native_solver_settings(case.solver, case.static_equilibrium, length_scale)
     springs, dampers, bump_stops, bushings = _build_elements(
         assembly, body_frames, length_scale
@@ -318,6 +340,12 @@ def prepare_vehicle_run(
             float(value * length_scale)
             for value in case.solver.gravity.as_tuple()
         ),
+        # The torque elements the assembly produced (subtask p2-09).  They are
+        # read off the composed runtime rather than rebuilt here: the element's
+        # two bodies came from a port match the assembly made, and re-deriving
+        # that pairing in the preparation layer would be a second decision about
+        # which member reacts the couple.
+        rotational_torques=_build_rotational_torques(assembly, body_index),
     )
     axle_case = AxleDynamicsCase(
         name=case.name,
@@ -336,6 +364,8 @@ def prepare_vehicle_run(
         road_velocity=road_velocity,
         wheel_torque=wheel_torque,
         brake_torque={} if brake_torque is None else brake_torque,
+        wheel_demand=wheel_demand,
+        brake_demand=brake_demand,
         static_rotation_gauges=static_rotation_gauges,
         static_gauge_body=model.chassis.name if gauge_active else None,
         static_gauge_dof_mask=(1 << 0) | (1 << 1) | (1 << 5) if gauge_active else 0,
@@ -947,6 +977,13 @@ def _build_elements(
             raise ValueError(
                 f"vertical tire element {element.name!r} must be represented by the native tire ABI"
             )
+        elif isinstance(element, RotationalTorqueElement):
+            # A torque element has its own ABI family, and it is emitted from
+            # `_NativeVehicleModel.rotational_torques` rather than from this
+            # elastic-element list (subtask p2-09).  Skipping it here is what
+            # keeps one element from being described twice -- a coupling that
+            # appeared in both lists would be applied twice.
+            continue
         else:
             raise ValueError(
                 f"native vehicle dynamics does not support element {type(element).__name__}"
@@ -1613,6 +1650,111 @@ def _build_wheel_torque_signals(
         drive_results[name] = tuple(drive_values)
         brake_results[name] = tuple(brake_values)
     return drive_results, brake_results
+
+
+def _build_demand_signals(
+    model: VehicleModel,
+    case: VehicleDynamicCase,
+    times: np.ndarray,
+) -> tuple[dict[str, tuple[float, ...]], dict[str, tuple[float, ...]]]:
+    """
+    Return the normalized driver demands the model's torque elements follow.
+
+    This is the other half of the mechanism ``_build_wheel_torque_signals``
+    belongs to: where that one samples a torque per wheel in newton-metres, this
+    one samples the *driver's own signal* -- the brake pressure and the throttle
+    demand -- and lets the kernel's element law turn it into a couple at every
+    step.  The distinction is the road map's 2.1 requirement: the element
+    follows the pedal, not a table somebody pre-computed from it.
+
+    Which wheels get a table is the model's declaration, read through
+    :func:`~suspension_multibody.subsystems.torque_elements.wheel_demand_wheels`
+    so the elements and the tables cannot disagree about it -- a table for a
+    wheel no element reads would be a silent no-op, and an element without a
+    table would follow a demand that does not exist.
+
+    The values are the *unnormalized* signal as the case states it, and they are
+    range-checked here by name: a brake pressure outside ``[0, 1]`` or a throttle
+    demand outside ``[-1, 1]`` is refused rather than clipped, matching what
+    ``brake.py`` and ``drive.py`` refuse for a direct call.
+    """
+    from ..subsystems.torque_elements import (
+        BRAKE_DEMAND,
+        DRIVE_DEMAND,
+        wheel_demand_wheels,
+    )
+
+    wheel_demand: dict[str, tuple[float, ...]] = {}
+    brake_demand: dict[str, tuple[float, ...]] = {}
+    for demand, table, low, name in (
+        (BRAKE_DEMAND, brake_demand, 0.0, "brake_input"),
+        (DRIVE_DEMAND, wheel_demand, -1.0, "drive_input"),
+    ):
+        wheels = wheel_demand_wheels(model, demand)
+        if not wheels:
+            continue
+        signal = case.brake_input if demand == BRAKE_DEMAND else case.drive_input
+        values = tuple(float(signal.value_at(float(time))) for time in times)
+        for value in values:
+            if not math.isfinite(value) or value < low or value > 1.0:
+                raise ValueError(
+                    f"{name} must be within [{low}, 1]; got {value!r}"
+                )
+        for wheel in wheels:
+            table[wheel] = values
+    return wheel_demand, brake_demand
+
+
+def _build_rotational_torques(
+    assembly: object,
+    body_index: Mapping[str, int],
+) -> tuple[AxleRotationalTorque, ...]:
+    """
+    Return the torque elements the composed assembly carries, in SI.
+
+    The elements already exist by the time this runs -- the assembly built them
+    from a port match -- so this is a *translation* rather than a second
+    decision: the two bodies are the element's own, and the axis is the
+    element's own.  The gain arrives in SI: the template's slots are in the
+    model's engineering units and
+    :mod:`~suspension_multibody.subsystems.torque_elements` converts them once
+    (its ``MM_TO_M``), so scaling again here would convert the same newton-metre
+    twice -- the 1000x error that would make a brake demand a thousand times too
+    weak, and one no reference result would catch because both runs would move.
+
+    A body the element names has to be in the model's body list; one that is not
+    means the assembly and the preparation disagree about what exists, which is
+    refused by name rather than translated into an index nobody meant.
+    """
+    assembled = getattr(assembly, "elements", ())
+    torques: list[AxleRotationalTorque] = []
+    for element in assembled:
+        if type(element).__name__ != "RotationalTorqueElement":
+            continue
+        parameters = element.parameters
+        for end, body in (("reaction", element.body_a), ("driven", element.body_b)):
+            if body not in body_index:
+                raise ValueError(
+                    f"torque element {element.name!r} names {end} body {body!r}, "
+                    "which the prepared model does not carry"
+                )
+        torques.append(
+            AxleRotationalTorque(
+                name=element.name,
+                body_a=element.body_a,
+                body_b=element.body_b,
+                axis_a=tuple(float(value) for value in parameters.axis_a),
+                reference_quaternion_a=tuple(
+                    float(value) for value in parameters.reference_quaternion
+                ),
+                stiffness_n_m_per_rad=float(parameters.stiffness),
+                damping_n_m_s_per_rad=float(parameters.damping),
+                max_torque_n_m=float(parameters.max_torque),
+                demand_source=int(parameters.demand_source),
+                demand_tire=int(parameters.demand_tire),
+            )
+        )
+    return tuple(torques)
 
 
 def _native_solver_settings(

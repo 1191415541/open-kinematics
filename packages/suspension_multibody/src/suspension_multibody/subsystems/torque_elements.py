@@ -36,6 +36,27 @@ The elements are produced only for the wheels the model *declares a driver
 demand for* (``DrivelineSpec.torque_demand``).  A model that declares none keeps
 the pre-sampled wheel-torque tables it always had, byte for byte -- which is what
 makes this additive rather than a behaviour change to every recorded result.
+
+The two units the slots and the kernel each use
+-----------------------------------------------
+The standardized template slots are the recorded Adams simple-brake numbers, so
+they are in the model's own engineering units: `piston_area` in mm^2 and
+`effective_radius` in mm, which makes ``brake_amplitude`` an **N*mm** figure.
+The kernel's law works in SI -- `stiffness`, `max_torque` and the couple it
+applies are all N*m -- and it scales a document's moment *parameters* by the
+document's length unit (``contract_model.cpp``'s ``stiffness *= length_scale_``).
+So the value this module hands the element is the amplitude converted to N*m,
+and the conversion is `MM_TO_M`, named rather than inlined: a bare ``/ 1000.0``
+here would be the kind of magic the assembly layer does not get to have.
+
+The share is the recorded split, not a new one
+----------------------------------------------
+``_brake_share`` reproduces the retired builder's allocation exactly: the front
+bias is split **among the braked wheels of that axle** rather than given whole
+to each (``preparation/vehicle_dynamic.py``'s ``_build_wheel_torque_signals``
+divided by ``len(front_braked)``), so a 60/40 car brakes its two front wheels at
+0.3 each.  The share multiplies the element's gain, which is the same statement
+as scaling the demand: ``min((gain*share)*demand, cap*share)``.
 """
 
 from __future__ import annotations
@@ -51,16 +72,32 @@ if TYPE_CHECKING:  # pragma: no cover - annotations only, keeps the import small
 
 __all__ = [
     "BRAKE_DEMAND",
+    "BRAKE_SOURCE",
     "DRIVE_DEMAND",
+    "DRIVE_SOURCE",
+    "MM_TO_M",
     "REACTION_ROLE",
     "rotational_torque_rows",
     "wheel_demand_wheels",
 ]
 
-#: The driver demand a wheel's brake follows.
+#: The driver demand a wheel's brake follows, as the model spells it.
 BRAKE_DEMAND = "brake_torque"
-#: The driver demand a wheel's drive follows.
+#: The driver demand a wheel's drive follows, as the model spells it.
 DRIVE_DEMAND = "wheel_torque"
+
+#: The kernel's `TorqueDemandSource` codes (`mb_model/enums.hpp`).
+#:
+#: They travel on the element's integer block, so the numbers are the kernel's
+#: and not this module's invention: 0 is the unit demand, 1 the case's
+#: per-tire `wheel_torque` column and 2 its `brake_torque` column.  The columns
+#: a *normalized* demand uses are the two new roles, which is why the case
+#: emitter writes `brake_pressure`/`throttle_demand` for these elements.
+BRAKE_SOURCE = 2
+DRIVE_SOURCE = 1
+
+#: Millimetres per metre: the template's slot units to the kernel's SI ones.
+MM_TO_M = 1.0e-3
 
 #: The requirement role each end of a couple is matched through.  A *role*, not
 #: a body name: what a vehicle declares is that these wheels need something to
@@ -76,13 +113,20 @@ def wheel_demand_wheels(model: VehicleModel, demand: str) -> tuple[str, ...]:
     wheel is braked: a template that states one driven corner is a different
     vehicle from one that states four, and the elements must be one per declared
     wheel or the count would be a guess.
+
+    ``DrivelineSpec.torque_demand`` is the switch the whole mechanism hangs on,
+    and its default is ``"none"`` -- the state every existing model is in.  A
+    model that states none produces no elements here and keeps the pre-sampled
+    tables its results were recorded from.
     """
     declared = getattr(model.driveline, "torque_demand", "none")
-    if declared == "none" or declared != ("drive" if demand == DRIVE_DEMAND else "brake"):
+    if declared == "none":
+        return ()
+    wanted = "drive" if demand == DRIVE_DEMAND else "brake"
+    if declared != wanted and declared != "both":
         return ()
     if demand == DRIVE_DEMAND:
-        driven = tuple(model.driveline.driven_wheels)
-        return driven
+        return tuple(model.driveline.driven_wheels)
     return tuple(wheel.name for wheel in model.wheels if wheel.braked)
 
 
@@ -186,28 +230,28 @@ def _element_for(
     The slot values are the role's own defaults, which is what "the parameter
     comes from the template's property slot" means for a model that states no
     properties file: the simplified template carries its numbers, and a caller
-    that wants others states them on the template.
+    that wants others states them on the template.  The gain is converted to
+    SI, because the slots are in the model's engineering units and the kernel's
+    couple is in newton-metres -- see the module docstring.
     """
     from ..templates.builtin import BRAKE, DRIVE
 
     if demand == BRAKE_DEMAND:
-        template = BRAKE
-        slots = _slots(template)
-        source = 2
-        shared = brake_shared(model, wheel)
+        slots = _slots(BRAKE)
         return subsystem.wheel_torque_element(
             slots,
             wheel=wheel,
             own_body=own_body,
             report=report,
             ports=ports,
-            demand=shared,
-            share=_brake_share(model, wheel),
-            demand_source=source,
+            demand=1.0,
+            share=brake_share(model, wheel),
+            gain_scale=MM_TO_M,
+            reaction_role=REACTION_ROLE,
+            demand_source=BRAKE_SOURCE,
             demand_tire=_tire_index(model, wheel),
         )
-    template = DRIVE
-    slots = _slots(template)
+    slots = _slots(DRIVE)
     return subsystem.wheel_torque_element(
         model.driveline,
         slots=slots,
@@ -215,8 +259,10 @@ def _element_for(
         own_body=own_body,
         report=report,
         ports=ports,
-        drive=shared_drive(model),
-        demand_source=1,
+        drive=1.0,
+        gain_scale=MM_TO_M,
+        reaction_role=REACTION_ROLE,
+        demand_source=DRIVE_SOURCE,
         demand_tire=_tire_index(model, wheel),
     )
 
@@ -230,34 +276,32 @@ def _slots(template: Any) -> dict[str, float]:
     }
 
 
-def brake_shared(model: VehicleModel, wheel: str) -> float:
-    """Return the normalized brake demand this wheel's element is built at."""
-    from ..schema import TimeSignal
-
-    signal = dict(model.driveline.__dict__.get("_brake_signal", ()) or ())
-    if wheel in signal:
-        return 1.0
-    del TimeSignal
-    return 1.0
-
-
-def _brake_share(model: VehicleModel, wheel: str) -> float:
+def brake_share(model: VehicleModel, wheel: str) -> float:
     """
-    Return this wheel's part of one brake demand.
+    Return this wheel's part of one brake demand, the recorded way.
 
-    The front/rear split is no longer a slot of the brake role (one element per
-    wheel states its own share), so it is read here from the driveline's own
-    ``front_brake_bias`` -- the field the retired builder used -- which keeps a
-    model that states 60/40 producing the split it always did.
+    The retired builder split the bias among the braked wheels of the wheel's
+    own axle, so a 60/40 car brakes each front wheel at 0.3 and each rear at
+    0.2 -- reproducing that here is what keeps the elements' allocation the one
+    the recorded results were produced with.  A wheel that is not a front wheel
+    takes the rear share; a model that brakes only one axle gives that axle's
+    wheels the whole demand, which is what "split among the braked wheels"
+    means when there is one of them.
     """
-    if not wheel.startswith("front_"):
-        return 1.0 - float(model.driveline.front_brake_bias)
-    return float(model.driveline.front_brake_bias)
-
-
-def shared_drive(model: VehicleModel) -> float:
-    """Return the normalized drive demand a driven wheel's element is built at."""
-    return 1.0
+    bias = float(model.driveline.front_brake_bias)
+    front_wheels = sorted(
+        name
+        for name, spec in ((item.name, item) for item in model.wheels)
+        if spec.braked and name.startswith("front_")
+    )
+    rear_wheels = sorted(
+        name
+        for name, spec in ((item.name, item) for item in model.wheels)
+        if spec.braked and name.startswith("rear_")
+    )
+    if wheel.startswith("front_"):
+        return bias / len(front_wheels) if front_wheels else 0.0
+    return (1.0 - bias) / len(rear_wheels) if rear_wheels else 0.0
 
 
 def _tire_index(model: VehicleModel, wheel: str) -> int:

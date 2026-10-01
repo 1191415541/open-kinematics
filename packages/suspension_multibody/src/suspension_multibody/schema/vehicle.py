@@ -230,6 +230,25 @@ class DrivelineSpec(StrictModel):
     effective_piston_radius: float = Field(default=145.0, gt=0, exclude=True)
     #: Demand scaling of the simplified brake (the `.adm`'s `0.1`).
     max_brake_value: float = Field(default=0.1, gt=0, le=1, exclude=True)
+    #: Which driver demand the wheels' torque elements follow (subtask p2-09).
+    #:
+    #: ``"none"`` is the default and means exactly what every existing model
+    #: says: the brake and drive reach the solver through the per-wheel torque
+    #: tables the preparation layer has always built.  A model that states a
+    #: demand asks for the other mechanism instead -- a ``rotational_torque``
+    #: element per declared wheel end, whose magnitude the kernel reads from the
+    #: case's normalized ``brake_pressure``/``throttle_demand`` signal at every
+    #: step.  The two are alternatives rather than a combination: a wheel is
+    #: stated in Newton-metres or as a fraction, and the kernel refuses a case
+    #: that states both for one wheel's channel.
+    #:
+    #: Excluded from `model_dump` for the same reason the four fields above are:
+    #: `api.py` hashes the dump into `Provenance.model_hash`, so a dump-visible
+    #: field would move every existing model hash and with it the recorded
+    #: baselines.  Exclusion is what keeps the switch usable.
+    torque_demand: Literal["none", "drive", "brake", "both"] = Field(
+        default="none", exclude=True
+    )
 
     @model_validator(mode="after")
     def _validate_distribution(self) -> DrivelineSpec:

@@ -92,6 +92,10 @@ _ELEMENT_WRENCH_TYPES: tuple[tuple[int, str, int], ...] = (
     # only.  Both apply a wrench on each end, like the spring does.
     (8, "damper", 2),
     (9, "bump_stop", 2),
+    # The rotational actuator (subtask p2-09 registers it here; the kernel's own
+    # code is `kElementWrenchRotationalTorque = 10`).  It applies a pure couple
+    # on each end, like the anti-roll bar above, so it has two rows.
+    (10, "rotational_torque", 2),
 )
 
 ELEMENT_WRENCH_TYPE_NAMES: Mapping[int, str] = MappingProxyType(

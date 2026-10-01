@@ -312,6 +312,10 @@ _CHANNEL_DOCUMENT_TYPES: Mapping[int, tuple[str, str]] = MappingProxyType(
         6: ("tires", ""),
         8: ("elements", "damper"),
         9: ("elements", "bump_stop"),
+        # The rotational actuator (subtask p2-09).  It *is* a declared element,
+        # so its index is a position in the document's element list, filtered by
+        # this type like every other row here.
+        10: ("elements", "rotational_torque"),
     }
 )
 

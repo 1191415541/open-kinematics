@@ -465,6 +465,14 @@ def model_document(
         _steering_element(prepared.steering, index, prepared.body_names)
         for index in range(len(prepared.steering.names))
     )
+    # The brake and drive torque elements (subtask p2-09).  Their gain and cap
+    # are already SI -- the preparation layer converted the template's
+    # engineering-unit slots once -- and the document declares the model in
+    # metres, so the kernel's own moment scaling is the identity here.
+    elements.extend(
+        _rotational_torque_element(torque)
+        for torque in native.rotational_torques
+    )
     document: dict[str, Any] = {
         "contract": "multibody-model",
         "contract_version": 1,
@@ -540,6 +548,30 @@ def _append_table(
     )
 
 
+def _rotational_torque_element(torque) -> dict[str, Any]:
+    """One active couple, as the element the kernel's own family reads."""
+    return {
+        "name": torque.name,
+        "type": "rotational_torque",
+        # `body_a` is the reaction end and `body_b` the driven one, the native
+        # element's own fields; swapping them reverses every couple it applies.
+        "body_a": torque.body_a,
+        "body_b": torque.body_b,
+        "parameters": {
+            "axis_a": _vec3(torque.axis_a),
+            "reference_quaternion": _quaternion(torque.reference_quaternion_a),
+            "stiffness": float(torque.stiffness_n_m_per_rad),
+            "damping": float(torque.damping_n_m_s_per_rad),
+            "max_torque": float(torque.max_torque_n_m),
+        },
+        # The demand channel: which of the case's per-tire signals sets the
+        # magnitude, and which column it reads.  The two travel with the element
+        # because they describe the element, exactly as its gain does.
+        "demand_source": int(torque.demand_source),
+        "demand_tire": int(torque.demand_tire),
+    }
+
+
 def _solver_block(settings) -> dict[str, Any]:
     """Compatibility wrapper for the shared neutral solver serializer."""
     return solver_settings_document(settings)
@@ -574,12 +606,23 @@ def case_document(
         velocity = prepared.road_velocity.get(tire.name)
         if velocity is not None:
             _append_table(blob, tables, velocity, role="road_velocity", tire=tire.name)
+        # A wheel is stated in Newton-metres or as a normalized demand, never
+        # both (subtask p2-09): the preparation layer removes a wheel from the
+        # torque tables as soon as an element follows a demand for it, and the
+        # kernel refuses a case that carries both for one wheel's channel.  The
+        # two roles are therefore alternatives in one document, not a pair.
         torque = prepared.wheel_torque.get(tire.name)
         if torque is not None:
             _append_table(blob, tables, torque, role="wheel_torque", tire=tire.name)
         brake = prepared.brake_torque.get(tire.name)
         if brake is not None:
             _append_table(blob, tables, brake, role="brake_torque", tire=tire.name)
+        demand = prepared.brake_demand.get(tire.name)
+        if demand is not None:
+            _append_table(blob, tables, demand, role="brake_pressure", tire=tire.name)
+        drive = prepared.wheel_demand.get(tire.name)
+        if drive is not None:
+            _append_table(blob, tables, drive, role="throttle_demand", tire=tire.name)
     # The steering buffers are flat `sample_count * actuator_count` tables in
     # the ABI, so a column is a stride through them rather than a slice.
     actuator_count = len(prepared.steering.names)

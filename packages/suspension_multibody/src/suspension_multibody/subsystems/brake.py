@@ -203,6 +203,10 @@ def torque_parameters(
     demand: float,
     share: float = 1.0,
     axis_a: object | None = None,
+    demand_source: int = 0,
+    demand_tire: int = -1,
+    gain_scale: float = 1.0,
+    reaction_role: str | None = None,
 ) -> RotationalTorqueParameters:
     """
     Return the couple one braked wheel's element carries.
@@ -236,9 +240,11 @@ def torque_parameters(
         else np.asarray(axis_a, dtype=float)
     )
     return RotationalTorqueParameters(
-        stiffness=amplitude,
-        max_torque=full_demand,
+        stiffness=amplitude * gain_scale,
+        max_torque=full_demand * gain_scale,
         axis_a=axis,
+        demand_source=demand_source,
+        demand_tire=demand_tire,
     )
 
 
@@ -252,6 +258,10 @@ def wheel_torque_element(
     demand: float,
     share: float = 1.0,
     axis_a: object | None = None,
+    demand_source: int = 0,
+    demand_tire: int = -1,
+    gain_scale: float = 1.0,
+    reaction_role: str | None = None,
 ) -> ResolvedElement:
     """
     Return the brake torque element one wheel carries, as a declared row.
@@ -272,7 +282,7 @@ def wheel_torque_element(
 
     pairing = pair_torque_bodies(
         name=f"brake_{wheel}",
-        role=BRAKE_REACTION_ROLE,
+        role=BRAKE_REACTION_ROLE if reaction_role is None else reaction_role,
         own_body=own_body,
         report=report,
         ports=ports,
@@ -280,7 +290,9 @@ def wheel_torque_element(
     element = torque_element_row(
         pairing,
         torque_parameters(
-            parameters, wheel=wheel, demand=demand, share=share, axis_a=axis_a
+            parameters, wheel=wheel, demand=demand, share=share, axis_a=axis_a,
+            demand_source=demand_source, demand_tire=demand_tire,
+            gain_scale=gain_scale,
         ),
     )
     return cast(ResolvedElement, element)

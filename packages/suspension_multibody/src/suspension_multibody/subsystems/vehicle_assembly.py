@@ -24,7 +24,7 @@ re-deriving them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 import numpy as np
@@ -144,10 +144,37 @@ def compose_vehicle_runtime(
     """
     from .vehicle_parts import _body_from_spec
 
-    return compose_entries_runtime(
+    runtime = compose_entries_runtime(
         axle_entries_for_model(model),
         chassis_name=model.chassis.name,
         chassis_body=_body_from_spec(model.chassis),
         mode=mode,
         request=request,
     )
+    return _with_torque_elements(model, runtime)
+
+
+def _with_torque_elements(
+    model: VehicleModel, runtime: VehicleRuntime
+) -> VehicleRuntime:
+    """
+    Return ``runtime`` with the model's brake and drive torque elements added.
+
+    The elements are built *after* the assembly rather than inside it because a
+    couple's reaction member is the wheel end's own carrier, and that table only
+    exists once every entry has handed its wheels over.  Building them here also
+    keeps the entry list free of a role the vehicle owns: the brake and drive
+    are the vehicle's subsystem, exactly as ``DEFAULT_VEHICLE_SUBSYSTEMS`` says.
+
+    A model that declares no driver demand
+    (``DrivelineSpec.torque_demand == "none"``, the default) gets a runtime whose
+    ``elements`` are the ones the assembly produced, untouched -- which is what
+    keeps every recorded result exactly what it was.
+    """
+    from .element_build import build_element
+    from .torque_elements import rotational_torque_rows
+
+    rows = rotational_torque_rows(model, runtime)
+    if not rows:
+        return runtime
+    return replace(runtime, elements=runtime.elements + tuple(build_element(row) for row in rows))

@@ -186,20 +186,24 @@ def test_rows_per_element_is_the_row_stride_of_the_frozen_layout() -> None:
         rows_per_element(99)
 
 
-def test_the_split_codes_are_named_and_appended() -> None:
+def test_the_appended_codes_are_named_and_none_of_them_moved() -> None:
     """
-    The two new codes keep code 1's meaning and do not renumber the old ones.
+    Every appended code keeps the old ones' meaning and does not renumber them.
 
     The channel's type codes are frozen: a stored artifact's rows carry them, so
-    inserting a code would silently relabel every row after it.  The split added
-    its two laws at 8 and 9 for that reason, and `spring` now counts only the
-    elastic structure.
+    inserting a code would silently relabel every row after it.  The damper /
+    bump-stop split appended its two laws at 8 and 9 for that reason, and
+    `spring` now counts only the elastic structure.  The rotational actuator
+    follows the same rule at 10 (subtask p2-09) -- the kernel's own code is
+    `kElementWrenchRotationalTorque = 10`, and this table is that code's name on
+    the reading side.
     """
     assert ELEMENT_WRENCH_TYPE_NAMES[1] == "spring"
     assert ELEMENT_WRENCH_TYPE_NAMES[8] == "damper"
     assert ELEMENT_WRENCH_TYPE_NAMES[9] == "bump_stop"
+    assert ELEMENT_WRENCH_TYPE_NAMES[10] == "rotational_torque"
     # Every frozen code keeps its name and its position.
-    assert tuple(sorted(ELEMENT_WRENCH_TYPE_NAMES)) == (1, 2, 3, 4, 5, 6, 7, 8, 9)
+    assert tuple(sorted(ELEMENT_WRENCH_TYPE_NAMES)) == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 
 
 def test_a_missing_block_is_the_off_channel_and_not_an_error(monkeypatch) -> None:
