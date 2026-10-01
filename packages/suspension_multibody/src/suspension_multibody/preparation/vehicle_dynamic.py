@@ -32,6 +32,7 @@ from ..axle_dynamics.schema import (
     AxleDrivenCoordinate,
     AxleDynamicsCase,
     AxleJoint,
+    AxleRotationalTorque,
     AxleSolverSettings,
     AxleSpring,
     AxleTire,
@@ -135,6 +136,11 @@ class _NativeVehicleModel:
     # carries the field so the driven-coordinate machinery has one model shape to
     # work with on both entry points.
     driven_coordinates: tuple[AxleDrivenCoordinate, ...] = ()
+    #: The vehicle's torque elements (subtask p2-09).  Empty by default, which is
+    #: what every model gets: the brake and drive roles produce nothing unless the
+    #: model declares a driver demand for them, so a vehicle that states none
+    #: keeps the wheel-torque tables it always had.
+    rotational_torques: tuple[AxleRotationalTorque, ...] = ()
 
 
 @dataclass(frozen=True)

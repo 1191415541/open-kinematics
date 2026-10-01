@@ -66,6 +66,18 @@ struct ContractCase {
   std::vector<double> steering_rate;
   /// Per-tire brake torque, `sample_count * tire_count`.
   std::vector<double> brake_torque;
+  /// The normalized driver demands, `sample_count * tire_count` each (p2-10).
+  ///
+  /// Separate from the two tables above because the units differ and so does
+  /// the consumer: `wheel_torque`/`brake_torque` are N*m and the old drive and
+  /// brake path applies them as such, while these two are dimensionless
+  /// fractions the rotational actuator's demand channel reads.  A run that
+  /// declares no demand leaves them empty, and every path that reads them
+  /// treats "empty" as "no demand" rather than as a zero demand of a declared
+  /// one -- the distinction is what keeps an un-opted-in model byte-for-byte
+  /// what it was.
+  std::vector<double> wheel_demand;
+  std::vector<double> brake_demand;
 
   /// The road the case runs on, when it overrides the model's own profile.
   /// A road is a case input, not a model one: the same vehicle is driven over

@@ -378,6 +378,15 @@ struct Model {
     std::vector<StaticRotationGauge> static_rotation_gauges;
     RoadProfile road_profile{};
     const double* vehicle_brake_torque{nullptr};
+    // The normalized driver demands, one per tire per sample (subtask p2-10).
+    //
+    // Pointers rather than vectors for the same reason the brake torque above
+    // is one: the contract runner owns one buffer per table whose address never
+    // changes, and each case overwrites its contents, so a per-case vector here
+    // would leave the model pointing at a freed allocation.  A null pointer
+    // means "no demand declared", which is every model that has not opted in.
+    const double* vehicle_wheel_demand{nullptr};
+    const double* vehicle_brake_demand{nullptr};
     int static_gauge_body{-1};
     std::uint32_t static_gauge_dof_mask{0};
     bool static_trim_then_release{false};
@@ -472,6 +481,16 @@ struct State {
 
 struct SampleInput {
     std::vector<double> body_wrench, road_z, road_v, torque, brake_torque;
+    // The normalized driver demands, one per tire (subtask p2-10).
+    //
+    // They are deliberately *not* `torque`/`brake_torque`: those two carry
+    // N*m and the old drive/brake path applies them as such, while the
+    // rotational actuator's demand channel means a dimensionless [0, 1] (or
+    // [-1, 1]) fraction.  One buffer cannot hold both meanings -- a value of
+    // 0.5 written there would be applied as half a newton-metre *and* read as
+    // half a demand -- so the two travel separately and each family reads its
+    // own.  Both are zero-filled for a caller that declares no demand.
+    std::vector<double> wheel_demand, brake_demand;
     std::vector<double> steering_target, steering_target_rate,
         steering_target_acceleration;
     // Targets of the model's driven coordinates (AXLE_DRIVEN_TRANSLATION /

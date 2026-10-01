@@ -126,17 +126,21 @@ void assemble_rotational_torque_forces(
             ? state.omega[actuator.b] - state.omega[actuator.a]
             : state.omega[actuator.a] * (-1.0);
         const double rate = dot(axis_world, relative_omega);
-        // The driver demand (p2-08).  `TORQUE_DEMAND_UNIT` is the block's own
-        // `stiffness` and is what every block written before this channel meant;
-        // the other two sources read the case's per-tire driver signal at this
-        // sample, so the element follows the pedal rather than a pre-computed
-        // torque table.  A source that names no tire is refused by the reader, so
-        // `demand_tire` indexes a real column here.
+        // The driver demand (p2-08, moved to its own buffer by p2-10).
+        // `TORQUE_DEMAND_UNIT` is the block's own `stiffness` and is what every
+        // block written before this channel meant; the other two sources read the
+        // *normalized* per-tire demand at this sample, so the element follows the
+        // pedal rather than a pre-computed torque table.  The normalized tables
+        // are separate from the N*m ones on purpose: the old drive/brake path
+        // applies `input.torque`/`input.brake_torque` as torque, so a demand
+        // written there would be applied twice, once as a fraction and once as
+        // newton-metres.  A source that names no tire is refused by the reader,
+        // so `demand_tire` indexes a real column here.
         double demand = 1.0;
         if (actuator.demand_source == TORQUE_DEMAND_WHEEL) {
-            demand = slot_value(input.torque, actuator.demand_tire);
+            demand = slot_value(input.wheel_demand, actuator.demand_tire);
         } else if (actuator.demand_source == TORQUE_DEMAND_BRAKE) {
-            demand = slot_value(input.brake_torque, actuator.demand_tire);
+            demand = slot_value(input.brake_demand, actuator.demand_tire);
         }
         const double magnitude =
             std::min(actuator.stiffness * demand, actuator.max_torque);

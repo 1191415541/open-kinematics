@@ -302,6 +302,54 @@ def test_a_locked_wheel_is_still_braked(probe: dict[str, list[str]]) -> None:
     assert reverse_a == -reverse_b, (reverse_a, reverse_b)
 
 
+def test_the_demand_channel_does_not_read_the_torque_tables(
+    probe: dict[str, list[str]],
+) -> None:
+    """
+    The normalized demand lives in its own buffer, not in the N*m tables.
+
+    This is subtask p2-10's whole point.  The probe gives the same wheel a
+    full brake demand of 1.0 *and* a stale 250 N*m in the old brake table: a
+    law that still read the N*m buffer would take 250 as the fraction (capped
+    at the block's 1000 `max_torque`, so the couple would be -1000), while one
+    that reads the demand buffer prints the 400 its gain asks for.  Without
+    this assertion, "the two unit systems are separate" would be a comment.
+    """
+    decoupled_a, decoupled_b = _eval(probe, "decoupled")
+    assert decoupled_b == -400.0, decoupled_b
+    assert decoupled_a == -decoupled_b, (decoupled_a, decoupled_b)
+
+
+def test_the_sampler_keeps_the_two_unit_systems_apart(
+    probe: dict[str, list[str]],
+) -> None:
+    """
+    `interpolate_input` fills four destinations and mixes none of them.
+
+    The case states wheel torque `10 -> 20`, brake torque `30 -> 40` and, in
+    the second reading, wheel demand `0.25 -> 0.75` and brake demand
+    `0.5 -> 1.0`.  At `t = 0.5` every one of those is a midpoint, so:
+
+    * with no demand declared the two demand vectors stay zero and the N*m
+      ones carry the case's own values (15 and 35);
+    * with demands declared the demand vectors carry 0.5 and 0.75 while the
+      N*m destinations are *unchanged* -- the normalization never leaks into
+      the torque buffers, which is the double-application p2-10 exists to
+      prevent.
+    """
+    lines = probe["isolate"]
+    none_line = [line for line in lines if line.startswith("none ")]
+    both_line = [line for line in lines if line.startswith("both ")]
+    assert len(none_line) == 1, lines
+    assert len(both_line) == 1, lines
+    assert none_line[0] == (
+        "none torque 15 brake_torque 35 wheel_demand 0 brake_demand 0"
+    ), none_line[0]
+    assert both_line[0] == (
+        "both torque 15 brake_torque 35 wheel_demand 0.5 brake_demand 0.75"
+    ), both_line[0]
+
+
 def test_the_reader_keeps_the_demand_slots(probe: dict[str, list[str]]) -> None:
     """
     The two integer slots reach the model rather than being read and dropped.

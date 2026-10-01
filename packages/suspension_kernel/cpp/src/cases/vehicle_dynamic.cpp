@@ -14,6 +14,7 @@
 
 #include "case_common.hpp"
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -24,14 +25,35 @@ namespace {
 using Json = JsonValue;
 
 /// The per-tire roles a sample table can play.
-enum class TireRole { RoadHeight, RoadVelocity, WheelTorque, BrakeTorque, None };
+///
+/// The first two are the old N*m tables the drive and brake path applies as
+/// torque; the last two are the *normalized* driver demands the rotational
+/// actuator's demand channel reads (subtask p2-10).  They are distinct roles
+/// because they carry different units, and a table that names one may not be
+/// read by the other's consumer.
+enum class TireRole {
+  RoadHeight,
+  RoadVelocity,
+  WheelTorque,
+  BrakeTorque,
+  ThrottleDemand,
+  BrakePressure,
+  None
+};
 
 TireRole tire_role_of(const std::string& role) {
   if (role == "road_height") return TireRole::RoadHeight;
   if (role == "road_velocity") return TireRole::RoadVelocity;
   if (role == "wheel_torque") return TireRole::WheelTorque;
   if (role == "brake_torque") return TireRole::BrakeTorque;
+  if (role == "throttle_demand") return TireRole::ThrottleDemand;
+  if (role == "brake_pressure") return TireRole::BrakePressure;
   return TireRole::None;
+}
+
+/// Whether a role carries a normalized driver demand.
+bool role_is_demand(TireRole role) {
+  return role == TireRole::ThrottleDemand || role == TireRole::BrakePressure;
 }
 
 }  // namespace
@@ -74,6 +96,14 @@ bool expand_vehicle_dynamic(const Json& document, const std::string& blob,
     run.static_gauge_body = static_cast<std::size_t>(index);
   }
 
+  // Which unit system each tire has *already* been stated in, per channel, by
+  // the roles read so far.  A channel is the wheel or the brake -- a car may
+  // legitimately have a driven wheel *and* a braked one, so the two are
+  // tracked apart.  The unit tables are zero-filled before the loop, so "is
+  // the table non-empty" cannot answer this; only the roles the document
+  // actually named can, and that is what this records.
+  std::vector<int> wheel_units(static_cast<std::size_t>(tire_count), 0);
+  std::vector<int> brake_units(static_cast<std::size_t>(tire_count), 0);
   const Json* blobs = document.find("blobs");
   if (blobs != nullptr) {
     if (!blobs->is_array()) return fail(error, "blobs must be an array");
@@ -118,14 +148,88 @@ bool expand_vehicle_dynamic(const Json& document, const std::string& blob,
             target = &run.brake_torque;
             scale = model.moment_scale();
             break;
+          // A normalized demand is a *fraction*, so nothing scales it: the
+          // document's length unit turns millimetres into metres and its moment
+          // unit turns a stated torque into newton-metres, but "half the pedal"
+          // is half whatever the unit system is.
+          case TireRole::ThrottleDemand:
+            target = &run.wheel_demand;
+            scale = 1.0;
+            break;
+          case TireRole::BrakePressure:
+            target = &run.brake_demand;
+            scale = 1.0;
+            break;
           case TireRole::None:
             break;
+        }
+        // The two unit systems are not interchangeable *within one channel*,
+        // and a case that states both for one tire's wheel or brake is
+        // describing two actuators in one place.  It is refused by name rather
+        // than merged -- silently picking one would apply either a 0.6 N*m
+        // couple or a 0.6 fraction, and those are not the same physical claim.
+        // A driven *and* braked wheel is not this case: the two live in
+        // different channels and are tracked apart.
+        std::vector<int>* units_for_tire = nullptr;
+        int units = 0;
+        switch (tire_role) {
+          case TireRole::WheelTorque:
+          case TireRole::ThrottleDemand:
+            units_for_tire = &wheel_units;
+            units = tire_role == TireRole::WheelTorque ? 1 : 2;
+            break;
+          case TireRole::BrakeTorque:
+          case TireRole::BrakePressure:
+            units_for_tire = &brake_units;
+            units = tire_role == TireRole::BrakeTorque ? 1 : 2;
+            break;
+          default:
+            break;
+        }
+        if (units_for_tire != nullptr) {
+          int& seen = (*units_for_tire)[static_cast<std::size_t>(index)];
+          if (seen != 0 && seen != units) {
+            return fail(error,
+                        "role " + *role + " on tire " + *tire +
+                        " states a unit its channel was already given in the "
+                        "other system; a wheel's torque is stated in newton-metres "
+                        "or as a normalized demand, not both");
+          }
+          seen = units;
+        }
+        // A demand table is allocated the first time a demand role names
+        // it and stays empty otherwise, so "empty" continues to mean
+        // "this run declares no demand" for every reader of the case --
+        // which is what keeps an un-opted-in model byte-for-byte what it
+        // was.  Allocating it up front would make every run look like it
+        // declared a demand of zero.
+        if (role_is_demand(tire_role) && target->empty()) {
+          target->assign(sample_count * tire_count, 0.0);
         }
         if (!read_column_table(descriptor, blob, sample_count,
                                static_cast<std::size_t>(index), tire_count, scale,
                                *target, "role " + *role, error)) {
           return false;
         }
+        // A normalized demand has a declared range, and a value outside it
+        // is a mistake rather than something to clip: the brake's own
+        // subsystem refuses `brake_input` outside [0, 1] and the drive's
+        // refuses `drive_input` outside [-1, 1] (subsystems/brake.py,
+        // subsystems/drive.py), so the case has to say the same thing or
+        // the two layers would disagree about what a legal demand is.
+        if (role_is_demand(tire_role)) {
+          const double low = tire_role == TireRole::ThrottleDemand ? -1.0 : 0.0;
+          for (std::size_t sample = 0; sample < sample_count; ++sample) {
+            const double value = (*target)[sample * tire_count + static_cast<std::size_t>(index)];
+            if (!std::isfinite(value) || value < low || value > 1.0) {
+              return fail(error,
+                          "role " + *role + " on tire " + *tire +
+                          " must be within [" + (low < 0.0 ? "-1" : "0") +
+                          ", 1]; got " + std::to_string(value));
+            }
+          }
+        }
+
         continue;
       }
 

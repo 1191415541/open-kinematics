@@ -16,6 +16,8 @@ void interpolate_input(const AxleInput& in, double t, SampleInput& out) {
     out.road_v.assign(nt, 0.0);
     out.torque.assign(nt, 0.0);
     out.brake_torque.assign(nt, 0.0);
+    out.wheel_demand.assign(nt, 0.0);
+    out.brake_demand.assign(nt, 0.0);
     if (n == 0) return;
     std::size_t k = 0;
     while (k+1 < n && in.sample_times[k+1] < t) ++k;
@@ -70,6 +72,39 @@ void interpolate_input(
             const double a = model.vehicle_brake_torque[k*tire_count+j];
             const double b = model.vehicle_brake_torque[k1*tire_count+j];
             out.brake_torque[j] = (1.0 - u)*a + u*b;
+        }
+    }
+    // The normalized demands, from their own tables (subtask p2-10).  Each is
+    // filled the way the brake torque above is -- same bracketing, same
+    // interpolation -- and left at zero when the model declares none, which is
+    // what makes an un-opted-in model byte-for-byte what it was.
+    if (n > 0) {
+        const std::size_t k = [&]() {
+            std::size_t index = 0;
+            while (index + 1 < n && in.sample_times[index + 1] < t) {
+                ++index;
+            }
+            return index;
+        }();
+        const std::size_t k1 = std::min(k + 1, n - 1);
+        const double t0 = in.sample_times[k];
+        const double t1 = in.sample_times[k1];
+        const double raw_u = std::abs(t1 - t0) > kEps
+            ? (t - t0) / (t1 - t0) : 0.0;
+        const double u = std::max(0.0, std::min(1.0, raw_u));
+        const std::size_t tire_count = in.tire_count;
+        const auto read_demand = [&](const double* table, std::size_t j) {
+            const double a = table[k * tire_count + j];
+            const double b = table[k1 * tire_count + j];
+            return (1.0 - u) * a + u * b;
+        };
+        for (std::size_t j = 0; j < tire_count; ++j) {
+            if (model.vehicle_wheel_demand != nullptr) {
+                out.wheel_demand[j] = read_demand(model.vehicle_wheel_demand, j);
+            }
+            if (model.vehicle_brake_demand != nullptr) {
+                out.brake_demand[j] = read_demand(model.vehicle_brake_demand, j);
+            }
         }
     }
     out.steering_target.assign(count, 0.0);

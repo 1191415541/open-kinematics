@@ -485,14 +485,15 @@ void external_force_rotational_torque_directional(
             : DVec3{};
         const DirectionalScalar rate = d_dot(axis_world, omega_b - omega_a);
         // The same driver demand the scalar path reads, sampled at this step's
-        // own time: `TORQUE_DEMAND_UNIT` is the block's own stiffness, the other two follow
-        // case's per-tire signal.  It is a constant for one step, so it carries no
-        // derivative of its own.
+        // own time: `TORQUE_DEMAND_UNIT` is the block's own stiffness, the other
+        // two follow the case's *normalized* per-tire signal (p2-10 moved them to
+        // their own buffers, so the N*m path cannot see a demand).  It is a
+        // constant for one step, so it carries no derivative of its own.
         double demand = 1.0;
         if (actuator.demand_source == TORQUE_DEMAND_WHEEL) {
-            demand = slot_value(input.torque, actuator.demand_tire);
+            demand = slot_value(input.wheel_demand, actuator.demand_tire);
         } else if (actuator.demand_source == TORQUE_DEMAND_BRAKE) {
-            demand = slot_value(input.brake_torque, actuator.demand_tire);
+            demand = slot_value(input.brake_demand, actuator.demand_tire);
         }
         const double magnitude =
             std::min(actuator.stiffness * demand, actuator.max_torque);

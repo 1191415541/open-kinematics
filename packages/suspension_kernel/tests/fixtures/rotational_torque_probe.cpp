@@ -20,6 +20,7 @@
 
 #include "mb_assembly/functions.hpp"
 #include "mb_element/functions.hpp"
+#include "mb_input/functions.hpp"
 #include "mb_model/types.hpp"
 
 #include <cmath>
@@ -128,7 +129,8 @@ void dump_reader() {
 void dump_eval(const char* label, double stiffness, double max_torque,
                double omega_a, double omega_b, int body_b,
                int demand_source = TORQUE_DEMAND_UNIT, int demand_tire = -1,
-               double demand_value = 0.0, double slip = 0.0) {
+               double demand_value = 0.0, double slip = 0.0,
+               double stale_torque = 0.0) {
   Model model;
   seed_bodies(model);
   RotationalTorque actuator;
@@ -149,10 +151,17 @@ void dump_eval(const char* label, double stiffness, double max_torque,
   std::vector<Vec3> torque(2, Vec3{});
   double external_power = 0.0;
   axle_kernel::SampleInput input;
+  // The demand channel reads its *own* vectors (subtask p2-10).  The N*m
+  // tables are filled with the same number on purpose: a law that still read
+  // them would print a couple for the `decoupled` state below and the test
+  // would catch it, which is what makes "the two unit systems are separate"
+  // an assertion rather than a comment.
   if (demand_source == TORQUE_DEMAND_WHEEL) {
-    input.torque.assign(1, demand_value);
+    input.wheel_demand.assign(1, demand_value);
+    input.torque.assign(1, stale_torque);
   } else if (demand_source == TORQUE_DEMAND_BRAKE) {
-    input.brake_torque.assign(1, demand_value);
+    input.brake_demand.assign(1, demand_value);
+    input.brake_torque.assign(1, stale_torque);
   }
   axle_kernel::assemble_rotational_torque_forces(
       model, state, input, torque, nullptr, false, false, external_power
@@ -163,10 +172,58 @@ void dump_eval(const char* label, double stiffness, double max_torque,
               label, torque[0].y, torque[1].y);
 }
 
+/// The two unit systems are separate, at the sampling layer as well.
+///
+/// `interpolate_input` is where a case's tables become the sample a force law
+/// reads, and the whole point of p2-10 is that the N*m tables and the
+/// normalized demand tables stay apart there too: same input structure, two
+/// destinations, no bleed either way.  This prints all four destinations for
+/// one sample so the test can assert each independently.
+void dump_input_isolation() {
+  double times[2] = {0.0, 1.0};
+  double wheel_torque[2] = {10.0, 20.0};
+  double brake_torque[2] = {30.0, 40.0};
+  double wheel_demand[2] = {0.25, 0.75};
+  double brake_demand[2] = {0.5, 1.0};
+
+  AxleInput in{};
+  in.sample_count = 2;
+  in.body_count = 0;
+  in.tire_count = 1;
+  in.sample_times = times;
+  in.wheel_torque = wheel_torque;
+
+  // No demand declared: the two demand vectors are zero and the N*m ones are
+  // exactly the case's own values.
+  {
+    Model model;
+    model.vehicle_brake_torque = brake_torque;
+    SampleInput sample;
+    axle_kernel::interpolate_input(model, in, 0.5, sample);
+    std::printf("isolate none torque %.17g brake_torque %.17g wheel_demand %.17g brake_demand %.17g\n",
+                sample.torque[0], sample.brake_torque[0],
+                sample.wheel_demand[0], sample.brake_demand[0]);
+  }
+  // Demands declared: both demand vectors carry the case's fractions and the
+  // N*m destinations are untouched -- the demand is not written into them.
+  {
+    Model model;
+    model.vehicle_brake_torque = brake_torque;
+    model.vehicle_wheel_demand = wheel_demand;
+    model.vehicle_brake_demand = brake_demand;
+    SampleInput sample;
+    axle_kernel::interpolate_input(model, in, 0.5, sample);
+    std::printf("isolate both torque %.17g brake_torque %.17g wheel_demand %.17g brake_demand %.17g\n",
+                sample.torque[0], sample.brake_torque[0],
+                sample.wheel_demand[0], sample.brake_demand[0]);
+  }
+}
+
 } // namespace
 
 int main() {
   dump_reader();
+  dump_input_isolation();
   // A stationary pair: the rate is exactly zero, so no couple at all.  This is
   // the "does not accelerate a stopped pair" state.
   dump_eval("still", 400.0, 1000.0, 0.0, 0.0, 1);
@@ -206,5 +263,12 @@ int main() {
   // The unit-demand block is untouched by the slip branch: with no source it has
   // no tire to follow, so a stopped pair still gets exactly nothing.
   dump_eval("unit_still", 400.0, 1000.0, 0.0, 0.0, 1);
+  // The unit systems are separate (p2-10): the same wheel is given a full
+  // brake demand of 1.0 *and* a stale 250 N*m in the old table.  A law that
+  // read the N*m buffer would apply its own 250 as the fraction (capped at
+  // 1000, so the couple would be -1000); a law that reads the demand buffer
+  // prints the 400 the gain asks for, and the 250 is ignored.
+  dump_eval("decoupled", 400.0, 1000.0, 0.0, 3.0, 1, TORQUE_DEMAND_BRAKE, 0,
+            1.0, 0.0, 250.0);
   return 0;
 }

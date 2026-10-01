@@ -948,6 +948,49 @@ class AxleAntiRollBar(StrictModel):
         return self
 
 
+class AxleRotationalTorque(StrictModel):
+    """
+    An active couple between two bodies, following a driver demand.
+
+    The axle family's own structure for the element ``rotational_torque`` names
+    (subtask p2-09).  ``stiffness_n_m_per_rad`` is the demand-to-magnitude gain,
+    ``max_torque_n_m`` the cap, and the two ``demand_*`` fields say *which*
+    driver signal sets the magnitude at each step: 0 is the unit demand, where
+    the gain is the amplitude (what a model that states no driver gets), 1 the
+    case's wheel-torque column and 2 its brake-torque column.  A source other
+    than the unit demand names the tire it follows, because a couple's own two
+    bodies do not name one.
+    """
+
+    name: str = Field(min_length=1)
+    #: The body the couple is applied to.
+    body_a: str
+    #: The body the equal-and-opposite reaction is applied to.
+    body_b: str
+    axis_a: Vec3Tuple = (0.0, 1.0, 0.0)
+    reference_quaternion_a: QuaternionTuple = (1.0, 0.0, 0.0, 0.0)
+    stiffness_n_m_per_rad: float = Field(ge=0)
+    damping_n_m_s_per_rad: float = Field(default=0.0, ge=0)
+    max_torque_n_m: float = Field(ge=0)
+    #: Which driver signal sets the magnitude; see the class docstring.
+    demand_source: int = Field(default=0, ge=0, le=2)
+    #: The tire whose column the demand source reads; -1 means none, which is
+    #: only legal for the unit demand.
+    demand_tire: int = -1
+
+    @model_validator(mode="after")
+    def _valid_demand(self) -> AxleRotationalTorque:
+        _finite(self.axis_a, "axis_a")
+        if np.linalg.norm(self.axis_a) <= 1e-12:
+            raise ValueError("axis_a must be nonzero")
+        if self.demand_source != 0 and self.demand_tire < 0:
+            raise ValueError(
+                "a rotational torque with a driver demand must name the tire it "
+                "follows"
+            )
+        return self
+
+
 class AxleAerodynamicDrag(StrictModel):
     """Quadratic drag element carried by one body."""
 

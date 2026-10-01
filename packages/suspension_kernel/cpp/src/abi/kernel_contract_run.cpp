@@ -309,6 +309,15 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   std::vector<double> steering_rate(samples * actuator_count, 0.0);
   std::vector<double> brake_torque(
       samples * (model.tire_order().empty() ? 1 : model.tire_order().size()), 0.0);
+  // The normalized demands, in buffers of the same shape and the same lifetime
+  // rule as the tables above (subtask p2-10).  They are always allocated so a
+  // case can point the model at them; a run that declares none leaves them
+  // empty-valued and, crucially, leaves the model's pointers null, which is
+  // what tells every demand reader that no demand was declared.
+  std::vector<double> wheel_demand(
+      samples * (model.tire_order().empty() ? 1 : model.tire_order().size()), 0.0);
+  std::vector<double> brake_demand(
+      samples * (model.tire_order().empty() ? 1 : model.tire_order().size()), 0.0);
 
   VehicleInput input{};
   input.struct_size = sizeof(VehicleInput);
@@ -564,6 +573,18 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   if (!model.tire_order().empty()) {
     built.vehicle_brake_torque = input.brake_torque;
   }
+  // The normalized demands (subtask p2-10).  Registered only when a case
+  // actually declares one: a run that declares none leaves both pointers null,
+  // which is what makes every demand reader behave exactly as it did before the
+  // channel existed.  The per-case contents are copied in the case loop.
+  bool declares_wheel_demand = false;
+  bool declares_brake_demand = false;
+  for (const ContractCase& run : plan.cases) {
+    declares_wheel_demand = declares_wheel_demand || !run.wheel_demand.empty();
+    declares_brake_demand = declares_brake_demand || !run.brake_demand.empty();
+  }
+  if (declares_wheel_demand) built.vehicle_wheel_demand = wheel_demand.data();
+  if (declares_brake_demand) built.vehicle_brake_demand = brake_demand.data();
 
   const std::size_t bodies = built.bodies.size();
   const std::size_t wrench_rows = built.constraints.size();
@@ -696,6 +717,23 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
     if (!run.brake_torque.empty()) {
       std::memcpy(brake_torque.data(), run.brake_torque.data(),
                   run.brake_torque.size() * sizeof(double));
+    }
+    // The normalized demands, same address new contents (subtask p2-10).  A
+    // case that declares none leaves its buffer at whatever the previous case
+    // wrote only if the model pointer is live for the other table, so each
+    // declared table is copied in full and each undeclared one is explicitly
+    // cleared: a demand must never leak from one case into the next.
+    if (!run.wheel_demand.empty()) {
+      std::memcpy(wheel_demand.data(), run.wheel_demand.data(),
+                  run.wheel_demand.size() * sizeof(double));
+    } else if (declares_wheel_demand) {
+      std::fill(wheel_demand.begin(), wheel_demand.end(), 0.0);
+    }
+    if (!run.brake_demand.empty()) {
+      std::memcpy(brake_demand.data(), run.brake_demand.data(),
+                  run.brake_demand.size() * sizeof(double));
+    } else if (declares_brake_demand) {
+      std::fill(brake_demand.begin(), brake_demand.end(), 0.0);
     }
     // A driven coordinate that a family does not drive is held at its design
     // separation, which is the state the model was assembled in.  Leaving the
