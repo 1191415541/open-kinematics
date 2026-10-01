@@ -271,7 +271,42 @@ eval unit_still tau_a 0 tau_b 0
 `still`/`forward`/`reverse`/`capped`/`uncapped`/`grounded` 六条与 p2-02 的八个用例读数**逐字相同**（该行未弱化任何既有断言）；
 `driven`/`no_demand`/`locked`/`locked_reverse`/`unit_still` 是本行新增的五条。
 
-## 11. 本行与相邻行的接口
+## 11. 补完：文档路由也解析这两个字段（同日追加）
+
+`cpp/src/cases/contract_model.cpp` 的 `rotational_torque` 分支起初只解析
+`axis_a`/`stiffness`/`damping`/`max_torque`——而**文档路由才是生产路径**
+（`simulation/backend.py:24` 提交模型文档）。只走 ABI 块面会让需求通道在生产里不可达。
+本行追加：
+
+| 处 | 改动 |
+|---|---|
+| `contract_model.cpp:124-137` | 新增 `optional_int(...)` 辅助：非整数值拒绝（索引不是可以截断的量），越界拒绝 |
+| 同文件 `:877-899` | 解析 `demand_source` / `demand_tire`；源不在 `[UNIT, BRAKE]` 内按名字拒绝；有源无轮胎按名字拒绝 |
+| 同文件 `:952-953` | 写入 `block.ints[ELEMENT_INT_TORQUE_DEMAND_SOURCE]` / `[ELEMENT_INT_TORQUE_TIRE]` |
+
+两个字段都**可选**：文档不写时保持 `UNIT` / `-1`，即改前语义，故既有文档逐位不变。
+
+新增断言 `packages/suspension_multibody/tests/cases/test_rotational_torque_document.py::test_the_document_route_carries_the_demand_channel`：
+
+```python
+    # Read, not merely tolerated: the pair reaches the kernel's block slots.
+    submit({"demand_source": 2, "demand_tire": 0})
+
+    # And a bad pair is an error about the document rather than a silent default.
+    with pytest.raises(Exception, match="tire"):
+        submit({"demand_source": 2})
+    with pytest.raises(Exception, match="demand source"):
+        submit({"demand_source": 9, "demand_tire": 0})
+    with pytest.raises(Exception, match="demand channel"):
+        submit({"demand_source": 2, "demand_tire": 0.5})
+```
+
+实跑：该文件 **8 passed**（新增 1 条）；内核 **45 passed**。
+
+**契约 schema 无需改**：`multibody_model.schema.json` 的 `element.parameters` 是自由对象
+（`{"type": "object"}`），两个新字段已被允许——实测确认。
+
+## 12. 本行与相邻行的接口
 
 - **p2-05 依赖本行**：删除 `_build_wheel_torque_signals` 后，工况文档里的 `wheel_torque` / `brake_torque` 列从
   「已经乘好、单位 N·m 的力矩」变为「归一化驾驶员需求」，元素块用 `demand_source` 声明自己读哪一列、

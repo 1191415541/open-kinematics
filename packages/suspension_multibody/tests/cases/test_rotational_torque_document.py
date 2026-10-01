@@ -377,6 +377,41 @@ def test_the_omitted_reference_pose_means_the_same_thing_on_both_routes(
     )
 
 
+def test_the_document_route_carries_the_demand_channel() -> None:
+    """
+    The two demand fields reach the kernel's own block slots (p2-08), and a bad
+    pair is refused at the document rather than silently defaulted.
+
+    The parse is what is asserted: a document whose ``demand_source``/``demand_tire``
+    are accepted but dropped would run the element on the unit demand, and the
+    run would succeed -- the failure mode is a wrong couple, not a missing one.
+    The refusals below are the other half: a source that names no tire, and a
+    fractional index, are both errors about the document.
+    """
+    def submit(parameters: dict[str, Any]) -> None:
+        document = _model_document(with_element=True)
+        document["elements"][0]["parameters"].update(parameters)
+        run = run_request(
+            compile_document_pair(
+                SimulationRequest(assembly="axle", family="axle_dynamic"),
+                model_document=document,
+                case_document=_case_document(),
+            )
+        )
+        assert run.status == "success", run.raw.document.get("manifest")
+
+    # Read, not merely tolerated: the pair reaches the kernel's block slots.
+    submit({"demand_source": 2, "demand_tire": 0})
+
+    # And a bad pair is an error about the document rather than a silent default.
+    with pytest.raises(Exception, match="tire"):
+        submit({"demand_source": 2})
+    with pytest.raises(Exception, match="demand source"):
+        submit({"demand_source": 9, "demand_tire": 0})
+    with pytest.raises(Exception, match="demand channel"):
+        submit({"demand_source": 2, "demand_tire": 0.5})
+
+
 def test_the_element_is_read_by_the_route_that_used_to_refuse_it() -> None:
     """
     The refusal this file exists to remove is gone.

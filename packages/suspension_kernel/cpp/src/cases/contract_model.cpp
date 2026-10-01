@@ -124,6 +124,22 @@ bool optional_number(const Json& object, const char* key, double& out) {
   return number_at(*value, out);
 }
 
+/// Read `key` as an integer when it is present; absent leaves `out` untouched.
+///
+/// A JSON number that is not integral is refused rather than truncated: the
+/// demand channel's two fields index a table, and a fractional index would mean
+/// the document said something the model cannot carry out.
+bool optional_int(const Json& object, const char* key, int& out) {
+  const Json* value = object.find(key);
+  if (value == nullptr) return true;
+  double number = 0.0;
+  if (!number_at(*value, number)) return false;
+  if (!std::isfinite(number) || number != std::floor(number)) return false;
+  if (number < -2147483648.0 || number > 2147483647.0) return false;
+  out = static_cast<int>(number);
+  return true;
+}
+
 bool vec3_at(const Json& value, double* out) {
   if (!value.is_array() || value.items.size() != 3) return false;
   for (std::size_t index = 0; index < 3; ++index) {
@@ -861,6 +877,30 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
           return fail(error, "rotational torque " + quote(*element_name) +
                                   " has malformed parameters");
         }
+        // The demand channel (subtask p2-08).  Two integers rather than
+        // parameters, because what the element follows is a choice: which driver
+        // signal sets the magnitude, and which tire's column that signal comes
+        // from.  Both are optional so a document written before this channel
+        // keeps its meaning -- the unit demand, where the gain *is* the
+        // amplitude.  A source that is not the unit demand needs a tire, and the
+        // reader refuses the pair rather than reading column 0 for a couple that
+        // belongs to no named wheel.
+        int demand_source = TORQUE_DEMAND_UNIT;
+        int demand_tire = -1;
+        if (!optional_int(*parameters, "demand_source", demand_source) ||
+            !optional_int(*parameters, "demand_tire", demand_tire)) {
+          return fail(error, "rotational torque " + quote(*element_name) +
+                                  " has a malformed demand channel");
+        }
+        if (demand_source < TORQUE_DEMAND_UNIT ||
+            demand_source > TORQUE_DEMAND_BRAKE) {
+          return fail(error, "rotational torque " + quote(*element_name) +
+                                  " names an unknown demand source");
+        }
+        if (demand_source != TORQUE_DEMAND_UNIT && demand_tire < 0) {
+          return fail(error, "rotational torque " + quote(*element_name) +
+                                  " needs the tire its demand follows");
+        }
         // Both gains and the cap are moments, so they follow the document's
         // length unit the way the anti-roll bar's coefficients do.  The axis
         // and the reference orientation are dimensionless.
@@ -910,6 +950,8 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
           }
         }
         block.parameters[ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE] = max_torque;
+        block.ints[ELEMENT_INT_TORQUE_DEMAND_SOURCE] = demand_source;
+        block.ints[ELEMENT_INT_TORQUE_TIRE] = demand_tire;
         rotational_torques_.push_back(block);
         continue;
       }
