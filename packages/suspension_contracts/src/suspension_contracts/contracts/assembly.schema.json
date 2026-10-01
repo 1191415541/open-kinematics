@@ -56,6 +56,12 @@
           "items": {"$ref": "#/$defs/vehicle_part"}
         },
         "steering": {"$ref": "#/$defs/vehicle_part"},
+        "steering_channels": {
+          "description": "The additional steering channels beyond the mandatory compatibility primary, each naming the placement it steers.  A vehicle with none of them is exactly what it always was.",
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/vehicle_part"}
+        },
         "driveline": {"$ref": "#/$defs/vehicle_part"}
       }
     }

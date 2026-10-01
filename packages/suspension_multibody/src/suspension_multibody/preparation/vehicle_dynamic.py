@@ -60,8 +60,10 @@ from ..modeling.primitives import (
 )
 from ..schema import (
     DynamicSolverSettings,
+    FrontAxleModel,
     RoadSurfaceSpec,
     SteeringSystemSpec,
+    TimeSignal,
     UnitSystem,
     VehicleDynamicCase,
     VehicleModel,
@@ -192,6 +194,13 @@ class PreparedVehicleRun:
     #: that states both.
     wheel_demand: dict[str, tuple[float, ...]] = field(default_factory=dict)
     brake_demand: dict[str, tuple[float, ...]] = field(default_factory=dict)
+    #: The per-channel steering angles the run was prepared with (subtask p2-06).
+    #:
+    #: Empty unless the model declares a law other than ``direct``.  Stated
+    #: rather than derived a second time: the angles are what the target tables
+    #: carry, and a reader that wants to know which law produced them would
+    #: otherwise have to re-run the allocator to find out.
+    steering_allocation: tuple[tuple[str, tuple[float, ...]], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -235,24 +244,54 @@ def _select_assembly_mode(
 
 def _validate_steering_topology(facts: VehicleFacts) -> None:
     """
-    Reject a second steerable rack instead of freezing it silently.
+    Judge the assembly's steering placements from the facts alone.
 
-    One steering system steers one axle: the first placement drives the rack and
-    every other axle's rack is bolted, which is what the native model can
-    represent.  Which placements are which is a fact about the assembly, so this
-    names the offending placements instead of reading an axle field.
+    This check used to refuse a second free rack.  It read the *first* axle in
+    assembly order as the steered one and demanded that every other placement
+    have its rack bolted to the chassis -- a `rack_fixed_to_chassis` requirement
+    stated as a check *in the preparation layer* -- which enforced "one steering
+    system steers one axle" by *position* rather than by declaration.  Subtask
+    p2-06 removes that: a model may declare several steering channels, each
+    naming the placement it steers, so which rack is driven is the model's own
+    declaration and nothing a preparation may infer from ordering.  Keeping the
+    refusal would refuse exactly the four-wheel-steered vehicle that channels
+    exist for.
+
+    What is left is what the assembly facts can actually decide: a placement may
+    only appear once.  Two axles at one placement would make the placement an
+    ambiguous name for a channel -- which is the *reason* the check exists, so it
+    is stated as the condition rather than as a consequence of it.
     """
-    steered, *trailing = facts.axles or ("",)
-    unbolted = sorted(
-        placement
-        for placement in trailing
-        if not facts.rack_fixed_to_chassis.get(placement, False)
+    placements = list(facts.axles)
+    repeated = next(
+        (name for index, name in enumerate(placements) if name in placements[:index]),
+        None,
     )
-    if unbolted:
+    if repeated is not None:
         raise ValueError(
-            f"native vehicle dynamics actuates the rack of {steered!r} only; "
-            f"rack_fixed_to_chassis must be true on {', '.join(unbolted)}"
+            f"the assembly places more than one axle at {repeated!r}; a placement "
+            "names one axle, and a steering channel is addressed by it"
         )
+
+
+def _steering_channel_specs(
+    model: VehicleModel,
+) -> tuple[SteeringSystemSpec, ...]:
+    """
+    Return the model's steering channels as one ordered, enabled list.
+
+    ``model.steering`` stays the mandatory compatibility channel and comes
+    first; the declared additional channels follow in declaration order.  A
+    channel with ``enabled`` false is left out here rather than later, so every
+    reader downstream sees the channels that take part in the run and nothing
+    else -- a vehicle is compared with and without its rear steer by disabling
+    the channel, not by assembling a different model.
+    """
+    specs: list[SteeringSystemSpec] = []
+    if model.steering.enabled:
+        specs.append(model.steering)
+    specs.extend(channel for channel in model.steering_channels if channel.enabled)
+    return tuple(specs)
 
 
 def prepare_vehicle_run(
@@ -281,10 +320,15 @@ def prepare_vehicle_run(
     body_state, body_frames = _initial_body_state(assembly, case, length_scale)
     body_names = tuple(assembly.bodies)
     body_index = {name: index for index, name in enumerate(body_names)}
-    steering = _build_steering(
-        model.steering,
+    # The model's channels, in order, enabled ones only (subtask p2-06).  One
+    # channel is the compatibility case and reaches the kernel exactly as it
+    # always did; several are stacked by the builder below.
+    steering_specs = _steering_channel_specs(model)
+    steering, steering_allocation = _build_steering(
+        steering_specs,
         case.steering_input,
         model,
+        case,
         assembly,
         body_state,
         body_index,
@@ -382,6 +426,7 @@ def prepare_vehicle_run(
         assembly=assembly,
         source_model=model,
         source_case=case,
+        steering_allocation=steering_allocation,
     )
 
 
@@ -1278,6 +1323,305 @@ def _build_tires(
 
 
 def _build_steering(
+    steering_specs: tuple[SteeringSystemSpec, ...],
+    steering_input,
+    model: VehicleModel,
+    case: VehicleDynamicCase,
+    assembly: VehicleRuntime,
+    initial_bodies: tuple[AxleBody, ...],
+    body_index: dict[str, int],
+    body_frames: dict[str, _BodyFrame],
+    times: np.ndarray,
+    scale: float,
+) -> tuple[_VehicleSteeringBuffers, tuple[tuple[str, tuple[float, ...]], ...]]:
+    """
+    Build the steering arrays for every enabled channel (subtask p2-06).
+
+    One channel is the historical case and is returned exactly as the single
+    channel's own builder produced it, array by array, so a one-channel vehicle
+    reaches the kernel with the numbers it always did, plus the (empty)
+    allocation record.
+
+    Several channels are stacked in channel order: the per-channel arrays of
+    length ``count`` are concatenated, and the two sample-major tables
+    (``target`` and ``target_rate``) are stacked by *column* so the flat layout
+    is the ABI's ``sample_index * count + channel_index``.  That last one is not
+    cosmetic -- ``cases/vehicle_dynamic.py`` reshapes the table to
+    ``(sample_count, actuator_count)`` and the kernel indexes
+    ``actuator.target_angle[k * count + j]``, so a channel-major layout would
+    drive every channel with another channel's samples.
+    """
+    specs = tuple(steering_specs)
+    if not specs:
+        # A model may disable every channel.  The arrays are then empty rather
+        # than absent: the ABI reads "no actuators" as a count of zero, and the
+        # rest of the preparation is untouched.
+        return (
+            _VehicleSteeringBuffers(
+                names=(),
+                actuator_type=np.zeros(0, dtype=np.int32),
+                body=np.zeros(0, dtype=np.int32),
+                reaction_body=np.zeros(0, dtype=np.int32),
+                point_local=np.zeros((0, 3), dtype=np.float64),
+                reaction_point_local=np.zeros((0, 3), dtype=np.float64),
+                axis_local=np.zeros((0, 3), dtype=np.float64),
+                reference_quaternion=np.zeros((0, 4), dtype=np.float64),
+                target=np.zeros(0, dtype=np.float64),
+                target_rate=np.zeros(0, dtype=np.float64),
+                stiffness=np.zeros(0, dtype=np.float64),
+                damping=np.zeros(0, dtype=np.float64),
+                output=np.full((len(times), 0, 4), np.nan, dtype=np.float64),
+            ),
+            (),
+        )
+    allocation = _steering_allocation_angles(model, case, specs, steering_input, times)
+    signals = _steering_channel_signals(specs, steering_input, times, allocation)
+    built = tuple(
+        _build_steering_channel(
+            spec,
+            signal,
+            model,
+            assembly,
+            initial_bodies,
+            body_index,
+            body_frames,
+            times,
+            scale,
+        )
+        for spec, signal in zip(specs, signals)
+    )
+    recorded = tuple(
+        (spec.channel_name, tuple(series)) for spec, series in zip(specs, allocation)
+    )
+    if len(built) == 1:
+        return built[0], recorded
+    return (
+        _VehicleSteeringBuffers(
+            names=tuple(name for buffers in built for name in buffers.names),
+            actuator_type=np.ascontiguousarray(
+                np.concatenate([buffers.actuator_type for buffers in built])
+            ),
+            body=np.ascontiguousarray(
+                np.concatenate([buffers.body for buffers in built])
+            ),
+            reaction_body=np.ascontiguousarray(
+                np.concatenate([buffers.reaction_body for buffers in built])
+            ),
+            point_local=np.ascontiguousarray(
+                np.concatenate([buffers.point_local for buffers in built], axis=0)
+            ),
+            reaction_point_local=np.ascontiguousarray(
+                np.concatenate(
+                    [buffers.reaction_point_local for buffers in built], axis=0
+                )
+            ),
+            axis_local=np.ascontiguousarray(
+                np.concatenate([buffers.axis_local for buffers in built], axis=0)
+            ),
+            reference_quaternion=np.ascontiguousarray(
+                np.concatenate(
+                    [buffers.reference_quaternion for buffers in built], axis=0
+                )
+            ),
+            target=np.ascontiguousarray(
+                np.column_stack([buffers.target for buffers in built]).reshape(-1)
+            ),
+            target_rate=np.ascontiguousarray(
+                np.column_stack([buffers.target_rate for buffers in built]).reshape(-1)
+            ),
+            stiffness=np.ascontiguousarray(
+                np.concatenate([buffers.stiffness for buffers in built])
+            ),
+            damping=np.ascontiguousarray(
+                np.concatenate([buffers.damping for buffers in built])
+            ),
+            output=np.full((len(times), len(built), 4), np.nan, dtype=np.float64),
+        ),
+        recorded,
+    )
+
+
+def _steering_allocation_angles(
+    model: VehicleModel,
+    case: VehicleDynamicCase,
+    specs: tuple[SteeringSystemSpec, ...],
+    steering_input,
+    times: np.ndarray,
+) -> tuple[tuple[float, ...], ...]:
+    """
+    Return the per-channel angle series the case's steering input allocates.
+
+    Empty under the ``direct`` law -- the default, and the historical behaviour:
+    every channel follows the case's own steering signal unchanged, so a
+    one-channel vehicle is driven exactly as it was before channels existed and
+    no allocation is computed at all.
+
+    Under any other law the case's signal drives the *reference* channel (the
+    first one) and the allocator turns that one demand into a per-channel angle
+    at every sample.  The speed is the case's declared initial forward speed,
+    the only speed this layer has: a schedule that followed the vehicle's
+    instantaneous speed would make the prescribed target depend on the state
+    being integrated.
+    """
+    law = str(getattr(model, "allocation_law", "direct"))
+    if law == "direct" or not specs:
+        return ()
+    from .steering_allocator import allocate
+
+    channels = _allocation_channels(model, specs)
+    speed = float(case.initial_forward_speed_mps)
+    return tuple(
+        tuple(
+            allocate(
+                law,
+                channels,
+                steer_input_rad=float(steering_input.value_at(float(time))),
+                speed_mps=speed,
+            ).angles_rad[position]
+            for time in times
+        )
+        for position in range(len(specs))
+    )
+
+
+def _steering_channel_signals(
+    specs: tuple[SteeringSystemSpec, ...],
+    steering_input,
+    times: np.ndarray,
+    allocation: tuple[tuple[float, ...], ...],
+) -> tuple[object, ...]:
+    """
+    Return the driver input each channel is to be driven by.
+
+    Without an allocation every channel takes the case's own signal, which is
+    what makes the one-channel case identical to the behaviour before channels
+    existed.  With one, each channel takes its own angle series -- expressed as
+    a signal in that channel's declared input units, so the ``input``/``ratio``
+    conversion further down applies unchanged: a channel that states a steering
+    wheel angle still gets its rack displacement by multiplying by its ratio,
+    and one that states a rack displacement is driven by the angle directly.
+    """
+    if not allocation:
+        return tuple(steering_input for _ in specs)
+    return tuple(_sampled_signal(times, series) for series in allocation)
+
+
+def _allocation_channels(
+    model: VehicleModel,
+    specs: tuple[SteeringSystemSpec, ...],
+) -> tuple[Any, ...]:
+    """
+    Describe each channel's geometry the way an allocation law reads it.
+
+    The geometry comes from the model, because that is where the axles and the
+    wheels are, and each channel's ``placement`` says which axle it steers.  What
+    the numbers mean is stated once, here:
+
+    * ``track_mm`` is the lateral separation of that placement's wheel pair;
+    * ``wheelbase_mm`` is the longitudinal separation between the channel's own
+      axle and the vehicle's *other* placed axle -- the wheelbase the Ackermann
+      formula is written in terms of;
+    * ``distance_to_reference_mm`` is the channel's longitudinal offset from the
+      reference channel's axle.  A channel behind the reference is the following
+      axle of a multi-axle train; read laterally, the sign says which end of the
+      track a channel steers.
+
+    A model that declares a single channel gets the reference's own geometry,
+    and no law then needs anybody else's.
+    """
+    from .steering_allocator import AllocationChannel
+
+    axles = _axle_by_placement(model)
+    reference = specs[0]
+    if reference.placement not in axles:
+        raise ValueError(
+            f"steering channel {reference.channel_name!r} steers placement "
+            f"{reference.placement!r}, which this vehicle does not place; it "
+            f"places {sorted(axles)}"
+        )
+    reference_x = _axle_center_x(axles[reference.placement])
+    described: list[AllocationChannel] = []
+    for spec in specs:
+        if spec.placement not in axles:
+            raise ValueError(
+                f"steering channel {spec.channel_name!r} steers placement "
+                f"{spec.placement!r}, which this vehicle does not place; it "
+                f"places {sorted(axles)}"
+            )
+        axle = axles[spec.placement]
+        other = [
+            candidate
+            for placement, candidate in axles.items()
+            if placement != spec.placement
+        ]
+        described.append(
+            AllocationChannel(
+                name=spec.channel_name,
+                placement=spec.placement,
+                wheelbase_mm=(
+                    abs(_axle_center_x(axle) - _axle_center_x(other[0]))
+                    if other
+                    else 0.0
+                ),
+                track_mm=_axle_track(model, spec.placement),
+                distance_to_reference_mm=(_axle_center_x(axle) - reference_x),
+            )
+        )
+    return tuple(described)
+
+
+def _axle_by_placement(model: VehicleModel) -> dict[str, FrontAxleModel]:
+    """
+    Return the model's axles keyed by the placement each one sits at.
+
+    The placements are the model's own declaration rather than a rule read off a
+    name: ``VehicleModel`` states ``front_axle`` and ``rear_axle``, so the
+    placement a channel names is looked up in those two fields.
+    """
+    return {"front": model.front_axle, "rear": model.rear_axle}
+
+
+def _axle_center_x(axle: FrontAxleModel) -> float:
+    """Return the longitudinal position of one axle's wheel centre."""
+    center = axle.hardpoints.get("WHEEL_CENTER")
+    return 0.0 if center is None else float(center.x)
+
+
+def _axle_track(model: VehicleModel, placement: str) -> float:
+    """
+    Return the lateral separation of one placement's wheel pair.
+
+    The pair is read off the wheels' names, the convention
+    ``subsystems/vehicle_model_adapter.py`` states from the other side: a
+    ``VehicleModel`` carries one flat wheel tuple, so the prefix is what says
+    which axle a corner belongs to.
+    """
+    lateral = sorted(
+        float(wheel.center_local.y)
+        for wheel in model.wheels
+        if wheel.name.startswith(f"{placement}_")
+    )
+    if len(lateral) < 2:
+        return 0.0
+    return abs(lateral[-1] - lateral[0])
+
+
+def _sampled_signal(times: np.ndarray, values) -> object:
+    """
+    Return one channel's allocated angle series as a signal.
+
+    A grid of fewer than two samples is a constant rather than a one-row table:
+    a signal needs two samples to interpolate, and a single instant has no rate.
+    """
+    if len(times) < 2:
+        return TimeSignal(constant=float(values[0]))
+    return TimeSignal(
+        times=tuple(float(time) for time in times),
+        values=tuple(float(value) for value in values),
+    )
+
+
+def _build_steering_channel(
     steering_spec: SteeringSystemSpec,
     steering_input,
     model: VehicleModel,
@@ -1288,20 +1632,26 @@ def _build_steering(
     times: np.ndarray,
     scale: float,
 ) -> _VehicleSteeringBuffers:
+    """Build one channel's actuator geometry and per-sample targets."""
     body_names = tuple(assembly.bodies)
     chassis = model.chassis.name
+    placement = steering_spec.placement
     if steering_spec.actuator_mode == "prescribed_rotation":
         if steering_spec.actuator_body is None:
             raise ValueError(
                 "prescribed steering requires steering_spec.actuator_body"
             )
         actuator_body = _resolve_named_body(
-            steering_spec.actuator_body, body_names, "steering actuator"
+            steering_spec.actuator_body,
+            body_names,
+            "steering actuator",
+            placement=placement,
         )
         reaction_body = _resolve_named_body(
             steering_spec.actuator_reaction_body or chassis,
             body_names,
             "steering reaction",
+            placement=placement,
         )
         if assembly.bodies[actuator_body].fixed:
             raise ValueError("the prescribed steering body must be free")
@@ -1318,7 +1668,7 @@ def _build_steering(
         axis = steering_spec.actuator_axis_local.as_array()
         axis /= np.linalg.norm(axis)
         return _VehicleSteeringBuffers(
-            names=("steering_input",),
+            names=(steering_spec.channel_name,),
             actuator_type=np.ascontiguousarray([2], dtype=np.int32),
             body=np.ascontiguousarray([body_index[actuator_body]], dtype=np.int32),
             reaction_body=np.ascontiguousarray(
@@ -1341,7 +1691,9 @@ def _build_steering(
             ),
             output=np.full((len(times), 1, 4), np.nan, dtype=np.float64),
         )
-    rack = _resolve_steering_rack(steering_spec.rack_body, body_names)
+    rack = _resolve_steering_rack(
+        steering_spec.rack_body, body_names, placement=placement
+    )
     if assembly.bodies[rack].fixed:
         raise ValueError("the steering rack must be a free body for native actuation")
     if steering_spec.actuator_reaction_body is None:
@@ -1367,6 +1719,7 @@ def _build_steering(
             steering_spec.actuator_reaction_body,
             body_names,
             "steering reaction",
+            placement=placement,
         )
         rack_joints = tuple(
             joint
@@ -1435,7 +1788,7 @@ def _build_steering(
         )
         reaction_point_local = reaction_point_local + axis * reference_offset
     return _VehicleSteeringBuffers(
-        names=("front_rack",),
+        names=(steering_spec.channel_name,),
         actuator_type=np.ascontiguousarray(
             [3 if steering_spec.actuator_mode == "prescribed_translation" else 0],
             dtype=np.int32,
@@ -1468,9 +1821,31 @@ def _build_steering(
     )
 
 
-def _resolve_named_body(name: str, body_names: tuple[str, ...], role: str) -> str:
+
+
+def _resolve_named_body(
+    name: str,
+    body_names: tuple[str, ...],
+    role: str,
+    *,
+    placement: str | None = None,
+) -> str:
+    """
+    Return the assembled body a steering channel's body name refers to.
+
+    A channel names a body the way its own *axle* names it (``"rack"``), while
+    the assembled vehicle prefixes every axle body with the placement it came
+    from (``"front_rack"``, ``"rear_rack"``).  Several channels make that prefix
+    load-bearing: with two racks in the assembly an unprefixed ``"rack"`` has
+    two answers, and resolving it by the historical front-first order would
+    silently drive the front rack twice.  The channel's own ``placement`` is the
+    declaration that settles it, so it is tried first when the channel states
+    one.
+    """
     if name in body_names:
         return name
+    if placement is not None and f"{placement}_{name}" in body_names:
+        return f"{placement}_{name}"
     candidates = tuple(
         candidate
         for candidate in (f"front_{name}", f"rear_{name}")
@@ -1499,9 +1874,21 @@ def _rack_guide_joint(assembly: VehicleRuntime, rack: str) -> PrismaticJoint:
     return guides[0]
 
 
-def _resolve_steering_rack(name: str, body_names: tuple[str, ...]) -> str:
+def _resolve_steering_rack(
+    name: str, body_names: tuple[str, ...], *, placement: str | None = None
+) -> str:
+    """
+    Return the assembled rack body one channel's ``rack_body`` names.
+
+    The same placement-first rule as :func:`_resolve_named_body`: with one rack
+    in the assembly the historical front-first order is right, and with two it
+    would be an answer chosen by assembly order rather than by the channel's own
+    declaration.
+    """
     if name in body_names:
         return name
+    if placement is not None and f"{placement}_{name}" in body_names:
+        return f"{placement}_{name}"
     if f"front_{name}" in body_names:
         return f"front_{name}"
     candidates = tuple(
@@ -1948,6 +2335,11 @@ __all__ = [
     "_rotation_from_quaternion",
     "_select_assembly_mode",
     "_shift_point",
+    "_steering_allocation_angles",
+    "_steering_channel_signals",
+    "_steering_channel_specs",
+    "_allocation_channels",
+    "_build_steering_channel",
     "_spring_force_curve",
     "_steering_target_rate",
     "_steering_target_value",

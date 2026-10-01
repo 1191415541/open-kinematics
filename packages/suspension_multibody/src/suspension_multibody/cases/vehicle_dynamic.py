@@ -415,7 +415,11 @@ def _append_tire_table(
 
 
 def model_document(
-    model: VehicleModel, prepared, *, name: str | None = None
+    model: VehicleModel,
+    prepared,
+    *,
+    name: str | None = None,
+    include_steering_actuators: bool = True,
 ) -> tuple[dict[str, Any], bytes]:
     """
     Describe the assembled vehicle as a multibody model document.
@@ -423,6 +427,12 @@ def model_document(
     Returns the document and the payload its own descriptors point into.  A tire
     model with a parameter vector needs the second half: the vector is far too
     big for the JSON, and the contract already has the vocabulary for it.
+
+    ``include_steering_actuators=False`` leaves the steering elements out of the
+    document at the *source*.  A family that drives the rack itself asks for this
+    rather than filtering the elements out afterwards: a document that was built
+    and then corrected is a document nobody described, and the removal would have
+    to be repeated for every steering channel.
     """
     native = prepared.native_model
     kinds, parameter_blocks, mirrors = tire_model_arrays(native)
@@ -461,10 +471,11 @@ def model_document(
         }
         for index, drag in enumerate(native.aerodynamic_drags)
     )
-    elements.extend(
-        _steering_element(prepared.steering, index, prepared.body_names)
-        for index in range(len(prepared.steering.names))
-    )
+    if include_steering_actuators:
+        elements.extend(
+            _steering_element(prepared.steering, index, prepared.body_names)
+            for index in range(len(prepared.steering.names))
+        )
     # The brake and drive torque elements (subtask p2-09).  Their gain and cap
     # are already SI -- the preparation layer converted the template's
     # engineering-unit slots once -- and the document declares the model in

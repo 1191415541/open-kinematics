@@ -11,6 +11,17 @@ Putting them here rather than in the vehicle model is deliberate.  A wheel-centr
 drive is a property of the case being run -- a K sweep prescribes it, a ride or
 handling case does not -- and a model that always carried one would pin the
 suspension in every other family.
+
+**This family asks for no steering actuator, rather than removing one.**  A K/C
+sweep drives the rack itself, and a prescribed steering actuator on the same
+degree of freedom would be a second row on one coordinate.  The answer is to ask
+the model document for a vehicle without steering elements -- the same
+"add, never remove" boundary subtask 05 of the assembly-layer epic applied to
+the test rig, where a bench stopped stripping a declaration it did not want and
+started not requesting it.  The two are the same rule read from two sides and
+they belong to *different* epics: that one owns the rig files
+(``subsystems/rig_link.py``, ``rigs/**``) and this one owns this family's model
+document, so neither repeats the other's change.
 """
 
 from __future__ import annotations
@@ -121,19 +132,20 @@ def model_document(
     """
     Add the sweep's driven coordinates to a vehicle model document.
 
+    Only additions: the base document is asked for a vehicle *without* steering
+    actuators and the sweep's own driven coordinates are appended to its joints.
+    The earlier form built the document with the actuators and then deleted every
+    ``steering_actuator`` element from it, which is why this function's contract
+    is now stated as a request rather than as a correction -- a driver that is
+    "the K sweep drives the rack itself" belongs in the request, and a deletion
+    would have to be repeated once per steering channel now that a vehicle may
+    declare several.
+
     The payload is unchanged: driven coordinates are topology, not data.
     """
     document, blob = model_document_pair
     document = dict(document)
-    # The vehicle model drives the rack through a prescribed steering actuator.
-    # A K/C sweep drives it itself, and two rows on the same degree of freedom
-    # is a rank-deficient constraint set, so the actuator is dropped here rather
-    # than left in place to collide with the sweep.
-    document["elements"] = [
-        element
-        for element in document["elements"]
-        if element["type"] != "steering_actuator"
-    ]
+    document["elements"] = list(document["elements"])
     document["joints"] = list(document["joints"]) + driven_joints(assembly, wheels)
     return document, blob
 
@@ -188,5 +200,13 @@ def case_document(
 
 
 def vehicle_model_document(model, prepared) -> tuple[dict[str, Any], bytes]:
-    """Return the vehicle model document this family starts from."""
-    return _vehicle_model_document(model, prepared)
+    """
+    Return the vehicle model document this family starts from.
+
+    Steering actuators are left out at the source (subtask p2-06): this family
+    prescribes the rack through its own driven coordinate, and two rows on one
+    degree of freedom is a rank-deficient constraint set.  Asking the document
+    builder for a vehicle without them is the boundary; deleting them afterwards
+    was the correction.
+    """
+    return _vehicle_model_document(model, prepared, include_steering_actuators=False)

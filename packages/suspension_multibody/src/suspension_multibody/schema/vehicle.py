@@ -165,7 +165,32 @@ class SteeringSystemSpec(StrictModel):
     actuator_reaction_body: str | None = None
     actuator_axis_local: Vec3 = Vec3(x=0.0, y=0.0, z=1.0)
     actuator_reference_rotation: Quaternion = Field(default_factory=Quaternion)
+    #: The name this channel is addressed by (subtask p2-06).
+    #:
+    #: A channel is a steering rack the preparation layer actuates, and it needs a
+    #: name of its own: the constraint row, the contract element and the recorded
+    #: output are all keyed by it.  ``"front_rack"`` is what the single
+    #: compatibility channel has always been called.
+    channel_name: str = Field(default="front_rack", min_length=1, exclude=True)
+    #: The placement this channel steers, as the assembly names it.
+    #:
+    #: The *declaration* rather than a reading of a name: a channel that does not
+    #: say which axle it steers would have its rack resolved by guessing, and a
+    #: two-channel vehicle would drive the same rack twice.
+    placement: str = Field(default="front", min_length=1, exclude=True)
+    #: Whether this channel takes part in a run (subtask p2-06).
+    #:
+    #: A declared-but-disabled channel keeps its geometry and ratio on file while
+    #: staying out of the assembled run, which is how a vehicle is compared with
+    #: and without its rear steer.
+    enabled: bool = Field(default=True, exclude=True)
 
+
+class SteeringChannelSpec(SteeringSystemSpec):
+    """One additional steering channel, beyond the compatibility primary."""
+
+    channel_name: str = Field(min_length=1, exclude=True)
+    placement: str = Field(min_length=1, exclude=True)
 
 class JointCoordinateCouplerSpec(StrictModel):
     """Linear relation between two ideal-joint coordinates."""
@@ -277,6 +302,24 @@ class VehicleModel(StrictModel):
     rear_axle: FrontAxleModel
     wheels: tuple[WheelSpec, ...]
     steering: SteeringSystemSpec
+    #: The additional steering channels (subtask p2-06).
+    #:
+    #: ``steering`` stays exactly what it was -- the mandatory compatibility
+    #: primary channel -- and this tuple carries the rest, so a one-channel
+    #: declaration dumps and hashes byte for byte as it always did.  Excluded
+    #: from ``model_dump`` for the same reason ``torque_demand`` is: ``api.py``
+    #: hashes that dump into ``Provenance.model_hash``.
+    steering_channels: tuple[SteeringChannelSpec, ...] = Field(
+        default=(), exclude=True
+    )
+    #: Which allocation law turns one driver input into the per-channel angles.
+    #:
+    #: ``direct`` is the historical behaviour and the default: every channel is
+    #: driven by the case's own steering signal, and a one-channel vehicle is
+    #: therefore bit-identical to what it was before channels existed.
+    allocation_law: Literal[
+        "direct", "ackermann", "four_wheel_steer", "multi_axle_follow"
+    ] = Field(default="direct", exclude=True)
     driveline: DrivelineSpec = Field(default_factory=DrivelineSpec)
     coordinate_couplers: tuple[JointCoordinateCouplerSpec, ...] = ()
     aerodynamic_drag: AerodynamicDragSpec | None = None
@@ -341,7 +384,70 @@ class VehicleModel(StrictModel):
                     raise ValueError(
                         f"coordinate coupler {coupler.name!r} references an undefined joint"
                     )
+        self._check_steering_channels()
         return self
+
+    def _check_steering_channels(self) -> None:
+        """
+        Refuse a channel set whose own declarations disagree (subtask p2-06).
+
+        Three questions are asked, and all three are answerable from the
+        declared names alone: whether a channel may be addressed at all, whether
+        two channels claim the same identity, and whether a channel states an
+        actuator whose two ends are the same body (a couple against itself, which
+        is not a load path).
+
+        Deliberately *not* asked: which channel steers which axle.  ``placement``
+        is the declaration that answers it, so an ordering rule such as "the first
+        channel is the steered one" would be a second answer that could disagree
+        with the first.
+        """
+        channels: tuple[SteeringSystemSpec, ...] = (
+            self.steering,
+            *self.steering_channels,
+        )
+        if not self.steering.channel_name.strip():
+            raise ValueError("the primary steering channel needs a channel_name")
+        if not self.steering.placement.strip():
+            raise ValueError("the primary steering channel needs a placement")
+        names = [channel.channel_name.strip() for channel in channels]
+        repeated = _first_repeated(names)
+        if repeated is not None:
+            raise ValueError(f"steering channel name {repeated!r} is declared twice")
+        placements = [channel.placement.strip() for channel in channels]
+        repeated_placement = _first_repeated(placements)
+        if repeated_placement is not None:
+            raise ValueError(
+                f"steering channel placement {repeated_placement!r} is declared twice"
+            )
+        for channel in channels:
+            for label, body in (
+                ("rack_body", channel.rack_body),
+                ("actuator_body", channel.actuator_body),
+                ("actuator_reaction_body", channel.actuator_reaction_body),
+            ):
+                if body is not None and not body.strip():
+                    raise ValueError(
+                        f"steering channel {channel.channel_name!r} states an empty {label}"
+                    )
+            if (
+                channel.actuator_body is not None
+                and channel.actuator_body == channel.actuator_reaction_body
+            ):
+                raise ValueError(
+                    f"steering channel {channel.channel_name!r} actuates "
+                    f"{channel.actuator_body!r} against itself"
+                )
+
+
+def _first_repeated(values: list[str]) -> str | None:
+    """Return the first value that appears twice, or ``None``."""
+    seen: set[str] = set()
+    for value in values:
+        if value in seen:
+            return value
+        seen.add(value)
+    return None
 
 
 class VehicleDynamicCase(StrictModel):

@@ -31,6 +31,7 @@ from pydantic import ValidationError
 from ..schema import (
     DrivelineSpec,
     RigidBodySpec,
+    SteeringChannelSpec,
     SteeringSystemSpec,
     VehicleModel,
     WheelSpec,
@@ -52,13 +53,21 @@ def vehicle_document_from(model: VehicleModel) -> dict[str, Any]:
     one.  The two axles are left out because they are subsystems: the assembly
     document refers to them by file, and writing them here as well would be a
     second description of the same axle.
+
+    `steering_channels` is written only when the model declares any of them, so a
+    one-channel vehicle exports the four keys it always did, byte for byte.
     """
-    return {
+    section = {
         "chassis": _stated(model.chassis),
         "wheels": [_stated(wheel) for wheel in model.wheels],
         "steering": _stated(model.steering),
         "driveline": _stated(model.driveline),
     }
+    if model.steering_channels:
+        section["steering_channels"] = [
+            _stated(channel) for channel in model.steering_channels
+        ]
+    return section
 
 
 def _stated(value: Any) -> dict[str, Any]:
@@ -110,13 +119,13 @@ def vehicle_model_from(
             "document states none"
         )
     axles = file_axles_from(assembly)
-    # A vehicle states one steering system, and a steering system steers one axle:
-    # the rear axle's rack is therefore bolted to the chassis rather than driven,
-    # which is what `rack_fixed_to_chassis` records.  Deriving it here is what
-    # makes "the file declares one steering system" mean one *steered* axle --
-    # leaving the rear rack free would describe a four-wheel-steered car that the
-    # document does not.
-    axles["rear"] = axles["rear"].model_copy(update={"rack_fixed_to_chassis": True})
+    # The axles come back exactly as their own subsystem files describe them,
+    # including whether each rack is bolted to the chassis.  A vehicle may declare
+    # several steering channels (subtask p2-06), so "the file states one steering
+    # system" no longer means one *steered* axle, and bolting the rear rack down
+    # here would silently refuse the second channel a document asked for.  Whether
+    # a rack is bolted is a fact about the axle its subsystem file describes, and
+    # that file is the one place that decides it.
     # Each part is validated on its own so a failure names the part: a nested
     # `model_validate` reports its own field (`ratio`) and loses which object the
     # field was in, and "ratio must be greater than 0" is a worse report than
@@ -132,6 +141,12 @@ def vehicle_model_from(
         _validated(assembly.path, f"wheels[{index}]", WheelSpec, row)
         for index, row in enumerate(section["wheels"])
     )
+    channels = tuple(
+        _validated(
+            assembly.path, f"steering_channels[{index}]", SteeringChannelSpec, row
+        )
+        for index, row in enumerate(section.get("steering_channels", []))
+    )
     try:
         return VehicleModel(
             name=name or assembly.name,
@@ -140,6 +155,7 @@ def vehicle_model_from(
             rear_axle=axles["rear"],
             wheels=wheels,
             steering=steering,
+            steering_channels=channels,
             driveline=driveline,
         )
     except ValidationError as exc:

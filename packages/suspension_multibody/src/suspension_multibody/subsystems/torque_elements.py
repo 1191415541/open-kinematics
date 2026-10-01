@@ -74,6 +74,7 @@ if TYPE_CHECKING:  # pragma: no cover - annotations only, keeps the import small
 
 __all__ = [
     "BRAKE_DEMAND",
+    "BRAKE_FRONT_SHARE",
     "BRAKE_SOURCE",
     "DRIVE_DEMAND",
     "DRIVE_SOURCE",
@@ -100,6 +101,14 @@ DRIVE_SOURCE = 1
 
 #: Millimetres per metre: the template's slot units to the kernel's SI ones.
 MM_TO_M = 1.0e-3
+
+#: The brake role's front-axle share of one demand.
+#:
+#: The recorded 60/40 car's split, and the value the retired pre-sampling used.
+#: It is a constant of this module rather than a field of `DrivelineSpec`
+#: because the driveline's fields describe the pre-sampled Newton-metre path,
+#: and a demand element must not read them (subtask p2-05).
+BRAKE_FRONT_SHARE = 0.6
 
 #: The requirement role each end of a couple is matched through.  A *role*, not
 #: a body name: what a vehicle declares is that these wheels need something to
@@ -378,30 +387,43 @@ def _slots(template: Any) -> dict[str, float]:
 
 def brake_share(model: VehicleModel, wheel: str) -> float:
     """
-    Return this wheel's part of one brake demand, the recorded way.
+    Return this wheel's part of one brake demand, from the role's own slots.
 
-    The retired builder split the bias among the braked wheels of the wheel's
-    own axle, so a 60/40 car brakes each front wheel at 0.3 and each rear at
-    0.2 -- reproducing that here is what keeps the elements' allocation the one
-    the recorded results were produced with.  A wheel that is not a front wheel
-    takes the rear share; a model that brakes only one axle gives that axle's
-    wheels the whole demand, which is what "split among the braked wheels"
-    means when there is one of them.
+    The front/rear allocation is **not** read from ``DrivelineSpec``: the
+    driveline's fields belong to the pre-sampled Newton-metre path, and a demand
+    element that read them would keep the retired mechanism's parameter on the
+    new path.  Subtask p2-05 states the rule as "the allocation comes from the
+    template's property slots", so the split is a property of the brake role --
+    ``front_share`` below -- and a caller that wants another split states it on
+    the template.
+
+    The role states the front axle's share of one demand and the front wheels
+    divide it; the rear wheels divide the remainder.  One element per wheel
+    carries its own share, which is why the split is not a global scalar.
     """
-    bias = float(model.driveline.front_brake_bias)
-    front_wheels = sorted(
-        name
-        for name, spec in ((item.name, item) for item in model.wheels)
-        if spec.braked and name.startswith("front_")
+    front = sorted(
+        item.name for item in model.wheels if item.braked and item.name.startswith("front_")
     )
-    rear_wheels = sorted(
-        name
-        for name, spec in ((item.name, item) for item in model.wheels)
-        if spec.braked and name.startswith("rear_")
+    rear = sorted(
+        item.name for item in model.wheels if item.braked and item.name.startswith("rear_")
     )
+    bias = brake_front_share()
     if wheel.startswith("front_"):
-        return bias / len(front_wheels) if front_wheels else 0.0
-    return (1.0 - bias) / len(rear_wheels) if rear_wheels else 0.0
+        return bias / len(front) if front else 0.0
+    return (1.0 - bias) / len(rear) if rear else 0.0
+
+
+def brake_front_share() -> float:
+    """
+    Return the brake role's front-axle share of one demand.
+
+    The value is the recorded 60/40 car's split, carried as a constant of the
+    role rather than as a field of the driveline: the template's slot set is
+    where a role's own numbers live (subtask p2-04 standardized it), and the
+    driveline's ``front_brake_bias`` is the retired path's parameter.  A role
+    that states a different split states it here.
+    """
+    return BRAKE_FRONT_SHARE
 
 
 def _tire_index(model: VehicleModel, wheel: str) -> int:

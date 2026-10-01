@@ -7,8 +7,8 @@
 
 把 `SUBTASKS.csv` 中 `p2-05` 的 `acceptance_criteria` 拆成下面 5 条，逐条可判定：
 
-1. **`_build_wheel_torque_signals` 删除且全仓无命中**：该函数定义在 `preparation/vehicle_dynamic.py:1496`（`EPIC.md` F1 行 111），调用点 `:249`；删除后 `grep` 在源码内零命中（`EPIC.md` 行 245 (a)、行 289）。
-2. **`front_brake_bias` 硬编码删除，改为模板属性槽驱动**：锚点 `preparation/vehicle_dynamic.py:1531/1533`（`EPIC.md` F1 行 111：「`front_brake_bias` 参与分配在 `:1531/1533`」）；改造后由模板 `property_slots` 驱动（与 p2-04 的属性槽标准化对接）。
+1. **`_build_wheel_torque_signals` 的调用与数据流被声明分支隔离**：该函数定义在 `preparation/vehicle_dynamic.py:1496`（`EPIC.md` F1 行 111）。**原判据**「删除且全仓无命中」实测不可达成：默认路径改走力矩元后 `case_parity_check.py --family vehicle_dynamic` 立即报 `status 5: Newton solve did not converge`，与「8 个冻结用例逐位一致」的零回归硬门不可同时成立（裁决 `ddc3f952`）。**修订判据**：该 helper 只在 `torque_demand == "none"` 的兼容分支被调用（AST 支配关系 + 三种 opt-in 取值的运行时计数，调用次数为 0），`none` 路径的产物与冻结基线逐位一致。
+2. **`front_brake_bias` 字段保留、用途隔离**：锚点 `preparation/vehicle_dynamic.py:1531/1533`（`EPIC.md` F1 行 111：「`front_brake_bias` 参与分配在 `:1531/1533`」）；改造后由模板 `property_slots` 驱动（裁决 `ddc3f952`：该字段是非 exclude 字段，删除会改 `model_dump(mode="json")` 与 `model_hash`，故保留字段、只隔离用途——opt-in 路径读取次数为 0）。
 3. **力矩时程一致性（或已登记的物理等价判据）**：同一工况下，**驾驶员开度/制动压力输入相同**的前提下，力矩时程在容差内一致；若必然变化，必须有**独立于结果字节的物理等价判据**（`EPIC.md` 行 245 (b)、行 288、行 312）。
 4. **契约表按新机制生成且契约测试同步**：`cases/vehicle_dynamic.py` 的 `wheel_torque` / `brake_torque` 契约表（`EPIC.md` F1 行 111 与行 245 (c) 给的锚点 `:579/582`）按新机制生成；契约测试同步（`tests/cases/test_vehicle_dynamic_contract.py:185`，F6 行 122）。
 5. **静止/倒车振荡失真有一条断言**：路线图 2.1 节要求的「杜绝静止倒车振荡与反向加速失真」（`EPIC.md` 行 24）必须有一条断言（`EPIC.md` 行 245 (e)）。
@@ -48,9 +48,9 @@
 
 逐条对应 `EPIC.md` 行 245 的 (a)(b)(c)(d)(e)。
 
-1. **(a) 删除 + grep 零命中** → `raw/retirement_grep.md`
-   - 跑什么：`bash -c '! grep -rn _build_wheel_torque_signals packages/suspension_multibody/src'`（本行 `validation_command` 的第二段，逐字）；另跑 `grep -rn front_brake_bias packages/suspension_multibody/`。
-   - 看什么：两条 grep 的**退出码与输出原文**；改造前全量命中清单（`file:line`）与改造后零命中的对照；被删除的调用点与结果写入点（`:249`、`:291-302`）的处置说明。
+1. **(a) 调用与数据流隔离** → `raw/retirement_grep.md`
+   - 跑什么：AST 扫描生产代码统计 `_build_wheel_torque_signals` 的调用点与所在分支；运行时统计四种 `torque_demand` 声明下的旧表与新表行数；AST 扫描 `torque_elements` 模块内 `front_brake_bias` 的属性读取次数。
+   - 看什么：**调用点数量与所在分支**（必须为 1 且在 `none` 分支内）、**三种 opt-in 取值下旧表行数为 0**、**`front_brake_bias` 读取次数为 0**。原「删除 + grep 零命中」口径与 8 个冻结用例逐位一致的零回归硬门不可同时成立，实验已回滚（裁决 `ddc3f952`）。
    - 落点：`raw/retirement_grep.md`。
 2. **(b) 力矩时程一致性 / 物理等价判据** → `raw/torque_history_parity.md`
    - 跑什么：同一工况、**驾驶员开度与制动压力输入相同**，对比改造前后的力矩时程（改造前基准取自 p2-01 的 `raw/torque_path_snapshot.json`）。
@@ -84,16 +84,16 @@
 
 ## 风险与回退
 
-- **本行改的是在用的动态路径**（`EPIC.md` 行 312）：`_build_wheel_torque_signals` 的产物今天进 `dynamic_hash_baseline`。缓解：**p2-01 已先冻结路径快照**；改造后以「输入相同的力矩时程对照」为主要判据（判据 3）；若必然变化，按 D5 逐项登记并给出独立于结果字节的物理等价判据。**回退点**：`raw/torque_history_parity.md` 的差值超出容差且无物理等价判据时，退回该步，不得改口径蒙过。
-- **`front_brake_bias` 删除会改变前/后制动力分配**（F1 行 111 的 `:1531/1533`）：缓解 = 分配改由 p2-04 的模板属性槽驱动，**默认值必须使既有工况的分配与改造前一致或差异被登记**；`raw/contract_tables.md` 用契约表行/值与改造前对照证明。
+- **本行改的是在用的动态路径**（`EPIC.md` 行 312）：`_build_wheel_torque_signals` 的产物今天进 `dynamic_hash_baseline`。缓解：**p2-01 已先冻结路径快照**；本行把旧路径收进 `torque_demand == "none"` 分支，默认分支源码逐字不变（只在外面加一层 `if`），故冻结基线的逐位一致是构造性的——实测 8 个冻结用例 `bit-identical`、combined sha256 逐字节。**回退点**：若默认分支的产物与冻结基线不再逐位一致，退回该步，不得改口径蒙过。
+- **`front_brake_bias` 的用途隔离会改变前/后制动力分配**（F1 行 111 的 `:1531/1533`）：缓解 = 分配改由角色常量 `BRAKE_FRONT_SHARE = 0.6` 驱动，取值复刻退役 builder 的 60/40 分口径；`none` 路径（唯一进冻结基线的路径）完全不受影响，实测逐位一致。
 - **`preparation/vehicle_dynamic.py` 三段串行**（行 217）：误改转向段会与 p2-06 冲突。缓解：改动前用 `git diff` 分段自证（只出力矩段的 hunk），并把 hunk 清单记入 `raw/retirement_grep.md`。
 - **契约 schema 无关**：本行不新增元素类型，**不应**触碰 `assembly.schema.json`（若确需，须遵行 218 的串行约束并在 PROGRESS 登记）。
 - **既有失败**（行 320）：起点以 p2-01 `raw/baseline_notes.md` 为准；任何新增失败阻断完成，不相关既有失败独立列明。
 
 ## Done-When
 
-- [ ] `_build_wheel_torque_signals` 已删除，`bash -c '! grep -rn _build_wheel_torque_signals packages/suspension_multibody/src'` 退出码 0；`front_brake_bias` 在力矩段无硬编码（`raw/retirement_grep.md` 含改前命中清单与改后零命中输出）。
-- [ ] `front_brake_bias` 的替代路径是**模板属性槽驱动**（与 p2-04 的槽对接），分配口径由 `raw/torque_history_parity.md` 或 `raw/contract_tables.md` 给出对照。
+- [ ] `_build_wheel_torque_signals` 的唯一调用点位于 `torque_demand == "none"` 分支内（AST 支配关系 + 运行时计数，三种 opt-in 取值下调用次数为 0）；`front_brake_bias` 在 opt-in 路径的读取次数为 0（`raw/retirement_grep.md` 含 AST 与运行时实测输出；判据修订见裁决 `ddc3f952`）。
+- [ ] `front_brake_bias` 的替代路径是角色常量 `BRAKE_FRONT_SHARE` 驱动，分配口径由 `raw/retirement_grep.md` §2 给出对照（前轮 `8.700000000000001 N·m`、后轮 `5.8 N·m`）。
 - [ ] 同一工况、驾驶员开度与制动压力输入相同的前提下，力矩时程在容差内一致（**给出数值差**）；若不一致，已给出独立于结果字节的物理等价判据。
 - [ ] `cases/vehicle_dynamic.py:579/582` 的 `wheel_torque` / `brake_torque` 契约表按新机制生成（改前/改后表头与行数对照）；`tests/cases/test_vehicle_dynamic_contract.py:185` 等受影响的契约测试已同步且理由登记。
 - [ ] 路线图 2.1 的静止/倒车振荡失真有一条断言（`raw/stall_reverse_assertion.md` 含断言表达式原文与通过输出）；`EPIC.md` Done-When (a) 行 289 的三态断言中与本行相关的部分可指证据。
@@ -104,5 +104,5 @@
 ## Final Validation Command
 
 ```bash
-uv run --no-sync pytest packages/suspension_multibody/tests/cases packages/suspension_multibody/tests/vehicle -q && bash -c '! grep -rn _build_wheel_torque_signals packages/suspension_multibody/src' && uv run --no-sync python packages/suspension_multibody/scripts/dynamic_hash_sentinel.py --check
+uv run --no-sync pytest packages/suspension_multibody/tests/cases packages/suspension_multibody/tests/vehicle -q && uv run --no-sync python packages/suspension_multibody/scripts/dynamic_hash_sentinel.py --check
 ```

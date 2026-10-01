@@ -80,7 +80,7 @@
 
 ## Goal
 
-**G1（阶段二·力矩内建）**：制动与驱动成为**模板内建的主动力矩元**而非离线预采样数组。力矩元建立在施力体与反力体之间，在求解期按实时旋转角速度与打滑状态求值；参数由模板 `property_slots` 驱动；工况文档只提供驾驶员开度（`throttle_demand(t)`）与制动压力（`brake_pressure(t)`）信号。判据：`preparation/vehicle_dynamic.py` 的 `_build_wheel_torque_signals`（`:1496`）与 `front_brake_bias` 硬编码（`:1531-1533`）被删除且 `grep` 无命中；力矩元有独立求值断言（静止/倒车/抱死三种状态各一条）。
+**G1（阶段二·力矩内建）**：制动与驱动成为**模板内建的主动力矩元**而非离线预采样数组。力矩元建立在施力体与反力体之间，在求解期按实时旋转角速度与打滑状态求值；参数由模板 `property_slots` 驱动；工况文档只提供驾驶员开度（`throttle_demand(t)`）与制动压力（`brake_pressure(t)`）信号。判据：`preparation/vehicle_dynamic.py` 的 `_build_wheel_torque_signals`（`:1496`）只在 `torque_demand == "none"` 的兼容分支被调用、**opt-in 路径调用次数为 0**（AST 支配关系加三种 opt-in 取值的运行时计数，可判定）；`front_brake_bias` 的数据流只出现在 none 分支、opt-in 路径读取次数为 0；力矩元有独立求值断言（静止/倒车/抱死三种状态各一条）。**裁决修订（code-reviewer `ddc3f952`，2026-10-01）**：本 Goal 原写「函数与硬编码**被删除**且 grep 无命中」——实测默认路径改走力矩元会使 8 个冻结基线用例 `status 5` 不收敛（`case_parity_check.py --family vehicle_dynamic` 直接失败），故采纳「保留旧路径为 none 兜底」；`front_brake_bias` 是**非 exclude** 字段，删除会改 `model_dump(mode="json")` 与 `model_hash`，故**保留字段**只隔离其用途。判据由「函数不存在」改为「调用与数据流被声明分支隔离」，仍可客观判定。
 
 **G2（阶段二·工况解耦与多轴转向）**：解除后轮转向限制（`preparation/vehicle_dynamic.py:205-211` 的抛错与 `authoring/vehicle.py:112-119` 的强制写死），转向从单例（`schema/vehicle.py:255`）改为**分布式通道**，新增**转向分配器**，原生支持阿克曼、4WS（高速同向/低速对向）与多轴随动。判据：一份两通道（前 + 后）总成文件装配并跑通一次；一份 4WS 工况与一份阿克曼工况在**相同方向盘输入**下各通道转角符合分配器声明的分配律；`grep "rack_fixed_to_chassis"` 在准备层无「必须为真」的校验。
 
@@ -252,7 +252,7 @@
 
 **p3-01（冻结现状 · 阶段三）**：(a) `vehicle/roll_centers.py` 与 `static_loads.py` 的完整现状锚点复核（含硬点别名表全表、`_WHEELS` 全表、`rank < 3` 抛错段与 `residual` 的计算口径）；(b) **四种构型的最小几何模型盘点**：双叉臂（现有）、5 连杆、麦弗逊、扭梁——实测各自今天能否构造（预期不能），记录拒绝点原文；(c) 现有 `tests/physics/test_vehicle_physics.py` 的 5 条断言原文；(d) 基线影响面复核（F10）——确认 `kc_baseline`/`dynamic_hash_baseline` 不含 roll center 字段；(e) **记录 p3-03 与 p3-04 的调度关系为「硬串行」**（`depends_on = p3-03`，不得并行），以免本行 SPEC 与父表口径不一致（第三轮复审修订）。
 
-**p2-06（转向通道 + 分配器）**：(a) 解除两层限制（`preparation/vehicle_dynamic.py:205-211` 与 `authoring/vehicle.py:112-119`），`grep` 无「must be true」校验；(b) `schema/vehicle.py` 的转向从单例改为**通道列表**（向后兼容：单通道声明仍等价于旧单例，产物逐项一致）；(c) 转向分配器：阿克曼、4WS（高速同向/低速对向）、多轴随动三种分配律各有断言，且**相同方向盘输入下**各通道转角符合分配律；(d) `cases/vehicle_kc.py:128-136` 的准备期 `steering_actuator` 删除改为「**只增不删**」的边界驱动（与阶段一 05 的试验台非侵入同口径），或按裁决登记；(e) 一份两通道总成文件装配并跑通一次 study。
+**p2-06（转向通道 + 分配器）**：(a) 解除两层限制（`preparation/vehicle_dynamic.py:236-255` 与 `authoring/vehicle.py:119`），准备层 `grep` 无「must be true」校验；(b) `schema/vehicle.py` **保留必填的 `steering` 单例**并新增 `exclude=True` 的 `steering_channels` 附加通道声明，准备层合成为有序逻辑通道列表（**裁决 `1331b13d`：原「改为通道列表」与 Boundaries「不改 `VehicleModel` 字段形状」冲突，已改；向后兼容硬门同时收紧为键集合/字节数/canonical_hash 三项逐项一致**）；(c) 转向分配器：阿克曼、4WS（高速同向/低速对向）、多轴随动三种分配律各有断言，且**相同方向盘输入下**各通道转角符合分配律；(d) `cases/vehicle_kc.py:128-136` 的准备期 `steering_actuator` 删除改为「**只增不删**」的边界驱动（与阶段一 05 的试验台非侵入同口径），或按裁决登记；(e) 一份两通道总成文件装配并跑通一次 study。
 
 **p3-01（冻结现状 · 阶段三）**：(a) `vehicle/roll_centers.py` 与 `static_loads.py` 的完整现状锚点复核（含硬点别名表全表、`_WHEELS` 全表）；(b) **四种构型的最小几何模型盘点**：双叉臂（现有）、5 连杆、麦弗逊、扭梁——实测各自今天能否构造（预期不能），记录拒绝点原文；(c) 现有 `tests/physics/test_vehicle_physics.py` 的 5 条断言原文；(d) 基线影响面复核（F10）——确认 `kc_baseline`/`dynamic_hash_baseline` 不含 roll center 字段。
 
@@ -294,9 +294,13 @@
 
 ```text
 (a) 力矩内建：同一工况下，驾驶员开度/制动压力输入不变，力矩时程一致或有登记的物理等价判据；
-    静止/倒车/抱死三态各有求值断言；_build_wheel_torque_signals 与 front_brake_bias grep 无命中
+    静止/倒车/抱死三态各有求值断言；_build_wheel_torque_signals 只在 none 分支被调用、
+    front_brake_bias 在 opt-in 路径读取次数为 0（判据修订见 G1 行的裁决 ddc3f952：
+    原「两符号 grep 全仓无命中」与「8 个冻结用例逐位一致」不可同时成立，已改为声明分支隔离）
 (b) 转向通道：两通道总成装配并跑通一次；阿克曼 / 4WS / 多轴随动三种分配律各有断言；
-    相同方向盘输入下各通道转角符合分配律；后轮转向限制两层均解除
+    相同方向盘输入下各通道转角符合分配律；后轮转向限制两层均解除；
+    `steering` 必填单例与 `model_dump(mode="json")` 的键集合/字节数/canonical_hash 逐项不变，
+    附加通道经 `exclude=True` 的字段声明（判据修订见 p2-06 行的裁决 1331b13d）
 (c) 通用运动学：双叉臂 / 5 连杆 / 麦弗逊 / 扭梁 四种构型各有滚转中心断言；
     新引擎路径无硬点名称嗅探；瞬轴在已知解析解构型上验证通过；
     滚转中心高由侧倾反力虚功导数矩阵解算并有独立数值判据（路线图 :136-139）

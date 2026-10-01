@@ -25,7 +25,10 @@ from suspension_multibody.authoring import (
     vehicle_document_from,
     vehicle_model_from,
 )
-from suspension_multibody.authoring.solver import assembly_request_for
+from suspension_multibody.authoring.solver import (
+    assembly_request_for,
+    file_axles_from,
+)
 from suspension_multibody.subsystems.entry import compose_vehicle
 
 from .fixtures import COORDINATES, write_vehicle_project
@@ -215,9 +218,13 @@ def test_a_vehicle_document_builds_a_vehicle_model_from_its_own_numbers(
     assert model.front_axle.hardpoints["WHEEL_CENTER"].as_tuple() == COORDINATES[
         "wheel_center"
     ]
-    # One steering system is one steered axle: the rear rack is bolted down.
+    # A rack is bolted because its own subsystem file says so, not because a
+    # vehicle declares one steering system.  Both of this fixture's suspension
+    # files leave it free, and the reader returns what they state.
     assert model.front_axle.rack_fixed_to_chassis is False
-    assert model.rear_axle.rack_fixed_to_chassis is True
+    assert model.rear_axle.rack_fixed_to_chassis is (
+        file_axles_from(document)["rear"].rack_fixed_to_chassis
+    )
 
 
 def test_the_vehicle_numbers_survive_a_trip_through_the_file(tmp_path: Path) -> None:
@@ -359,19 +366,30 @@ def test_the_project_loads_the_vehicle_and_its_numbers(tmp_path: Path) -> None:
     assert model.chassis.mass == pytest.approx(1400.0)
 
 
-def test_a_bolted_rack_keeps_the_built_in_fixed_template(tmp_path: Path) -> None:
+def test_the_rack_branch_follows_the_subsystem_files(tmp_path: Path) -> None:
     """
-    The model decides *whether* a rack is steered; the file decides *how*.
+    The file decides *whether* a rack is bolted; the model only reads it.
 
-    `vehicle_model_from` bolts the rear axle's rack down, because the document
-    declares one steering system: that rack reaches the assembly as a weld to the
-    chassis, while the front one is guided in the support the document's own steering
-    template declares.  The tie rods are the *suspension* template's (requirement 1),
-    so both axles build them and neither steering template names one.
+    This test used to be `test_a_bolted_rack_keeps_the_built_in_fixed_template`
+    and asserted `"rear_rack_fixed_to_chassis" in names`, because
+    `vehicle_model_from` bolted the rear axle's rack down on the ground that a
+    document declaring one steering system declares one *steered* axle.  Subtask
+    p2-06 removed that override: a vehicle declares its steering channels
+    explicitly, so bolting a rack the file left free would silently refuse the
+    rear channel a document asked for.  Measured on this fixture -- whose rear
+    suspension file leaves `rack_fixed_to_chassis` free, as `write_vehicle_project`
+    writes it -- both axles now build the guide branch, which is what the files
+    state.  The other branch is still built, and still covered, by
+    `tests/subsystems/test_explicit_in_composition.py::112` and
+    `tests/subsystems/test_assembly_matches_snapshot.py`, which drive it from the
+    model field directly.
+
+    What the templates decide is unchanged: the *guide* comes from each axle's
+    own steering template (the front through the support that template declares,
+    the rear through the same one placed at `rear`), the tie rods are the
+    *suspension* template's (requirement 1), and neither steering template names
+    one.
     """
-    from suspension_multibody.authoring.solver import assembly_request_for
-    from suspension_multibody.subsystems.entry import compose_vehicle
-
     paths = write_vehicle_project(tmp_path)
     document = AssemblyDocument.load(paths["vehicle_assembly"])
     model = vehicle_model_from(document)
@@ -382,6 +400,8 @@ def test_a_bolted_rack_keeps_the_built_in_fixed_template(tmp_path: Path) -> None
         ).constraints
     }
     assert "front_rack_guide" in names
-    assert "rear_rack_fixed_to_chassis" in names
+    assert "rear_rack_guide" in names
     assert "front_rack_tie_joint_L" in names and "rear_rack_tie_joint_L" in names
     assert not [name for name in names if name.endswith("rack_tie")]
+    # The branch is the *file's*: nothing bolts a rack the file left free.
+    assert not [name for name in names if name == "rear_rack_fixed_to_chassis"]
