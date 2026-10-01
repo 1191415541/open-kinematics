@@ -242,6 +242,25 @@ def _run(*, with_element: bool, reference_quaternion: bool = False) -> np.ndarra
     return state
 
 
+def _raw(*, with_element: bool):
+    """
+    Submit the same pair through the production entry point and return the run.
+
+    This is the helper the element-wrench assertions use: `_run` above goes one
+    step further and returns the state, while a test that reads the couple's own
+    record needs the raw result the channel lives in.
+    """
+    document = _model_document(with_element=with_element)
+    validate_model(document)
+    return run_request(
+        compile_document_pair(
+            SimulationRequest(assembly="axle", family="axle_dynamic"),
+            model_document=document,
+            case_document=_case_document(),
+        )
+    )
+
+
 def _omega_y(state: np.ndarray, body: int) -> np.ndarray:
     """One body's angular velocity about the element's own axis, per sample."""
     return state[:, body, OMEGA + 1]
@@ -410,6 +429,74 @@ def test_the_document_route_carries_the_demand_channel() -> None:
         submit({"demand_source": 9, "demand_tire": 0})
     with pytest.raises(Exception, match="demand channel"):
         submit({"demand_source": 2, "demand_tire": 0.5})
+
+
+def test_the_couple_the_kernel_applied_is_non_zero(monkeypatch) -> None:
+    """
+    The couple is *read back* from the run, not inferred from its consequences.
+
+    Subtask p2-11.  Everything above proves the element reaches the solver: the
+    state trajectory differs, the reaction end moves, the two ends meet.  None of
+    those separates "the law applied the demanded couple" from "the law applied
+    some couple" -- and a law that scaled the demand by a wrong factor would pass
+    all of them.
+
+    So this reads the kernel's own element-wrench channel: type code 10 is the
+    rotational actuator, the block carries one pair of rows per element per
+    sample, and the moment columns are the couple the law actually applied.  The
+    magnitude is asserted against the block's own `max_torque`, which is the
+    documented meaning of the cap (`min(stiffness * demand, max_torque)` with the
+    unit demand this document states).
+
+    The control is the same model with the element removed: it must carry *no*
+    code-10 row at all, so "the rows are the element's" is a measurement rather
+    than an assumption.
+    """
+    from suspension_multibody.results.element_wrench import (
+        ELEMENT_WRENCH_SWITCH,
+        element_wrench_block,
+    )
+
+    monkeypatch.setenv(ELEMENT_WRENCH_SWITCH, "1")
+    with_couple = _raw(with_element=True)
+    without = _raw(with_element=False)
+    guarded = element_wrench_block(with_couple.raw)
+    control = element_wrench_block(without.raw)
+    assert guarded is not None and control is not None
+
+    def code10(block):
+        # Column 6 is the channel's frozen type code; columns 3:6 are the world
+        # moment about the receiving body's origin.
+        return block[block[:, :, 6] == 10]
+
+    assert code10(control).shape[0] == 0, (
+        "the control run carries rotational-actuator rows, so the declaration "
+        "was not what produced them"
+    )
+    rows = code10(guarded)
+    assert rows.shape[0] == SAMPLES * 2, rows.shape
+    # Every sample's pair is equal and opposite: a couple applied to one end and
+    # not reacted on the other is the failure mode that still converges.
+    pairs = rows.reshape(SAMPLES, 2, rows.shape[1])
+    np.testing.assert_allclose(
+        pairs[:, 0, 3:6].astype(float), -(pairs[:, 1, 3:6].astype(float)), atol=0.0
+    )
+    # The first sample is the one with a known argument: the pair starts at a
+    # relative rate of `SPIN`, well outside the law's `kEps` branch, so the
+    # demanded magnitude is what the law must apply -- the block's own cap, which
+    # is what `min(stiffness * demand, max_torque)` means for the unit demand this
+    # document states.  A law that scaled the demand by the wrong factor, or one
+    # that applied a constant instead of the demand, fails here.
+    first_moment = pairs[0, 0, 3:6].astype(float)
+    assert np.linalg.norm(first_moment) == pytest.approx(MAX_TORQUE, rel=1e-12), (
+        first_moment
+    )
+    # And the couple does *not* stay at full magnitude forever: the two equal
+    # inertias bring the pair to a common rate, the relative rate reaches zero,
+    # and the law's third branch applies nothing.  A law that kept pushing would
+    # still satisfy every assertion above, so this is the other half of "the
+    # couple follows the state".
+    assert np.linalg.norm(pairs[-1, 0, 3:6].astype(float)) == pytest.approx(0.0, abs=1e-12)
 
 
 def test_the_element_is_read_by_the_route_that_used_to_refuse_it() -> None:

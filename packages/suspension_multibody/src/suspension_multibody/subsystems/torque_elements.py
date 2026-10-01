@@ -63,6 +63,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from ..modeling.identity import EntityId
 from ..modeling.ports import GeometryPort, PortRequirement
 
@@ -130,22 +132,120 @@ def wheel_demand_wheels(model: VehicleModel, demand: str) -> tuple[str, ...]:
     return tuple(wheel.name for wheel in model.wheels if wheel.braked)
 
 
+def _wheel_reaction_body(runtime: VehicleRuntime, wheel: str) -> str:
+    """
+    Return the member a wheel's couple must react on, from the topology alone.
+
+    This is the one decision in this module that a wrong answer makes silently
+    wrong rather than absent, so it is worth stating what the right answer is.
+
+    A wheel is joined to its carrier in two steps: the wheel body is **welded**
+    into a wheel-hub body (``vehicle_parts.py`` builds that weld whenever the
+    mount it landed on is a hub), and that rigid pair turns in the carrier
+    through the spin **revolute** joint (``suspension.py``'s
+    ``wheel_spin_joint_*``, whose axis is the wheel's own spin axis).  A couple
+    applied between the wheel body and the hub would therefore act *inside* one
+    rigid component -- the weld transmits it whole, the pair's relative rate is
+    identically zero, and the law's "a stopped pair gets no couple" branch makes
+    the element do nothing while every interface still looks correct.
+
+    So the reaction end is the far side of the spin joint: the member the welded
+    wheel-plus-hub rotates *in*.  The wheel body stays the driven end, and the
+    couple travels through the weld into the hub the way a real brake's does.
+
+    The walk is by *constraint kind and axis*, never by name:
+
+    * the rigid component is the connected set of bodies joined by welds;
+    * a candidate is a revolute joint with exactly one end in that component;
+    * it is *this wheel's* spin joint when its axis, taken on the component's
+      side, is parallel to the wheel's own spin axis.
+
+    Zero candidates and several candidates are both refused by name rather than
+    guessed at.  A topology that cannot say which joint is the spin joint cannot
+    say which member reacts the couple either, and picking one would be the
+    identity guess the assembly layer forbids.
+    """
+    from ..modeling.primitives.joints import RevoluteJoint, WeldJoint
+
+    start = runtime.wheel_body_names.get(wheel)
+    if start is None:
+        raise ValueError(
+            f"the wheel {wheel!r} has no wheel end in this assembly, so nothing "
+            "says which member reacts its couple"
+        )
+
+    component = {start}
+    changed = True
+    while changed:
+        changed = False
+        for constraint in runtime.constraints:
+            if not isinstance(constraint, WeldJoint):
+                continue
+            ends = {constraint.body_a, constraint.body_b}
+            if ends & component and not ends <= component:
+                component |= ends
+                changed = True
+
+    wheel_spec = runtime.wheel_specs.get(wheel)
+    if wheel_spec is None:
+        raise ValueError(f"the wheel {wheel!r} has no wheel spec in this assembly")
+    spin_axis = np.asarray(wheel_spec.spin_axis.as_array(), dtype=float)
+    spin_axis = spin_axis / np.linalg.norm(spin_axis)
+
+    candidates: list[str] = []
+    for constraint in runtime.constraints:
+        if not isinstance(constraint, RevoluteJoint):
+            continue
+        ends = {constraint.body_a, constraint.body_b}
+        inside = ends & component
+        if len(inside) != 1:
+            # A joint wholly inside the rigid component is not a joint at all
+            # after the weld, and one wholly outside does not touch this wheel.
+            continue
+        outer = next(iter(ends - component))
+        # The joint's axis is stated in each body's frame; the side inside the
+        # component is the one whose axis is the wheel's own spin axis.  A small
+        # tolerance compares directions only, so the two bodies' frames may
+        # differ by a pose without turning this into a geometry rebuild.
+        axis_inside = (
+            constraint.axis_a if constraint.body_a in component else constraint.axis_b
+        )
+        axis = np.asarray(axis_inside, dtype=float)
+        norm = np.linalg.norm(axis)
+        if norm <= 1e-12:
+            continue
+        axis = axis / norm
+        if float(np.dot(axis, spin_axis)) > 1.0 - 1e-6:
+            candidates.append(outer)
+        elif float(np.dot(axis, -spin_axis)) > 1.0 - 1e-6:
+            # An axis stated the other way round describes the same joint.
+            candidates.append(outer)
+
+    if len(candidates) != 1:
+        raise ValueError(
+            f"the wheel {wheel!r} has {len(candidates)} members it spins in "
+            f"({sorted(candidates)}); a couple's reaction end needs exactly one, "
+            "and which one is meant is a property of the topology rather than "
+            "something to guess"
+        )
+    return candidates[0]
+
+
 def _reaction_ports(
     instance: tuple[str, ...], runtime: VehicleRuntime
 ) -> dict[str, GeometryPort]:
     """
-    Offer one reaction port per wheel end, on the member that carries it.
+    Offer one reaction port per wheel end, on the member that reacts its couple.
 
-    The owner is the wheel end's own carrier as the assembly recorded it, so a
-    topology whose wheel hangs on a strut offers the port there and a
-    double-wishbone's offers it on its upright -- without this module asking
-    which topology it is looking at.
+    The owner comes from :func:`_wheel_reaction_body`, so a topology whose wheel
+    turns in a strut offers the port there and a double-wishbone's offers it on
+    its upright -- without this module asking which topology it is looking at.
     """
     ports: dict[str, GeometryPort] = {}
-    for wheel, (carrier, _centre) in runtime.wheel_centers.items():
+    for wheel in runtime.wheel_centers:
         ports[f"reaction_{wheel}"] = GeometryPort(
             id=EntityId(instance, f"reaction_{wheel}"),
-            owner=EntityId(instance, carrier),
+            owner=EntityId(instance, _wheel_reaction_body(runtime, wheel)),
             role=REACTION_ROLE,
             capabilities=frozenset({"geometry"}),
             labels=frozenset({wheel}),

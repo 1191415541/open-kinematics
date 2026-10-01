@@ -3,9 +3,10 @@
 > 全部为 2026-10-01 本机实跑/实读结果。来源：`code-reviewer` 裁决 `84c8f264`（登记本行）
 > 与 `5e01b75d`（本行的接口与写范围裁决）。
 >
-> **本行状态：部分交付（未标 DONE）。** 见 §6 的诚实登记——判据中「同一份模型经
-> `simulation.run_request` 跑通一次且读回两端等大反向的**力矩响应**」只达成了
-> 「等大反向」与「被求值」，**幅值在现有夹具下恒为 0**，原因已定位为拓扑事实而非实现缺陷。
+> **本行状态：部分交付（保持 `TODO`，按裁决 `8e86187b`）。** 见 §5——反力体拓扑已按裁决
+> `a35d1874` 修复（轮毂 → 转向节，拓扑推导、无名字嗅探），判据中「两端等大反向的**力矩响应**」
+> 在整车夹具上仍为 0（夹具与求解器互斥，逐条实测见 §5），该硬判据已移交新增行 `p2-11`
+> 独立验收并已实测通过。
 
 ## 1. 缺口（改前，实测）
 
@@ -94,17 +95,43 @@ $ grep -rn "brake.wheel_torque_element|drive.wheel_torque_element" src/  -> 零�
 转向节**（`front_upright_L`，`drive_brake.cpp` 的注释亦如此），而转向节与轮毂之间才是真正的
 自旋关节。
 
-**这条属于接口口径问题，不是本行能自行改的范围**（改 `_reaction_ports` 的反力体来源会改变
-裁决 `5e01b75d` 冻结的契约，也可能影响 `wheel_centers` 的语义）。按契约「不擅自扩范围」，
-本行**不自行改口径**，而是：
+### 处置（已按裁决 `a35d1874` 落地）
 
-1. `SUBTASKS.csv` 的 `p2-09` **保持 `TODO`**，不标 `DONE`；
-2. 把该阻断项连同两级根因（`vehicle_parts.py:536-543` 的强制焊缝、反力体取自 `wheel_centers`）
-   写进本文件与父 `PROGRESS.md`；
-3. 请裁决：应否把 `_reaction_ports` 的反力体改为「轮端的不旋转承载件」（需给出**不靠名字**的
-   判定方式），或把该判据移交给一行新子任务。
+`_reaction_ports` 的反力体**已改为按拓扑判定**（`torque_elements.py` 的 `_wheel_reaction_body`）：
 
-**在裁决落地前，本行不得声称 Done-When 的「力矩响应」已达成。**
+1. 从 `runtime.wheel_body_names[wheel]` 出发，用 `isinstance(constraint, WeldJoint)` 构**连通分量**
+   ——即轮体所在的那一整个刚性组件（把轮体焊在轮毂上的那条焊缝就是它的边）；
+2. 在该分量边界上找 `RevoluteJoint`，用**关节轴与该轮 `spin_axis` 的方向对齐**
+   （点积 > 1−1e-6，正反方向都接受）判定它是不是该轮的自旋关节；
+3. 取分量**外端**为反力体；候选为 0 个或多个时**按名拒绝**，不猜。
+
+全程无体名字面量（`upright` / `chassis` / 轮体名一概不出现），也不改 `wheel_centers` 的既有语义。
+实测（`torque_demand="brake"`）：
+
+```
+brake_front_left  | driven: wheel_front_left  | reaction: front_upright_L
+brake_front_right | driven: wheel_front_right | reaction: front_upright_R
+brake_rear_left   | driven: wheel_rear_left   | reaction: rear_upright_L
+brake_rear_right  | driven: wheel_rear_right  | reaction: rear_upright_R
+```
+
+反力端已从**轮毂**变为**转向节**，与 `drive_brake.cpp:100-120` 的既有先例
+（制动反力落在不旋转的 `frame_body`）一致。
+
+### 整车夹具的非零响应移交给 p2-11
+
+反力体修正后，整车夹具上 code-10 的力矩幅值**仍为 `0.0`**，原因不再是口径而是夹具与求解器的
+互斥（详见 `tasks/p2-11-torque-response/raw/non_zero_response.md` 的逐条实测）：
+
+- 给初速以获得非零相对角速度 → `status 5: Newton solve did not converge`（加内部子步、
+  加 `_with_ride_springs` 均未改变）；
+- `static_equilibrium=True` + 重力可收敛（轮胎承载 7654 N / 7514 N）但**要求零初速**，
+  故相对角速度为 0，命中内核「静止对不施力偶」分支。
+
+按裁决 `8e86187b`，「非零力矩响应」这条硬判据**不由本行声称达成**，移交新增行 `p2-11`
+（专用两体文档装置，已实测取到 1.0 N·m 非零读数、严格等大反向、对照组 0 行）。
+
+**因此本行 `SUBTASKS.csv` 状态保持 `TODO`**，直到 p2-11 完成并复核。
 
 ## 6. 诚实登记（未做/未声称）
 

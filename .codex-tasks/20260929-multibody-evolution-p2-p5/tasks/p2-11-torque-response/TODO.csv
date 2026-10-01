@@ -1,0 +1,4 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,复用两体文档装置的 code-10 非零读回,TODO,"新增 _raw 辅助与 test_the_couple_the_kernel_applied_is_non_zero；读 element_wrench 的 code 10",uv run --no-sync pytest packages/suspension_multibody/tests/cases/test_rotational_torque_document.py -q,,0,"保持既有 8 条不动；打开 SUSPENSION_KERNEL_ELEMENT_WRENCH_OUTPUT"
+2,四条判据各有断言,TODO,"首样本范数 = max_torque（rel=1e-12）；每样本严格等大反向（atol=0）；对照组 0 行；末样本归零（abs=1e-12）",uv run --no-sync pytest packages/suspension_multibody/tests/cases/test_rotational_torque_document.py -q,,0,"末样本归零是必需的一半：只断言非零对一直施满力偶的错律同样通过"
+3,门禁与证据落盘,TODO,"三份测试文件 30 passed；dynamic_hash_sentinel --check 逐字节；raw/non_zero_response.md 非空",uv run --no-sync python packages/suspension_multibody/scripts/dynamic_hash_sentinel.py --check,,0,"未改生产代码、未改 ABI、未重录基线、未新增 skip/xfail"
