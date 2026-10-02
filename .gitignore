@@ -233,6 +233,13 @@ GEMINI.md
 /packages/suspension_multibody/src/suspension_multibody/native/*.so
 /packages/suspension_multibody/src/suspension_multibody/native/native_build.json
 
+# The FMU wrapper is compiled from the source beside it by
+# `scripts/build_fmu_binary.py`, exactly like the kernel mirror above: it is a
+# build product of the checked-in C file, not something to commit.
+/packages/suspension_multibody/src/suspension_multibody/fmi/*.dll
+/packages/suspension_multibody/src/suspension_multibody/fmi/*.dylib
+/packages/suspension_multibody/src/suspension_multibody/fmi/*.so
+
 # The virtual workspace owns the single tracked lockfile at its root.
 /packages/*/uv.lock
 # Root-level generated local evidence and analysis scratch.

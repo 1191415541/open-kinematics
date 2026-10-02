@@ -220,3 +220,48 @@
 **结论**：规划轮**交付完成**，5 轮审核（1 轮开工前审核 + 4 轮复审）共报 6 项阻断项 + 4 项复审未闭合 + 1 项新发现，**现已全部闭合**。规划仍**待用户裁决 D1–D6** 后方可开工。
 
 **方法教训（记录，供后续规划轮参考）**：同一个模板句（「前置 S1 强制：本 Epic 23 行全部…」）被批量复制到 23 个子任务文件，导致**父真源改一次、23 个副本全部过期**；且派发 fixer 时按阶段切目录，**未派到的目录（p3-02）保留了错误授权**。后续同类规划应：(i) 子任务文件里的跨行约束**只写指针**（「见 EPIC 前置一节」），不复制父真源原文；(ii) 修订派发**按「受影响文件全集」**而非「按阶段目录」切分。
+
+---
+
+## 2026-10-02 执行轮：p5-05（FMI 联合仿真导出）收口
+
+**状态**：`SUBTASKS.csv` 的 **p5-05 → DONE**（`completed_at = 2026-10-02`，`retry_count = 0`）。
+Epic 进度 **27/28**，仅剩 `p5-06`（终局独立验收）。
+
+**交付**：真正的 **FMU 2.0 Co-Simulation 归档**（`rig.fmu` 22435 B），按 D4 的范围
+（模型 + 输入/输出变量，不含 Python 侧求值，不做实时/硬件在环）：
+
+- `fmi/export.py`：契约容器、变量清单与**绑定**、`modelDescription.xml`、归档；只 import 标准库与本包。
+- `fmi/fmu_wrapper.c`：完整 FMI 2.0 Co-Simulation 符号集，`fmi2DoStep` 加载内核并调 `suspension_kernel_run`。
+- `scripts/build_fmu_binary.py`：编译 wrapper，按 target triple 拒绝非 64 位编译器。
+- `tests/api/test_fmu_export.py`：16 个用例（结构断言 + 四类拒绝 + 逐字节可复现 + 非侵入）。
+- `.gitignore`：`fmi/*.dll` / `*.dylib` / `*.so` 为构建产物。
+
+**判定依据（实跑原文见 `tasks/p5-05-fmi/raw/`）**：
+
+- 变量 **17**（2 input / 15 output，`valueReference` 0..16 稠密）。输入绑定 = case
+  `blobs` descriptor 的 `offset`/`length//8`；输出绑定 = 结果块真实列（`body_state` 角速度/加速度、
+  `tire_output` 法向力/纵向滑移）+ `time_s`；两集合不相交。
+- **仓库外**脚本（不 import 本仓库任何模块）实跑：`fmi2GetVersion()==2.0`；
+  **轨迹断言**（行 279(a) 要求的强判据）——输入 `0.0` 改到 `0.9` 使滑移时程逐样本最大差 **2.188280**；
+  同运行内滑移极差 **3.933832**（步进确实换样本）；写输出被拒；`EXIT=0`。
+- **D6**：FMI 库「条件允许」但实测标准库已足够，故 **未引入任何新依赖**
+  （`pyproject.toml`/`uv.lock` 未动）；D6 授权未被动用，**不是降级交付、无未闭合项**。
+- 零回归：`tests/api` 75 passed；`tests/api`+`tests/architecture` 222 passed；kernel+contracts 79 passed；
+  ruff/ty 全仓 exit 0；三个架构门 exit 0；sentinel 26 artifact 逐字节（`fdfd5a6b…eebc9`）；
+  `case_parity` 8 families PASS；`kc_perf` 在预算内；`tests/data/` 未写；ABI 仍 **17/32/1**；未新增 skip/xfail。
+
+**实测修正的两个真缺陷**（若无实测会被静默交付）：
+
+1. **导出器写出的容器 blob 为空**：内核读该 FMU 直接
+   `status 2: case document: role brake_pressure range falls outside the payload blob`。
+   根因：`compile_document_pair` 收的是**容器字节**（`pack_container`），而 case 模块返回的是裸 blob。
+   修：导出器负责打包，并对「有 descriptor 无 payload」按名拒绝。
+2. **wrapper 的块扫描器方向错**：`block_descriptor()` 的 JSON 键是**字母序**
+   （`dtype, length, name, offset, order, shape`），`offset`/`length` 在 `name` **之前**，
+   从名字向后扫会读到下一个描述符的字段（**静默读错块**）。修：回退到对象 `{` 后在该对象边界内取字段；
+   并按 `shape` 的第二/三 extent 取行数与列宽（原先列偏移对第 0 个样本硬编码，步进不换样本）。
+
+**方法记录**：本行由两个委派 fixer 起草（`fmi/export.py` 半份 + `fmu_wrapper.c`），
+主代理接手后**先实测**——实测立刻暴露上述两处缺陷，且第二处是「看起来能跑、数值来自错误偏移」的
+静默失败。这与本 Epic 的既有教训一致：**判据必须能被实跑推翻，否则等于没判**。

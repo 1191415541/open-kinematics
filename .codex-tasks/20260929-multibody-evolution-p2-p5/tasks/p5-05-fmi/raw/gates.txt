@@ -1,0 +1,83 @@
+# p5-05 门禁实跑（命令与结论）
+
+> 逐条实跑，退出码与关键输出如下。
+
+## 1. validation_command（本行）
+```
+$ uv run --no-sync pytest packages/suspension_multibody/tests/api -q -p no:cacheprovider && test -s .codex-tasks/20260929-multibody-evolution-p2-p5/tasks/p5-05-fmi/raw/fmu_validation.md
+75 passed in 5.03s
+validation_command: OK
+```
+
+## 2. 本行新增用例
+```
+$ uv run --no-sync pytest packages/suspension_multibody/tests/api/test_fmu_export.py -q -p no:cacheprovider
+16 passed in 3.51s
+```
+
+## 3. tests/api + tests/architecture（含 import/dependency 边界，验证新包 fmi/ 合法）
+```
+$ uv run --no-sync pytest packages/suspension_multibody/tests/api       packages/suspension_multibody/tests/architecture -q -p no:cacheprovider
+........................................................................ [ 32%]
+........................................................................ [ 64%]
+........................................................................ [ 97%]
+......                                                                   [100%]
+222 passed in 592.87s (0:09:52)
+```
+（`tests/api` 75 + `tests/architecture` 147 = 222。两次调用合并跑是因为
+`tests/architecture` 单一目录约 10 分钟；合并覆盖了 `test_import_boundaries.py`
+与 `test_dependency_boundaries.py`，即新包 `fmi/` 的分层方向与依赖边界。）
+
+## 4. 内核 + 契约包
+```
+$ uv run --no-sync pytest packages/suspension_kernel/tests packages/suspension_contracts/tests -q -p no:cacheprovider
+79 passed in 14.90s
+```
+
+## 5. ruff / ty（全仓）
+```
+$ uv run --no-sync ruff check .
+All checks passed!
+$ uv run --no-sync ty check .
+All checks passed!
+```
+
+## 6. 三个架构门脚本
+```
+$ uv run --no-sync python packages/suspension_multibody/tests/architecture/legacy_surface_gate.py --check
+mode      : migration
+findings  : 0
+OK: no unregistered Python boundary violation
+
+$ uv run --no-sync python packages/suspension_kernel/scripts/check_module_layering.py --strict --final
+self-including headers     : 0
+cross-aggregate includes   : 0
+module cycles (SCC size>1) : 0
+OK: layering matches the recorded baseline
+
+$ uv run --no-sync python packages/suspension_multibody/scripts/check_composable_release.py --skip-isolation
+[PASS] migration list: 0 retained legacy imports (0 production, 0 test) and 4 retired packages gone
+[PASS] documentation roots: 16 documented modules present, 4 retired ones absent
+[PASS] documentation examples: 3 example(s) executed: E-1, E-2, E-3
+OK: 3 release checks passed
+```
+
+## 7. 数值门三项
+```
+$ uv run --no-sync python packages/suspension_multibody/scripts/dynamic_hash_sentinel.py --check
+artifacts hashed : 26
+combined sha256  : fdfd5a6ba50970571ac31eb278cf5c713964a43ba77cd74fc1011ec8651eebc9
+OK: dynamic output matches the frozen baseline byte-for-byte
+
+$ uv run --no-sync python packages/suspension_multibody/scripts/case_parity_check.py
+OK: 8 families accepted
+
+$ uv run --no-sync python packages/suspension_multibody/scripts/kc_perf_gate.py --check
+OK: benchmarks are within the recorded budget
+```
+
+## 8. 未重录基线
+```
+$ git status --short -- packages/suspension_multibody/tests/data/
+（空）
+```
