@@ -132,3 +132,41 @@ steering_channels present in dump: False
 ## 既有 `__all__` 变化
 
 `tests/vehicle/test_service_contract.py` 的 `PREPARATION_SYMBOLS` 与 `__all__` 的关系：**只增名，未删名**。新增 5 个：`_steering_channel_specs`、`_steering_allocation_angles`、`_steering_channel_signals`、`_allocation_channels`、`_build_steering_channel`。该用例 `test_vehicle_legacy_definition_map`（断言 46 项计数）与全套 `tests/vehicle/` 通过（462 passed / 1 xfailed）。
+
+## 契约反转登记：actuator 寻址从字面量改为声明的 channel_name
+
+**追加于 2026-10-02（p5-06 终局验收，裁决 `442ffad6` 点 1–2）。**
+
+本子任务把转向执行器的**结果寻址键**从一个既有字面量改成了声明字段，这是本行引入的
+一处**旧契约反转**，本文件在收尾时漏登，现补上：
+
+| 项 | p2-06 之前 | p2-06 之后 |
+|---|---|---|
+| prescribed rotation 的执行器名 | 字面量 `"steering_input"`（= 该算例的信号变量名） | `steering_spec.channel_name`（`SteeringSystemSpec` 默认 `"front_rack"`） |
+| 齿条平移路径的名字 | `"front_rack"`（硬编码） | 同上（`channel_name`，主通道默认值恰好仍是 `"front_rack"`） |
+
+**为什么旧契约会断**：`preparation/vehicle_dynamic.py` 的 `_build_steering_channel`
+以 `names=(steering_spec.channel_name,)` 输出；`build_adams_source_vehicle_model`
+（`adams/full_vehicle_model.py:3283-3297`）构造的是 `prescribed_rotation`，它**未声明**
+`channel_name`，故取默认值 `"front_rack"`。于是同一个 `steering_input` 通道，旧键不再命中。
+
+**暴露点**：`tests/adams/test_full_vehicle_model.py::test_source_prescribed_steering_reports_rate_in_actuator_coordinates`
+在 p5-06 全量里报 `KeyError: "unknown steering actuator 'steering_input'"`（`results/vehicle.py:81`）。
+
+**新契约**（已声明并锁死）：**所有 actuator 以声明的 `channel_name` 寻址**，不论其
+`actuator_mode` 是齿条平移还是规定旋转。
+处置（裁决 `442ffad6` 裁定 A）：改测试不改产品——该用例改调 `model.steering.channel_name`，
+并补 `assert result.steering_names == (model.steering.channel_name,)` 显式断言新契约。
+**数值断言未放宽**（`steering[-1, 1] == pytest.approx(target_rate, abs=5e-4)` 原样保留）。
+
+**连带发现的静默数值缺陷**（同裁决点 3，不在本行写入范围内，由 p5-06 退回修）：
+`adams/full_vehicle_correlation.py` 原先按**名字**猜物理类型——先试 `front_rack` 并除以
+`steering_ratio_m_per_rad`，查不到才用 `steering_input` 原值。命名契约反转后 prescribed
+rotation 也叫 `front_rack`，命中前支、把**角度**按 m/rad 误换算。实测同一算例偏小
+**5.729577951289618 倍**（恰为齿条比）。已修为按调用方声明的 `actuator_mode` 决定换算、
+按声明的 `channel_name` 取输出。
+
+**本文件前面「单通道产物逐项相同」一节仍然成立**：那一节比较的是**声明了**
+`channel_name="front_rack"` 的文件夹具（`full_vehicle_model` 夹具），主通道默认值恰为
+`"front_rack"`，故其 `names` 前后相同；它**未覆盖** prescribed rotation 这条旧契约，
+这正是本登记要补的缺口。

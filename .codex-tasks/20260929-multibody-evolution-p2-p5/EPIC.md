@@ -370,3 +370,31 @@
 ```
 
 本轮为**规划轮**：`EPIC.md` + `SUBTASKS.csv` + `PROGRESS.md` 是交付物，**同时落盘全部 23 个子任务目录**（每个含 `SPEC.md` / `TODO.csv` / `PROGRESS.md` / `raw/`），使 `SUBTASKS.csv` 的 `task_dir` 真实存在、Epic 可执行且可冷启动恢复。子任务的 `SPEC.md` 写「要做什么、写哪些路径、判据与证据落在哪」，`TODO.csv` 是它的步骤表（初始 `TODO`），`PROGRESS.md` 是它的恢复块；子任务开工时按 SPEC 展开步骤，**不得**用规划文本冒充实施记录。临时脚本与中间日志写会话 scratch；`raw/` 只存**已执行**的证据，不存虚构结果。父 `SUBTASKS.csv` 管子任务状态，子 `TODO.csv` 管具体步骤，禁止相互替代。**本轮不将任何子任务置为 `DONE` 或 `IN_PROGRESS`。**
+---
+
+## Epic 状态：**未结项**（2026-10-02 更新）
+
+**状态：27/28 DONE；p5-06 为 IN_PROGRESS。**
+
+p5-06 的终局验收已执行，但独立复核（code-reviewer `8ab15196`，处置裁决 `40d78977`）判定
+**不能以「未完全达成」登记后宣告关闭**。主代理逐条独立实证后确认复核意见成立：
+
+| Done-When | 实测结论 |
+|---|---|
+| (b)(c)(d)(e)(g)(j) | **满足** |
+| (a) | 主代理已把 `_build_wheel_torque_signals` 改为真正的条件调用（`none` 才调），opt-in 路径不再读取 `front_brake_bias`；默认路径 `dynamic_hash_sentinel` 逐字节一致、`case_parity` 8 cases bit-identical。**待并入后复验** |
+| (f) | 已独立产出证据：两侧经正常文档加载打开**同一份** wheel 文档（同路径、同 sha256），probe 体名到达两侧装配产物 |
+| (i) | **未达成**：skip 由 1 增至 47（`artifacts/` 被误删，本机无 Adams 不可恢复） |
+| (h) | **未达成**：总线写入实测不改变轨迹——`variable_damping_L` 直接 `BusError`（把 `elements` 当映射，实际是列表）；`motor_torque_FL` 写入成功但状态轨迹差 **0.000000e+00**。这是 p5-03 的实现缺陷 |
+
+**另需修复**（复核裁决 `40d78977`）：p5-04 需补固定目标的收敛断言（现测试只断言跨目标方向）；
+p5-05 的 FMU 输入写入覆盖全时域、从原初值重算，缺时间因果性。
+
+**验收期间已并入的两个真实缺陷修复**（提交 `7e9f2dd`）：FMU 构建在非 ASCII 仓库路径下的
+产物落盘；转向输出按声明口径而非名字换算。**同时补登** p2-06 的 actuator 寻址契约反转。
+
+**事故登记**：本行在实施修复时用 `Path()`（即 `.`，恒为真值）当哨兵，`finally: rmtree(staged)`
+删除了仓库根目录。`.git/objects` 幸存并据此重建全部跟踪文件；`artifacts/` 不可恢复。
+
+**本轮如实更正**：此前写入的「9/10 满足、Epic 28/28 DONE」结论**已作废**，见
+`tasks/p5-06-acceptance/raw/review_findings.md` 与 `raw/acceptance.md`。

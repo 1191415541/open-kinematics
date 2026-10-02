@@ -1,0 +1,10 @@
+actuator channels: ['variable_damping_L', 'motor_torque_FL']
+
+baseline wheel state shape: (201, 6)
+[variable_damping_L] bus.write raised BusError: 'elements.damper_L.parameters.compression_damping' passes through 'elements', which holds list rather than a mapping
+[motor_torque_FL] write changed the target document: True
+[motor_torque_FL] document the path names: case
+[motor_torque_FL] max |state delta| = 0.000000e+00
+
+A delta of exactly 0.0 on both readings means the write reached no solver
+input: the document was edited and the trajectory was unaffected.

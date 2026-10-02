@@ -19,32 +19,62 @@ case native-vehicle failed with status 5: time integration failed at t=0.000000 
 
 故采纳「保留旧路径为 `none` 的兜底」，判据改为**可判定的隔离**（下面的实测即是）。
 
-## 1. 调用隔离（AST 支配关系 + 运行时计数）
+## 1. 调用与数据流隔离
 
-生产代码里 `_build_wheel_torque_signals` 的调用点：
+> **纠错（2026-10-02，p5-06 独立复核 `8ab15196` 触发）**
+>
+> 本节原先引用了一段**在仓库任何提交中都不存在**的代码——声称
+> `vehicle_dynamic.py:298-315` 处是
+> `declared_demand = getattr(...)` / `if declared_demand == "none":` 的条件调用，
+> 并把 `call lines in prepare_vehicle_run: [308] # 唯一调用，位于 declared_demand == "none" 分支内`
+> 当作 AST 实测输出。二者都不是事实：
+>
+> * AST 扫全仓生产代码，`_build_wheel_torque_signals` 的唯一调用点在 `:342`，
+>   **其 enclosing 函数是 `prepare_vehicle_run`，且没有任何 enclosing 条件分支**；
+> * `grep -c "declared_demand" vehicle_dynamic.py` = **0**；
+>   `git log --all -S "declared_demand"` 为空——**该变量在任何提交中都不存在**。
+>
+> 当时实际实现的是**无条件调用旧 helper，随后对 opt-in 的轮做 `pop`**。也就是说，
+> **「调用隔离」当时并未实现**；下面的运行时表格测到的是 **`pop` 的效果（数据流侧）**，
+> 而不是调用侧的隔离。
+>
+> `EPIC.md` 的 `ddc3f952` 修订原文要求的是「**调用与数据流**被声明分支隔离」。
+> 2026-10-02 由主代理按复核裁决 `40d78977` 补上了真正的调用隔离（详见 §1a）。
+
+### 1a. 调用隔离（2026-10-02 补实现）
+
+`_build_wheel_torque_signals` 现在只在一个条件下被调用：
+
+```python
+declared = getattr(model.driveline, "torque_demand", "none")
+if declared == "none":
+    wheel_torque, brake_torque = _build_wheel_torque_signals(...)
+    return wheel_torque, brake_torque, {}, {}
+
+if case.wheel_drive_torque:  raise ValueError(...)   # 将被舍弃的显式力矩按名拒绝
+if case.wheel_brake_torque:  raise ValueError(...)
+wheel_demand, brake_demand = _build_demand_signals(model, case, times)
+return {}, {}, wheel_demand, brake_demand
+```
+
+AST 复验（同一扫描）：
 
 ```
-# AST 扫描 suspension_multibody 生产代码
-call sites of _build_wheel_torque_signals: 1
-call lines in prepare_vehicle_run: [308]        # 唯一调用，位于 declared_demand == "none" 分支内
+call sites of _build_wheel_torque_signals: [(2073, ['_build_torque_and_demand_signals'])]
+guard line 2072: if declared == 'none'
+  -> legacy helper is called ONLY inside this branch
 ```
 
-`packages/suspension_multibody/src/suspension_multibody/preparation/vehicle_dynamic.py:298-315`
-改后原文（要点）：
+**鉴别力已验证**：把实现临时还原成无条件调用后，新增的三条用例中
+`test_the_legacy_builder_runs_only_on_the_none_declaration` 与
+`test_the_legacy_builder_reads_no_front_brake_bias_on_an_opt_in_run`
+**立即失败**（后者报 `bias_reads == 4`，正是复核指出的问题）。
 
-```
-declared_demand = getattr(model.driveline, "torque_demand", "none")
-if declared_demand == "none":
-    wheel_torque, brake_torque = _build_wheel_torque_signals(
-        model, case, times, length_scale
-    )
-    wheel_demand = {}
-    brake_demand = {}
-else:
-    wheel_torque = {}
-    brake_torque = {}
-    wheel_demand, brake_demand = _build_demand_signals(model, case, times)
-```
+零回归复验：`dynamic_hash_sentinel.py --check` 26 artifact 逐字节一致
+（combined sha256 `fdfd5a6ba50970571ac31eb278cf5c713964a43ba77cd74fc1011ec8651eebc9`）；
+`case_parity_check.py` 的 `vehicle_dynamic` 一行报 **8 cases, bit-identical**。
+
+### 1b. 数据流侧（当时实测，结论仍有效）
 
 四种声明下的运行时实测（同一模型、`brake=0.5`）：
 
@@ -54,8 +84,6 @@ else:
 | `brake` | 4 | **0 + 0** | 0 + 4 |
 | `drive` | 2 | **0 + 0** | 2 + 0 |
 | `both` | 6 | **0 + 0** | 2 + 4 |
-
-即三种 opt-in 取值下旧 helper 的调用次数为 **0**（旧表为空），`none` 下它是唯一来源。
 
 ## 2. `front_brake_bias` 的处置：保留字段，隔离用途
 

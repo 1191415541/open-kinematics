@@ -1,0 +1,21 @@
+=== p5-06 独立复跑 p5-01 的冻结哈希探针（同一脚本，逐字未改）===
+$ uv run --no-sync python $PI_SCRATCH_DIR/p501/hash_probe.py
+fixture           : packages\suspension_multibody\tests\data\benchmark_axle.json
+model_dump keys   : ['schema_version', 'name', 'units', 'coordinate_system', 'hardpoints', 'bodies', 'mass', 'springs', 'dampers', 'bushings', 'tires', 'anti_roll_bars', 'stops', 'side', 'topology', 'joints', 'rack_axis', 'rack_fixed_to_chassis', 'road']
+model_dump json   : {"anti_roll_bars":[],"bodies":[],"bushings":[],"coordinate_system":"vehicle","dampers":[],"hardpoints":{"lca_front":{"x":-120.0,"y":-500.0,"z":150.0},"lca_outer":{"x":0.0,"y":-700.0,"z":150.0},"lca_rear":{"x":120.0,"y":-500.0,"z":150.0},"rack_center":{"x":0.0,"y":0.0,"z":250.0},"tierod_inner":{"x":100.0,"y":-400.0,"z":250.0},"tierod_outer":{"x":50.0,"y":-700.0,"z":250.0},"uca_front":{"x":-100.0,"y
+model_dump bytes  : 1007
+canonical_hash    : 72bd9f30330cce22fe672fc63c4248df09261928942443e2aedd98102b38c60b
+EXIT=0
+
+=== p5-01 记录值（tasks/p5-01-freeze/raw/baseline_run.md:47）===
+keys 19 / bytes 1007 / canonical_hash 72bd9f30330cce22fe672fc63c4248df09261928942443e2aedd98102b38c60b
+
+=== tests/data 冻结文件工作树状态 ===
+$ git status --short -- packages/suspension_multibody/tests/data/
+(空 = 未修改) EXIT=0
+
+=== 冻结文件最后一次改动提交（应落在 Epic 起点之前）===
+packages/suspension_multibody/tests/data/kc_baseline                   60a6976 2026-09-18 把求解权交给内核：契约边界接管、flat ABI 退役、Python 侧零本构
+packages/suspension_multibody/tests/data/dynamic_hash_baseline.json    d9aca63 2026-09-26 力元件三拆：内核与 Python 统一为 elastic / dissipative / unilateral 三条力律
+packages/suspension_multibody/tests/data/vehicle_dynamics_baseline     db22f9e 2026-09-29 落地悬架模板化装配层改造：轮毂自旋副、转向外壳与试验台自旋锁
+packages/suspension_multibody/tests/data/kc_perf_baseline_native.json  db22f9e 2026-09-29 落地悬架模板化装配层改造：轮毂自旋副、转向外壳与试验台自旋锁

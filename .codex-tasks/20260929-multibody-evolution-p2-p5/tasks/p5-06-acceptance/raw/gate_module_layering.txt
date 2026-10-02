@@ -1,0 +1,17 @@
+kernel root                : E:\тс╪Ч\open-kinematics\packages\suspension_kernel
+mode                       : final
+headers                    : 57
+cpp translation units      : 75
+modules present            : 23
+header edges               : 118
+source edges               : 107
+source edge evidence       : 229 records (tu_include 213, symbol_reference 175, both 159; kind mentions 388)
+target modules missing     : 0
+legacy modules present     : 0
+legacy modules unregistered: 0 []
+mutual (reverse) edges     : 0
+self-including headers     : 0
+cross-aggregate includes   : 0
+module cycles (SCC size>1) : 0
+
+OK: layering matches the recorded baseline

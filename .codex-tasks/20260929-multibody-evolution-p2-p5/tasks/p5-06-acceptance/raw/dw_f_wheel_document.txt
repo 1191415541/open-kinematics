@@ -1,0 +1,20 @@
+=== the wheel subsystem document under test ===
+resolved path : C:\Users\zzy11\AppData\Local\Temp\p506_f_sfe17vpv\probe_wheel.sub.json
+sha256        : 7510feade8e993e74df8d15e670d6e0d9ddb78043e168204fd737ab5d3f34d7f
+
+--- route 1: single axle ---
+  wheel template instance     : probe_wheel
+  wheel-role bodies produced  : ('probe_wheel_L', 'probe_wheel_R')
+  wheel subsystem docs opened : ['C:\\Users\\zzy11\\AppData\\Local\\Temp\\p506_f_sfe17vpv\\probe_wheel.sub.json']
+  axle runtime has probe body : False
+--- route 2: whole vehicle ---
+  wheel template instance     : probe_wheel
+  wheel-role bodies produced  : ['probe_wheel_L', 'probe_wheel_R']
+  wheel subsystem docs opened : ['C:\\Users\\zzy11\\AppData\\Local\\Temp\\p506_f_sfe17vpv\\probe_wheel.sub.json']
+
+same resolved document path     : True
+same content fingerprint        : True
+probe body reached both outputs : True
+neither side used the built-in  : True
+
+RESULT: PASS

@@ -44,6 +44,7 @@ import numpy as np
 import pytest
 
 from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+from suspension_multibody.schema import TimeSignal
 from suspension_multibody.simulation import SimulationRequest, run_request
 from suspension_multibody.subsystems import torque_elements
 from suspension_multibody.subsystems.vehicle_assembly import compose_vehicle_runtime
@@ -356,3 +357,103 @@ def test_the_couple_reaches_the_solver_as_an_element(fixture, monkeypatch) -> No
     # And with no relative rate at the start, the demanded magnitude is not
     # applied: the pair is not accelerated by the sign of a rounding error.
     np.testing.assert_allclose(np.asarray(rows[:, 3:6], dtype=float), 0.0)
+
+def test_the_legacy_builder_runs_only_on_the_none_declaration(fixture, monkeypatch):
+    """
+    The retired path is *called* on `none` and nowhere else (ruling 40d78977).
+
+    The old builder used to run on every declaration and have its result trimmed
+    afterwards, which kept it reading `front_brake_bias` and sampling a table per
+    wheel on opt-in runs -- a path that executes is not retired, whatever happens
+    to its output.  This counts the calls, so the retirement is a property of the
+    control flow rather than of the returned value.
+    """
+    import suspension_multibody.preparation.vehicle_dynamic as vd
+
+    calls = {"n": 0}
+    original = vd._build_wheel_torque_signals
+
+    def counting(*args, **kwargs):
+        calls["n"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(vd, "_build_wheel_torque_signals", counting)
+    base = fixture._positioned_vehicle(fixture._vehicle())
+    times = np.asarray((0.0, 0.001))
+
+    for demand in ("none", "brake", "drive", "both"):
+        calls["n"] = 0
+        model = _with_demand(base, demand)
+        vd._build_torque_and_demand_signals(
+            model, fixture._case(model), times, 1.0
+        )
+        expected = 1 if demand == "none" else 0
+        assert calls["n"] == expected, (demand, calls["n"])
+
+
+def test_the_legacy_builder_reads_no_front_brake_bias_on_an_opt_in_run(fixture):
+    """
+    `front_brake_bias` is read zero times on the opt-in path (ruling ddc3f952).
+
+    The field stays on the model -- it is not excluded from `model_dump`, so
+    removing it would move every `model_hash` -- but the opt-in path must not
+    consult it.  Counting the reads is what distinguishes "kept the field" from
+    "kept using the field".
+    """
+    import suspension_multibody.preparation.vehicle_dynamic as vd
+    from suspension_multibody.subsystems.torque_elements import BRAKE_FRONT_SHARE
+
+    class _CountingDriveline:
+        """A driveline that records how often the legacy bias is read."""
+
+        def __init__(self, inner):
+            self._inner = inner
+            self.bias_reads = 0
+
+        def __getattr__(self, name):
+            if name == "front_brake_bias":
+                self.bias_reads += 1
+            return getattr(self._inner, name)
+
+    base = fixture._positioned_vehicle(fixture._vehicle())
+    model = _with_demand(base, "brake")
+    case = fixture._case(model, brake=0.5)
+    counting_model = model.model_copy(update={"driveline": _CountingDriveline(model.driveline)})
+
+    vd._build_torque_and_demand_signals(counting_model, case, np.asarray((0.0, 0.001)), 1.0)
+
+    assert counting_model.driveline.bias_reads == 0
+    # The share the opt-in path *does* use is its own named constant.
+    assert BRAKE_FRONT_SHARE == 0.6
+
+
+def test_an_opt_in_run_refuses_explicit_wheel_torques_it_would_discard(fixture):
+    """
+    A torque the declaration would throw away is refused by name, not dropped.
+
+    Silently discarding it would leave a run that looks like the caller's request
+    and is not, which is the failure mode this refusal exists to prevent.  The
+    message names both the declaration and the way to state the intent instead.
+    """
+    base = fixture._positioned_vehicle(fixture._vehicle())
+    times = np.asarray((0.0, 0.001))
+    signal = TimeSignal(times=times, values=np.asarray((0.0, 100.0)))
+
+    for demand, field, label in (
+        ("brake", "wheel_drive_torque", "wheel_drive_torque"),
+        ("drive", "wheel_brake_torque", "wheel_brake_torque"),
+    ):
+        model = _with_demand(base, demand)
+        case = fixture._case(model).model_copy(
+            update={field: (("front_left", signal),)}
+        )
+        with pytest.raises(ValueError, match=label):
+            vd_call(model, case, times)
+
+
+def vd_call(model, case, times):
+    """Call the torque/demand builder, so a refusal is raised in one place."""
+    import suspension_multibody.preparation.vehicle_dynamic as vd
+
+    return vd._build_torque_and_demand_signals(model, case, times, 1.0)
+

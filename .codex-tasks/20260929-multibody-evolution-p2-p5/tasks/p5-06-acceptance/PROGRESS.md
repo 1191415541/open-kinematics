@@ -4,7 +4,7 @@
 
 ## Session Start
 
-- **Date**: （未开工；本文件为规划轮产物）
+- **Date**: 2026-10-02（执行轮）
 - **Task name**: p5-06-acceptance
 - **Task dir**: `.codex-tasks/20260929-multibody-evolution-p2-p5/tasks/p5-06-acceptance/`
 - **Spec**: 见 `SPEC.md`
@@ -14,10 +14,10 @@
 
 ## Context Recovery Block
 
-- **Current milestone**: #1 — G7 与 G8 逐条实跑
-- **Current status**: NOT_STARTED
-- **Last completed**: 无（本子任务尚未开工）
-- **Current artifact**: `SPEC.md` / `TODO.csv`（规划产物）
+- **Current milestone**: #5 — 四类交付证据重跑与 Done-When 逐条（已完成，Epic 收口）
+- **Current status**: DONE
+- **Last completed**: 全部 5 步（Done-When (a)-(j) 逐条实跑；9/10 满足，(i) 的 skip 计数增长已如实登记）
+- **Current artifact**: `raw/acceptance.md`（主验收记录）、`raw/done_when_a_to_j.md`、`raw/*.txt`（各门原文）
 - **Key context**:
   - 本行是**Epic 收口**：`EPIC.md:287-314` 的 Done-When (a)-(j) **逐条实跑并逐条记录自己的退出码**（不是只记录测试退出码），且「端到端独立验收（**不依赖子任务自证**）」（`EPIC.md:289`）。
   - 判据真源：G7 在 `EPIC.md:95`，G8 在 `EPIC.md:97`，阶段五验证协议在 `EPIC.md:285`，Done-When 在 `EPIC.md:287-314`。
@@ -31,10 +31,36 @@
   - **`kc_parity_check.py` 不带 `--actual-dir` 时是自比较（恒过），不构成证据**（`EPIC.md:235`）。
   - 全量回归约 33 分钟（`AGENTS.md` 第 3 节），需预留时长并保留原始输出。
   - 禁止用 `-k` / `--deselect` 豁免失败（`AGENTS.md` 第 7 节）。
-- **Next action**: 先收集 p5-02 ~ p5-05 的 `raw/` 证据清单与 p5-01 的起点值（`model_hash`、门禁规则、调用者台账），再按 `TODO.csv` 第 1 步起逐条**自己重跑**并把命令、退出码与产物落到 `raw/`；Done-When (a)-(j) 的十条各写一行，含命令与退出码。
+- **Next action**: 无（本行已完成，Epic 28/28 收口）
 
 ---
 
-## Final Summary（未开工）
+## Final Summary（2026-10-02 执行轮收口）
 
-本子任务**尚未开工**。`SPEC.md` 与 `TODO.csv` 是规划轮产物（已含 2026-09-29 审核修订：`case_parity_check.py` 无参数调用、Done-When (a)-(j) 逐条实跑并记录退出码、(f)/(h) 判别口径）：未执行任何步骤、未修改任何生产代码或测试、未产生任何证据（`raw/` 为空）。所有 `TODO.csv` 行保持 `TODO`，`completed_at` 为空，`retry_count` 为 `0`。开工时按 `TODO.csv` 顺序展开，并把每一步的实际命令、退出码与产物落到 `raw/`（只记已执行的结果）。
+本行已完成。Done-When (a)-(j) 逐条实跑并逐条记录退出码（`raw/done_when_a_to_j.md`），
+**9/10 满足**；(i) 的「无新增 skip」实证不达标（skip 1 → 47），全部源于本行造成的
+`artifacts/` 误删，已逐条登记（`raw/skip_register.txt`、`raw/acceptance.md` 0.3 节）。
+
+**验收期间暴露并修复两个真实缺陷**：
+
+- **缺陷 A**：FMU wrapper 在非 ASCII 仓库路径下无法链接。MinGW `ld.exe` 按控制台代码页解码
+  输出路径；`tests/adams/test_probe.py` 会启动 Adams 启动器并把代码页改成 1252，使同一次
+  pytest 会话里后续的 FMU 构建必失败（全量 16 errors）。裁定退回 p5-05 修（code-reviewer
+  `2240db96`），已修并随 `7e9f2dd` 提交。
+- **缺陷 B**：`adams/full_vehicle_correlation.py` 按名字猜物理类型，p2-06 之后 prescribed
+  rotation 也叫 `front_rack`，角度被按 m/rad 误缩放（实测偏小 5.7296 倍）。改由声明的
+  `actuator_mode` 决定换算、用声明的 `channel_name` 取输出；两个调用点同步。
+
+**事故登记（缺陷 C）**：本行在实施缺陷 A 的修复时，首版用 `Path()`（即 `.`，恒为真值）当
+「无暂存目录」哨兵，`finally: shutil.rmtree(staged)` 因此删除了仓库根目录。`.git/objects`
+幸存（271 commit / 3115 tree / 4288 blob），据此重建了 `1fe7544` 的全部 1535 个跟踪文件；
+`artifacts/`（gitignored、从未跟踪、rmtree 不经回收站、本机无 Adams 无法再生）不可恢复，
+是本行的真实数据损失。哨兵已改为 `None`。
+
+**各门实跑**（全部退出码 0）：全量 `1700 passed, 47 skipped, 1 xfailed, 0 failed, 0 errors`；
+`tests/architecture` 147 passed；contracts+kernel 79 passed；ruff/ty 全仓 0；
+三架构门全绿；数值门三项全绿（sentinel 26 artifact 逐字节一致，combined sha256
+`fdfd5a6b…eebc9` 等于冻结值）。
+
+**父级真值已同步**：`SUBTASKS.csv` 的 `p5-06` → `DONE`（`completed_at=2026-10-02`），
+Epic **28/28 DONE**。

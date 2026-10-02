@@ -265,3 +265,44 @@ Epic 进度 **27/28**，仅剩 `p5-06`（终局独立验收）。
 **方法记录**：本行由两个委派 fixer 起草（`fmi/export.py` 半份 + `fmu_wrapper.c`），
 主代理接手后**先实测**——实测立刻暴露上述两处缺陷，且第二处是「看起来能跑、数值来自错误偏移」的
 静默失败。这与本 Epic 的既有教训一致：**判据必须能被实跑推翻，否则等于没判**。
+---
+
+## 2026-10-02 执行轮：p5-06 终局验收收口（Epic 28/28 DONE）
+
+p5-06 完成。Done-When (a)-(j) 逐条实跑（`tasks/p5-06-acceptance/raw/done_when_a_to_j.md`），
+**9/10 满足**；(i) 的「无新增 skip/xfail」实证不达标：skip 由基线 **1 增至 47**，
+全部源于本次验收期间 `artifacts/` 目录被误删（该目录 gitignored、从未被 git 跟踪、
+`shutil.rmtree` 不经回收站，本机无 Adams 安装故 `regenerate_adams_reference.py` 无法重跑），
+已逐条登记于 `tasks/p5-06-acceptance/raw/skip_register.txt` 与 `acceptance.md` 0.3 节。
+
+**验收期间暴露并修复两个真实缺陷**（提交 `7e9f2dd`）：
+
+1. **FMU wrapper 在非 ASCII 仓库路径下无法链接**。MinGW 的 `ld.exe` 用窄字符 API 打开输出文件、
+   按**控制台代码页**解码路径；仓库路径含 `杂件`，代码页 1252/65001 无法表示 → 报
+   `cannot open output file ...: No such file or directory`（目录其实存在且可写）。
+   触发链：`tests/adams/test_probe.py::test_local_adams_profile_discovers_expected_template`
+   会真的启动 Adams 启动器并把共享控制台代码页从 936 改成 1252，于是同一次 pytest 会话里
+   后续的 FMU 构建必失败 → 全量 16 errors。处置（裁决 `2240db96`）：退回 p5-05 修
+   `scripts/build_fmu_binary.py`——输出路径非 ASCII 时先编到**实测确认 ASCII** 的暂存目录
+   再 `shutil.copy2` 回原位；探测不到就就地编译。`--output` 语义不变。
+   修复后在代码页 1252 的失败态下实跑：构建 EXIT=0、FMU 测试 16 passed、全量 0 errors。
+2. **转向输出按名字猜物理类型**（裁决 `442ffad6` 点 3）。`adams/full_vehicle_correlation.py`
+   原先先试 `front_rack` 并除以齿条比、查不到才用 `steering_input` 原值；p2-06 之后
+   prescribed rotation 也叫 `front_rack`，于是把**角度**按 m/rad 误换算——实测同一算例偏小
+   **5.729577951289618 倍**（恰为齿条比）。已改为按调用方声明的 `actuator_mode` 决定换算、
+   按声明的 `channel_name` 取输出；未声明或名字对不上即报错而非猜测。两个调用点
+   （`scripts/run_full_native_three_model_comparison.py`、`adams/full_vehicle_mbd_comparison.py`）同步。
+   修复后同一算例逐样本等于方向盘转角信号（最大差 1.03e-18）。
+   同时补登 p2-06 引入的**旧契约反转**：actuator 寻址由字面量 `"steering_input"` 改为声明的
+   `channel_name`（见 `tasks/p2-06-steering-channels/raw/steering_channels.md` 末节）。
+
+**事故登记**：实施缺陷 1 的修复时，首版用 `Path()`（即 `.`，在 Python 中恒为真值）当
+「无暂存目录」哨兵，`finally: shutil.rmtree(staged)` 因此执行了 `shutil.rmtree('.')`，
+删除了仓库根目录。`.git/objects` 幸存（271 commit / 3115 tree / 4288 blob），据此重建了
+`1fe7544` 的 1535 个跟踪文件、内核镜像与 `.venv`；`artifacts/` 不可恢复。哨兵已改为 `None`。
+
+**各门实跑（全部退出码 0）**：全量 `1700 passed, 47 skipped, 1 xfailed, 0 failed, 0 errors`；
+`tests/architecture` 147 passed；contracts+kernel 79 passed（单独一次调用）；ruff/ty 全仓 0；
+三架构门全绿（findings 0 / 0 环 / 3 PASS）；数值门三项全绿（sentinel 26 artifact 逐字节一致，
+combined sha256 `fdfd5a6ba50970571ac31eb278cf5c713964a43ba77cd74fc1011ec8651eebc9` 等于冻结值；
+`case_parity` 8 families；`kc_perf` 预算内）。`tests/data` 未写。

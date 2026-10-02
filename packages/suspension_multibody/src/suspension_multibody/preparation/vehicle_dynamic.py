@@ -339,18 +339,9 @@ def prepare_vehicle_run(
     road, road_height, road_velocity = _build_road(
         case.road, times, length_scale
     )
-    wheel_torque, brake_torque = _build_wheel_torque_signals(
-        model, case, times, length_scale
+    wheel_torque, brake_torque, wheel_demand, brake_demand = (
+        _build_torque_and_demand_signals(model, case, times, length_scale)
     )
-    wheel_demand, brake_demand = _build_demand_signals(model, case, times)
-    # The unit systems are alternatives, so a wheel an element drives or brakes
-    # stops appearing in the Newton-metre tables: the evidence for it is the
-    # element, and leaving a zero there would be a statement the kernel reads as
-    # "this wheel also gets zero newton-metres" rather than as "no table".
-    for wheel in wheel_demand:
-        wheel_torque.pop(wheel, None)
-    for wheel in brake_demand:
-        brake_torque.pop(wheel, None)
     solver = _native_solver_settings(case.solver, case.static_equilibrium, length_scale)
     springs, dampers, bump_stops, bushings = _build_elements(
         assembly, body_frames, length_scale
@@ -2037,6 +2028,69 @@ def _build_wheel_torque_signals(
         drive_results[name] = tuple(drive_values)
         brake_results[name] = tuple(brake_values)
     return drive_results, brake_results
+
+
+def _build_torque_and_demand_signals(
+    model: VehicleModel,
+    case: VehicleDynamicCase,
+    times: np.ndarray,
+    scale: float,
+) -> tuple[
+    dict[str, tuple[float, ...]],
+    dict[str, tuple[float, ...]],
+    dict[str, tuple[float, ...]],
+    dict[str, tuple[float, ...]],
+]:
+    """
+    Return the newton-metre tables and the driver-demand tables for one run.
+
+    The two unit systems are alternatives, and *which* of them a wheel is stated
+    in is the model's ``DrivelineSpec.torque_demand`` declaration -- read here,
+    in one place, so the legacy pre-sampled builder and the element demand tables
+    cannot both claim a wheel:
+
+    * ``none`` keeps the pre-sampled newton-metre tables its recorded results
+      came from, and states no demand;
+    * ``drive`` / ``brake`` / ``both`` state a demand for the declared wheels and
+      **do not build the legacy tables at all**.
+
+    The legacy builder is therefore called only on the ``none`` declaration
+    rather than called unconditionally and trimmed afterwards.  Trimming made the
+    call count independent of the declaration, so the retired path stayed on
+    every opt-in run: it still read ``front_brake_bias`` and still sampled a
+    table per wheel, and only the result was discarded.  A path that runs and
+    whose output is thrown away is not retired -- the next edit to it would move
+    an opt-in run's behaviour with nothing to catch it.
+
+    A case that supplies explicit wheel torque signals which the declaration
+    would discard is refused by name: the caller asked for a torque those wheels
+    will not receive, and dropping it silently would leave a run that looks
+    applied and is not.  ``none`` accepts them, because that is the path that
+    reads them.
+    """
+    declared = getattr(model.driveline, "torque_demand", "none")
+    if declared == "none":
+        wheel_torque, brake_torque = _build_wheel_torque_signals(
+            model, case, times, scale
+        )
+        return wheel_torque, brake_torque, {}, {}
+
+    if case.wheel_drive_torque:
+        raise ValueError(
+            "a model that declares torque_demand="
+            f"{declared!r} drives its wheels through torque elements, so the "
+            "case's wheel_drive_torque would be discarded; state the driver's "
+            "demand in drive_input instead, or declare torque_demand='none'"
+        )
+    if case.wheel_brake_torque:
+        raise ValueError(
+            "a model that declares torque_demand="
+            f"{declared!r} brakes its wheels through torque elements, so the "
+            "case's wheel_brake_torque would be discarded; state the driver's "
+            "demand in brake_input instead, or declare torque_demand='none'"
+        )
+    wheel_demand, brake_demand = _build_demand_signals(model, case, times)
+    return {}, {}, wheel_demand, brake_demand
 
 
 def _build_demand_signals(

@@ -1,0 +1,63 @@
+........................................................................ [  4%]
+.......................sssssssssssssss......ssssssssssssssss.sssssssssss [  8%]
+sss...............ss.................................................... [ 12%]
+........................................................................ [ 16%]
+........................................................................ [ 20%]
+........................................................................ [ 24%]
+........................................................................ [ 28%]
+........................................................................ [ 32%]
+........................................................................ [ 37%]
+........................................................................ [ 41%]
+........................................................................ [ 45%]
+........................................................................ [ 49%]
+........................................................................ [ 53%]
+........................................................................ [ 57%]
+........................................................................ [ 61%]
+........................................................................ [ 65%]
+........................................................................ [ 70%]
+........................................................................ [ 74%]
+........................................................................ [ 78%]
+........................................................................ [ 82%]
+........................................................................ [ 86%]
+........................................................................ [ 90%]
+........................................................................ [ 94%]
+...................................x.................................... [ 98%]
+....................                                                     [100%]
+=========================== short test summary info ===========================
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:540: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:598: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:612: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:658: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:708: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:740: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:841: real Adams reference artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:959: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:993: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1053: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1134: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1163: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1178: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1241: strict Adams source artifacts are unavailable
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_full_vehicle_model.py:1405: strict Adams source artifacts are unavailable
+SKIPPED [12] packages\suspension_multibody\tests\adams\test_native_fiala_correlation_gate.py:137: Adams Fiala source case unavailable: artifacts\adams-full-source-fiala\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_native_fiala_correlation_gate.py:162: Adams Fiala source case unavailable: artifacts\adams-full-source-fiala\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_native_fiala_correlation_gate.py:182: Adams Fiala source case unavailable: artifacts\adams-full-source-fiala\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_native_fiala_correlation_gate.py:223: Adams Fiala source case unavailable: artifacts\adams-full-source-fiala\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_native_fiala_correlation_gate.py:245: Adams Fiala source case unavailable: artifacts\adams-full-source-fiala\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:100: Adams source case unavailable: artifacts\adams-full-source-2025_1_1\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:126: Adams source case unavailable: artifacts\adams-full-source-2025_1_1\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:156: Adams source case unavailable: artifacts\adams-full-source-2025_1_1\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:195: Adams source case unavailable: artifacts\adams-full-source-2025_1_1\step_steer
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:278: advanced-transient reference unavailable for USE_MODE 23: artifacts\adams-mode-ref\um23-native / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um23-native.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:278: advanced-transient reference unavailable for USE_MODE 24: artifacts\adams-mode-ref\um24-native / artifacts\adams-mode-ref\clones\pac2002_um24_native_scope.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:380: advanced-transient reference tire unavailable: artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um23-native.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:380: advanced-transient reference tire unavailable: artifacts\adams-mode-ref\clones\pac2002_um24_native_scope.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:492: parking reference unavailable: artifacts\adams-mode-ref\um24-parking_steer-native / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um24-parking_steer-native.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:685: mode-25 parking reference unavailable: artifacts\adams-mode-ref\um25-parking_steer / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um25-parking_steer.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:783: mode-25 parking reference unavailable: artifacts\adams-mode-ref\um25-parking_steer / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um25-parking_steer.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:899: reference unavailable for USE_MODE 3: artifacts\adams-mode-ref\um3
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:899: reference unavailable for USE_MODE 4: artifacts\adams-mode-ref\um4
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_adams_correlation_gate.py:899: reference unavailable for USE_MODE 13: artifacts\adams-mode-ref\um13
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_parking_torque_structure.py:135: mode-25 parking reference unavailable: artifacts\adams-mode-ref\um25-parking_steer / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um25-parking_steer.tir
+SKIPPED [1] packages\suspension_multibody\tests\adams\test_pac2002_parking_torque_structure.py:155: mode-25 parking reference unavailable: artifacts\adams-mode-ref\um25-parking_steer / artifacts\adams-mode-ref\clones\pac2002_205_55R16_parking_um25-parking_steer.tir
+1700 passed, 47 skipped, 1 xfailed in 857.94s (0:14:17)
