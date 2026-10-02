@@ -15,10 +15,12 @@ build artifact of the source beside it, not something to check in.
 from __future__ import annotations
 
 import argparse
+import os
 import platform
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -117,13 +119,51 @@ def find_compiler() -> str:
     )
 
 
-def build(*, output: Path | None = None, keep_source: bool = True) -> Path:
-    """Compile the wrapper and return the produced library's path."""
-    if not SOURCE.is_file():
-        raise SystemExit(f"the wrapper source is missing at {SOURCE}")
-    compiler = find_compiler()
-    destination = output or (FMI_DIR / _library_name())
-    destination.parent.mkdir(parents=True, exist_ok=True)
+def _staged_build_directory() -> Path | None:
+    """
+    Return a temporary directory whose path is pure ASCII, or ``None``.
+
+    The staging directory exists because MinGW's ``ld.exe`` opens its output
+    with a narrow-character API and decodes that path through the *console code
+    page*.  A repository checked out under a non-ASCII path -- this one is --
+    therefore fails to link whenever the code page cannot represent those
+    characters (measured: ``chcp 936`` links, while ``chcp 1252`` and
+    ``chcp 65001`` both report ``cannot open output file ...: No such file or
+    directory`` for a directory that exists and is writable).  ``ld`` is the
+    only tool in the chain with that limitation; the compiler driver itself is
+    unaffected.
+
+    The code page is console-wide state that an earlier process can leave
+    behind -- the Adams probe tests set it to 1252 -- so this build cannot
+    assume the developer's console is still where it started.
+
+    ``tempfile`` promises nothing about its own location being ASCII (a user
+    name is part of the path), so a candidate is *observed* rather than
+    trusted, and ``None`` means "no ASCII staging directory is available": the
+    caller then links in place, which is what any machine with an ASCII
+    checkout does anyway.
+    """
+    candidates: list[Path] = []
+    for variable in ("TEMP", "TMP"):
+        configured = os.environ.get(variable)
+        if configured:
+            candidates.append(Path(configured))
+    candidates.append(Path(tempfile.gettempdir()))
+    for candidate in candidates:
+        try:
+            if not candidate.is_dir():
+                continue
+            staged = Path(tempfile.mkdtemp(prefix="fmu_build_", dir=str(candidate)))
+        except OSError:
+            continue
+        if str(staged).isascii():
+            return staged
+        shutil.rmtree(staged, ignore_errors=True)
+    return None
+
+
+def _compile(compiler: str, destination: Path) -> subprocess.CompletedProcess[str]:
+    """Compile the wrapper to one destination and return the completed process."""
     command = [
         compiler,
         "-shared",
@@ -137,14 +177,45 @@ def build(*, output: Path | None = None, keep_source: bool = True) -> Path:
         # The wrapper resolves the kernel with LoadLibrary at run time, so it
         # must not be linked against an import library for it.
         command.append("-Wl,--enable-auto-image-base")
-    completed = subprocess.run(command, capture_output=True, text=True)
-    if completed.stderr.strip():
-        sys.stderr.write(completed.stderr)
-    if completed.returncode != 0:
-        raise SystemExit(
-            f"the wrapper failed to build with {compiler} (exit "
-            f"{completed.returncode})"
-        )
+    return subprocess.run(command, capture_output=True, text=True)
+
+
+def build(*, output: Path | None = None, keep_source: bool = True) -> Path:
+    """
+    Compile the wrapper and return the produced library's path.
+
+    ``output`` keeps its meaning exactly: the returned path is where the library
+    ends up.  The staging detour changes only where the linker is asked to write
+    it first, and only when ``output`` cannot be named in ASCII.
+    """
+    if not SOURCE.is_file():
+        raise SystemExit(f"the wrapper source is missing at {SOURCE}")
+    compiler = find_compiler()
+    destination = output or (FMI_DIR / _library_name())
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    # A *falsy* sentinel, never `Path()`: `Path()` is `.`, and a truth test on it
+    # is always true, which would hand `.` to the cleanup below.
+    staged = _staged_build_directory() if not str(destination).isascii() else None
+    try:
+        linked = (staged / destination.name) if staged is not None else destination
+        completed = _compile(compiler, linked)
+        if completed.stderr.strip():
+            sys.stderr.write(completed.stderr)
+        if completed.returncode != 0:
+            raise SystemExit(
+                f"the wrapper failed to build with {compiler} (exit "
+                f"{completed.returncode})"
+            )
+        if not linked.is_file():
+            raise SystemExit(f"{compiler} reported success but wrote no {linked}")
+        if staged is not None:
+            # Copy rather than rename: the staging directory can sit on another
+            # volume, where a move is a copy followed by a delete anyway.
+            shutil.copy2(linked, destination)
+    finally:
+        if staged is not None:
+            shutil.rmtree(staged, ignore_errors=True)
     if not destination.is_file():
         raise SystemExit(f"{compiler} reported success but wrote no {destination}")
     if not keep_source:

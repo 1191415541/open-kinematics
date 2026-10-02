@@ -339,15 +339,21 @@ def compare_full_vehicle_mbd_case(
     length_scale = (
         1.0e-3 if case.vehicle.units.value == "engineering" else 1.0
     )
+    steering = case.vehicle.steering
     steering_ratio = (
-        case.vehicle.steering.rack_displacement_per_steering_wheel_angle
-        or case.vehicle.steering.ratio
+        steering.rack_displacement_per_steering_wheel_angle or steering.ratio
     )
     actual = _canonical_solver_history(
         full_vehicle_time_history(
             run,
             "handling_stability",
             steering_ratio_m_per_rad=steering_ratio * length_scale,
+            # Declared, not sniffed: a prescribed rotation reports a steering
+            # *angle* under the same channel name a rack translation reports a
+            # displacement under, so only the declaration can say which
+            # conversion applies.
+            steering_channel=steering.channel_name,
+            steering_actuator_mode=steering.actuator_mode,
             chassis_center_of_mass_m=tuple(
                 value * length_scale
                 for value in case.vehicle.chassis.center_of_mass.as_tuple()

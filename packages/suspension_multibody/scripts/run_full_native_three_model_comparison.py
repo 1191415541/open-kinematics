@@ -240,14 +240,19 @@ def _relative_body_roll(history: TimeHistory) -> TimeHistory:
 
 def _native_handling_history(result: Any, case: Any) -> TimeHistory:
     length_scale = _length_scale(case.vehicle.units)
+    steering = case.vehicle.steering
     steering_ratio = (
-        case.vehicle.steering.rack_displacement_per_steering_wheel_angle
-        or case.vehicle.steering.ratio
+        steering.rack_displacement_per_steering_wheel_angle or steering.ratio
     )
     history = full_vehicle_time_history(
         result,
         "handling_stability",
         steering_ratio_m_per_rad=steering_ratio * length_scale,
+        # The channel and its physical kind come from this case's own steering
+        # declaration; this script builds a prescribed rack translation, so the
+        # ratio above is the conversion that applies.
+        steering_channel=steering.channel_name,
+        steering_actuator_mode=steering.actuator_mode,
         chassis_center_of_mass_m=tuple(
             value * length_scale
             for value in case.vehicle.chassis.center_of_mass.as_tuple()

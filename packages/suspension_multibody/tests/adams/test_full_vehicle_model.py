@@ -1424,7 +1424,15 @@ def test_source_prescribed_steering_reports_rate_in_actuator_coordinates() -> No
     assert len(case.initial_states) == 53
     assert bool(np.all(result.diagnostics.accepted))
     assert float(np.max(result.diagnostics.velocity_residual)) <= 1.0e-4
-    steering = result.steering_state("steering_input")
+    # The channel is addressed by its declared name.  This case is a prescribed
+    # rotation (`build_adams_source_vehicle_model` fixes `actuator_mode` and
+    # declares no channel name, so `SteeringSystemSpec.channel_name` defaults to
+    # `front_rack`), and since p2-06 every actuator -- prescribed rotation
+    # included -- is named after that field rather than after this case's signal
+    # variable.  The old query key `steering_input` was the pre-p2-06 spelling of
+    # this same channel; the assertion below is unchanged.
+    assert result.steering_names == (model.steering.channel_name,)
+    steering = result.steering_state(model.steering.channel_name)
     target_rate = (steering[-1, 2] - steering[-2, 2]) / (
         result.times_s[-1] - result.times_s[-2]
     )

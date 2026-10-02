@@ -9,20 +9,42 @@ import numpy as np
 
 from .time_domain import TimeHistory
 
+#: The steering actuator kinds the vehicle schema declares.
+#:
+#: Repeated as a local alias rather than imported from the schema package: the
+#: caller passes one value out of this set, so a fourth schema kind shows up as a
+#: ``ty`` error at every call site instead of as a defaulted conversion here.
+SteeringActuatorMode = Literal[
+    "rack_translation",
+    "prescribed_rotation",
+    "prescribed_translation",
+]
+
 
 def full_vehicle_time_history(
     run: Any,
     category: Literal["handling_stability", "ride"],
     *,
     steering_ratio_m_per_rad: float | None = None,
+    steering_channel: str | None = None,
+    steering_actuator_mode: SteeringActuatorMode = "rack_translation",
     chassis_center_of_mass_m: tuple[float, float, float] | None = None,
 ) -> TimeHistory:
-    """Export a full-vehicle run using the existing Adams channel contract."""
+    """
+    Export a full-vehicle run using the existing Adams channel contract.
+
+    ``steering_channel`` is the name the run addresses its steering actuator by,
+    and ``steering_actuator_mode`` is what the caller declared that actuator to
+    be.  Both are required for a ``handling_stability`` history and are taken
+    from the case's own ``vehicle.steering`` declaration; neither is inferred.
+    """
     if hasattr(run, "times_s") and hasattr(run, "body_state"):
         return _native_vehicle_time_history(
             run,
             category,
             steering_ratio_m_per_rad=steering_ratio_m_per_rad,
+            steering_channel=steering_channel,
+            steering_actuator_mode=steering_actuator_mode,
             chassis_center_of_mass_m=chassis_center_of_mass_m,
         )
     if len(run.samples) < 2:
@@ -65,6 +87,8 @@ def _native_vehicle_time_history(
     category: Literal["handling_stability", "ride"],
     *,
     steering_ratio_m_per_rad: float | None,
+    steering_channel: str | None,
+    steering_actuator_mode: SteeringActuatorMode,
     chassis_center_of_mass_m: tuple[float, float, float] | None,
 ) -> TimeHistory:
     """Convert native COM states to the legacy Adams scalar channels."""
@@ -131,19 +155,42 @@ def _native_vehicle_time_history(
     channels: dict[str, tuple[float, ...]]
     units: dict[str, str]
     if category == "handling_stability":
-        if steering_ratio_m_per_rad is None or steering_ratio_m_per_rad <= 0.0:
+        if steering_channel is None or not steering_channel.strip():
             raise ValueError(
-                "native handling history requires a positive steering ratio in m/rad"
+                "native handling history requires the declared steering channel name"
             )
+        # The conversion follows the *declared* actuator mode, not the channel
+        # name.  Since p2-06 every steering actuator -- prescribed rotation
+        # included -- is addressed by its declared ``channel_name``, so both kinds
+        # answer to one name and a name lookup can no longer tell them apart.
+        # Adams MOTION/4 prescribes the steering wheel angle directly; reading
+        # that angle back through the rack ratio scales it by 1/ratio.
+        prescribed_rotation = steering_actuator_mode == "prescribed_rotation"
+        rack_ratio_m_per_rad = 0.0
+        if not prescribed_rotation:
+            if steering_ratio_m_per_rad is None or steering_ratio_m_per_rad <= 0.0:
+                raise ValueError(
+                    "native handling history requires a positive steering ratio "
+                    "in m/rad"
+                )
+            rack_ratio_m_per_rad = float(steering_ratio_m_per_rad)
         try:
-            steering = np.asarray(run.steering_state("front_rack"), dtype=float)
-            steering_angle = steering[:, 2] / steering_ratio_m_per_rad
-        except KeyError:
-            # Adams MOTION/4 直接规定方向盘转角，不能再把它解释为齿条位移。
-            steering = np.asarray(run.steering_state("steering_input"), dtype=float)
-            steering_angle = steering[:, 2]
+            steering = np.asarray(run.steering_state(steering_channel), dtype=float)
+        except KeyError as exc:
+            reported = tuple(getattr(run, "steering_names", ()))
+            raise ValueError(
+                f"native handling history has no steering channel "
+                f"{steering_channel!r}; the run reports {reported!r}"
+            ) from exc
         if steering.shape != (len(times), 4):
             raise ValueError("native steering output has an invalid shape")
+        # Column 2 is the actuator target in its own coordinate: a rack
+        # translation in metres, or a prescribed rotation in radians.
+        steering_angle = (
+            steering[:, 2]
+            if prescribed_rotation
+            else steering[:, 2] / rack_ratio_m_per_rad
+        )
         channels = {
             "steering_angle": tuple(steering_angle),
             "lateral_acceleration": tuple(
