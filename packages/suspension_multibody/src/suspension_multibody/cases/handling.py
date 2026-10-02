@@ -5,10 +5,19 @@ A handling manoeuvre is a steering input as a function of time.  This module is
 the authoring side of it: a shape per actuator, in the units the document
 declares, plus the independent expansion the equivalence check compares against.
 
-Only open-loop manoeuvres are expressible here.  A closed-loop manoeuvre -- an
-ISO lane change, say -- needs a driver following a path, which is a different
-model rather than a different shape, and the kernel refuses those by name rather
-than approximating them with a steering history that happens to look similar.
+Only open-loop manoeuvres are expressible *as a shape here*.  This layer's input
+is one steering actuator's history, so a manoeuvre that a driver model would
+close around -- an ISO lane change, say -- is not a shape it can spell, and the
+kernel refuses those names rather than approximating them with a steering
+history that happens to look similar.
+
+That is a statement about *this* input, not about the simulator.  A closed loop
+exists, and it lives one layer down: a `rotational_torque` element is evaluated
+inside every residual evaluation with the real-time state and the driver's own
+demand, so a controller written there reads the state it is measured on and acts
+on the same step (subtask p5-04, ABS).  The two are different layers rather than
+two settings of one, which is why closing a loop there does not make a driver
+model a valid shape here.
 """
 
 from __future__ import annotations

@@ -18,6 +18,7 @@
 // modules whose functions it actually calls.
 #include "mb_config/functions.hpp"
 #include "mb_config/element_wrench.hpp"
+#include "mb_config/controller_output.hpp"
 #include "mb_numeric/functions.hpp"
 #include "mb_model/functions.hpp"
 
@@ -142,19 +143,120 @@ void assemble_rotational_torque_forces(
         } else if (actuator.demand_source == TORQUE_DEMAND_BRAKE) {
             demand = slot_value(input.brake_demand, actuator.demand_tire);
         }
-        const double magnitude =
-            std::min(actuator.stiffness * demand, actuator.max_torque);
         // The slip branch.  A locked wheel keeps slipping while it is held, so
         // the couple must not fall to zero just because the pair stopped turning:
         // with a tire bound to the element, a slip large enough to have saturated
         // the tire holds the couple at its demanded magnitude in the direction
         // that opposes the slip.  Without a bound tire this branch is inert and
         // the law is exactly the rate-only one it always was.
-        const double slip = actuator.demand_tire >= 0 &&
-                actuator.demand_source != TORQUE_DEMAND_UNIT &&
-                static_cast<std::size_t>(actuator.demand_tire) < state.tire_sx.size()
+        //
+        // It is computed here, before the magnitude, because the closed-loop law
+        // below reads it: `state.tire_sx` is the dimensionless longitudinal slip
+        // ratio the solver carries, about [-1, 1], and it is the *same* value the
+        // sign branch below and the tire law read.  A negative slip is a wheel
+        // turning slower than the road, which is braking.
+        const bool tire_bound = actuator.demand_tire >= 0 &&
+            static_cast<std::size_t>(actuator.demand_tire) < state.tire_sx.size();
+        const double bound_slip = tire_bound
             ? state.tire_sx[static_cast<std::size_t>(actuator.demand_tire)]
             : 0.0;
+        // The sign branch reads the bound slip only when a driver signal
+        // *chose* the magnitude: with the unit demand the branch's two rate
+        // cases already decide, and folding the slip in would change what every
+        // block written before the demand channel does.
+        const double slip = actuator.demand_source != TORQUE_DEMAND_UNIT
+            ? bound_slip
+            : 0.0;
+        // The closed-loop ABS law (p5-04).  It runs *inside* the solver's force
+        // evaluation, so it sees the real-time slip of the current residual
+        // evaluation and its output feeds the very same step -- a genuine
+        // feedback loop within one run, not a replay across runs.  Everything
+        // below reads state the element already receives; nothing reaches into
+        // the tire block.
+        //
+        // The law works on the *magnitude* of the slip -- an ABS holds a wheel
+        // at a given amount of slip whichever way it rolls -- and its demand is a
+        // normalized fraction of the element's own driver signal, so it says
+        // "hold this wheel at this much slip" without knowing the sign or the
+        // cap.  The error is `|slip| - target`: below the target the demand is
+        // zero (the driver is not yet braking that wheel to its limit), and above
+        // it the demand grows until the wheel slows back into the target band.
+        // Both ends are clamped, because the demand is applied as a fraction of
+        // the driver's own signal and a demand outside [0, 1] is not a brake
+        // command any path can carry out.  A clamped demand is also *constant* in
+        // the state, which is the `smooth` case the directional pass registers.
+        //
+        // What is recorded is the signed slip the law read, not its magnitude:
+        // that is the number `tire_output`'s longitudinal-slip column and
+        // `state.tire_sx` carry, so the control ledger and the state ledger are
+        // the same measurement rather than two readings of it.  The target is
+        // recorded as given -- a non-negative amount of slip -- and the demand as
+        // the fraction the law derived.
+        //
+        // The controller measures the *bound tire's* slip rather than the sign
+        // branch's `slip`: the branch reads it only to break the tie at a zero
+        // rate, while the controller is what makes the wheel's own slip its
+        // measurement, and a model whose magnitude comes from the unit demand --
+        // every axle-family model, which carries no demand table -- has a bound
+        // tire and no driver signal at all.  Both readings are the same number
+        // when both exist.
+        //
+        // The driver's own demand is recorded *before* it is replaced: it is the
+        // signal the sample carried, which is what makes the control column
+        // comparable with the driver column rather than a restatement of it.
+        const double driver_demand = demand;
+        if (controller_sink_active()) set_controller_driver_demand(driver_demand);
+        if (actuator.controller_gain > 0.0 && actuator.target_slip >= 0.0) {
+            // The law *scales* the driver's own demand rather than replacing it,
+            // and both halves of that matter.
+            //
+            // Physically it is what an ABS does: it modulates the command the
+            // driver is asking for, so a driver who is not braking gets no brake
+            // and one who is braking hard gets as much of it as the wheel can
+            // take.  Replacing the demand instead would brake a wheel the driver
+            // never asked to brake, and it would do it on the first step, before
+            // any slip exists to justify it.
+            //
+            // Numerically it is what keeps the demand *continuous*.  A replaced
+            // demand steps from zero to `gain * target` the moment the law turns
+            // on (measured: Newton refuses the step at exactly that sample),
+            // while a scaled one starts at the driver's own zero and rises with
+            // the pedal.  The error term is `target - |slip|`, not the other way
+            // round: a wheel slipping *less* than the target can take more
+            // brake, one slipping more has to have some taken back, and the
+            // opposite sign is a positive feedback loop that brakes hardest
+            // exactly when the wheel is already locked.
+            // The authority has a *unity feedforward*: a wheel slipping less
+            // than the target gets the driver's whole command, and only a wheel
+            // slipping more has some of it taken back.  A law without that term
+            // (`gain * (target - |slip|)`) throttles the brake to almost nothing
+            // whenever the wheel is below the target -- which is every wheel
+            // that is not already sliding -- so it holds a stable equilibrium in
+            // which no wheel ever reaches the target.  Measured: with
+            // `gain = 0.1, target = 0.2` the demand settles at 0.019 and the
+            // slip at 0.010, i.e. the brake is essentially off and the target is
+            // twenty times away.
+            //
+            // With the feedforward the gain changes what it should: how fast the
+            // brake is released once the wheel goes past the target, rather than
+            // how much braking is allowed at all.
+            const double authority = std::max(
+                0.0,
+                std::min(
+                    1.0,
+                    1.0 + actuator.controller_gain *
+                              (actuator.target_slip - std::abs(bound_slip))
+                )
+            );
+            demand = demand * authority;
+            if (controller_sink_active()) {
+                record_controller_sample(bound_slip, actuator.target_slip, demand);
+            }
+        } else if (controller_sink_active()) {
+            record_controller_sample(bound_slip, -1.0, demand);
+        }
+        const double magnitude =
+            std::min(actuator.stiffness * demand, actuator.max_torque);
         double tau = 0.0;
         if (rate > kEps) {
             tau = -magnitude;

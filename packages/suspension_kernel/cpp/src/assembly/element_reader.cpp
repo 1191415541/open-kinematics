@@ -393,6 +393,40 @@ bool read_element_blocks(
                 error = "a driven rotational torque needs the tire it follows";
                 return false;
             }
+            // The closed-loop ABS law (p5-04).  The flag is a switch, not a
+            // number, so anything but 0 and 1 is refused by name rather than
+            // read as "on"; and an element that turns the law on without
+            // stating both of the values it needs would run a controller whose
+            // target and gain are whatever the block happened to leave in its
+            // padding.  Those two are refused together, by the element's own
+            // index, so the report names which element is wrong.
+            const int controller_enabled =
+                block.ints[ELEMENT_INT_CONTROLLER_ENABLED];
+            if (controller_enabled != 0 && controller_enabled != 1) {
+                error = "rotational torque element " + std::to_string(index) +
+                        " has an unknown controller_enabled flag " +
+                        std::to_string(controller_enabled);
+                return false;
+            }
+            actuator.target_slip =
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_TARGET_SLIP];
+            actuator.controller_gain =
+                block.parameters[ELEMENT_ROTATIONAL_TORQUE_CONTROLLER_GAIN];
+            if (controller_enabled == 1 &&
+                (actuator.target_slip < 0.0 || !(actuator.controller_gain > 0.0))) {
+                error = "rotational torque element " + std::to_string(index) +
+                        " enables its controller without a non-negative target "
+                        "slip and a positive controller_gain";
+                return false;
+            }
+            if (controller_enabled != 1) {
+                // A disabled element keeps the plain demand path whatever its
+                // padding holds: the two slots are only read when the flag asks
+                // for them, so a block whose padding is not zero still means
+                // what every block written before this slot meant.
+                actuator.target_slip = -1.0;
+                actuator.controller_gain = 0.0;
+            }
             // Same rules as the anti-roll bar above: body `a` is required by the
             // shared range check, the axis must have a direction, and a negative
             // gain or cap would make the sign law below meaningless.  The

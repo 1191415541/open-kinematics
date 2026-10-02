@@ -126,6 +126,7 @@ SOURCE_RELATIVES = (
     "packages/suspension_kernel/cpp/include/mb_dual/dual_geometry.hpp",
     "packages/suspension_kernel/cpp/include/mb_config/env.hpp",
     "packages/suspension_kernel/cpp/include/mb_config/element_wrench.hpp",
+    "packages/suspension_kernel/cpp/include/mb_config/controller_output.hpp",
     "packages/suspension_kernel/cpp/include/mb_config/functions.hpp",
     "packages/suspension_kernel/cpp/include/mb_numeric/functions.hpp",
     "packages/suspension_kernel/cpp/include/mb_dual/functions.hpp",

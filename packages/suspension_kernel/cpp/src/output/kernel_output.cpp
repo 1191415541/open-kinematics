@@ -13,6 +13,7 @@
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
 #include "mb_config/element_wrench.hpp"
+#include "mb_config/controller_output.hpp"
 #include "mb_config/functions.hpp"
 #include "mb_numeric/functions.hpp"
 #include "mb_joint/functions.hpp"
@@ -385,6 +386,12 @@ void write_physics_output(
     // assembles one accepted sample's element wrenches for observation, and its
     // `sample` is the index the other ledgers are written at.  A switch that is
     // off leaves the sink unconfigured, so none of this runs.
+    // The closed-loop controller ledger records in this same pass: the element
+    // law derives its demand inside `external_force_vector` below, so this is
+    // the one place one accepted sample's control row exists as a coherent set.
+    // A switch that is off leaves the sink unconfigured, so none of this runs.
+    ControllerSink* const controller = controller_sink();
+    if (controller != nullptr) controller->begin_sample(sample);
     ElementWrenchSink* const element_wrench = element_wrench_sink();
     if (element_wrench != nullptr) {
         ElementWrenchCounts element_wrench_counts;
@@ -408,6 +415,7 @@ void write_physics_output(
         &bushing_output, &anti_roll_output, nullptr, nullptr, &storage
     );
     if (element_wrench != nullptr) element_wrench->end_sample();
+    if (controller != nullptr) controller->end_sample();
     const double kinetic = kinetic_energy(model, state);
     const double total = kinetic + potential;
     const double residual = first

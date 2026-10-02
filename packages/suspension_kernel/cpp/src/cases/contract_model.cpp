@@ -140,6 +140,19 @@ bool optional_int(const Json& object, const char* key, int& out) {
   return true;
 }
 
+/// Read `key` as a boolean when it is present; absent leaves `out` untouched.
+///
+/// A JSON boolean is the only spelling accepted: `1`/`0` are numbers, and a
+/// switch written as a number would leave the document saying two things the
+/// schema cannot tell apart.
+bool optional_bool(const Json& object, const char* key, bool& out) {
+  const Json* value = object.find(key);
+  if (value == nullptr) return true;
+  if (value->kind != JsonKind::Bool) return false;
+  out = value->boolean;
+  return true;
+}
+
 bool vec3_at(const Json& value, double* out) {
   if (!value.is_array() || value.items.size() != 3) return false;
   for (std::size_t index = 0; index < 3; ++index) {
@@ -901,6 +914,35 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
           return fail(error, "rotational torque " + quote(*element_name) +
                                   " needs the tire its demand follows");
         }
+        // The closed-loop ABS law (p5-04).  Three optional fields, and an
+        // element that states none of them gets the plain demand path every
+        // document written before this channel meant.  The switch is a boolean
+        // in the document because it *is* a choice rather than a number; the
+        // block it becomes is the integer slot the reader switches on.
+        bool controller_enabled = false;
+        double target_slip = -1.0;
+        double controller_gain = 0.0;
+        if (!optional_bool(*parameters, "controller_enabled", controller_enabled) ||
+            !optional_number(*parameters, "target_slip", target_slip) ||
+            !optional_number(*parameters, "controller_gain", controller_gain)) {
+          return fail(error, "rotational torque " + quote(*element_name) +
+                                  " has a malformed controller block");
+        }
+        // The same rule the reader states, restated here so a bad document is
+        // named at the field rather than reported as an invalid block two layers
+        // later.  A target slip is a slip ratio, so the document's length unit
+        // does not touch it and neither does the gain: both are dimensionless.
+        if (!std::isfinite(target_slip) || !std::isfinite(controller_gain)) {
+          return fail(error, "rotational torque " + quote(*element_name) +
+                                  " has a non-finite controller parameter");
+        }
+        if (controller_enabled &&
+            (target_slip < 0.0 || !(controller_gain > 0.0))) {
+          return fail(error, "rotational torque " + quote(*element_name) +
+                                  " enables its controller without a "
+                                  "non-negative target_slip and a positive "
+                                  "controller_gain");
+        }
         // Both gains and the cap are moments, so they follow the document's
         // length unit the way the anti-roll bar's coefficients do.  The axis
         // and the reference orientation are dimensionless.
@@ -952,6 +994,16 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
         block.parameters[ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE] = max_torque;
         block.ints[ELEMENT_INT_TORQUE_DEMAND_SOURCE] = demand_source;
         block.ints[ELEMENT_INT_TORQUE_TIRE] = demand_tire;
+        // The controller's three fields, written only as the switch asks: a
+        // document that states none, or states the switch off, leaves both
+        // parameter slots at the zero the aggregate began with, which is the
+        // same block a pre-p5-04 element produces.
+        block.ints[ELEMENT_INT_CONTROLLER_ENABLED] = controller_enabled ? 1 : 0;
+        if (controller_enabled) {
+          block.parameters[ELEMENT_ROTATIONAL_TORQUE_TARGET_SLIP] = target_slip;
+          block.parameters[ELEMENT_ROTATIONAL_TORQUE_CONTROLLER_GAIN] =
+              controller_gain;
+        }
         rotational_torques_.push_back(block);
         continue;
       }

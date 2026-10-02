@@ -185,6 +185,11 @@ struct RotationalTorque {
     /// Which tire's column the demand source reads.  -1 means "no tire", which
     /// only the unit source may leave unset.
     int demand_tire{-1};
+    /// The slip the controller targets, when this element runs an ABS law.
+    /// Negative disables the controller and restores the plain demand path.
+    double target_slip{-1.0};
+    /// Proportional gain of the ABS law: demand = clamp(kp * (slip - target)).
+    double controller_gain{0.0};
 };
 
 

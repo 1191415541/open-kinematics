@@ -191,6 +191,11 @@ def _copy_path(document: Mapping[str, Any], path: Sequence[str]) -> dict[str, An
 #: this module does not import the result layer just for one index.
 _TIRE_LOAD_COLUMN = 4
 
+#: The tire block's column holding the longitudinal slip velocity, in m/s.  The
+#: same column `results/` reads and the one the kernel's ABS law measures, so a
+#: controller reading the bus and the law acting in the solver see one quantity.
+_TIRE_SLIP_COLUMN = 7
+
 #: The measurement channels this bus exposes.
 #:
 #: Wheel speed comes from the wheel body's own spin rate in `body_state`; body
@@ -235,6 +240,24 @@ MEASUREMENT_CHANNELS: tuple[MeasurementChannel, ...] = (
             "the vertical force the contact law produced, at the sample asked "
             "for.  Column 4 of the tire row is the same column "
             "`results/kc_state.py` reads its own load from"
+        ),
+    ),
+
+    MeasurementChannel(
+        name="longitudinal_slip",
+        block="tire_output",
+        unit="m/s",
+        entity="tire",
+        columns=slice(_TIRE_SLIP_COLUMN, _TIRE_SLIP_COLUMN + 1),
+        declaration="tire_force",
+        note=(
+            "the tire's longitudinal slip velocity, at the sample asked for -- "
+            "column 7 of the tire row, the same column the ABS law's own "
+            "measurement is derived from and the one `results/kc_state.py` "
+            "reads.  A closed-loop controller needs a slip measurement, and "
+            "taking it from the result document rather than re-deriving it is "
+            "what keeps the bus reading the same number the solver produced "
+            "(subtask p5-04)"
         ),
     ),
 )

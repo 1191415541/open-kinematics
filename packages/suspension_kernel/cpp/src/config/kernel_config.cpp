@@ -6,6 +6,9 @@
 // The element-wrench recorder this unit also owns.
 #include "mb_config/element_wrench.hpp"
 
+// The closed-loop controller ledger this unit also owns (p5-04).
+#include "mb_config/controller_output.hpp"
+
 namespace axle_kernel {
 bool profiling_enabled() {
 
@@ -387,6 +390,19 @@ bool element_wrench_output_enabled() {
 }
 
 
+bool controller_output_enabled() {
+
+    const char* value = std::getenv(
+
+        "SUSPENSION_KERNEL_CONTROLLER_OUTPUT"
+
+    );
+
+    return value != nullptr && value[0] != '\0' && value[0] != '0';
+
+}
+
+
 namespace {
 
 /// Rows one element of `type` reserves in a sample: the two-ended elements
@@ -611,6 +627,56 @@ ElementWrenchSink* active_element_wrench_sink() {
     ElementWrenchSink& sink = element_wrench_sink_storage();
 
     return sink.recording() ? &sink : nullptr;
+
+}
+
+
+namespace {
+
+/// The closed-loop controller's process recorder (p5-04).  One object for the
+/// same reason the element-wrench sink is one: the target block is process
+/// state and the element laws cannot see the model, the case or the buffers.
+ControllerSink& controller_sink_storage() {
+
+    static ControllerSink sink;
+
+    return sink;
+
+}
+
+} // namespace
+
+
+ControllerSink* controller_sink() {
+
+    if (!controller_output_enabled()) return nullptr;
+
+    return &controller_sink_storage();
+
+}
+
+
+bool controller_sink_active() {
+
+    return controller_sink_storage().recording();
+
+}
+
+
+void record_controller_sample(
+    double measured, double target, double demand
+) {
+
+    controller_sink_storage().record(measured, target, demand);
+
+}
+
+
+void set_controller_driver_demand(double demand) {
+
+    ControllerSink& sink = controller_sink_storage();
+
+    if (sink.recording()) sink.set_driver_demand(demand);
 
 }
 } // namespace axle_kernel

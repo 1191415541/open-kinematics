@@ -495,17 +495,62 @@ void external_force_rotational_torque_directional(
         } else if (actuator.demand_source == TORQUE_DEMAND_BRAKE) {
             demand = slot_value(input.brake_demand, actuator.demand_tire);
         }
-        const double magnitude =
-            std::min(actuator.stiffness * demand, actuator.max_torque);
         // The slip branch, at the same values the scalar path reads.  Its
         // selection is non-smooth exactly where the rate branch's is, so it folds
         // into the same `smooth` decision below rather than carrying a derivative
         // of its own.
-        const double slip = actuator.demand_tire >= 0 &&
-                actuator.demand_source != TORQUE_DEMAND_UNIT &&
-                static_cast<std::size_t>(actuator.demand_tire) < state.tire_sx.size()
+        const bool tire_bound = actuator.demand_tire >= 0 &&
+            static_cast<std::size_t>(actuator.demand_tire) < state.tire_sx.size();
+        const double bound_slip = tire_bound
             ? state.tire_sx[static_cast<std::size_t>(actuator.demand_tire)]
             : 0.0;
+        // The sign branch keeps the scalar path's reading: the slip enters it
+        // only for a driver-chosen magnitude.
+        const double slip = actuator.demand_source != TORQUE_DEMAND_UNIT
+            ? bound_slip
+            : 0.0;
+        // The closed-loop ABS law (p5-04), word for word the scalar path's.  It
+        // belongs here because this pass supplies the *analytic* Jacobian: a
+        // residual that clamps its demand while the Jacobian does not would make
+        // the two disagree exactly where the clamp bites, and Newton would take
+        // steps the residual never asked for.
+        //
+        // Unlike the sign branch below, this law's output is a *continuous*
+        // function of the bound tire's slip: `demand` moves whenever `sx` does,
+        // not only when a branch flips.  The pass reads `bound_slip` as a
+        // constant of this evaluation, so its own tangent is zero exactly where
+        // the true one is not, and a column perturbing that slip would be handed
+        // a wrong analytic entry.  Such a column therefore falls back to finite
+        // differences, which is what `smooth` is for.  The two clamps are the
+        // other half of the same statement: a clamped demand is constant in the
+        // state, so the analytic tangent is zero there too.
+        //
+        // Registered rather than silently approximated: the run still produces
+        // the honest answer, it just pays the finite-difference column for it.
+        if (actuator.controller_gain > 0.0 && actuator.target_slip >= 0.0) {
+            const bool slip_perturbed = tire_bound &&
+                actuator.demand_tire < static_cast<int>(direction.dsx.size()) &&
+                direction.dsx[static_cast<std::size_t>(actuator.demand_tire)] != 0.0;
+            // The scalar path's law, word for word: the authority is a clamped
+            // proportional term on `target - |slip|` and the demand is the
+            // driver's own signal scaled by it.  A column that perturbs the slip
+            // this law reads has a genuine tangent the pass does not model (the
+            // pass reads `bound_slip` as a constant of this evaluation), so it
+            // falls back to finite differences; the two clamps are constant in
+            // the state and need no special case.
+            if (slip_perturbed) smooth = false;
+            const double authority = std::max(
+                0.0,
+                std::min(
+                    1.0,
+                    1.0 + actuator.controller_gain *
+                              (actuator.target_slip - std::abs(bound_slip))
+                )
+            );
+            demand = demand * authority;
+        }
+        const double magnitude =
+            std::min(actuator.stiffness * demand, actuator.max_torque);
         constexpr double kJacobianStep = 1e-7;
         const double trial_rate =
             rate.value + kJacobianStep*rate.derivative;

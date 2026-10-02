@@ -240,6 +240,19 @@ def test_a_document_request_bypasses_preparation_and_still_validates_identity(
 
 
 def test_a_closed_loop_manoeuvre_is_refused_by_name(prepared) -> None:
+    """
+    A driver model is refused *as a shape*, which is not a statement about loops.
+
+    The name below is not a steering history this layer can spell, so it is
+    refused by name rather than approximated.  That much never changed.  What
+    this case used to imply -- that the simulator has no closed loop at all --
+    is no longer true and was never this layer's claim to make: the loop lives in
+    the kernel's element-evaluation path, where a `rotational_torque` actuator
+    reads the real-time state and acts on the same step (subtask p5-04; the
+    acceptance evidence is `tests/cases/test_abs_closed_loop.py`).  So the
+    refusal is kept and its *reason* is corrected: what is rejected here is an
+    input shape, not feedback.
+    """
     model, case, base = prepared
     times = tuple(float(value) for value in base.times)
     actuator = base.steering.names[0]
@@ -249,8 +262,9 @@ def test_a_closed_loop_manoeuvre_is_refused_by_name(prepared) -> None:
         times_s=times,
         settings=AxleSolverSettings(),
     )
-    # A closed-loop manoeuvre is a driver model, not a shape; the case layer has
-    # to say so rather than quietly approximating one.
+    # Not a steering history this layer can spell: it is a driver model, and the
+    # case layer has to say so rather than quietly approximating one.  The loop
+    # that does exist is one layer down, in the element's own evaluation.
     document["handling"]["steering"][0]["shape"] = "iso_lane_change"
     model_doc, model_blob = vehicle_dynamic_model_document(model, base)
     with pytest.raises(Exception, match="not open-loop"):

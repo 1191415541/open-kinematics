@@ -26,15 +26,38 @@ namespace {
 
 using Json = JsonValue;
 
-/// The per-tire roles a sample table can play.  The axle family has no brake
-/// channel: a wheel torque is the whole excitation it applies.
-enum class TireRole { RoadHeight, RoadVelocity, WheelTorque, None };
+/// The per-tire roles a sample table can play.
+///
+/// `wheel_torque` is the Newton-metre excitation the axle family has always
+/// applied.  The two normalized demand roles were added with the closed-loop
+/// controller (p5-04): an ABS law modulates the *driver's* demand rather than a
+/// pre-computed torque, and the demand reaches the element through the same
+/// per-tire tables the vehicle family already carries.  They are dimensionless
+/// fractions, so nothing scales them -- a role's unit is a property of the role
+/// and the two unit systems must not be mixed inside one channel.
+enum class TireRole {
+  RoadHeight,
+  RoadVelocity,
+  WheelTorque,
+  ThrottleDemand,
+  BrakePressure,
+  None
+};
 
 TireRole tire_role_of(const std::string& role) {
   if (role == "road_height") return TireRole::RoadHeight;
   if (role == "road_velocity") return TireRole::RoadVelocity;
   if (role == "wheel_torque") return TireRole::WheelTorque;
+  if (role == "throttle_demand") return TireRole::ThrottleDemand;
+  if (role == "brake_pressure") return TireRole::BrakePressure;
   return TireRole::None;
+}
+
+/// Whether a role carries a normalized driver demand.  The vehicle family defines
+/// the same predicate; restating it here keeps the two boundaries reading one
+/// rule rather than two that can drift.
+bool role_is_demand(TireRole role) {
+  return role == TireRole::ThrottleDemand || role == TireRole::BrakePressure;
 }
 
 }  // namespace
@@ -58,6 +81,10 @@ bool expand_axle_dynamic(const Json& document, const std::string& blob,
   run.road_z.assign(sample_count * tire_count, 0.0);
   run.road_velocity.assign(sample_count * tire_count, 0.0);
   run.wheel_torque.assign(sample_count * tire_count, 0.0);
+  // The normalized demand tables stay *empty* unless a role fills them: the
+  // element law reads "empty" as "no driver signal" rather than as a zero
+  // demand of a declared one, which is what keeps a model that declares no
+  // demand byte-for-byte what it was (subtask p2-10).
   // The driven tables are read per coordinate by the `driven_offset`
   // role, so they are sized once here for the whole history.
   run.driven_target.assign(sample_count * model.driven_count(), 0.0);
@@ -105,13 +132,54 @@ bool expand_axle_dynamic(const Json& document, const std::string& blob,
             target = &run.wheel_torque;
             scale = model.moment_scale();
             break;
+          // A normalized demand is a *fraction*, so nothing scales it: the
+          // document's length unit turns millimetres into metres and its moment
+          // unit turns a stated torque into newton-metres, but "half the pedal"
+          // is half whatever the unit system is.  The same rule the vehicle
+          // family states, restated here so the two boundaries cannot drift.
+          case TireRole::ThrottleDemand:
+            target = &run.wheel_demand;
+            scale = 1.0;
+            break;
+          case TireRole::BrakePressure:
+            target = &run.brake_demand;
+            scale = 1.0;
+            break;
           case TireRole::None:
             break;
+        }
+        // A demand table is allocated *when a role first fills it*, not up
+        // front: an empty table is how every reader learns "this run declares
+        // no demand", which is what keeps an un-opted-in model byte-for-byte
+        // what it was.  Allocating it in the constructor would make every run
+        // look like it declared a demand of zero.  `read_column_table` writes
+        // through `column_count` slots, so an unallocated table would be an
+        // out-of-range write rather than a wrong number.
+        if (role_is_demand(tire_role) && target->empty()) {
+          target->assign(sample_count * tire_count, 0.0);
         }
         if (!read_column_table(descriptor, blob, sample_count,
                              static_cast<std::size_t>(index), tire_count, scale,
                              *target, "role " + *role, error)) {
           return false;
+        }
+        // A normalized demand has a declared range, and a value outside it is a
+        // mistake rather than something to clip: the brake's own subsystem
+        // refuses `brake_input` outside [0, 1] and the drive's refuses
+        // `drive_input` outside [-1, 1], so the case has to say the same thing
+        // or the two layers would disagree about what a legal demand is.
+        if (role_is_demand(tire_role)) {
+          const double low = tire_role == TireRole::ThrottleDemand ? -1.0 : 0.0;
+          for (std::size_t sample = 0; sample < sample_count; ++sample) {
+            const double value =
+                (*target)[sample * tire_count + static_cast<std::size_t>(index)];
+            if (!std::isfinite(value) || value < low || value > 1.0) {
+              return fail(error,
+                          "role " + *role + " on tire " + *tire +
+                              " must be within [" + (low < 0.0 ? "-1" : "0") +
+                              ", 1]; got " + std::to_string(value));
+            }
+          }
         }
         continue;
       }

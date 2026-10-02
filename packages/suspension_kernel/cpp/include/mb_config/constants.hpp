@@ -46,6 +46,21 @@ inline constexpr int kSteeringOutputWidth = 4;
 // like the other widths: the block's shape and its row addressing share it.
 inline constexpr int kElementWrenchOutputWidth = 13;
 
+// The closed-loop controller's ledger (p5-04): one row per sample carrying the
+// slip the law measured, the slip it targeted, the normalized demand it
+// derived, and the driver signal it was given.  Like the energy and element
+// ledgers it is *result*, not scratch: a caller reading the closed loop needs
+// the control half as well as the state half, and the element-wrench channel's
+// semantics ("the wrench actually applied") cannot carry it.
+//
+// The columns, in this order, are:
+//   [0] measured_slip   the tire longitudinal slip the law read at this sample
+//   [1] target_slip     the slip the law aimed at (-1 when no law ran)
+//   [2] control_demand  the normalized demand the law derived (0..1)
+//   [3] driver_demand   the normalized driver demand the sample carried,
+//                       before the law replaced it
+inline constexpr int kControllerOutputWidth = 4;
+
 inline constexpr int kDiagnosticsWidth = 16;
 
 inline constexpr int kPerformanceWidth = 24;

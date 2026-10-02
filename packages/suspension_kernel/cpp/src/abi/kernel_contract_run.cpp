@@ -19,6 +19,7 @@
 
 #include "mb_config/version.hpp"
 #include "mb_config/element_wrench.hpp"
+#include "mb_config/controller_output.hpp"
 #include "mb_cases/functions.hpp"
 #include "mb_contract/functions.hpp"
 #include "mb_model/enums.hpp"
@@ -272,6 +273,15 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
       if (ElementWrenchSink* const sink = element_wrench_sink()) sink->clear();
     }
   } element_wrench_guard;
+  // The controller ledger's recorder is process-global for the same reason and
+  // holds a pointer into a block owned by this call, so every return path has to
+  // hand its target back.  One guard beside the other: the two channels share
+  // every property that made the first one necessary.
+  struct ControllerGuard {
+    ~ControllerGuard() {
+      if (ControllerSink* const sink = controller_sink()) sink->clear();
+    }
+  } controller_guard;
 
   ContractPayload model_payload_parsed;
   ContractPayload case_payload_parsed;
@@ -648,6 +658,13 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
           ? 0
           : total_samples * element_wrench_records * kElementWrenchOutputWidth,
       kNan);
+  // The optional closed-loop controller ledger (p5-04): one row per sample,
+  // four columns, written by the element law as it derives the ABS demand.
+  // Off unless `SUSPENSION_KERNEL_CONTROLLER_OUTPUT` asks for it, so the
+  // default path allocates nothing, describes nothing and appends nothing.
+  const bool controller_enabled = controller_output_enabled();
+  std::vector<double> controller_block(
+      controller_enabled ? total_samples * kControllerOutputWidth : 0, kNan);
   // A block descriptor cannot express a zero extent, so an empty ledger is an
   // absent block rather than a block of nothing.
   const auto block_slot = [](std::vector<double>& block, std::size_t stride,
@@ -759,6 +776,16 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
             element_wrench_block.data() +
                 sample_offset * element_wrench_records * kElementWrenchOutputWidth,
             element_wrench_records);
+      }
+    }
+    // This case's rows of the controller ledger, bound the same way and with
+    // the same lifetime: the sink is handed the slice the observer writes into.
+    if (controller_enabled) {
+      ControllerSink* const sink = controller_sink();
+      if (sink != nullptr) {
+        sink->configure(
+            controller_block.data() + sample_offset * kControllerOutputWidth,
+            run.sample_count);
       }
     }
     AxleOutput axle_output{};
@@ -952,6 +979,11 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
                {total_samples, anti_roll_count, kAntiRollOutputWidth});
     push_block("element_wrench", element_wrench_block,
                {total_samples, element_wrench_records, kElementWrenchOutputWidth});
+    // The closed-loop ledger goes last, in the same order the blob appends it:
+    // a descriptor's offset is where the reader looks, and the two lists are
+    // written from one pass so they cannot disagree.
+    push_block("controller_output", controller_block,
+               {total_samples, kControllerOutputWidth});
 
     Json document = json_object({
         {"blocks", json_array(std::move(blocks))},
@@ -1003,6 +1035,7 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   append_doubles(bushing_block.data(), bushing_block.size(), blob);
   append_doubles(anti_roll_block.data(), anti_roll_block.size(), blob);
   append_doubles(element_wrench_block.data(), element_wrench_block.size(), blob);
+  append_doubles(controller_block.data(), controller_block.size(), blob);
 
   const std::string payload = contract_build_container(canonical, blob);
   if (result_out == nullptr || *result_length_in_out < payload.size()) {

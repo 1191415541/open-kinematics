@@ -304,7 +304,15 @@ enum ElementParameter {
     ELEMENT_ROTATIONAL_TORQUE_REFERENCE_QUATERNION = 133,
     // The amplitude cap: the couple never exceeds this, which is how "a locked
     // pair stops growing its brake torque" is stated as a parameter.
-    ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE = 137
+    ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE = 137,
+
+    // The closed-loop ABS law (p5-04), taken from the padding after the
+    // rotational-torque run.  The run itself ends at 137, and 138..143 is the
+    // gap before the anti-roll bar's declared band starts at 144, so the two
+    // slots sit inside the rotational family's own band and clear of every
+    // neighbour -- the `static_assert` below pins that.
+    ELEMENT_ROTATIONAL_TORQUE_TARGET_SLIP = 138,
+    ELEMENT_ROTATIONAL_TORQUE_CONTROLLER_GAIN = 139
 };
 
 /// Index into an element's integer block.
@@ -328,7 +336,10 @@ enum ElementInteger {
     // demand needs it, because a couple's own two bodies do not name a tire; -1
     // means "no tire" and is refused for those sources rather than silently
     // reading column 0.
-    ELEMENT_INT_TORQUE_TIRE = 7
+    ELEMENT_INT_TORQUE_TIRE = 7,
+    // Whether this element runs the ABS law (p5-04).  0 = plain demand (what
+    // every block written before this slot means), 1 = the law below.
+    ELEMENT_INT_CONTROLLER_ENABLED = 8
 };
 
 /// The one layout table both entry points read.
@@ -357,7 +368,14 @@ inline constexpr ElementLayout kElementLayouts[] = {
     {ELEMENT_ROTATIONAL_TORQUE, ELEMENT_ROTATIONAL_TORQUE_STIFFNESS,
      ELEMENT_ROTATIONAL_TORQUE_DAMPING, ELEMENT_ROTATIONAL_TORQUE_AXIS_A,
      ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE,
-     /*curve_slots=*/0, /*int_count=*/0},
+     // `int_count` counts the *leading* integer slots the family reads, and this
+     // row has always been declared as zero even though the demand channel's two
+     // slots (6 and 7) were read straight out of `block.ints[]` by name.  The
+     // controller flag is appended after them, so a truthful count is now one
+     // slot past the gap: the count is advisory here (the reader and the
+     // document model address the slots by name), and the demand pair keeps its
+     // own by-name reads.
+     /*curve_slots=*/0, /*int_count=*/1},
     {ELEMENT_TIRE, ELEMENT_TIRE_STIFFNESS, ELEMENT_TIRE_DAMPING,
      ELEMENT_TIRE_BRUSH_STIFFNESS_LONGITUDINAL,
      ELEMENT_TIRE_BRUSH_STIFFNESS_LATERAL,
@@ -531,6 +549,18 @@ static_assert(
     ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE < ELEMENT_ANTI_ROLL_STIFFNESS,
     "the rotational-torque run must stay inside the block and clear of "
     "the anti-roll run"
+);
+// The closed-loop law's two slots take the gap between the family's last used
+// field and the anti-roll band's start, so they stay inside the run the family
+// declares and cannot collide with a neighbour.
+static_assert(
+    ELEMENT_ROTATIONAL_TORQUE_CONTROLLER_GAIN < ELEMENT_ANTI_ROLL_STIFFNESS,
+    "the rotational-torque controller slots must stay clear of the anti-roll run"
+);
+static_assert(
+    ELEMENT_ROTATIONAL_TORQUE_MAX_TORQUE <
+        ELEMENT_ROTATIONAL_TORQUE_TARGET_SLIP,
+    "the rotational-torque controller slots must not overwrite the demand cap"
 );
 static_assert(
     ELEMENT_ANTI_ROLL_REFERENCE_QUATERNION + 4 <= ELEMENT_TIRE_STIFFNESS,

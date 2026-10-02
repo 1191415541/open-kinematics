@@ -34,4 +34,10 @@ bool acceleration_schur_probe_enabled();
 /// the default path's result bytes do not move.
 bool element_wrench_output_enabled();
 
+/// The optional closed-loop controller ledger (p5-04).  Default off for the
+/// same reason the element-wrench channel is: the switch only decides whether
+/// the observer records what it already computes, so the default path's result
+/// bytes do not move.
+bool controller_output_enabled();
+
 } // namespace axle_kernel
