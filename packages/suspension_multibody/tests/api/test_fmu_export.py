@@ -497,3 +497,179 @@ def test_exporting_does_not_change_a_run(exported):
         np.asarray(second.named_blocks["tire_output"]),
         np.asarray(first.named_blocks["tire_output"]),
     )
+
+# --- the co-simulation clock is causal --------------------------------------
+#
+# A value set at the simulator's current time must reach the solver from that
+# time on, and must not rewrite the samples already behind it.  Writing every
+# sample of the slot -- which an earlier version did -- made the whole reported
+# history depend on the value set last, so the same step sequence produced
+# different past outputs depending on when the simulator stopped.
+
+#: The sample the driver input is switched at: late enough that a history exists.
+_SWITCH_AT = 60
+
+
+def _fmi_library(archive: Path) -> Any:
+    """Load the wrapper from an unpacked archive and declare its signatures."""
+    import ctypes
+
+    library = next(
+        path
+        for path in archive.glob("binaries/*/*")
+        if path.suffix in {".dll", ".so", ".dylib"}
+    )
+    lib = ctypes.CDLL(str(library))
+    lib.fmi2GetVersion.restype = ctypes.c_char_p
+    lib.fmi2Instantiate.restype = ctypes.c_void_p
+    lib.fmi2Instantiate.argtypes = [
+        ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p,
+        ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+    ]
+    lib.fmi2SetReal.argtypes = [
+        ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint), ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_double),
+    ]
+    lib.fmi2GetReal.argtypes = [
+        ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint), ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_double),
+    ]
+    lib.fmi2DoStep.argtypes = [
+        ctypes.c_void_p, ctypes.c_double, ctypes.c_double, ctypes.c_int
+    ]
+    lib.fmi2FreeInstance.argtypes = [ctypes.c_void_p]
+    return lib
+
+
+def _grid(resources: Path) -> tuple[float, float, int]:
+    """Return the (start, step, samples) the archive declares."""
+    for line in (resources / "bindings.txt").read_text().splitlines():
+        parts = line.split()
+        if parts[:1] == ["grid"]:
+            return float(parts[1]), float(parts[2]), int(parts[3])
+    raise AssertionError("the archive declares no time grid")
+
+
+def _drive(lib: Any, resources: Path, reference: int, driver: int, switch_at):
+    """Run the archive; return the named output at every sample."""
+    import ctypes
+
+    start, step, samples = _grid(resources)
+    instance = lib.fmi2Instantiate(
+        b"probe", 1, b"", str(resources).encode(), None, 0, 0
+    )
+    assert instance, "fmi2Instantiate failed"
+    out = ctypes.c_double(0.0)
+    ref = ctypes.c_uint(reference)
+    values = []
+    try:
+        for index in range(samples):
+            if switch_at is not None and index == switch_at:
+                value = ctypes.c_double(0.9)
+                iref = ctypes.c_uint(driver)
+                assert lib.fmi2SetReal(
+                    instance, ctypes.byref(iref), 1, ctypes.byref(value)
+                ) == 0
+            status = lib.fmi2DoStep(
+                instance, start + index * step, step, 1
+            )
+            assert status == 0, f"fmi2DoStep returned {status} at sample {index}"
+            status = lib.fmi2GetReal(instance, ctypes.byref(ref), 1, ctypes.byref(out))
+            assert status == 0, f"fmi2GetReal returned {status} at sample {index}"
+            values.append(out.value)
+        if switch_at is not None:
+            # Read the *past* again, after the switch.  `fmi2GetReal` reports the
+            # sample the clock is at out of whatever result is current, so a
+            # wrapper that re-ran the whole horizon from the new inputs would
+            # answer these differently than the untouched run did.  This is the
+            # read that makes the property observable: without it the prefix was
+            # collected before the switch and could never differ.
+            past = []
+            for index in range(switch_at):
+                lib.fmi2DoStep(instance, start + index * step, step, 0)
+                status = lib.fmi2GetReal(instance, ctypes.byref(ref), 1, ctypes.byref(out))
+                assert status == 0, f"fmi2GetReal returned {status} re-reading {index}"
+                past.append(out.value)
+            values.extend(past)
+    finally:
+        lib.fmi2FreeInstance(instance)
+    return values
+
+
+def _slip_reference(resources: Path) -> int:
+    """Return the valueReference bound to the tire's longitudinal slip column."""
+    for line in (resources / "bindings.txt").read_text().splitlines():
+        parts = line.split()
+        if parts[:2] == ["output", "16"] or (
+            len(parts) == 4 and parts[0] == "output" and parts[2] == "tire_output"
+            and parts[3] == "7"
+        ):
+            return int(parts[1])
+    raise AssertionError("the archive declares no tire_output column 7")
+
+
+def _driver_reference(resources: Path) -> int:
+    """
+    Return the valueReference of the brake-pressure input, by position 1.
+
+    `bindings.txt` lists the inputs in the exporter's own order: reference 0 is
+    the belt speed and reference 1 the brake pressure (see `raw/fmu_validation.md`).
+    """
+    references = [
+        int(line.split()[1])
+        for line in (resources / "bindings.txt").read_text().splitlines()
+        if line.startswith("input ")
+    ]
+    assert len(references) >= 2, references
+    return references[1]
+
+
+def test_the_clock_is_causal_a_later_input_does_not_rewrite_the_past(
+    exported, wrapper_binary, tmp_path: Path, monkeypatch
+) -> None:
+    """
+    Setting an input at t1 leaves the samples before t1 bit-for-bit unchanged.
+
+    Two runs of one archive: untouched, and with the brake raised at `_SWITCH_AT`.
+    The sample window behind the switch must be identical in both -- otherwise the
+    reported past is a function of what the simulator did next -- and the window
+    from the switch on must move.
+    """
+    import zipfile
+
+    result, *_ = exported
+    unpacked = tmp_path / "archive"
+    with zipfile.ZipFile(result.path) as archive:
+        archive.extractall(unpacked)
+
+    # The wrapper resolves the kernel through this variable; the test sets it to
+    # the mirror the package ships, so the archive loads its own solver.
+    kernel = (
+        Path(__file__).resolve().parents[2]
+        / "src" / "suspension_multibody" / "native" / "suspension_kernel.dll"
+    )
+    monkeypatch.setenv("SUSPENSION_MULTIBODY_KERNEL", str(kernel))
+
+    resources = unpacked / "resources"
+    lib = _fmi_library(unpacked)
+    slip = _slip_reference(resources)
+    driver = _driver_reference(resources)
+
+    untouched = _drive(lib, resources, slip, driver, None)
+    switched = _drive(lib, resources, slip, driver, _SWITCH_AT)
+
+    # The run that switched carries its forward samples first and then the
+    # re-read past, so the two windows are split by the run's own sample count.
+    _start, _step, samples = _grid(resources)
+    forward = switched[:samples]
+    reread_past = switched[samples:]
+
+    # The past is not rewritten: reading it *after* the switch gives the same
+    # numbers the untouched run gave at those instants.
+    assert reread_past == untouched[:_SWITCH_AT]
+
+    # And the switch really reaches the solve.
+    moved = max(
+        abs(a - b) for a, b in zip(untouched[_SWITCH_AT:], forward[_SWITCH_AT:])
+    )
+    assert moved > 1e-6, moved

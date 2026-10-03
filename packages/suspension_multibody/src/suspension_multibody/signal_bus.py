@@ -47,9 +47,9 @@ how to compute a force.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -131,59 +131,222 @@ class MeasurementChannel:
 @dataclass(frozen=True)
 class ActuatorChannel:
     """
-    One input a case document accepts, named once.
+    One input a document accepts, named once, with where the solver reads it.
 
-    ``path`` is where the value goes inside the case document, as a tuple of keys.
-    Writing returns a new document with that path set -- the same edit a caller
-    would make by hand -- so the bus never becomes a second way to influence a
-    solve, only a named way to say what to write.
+    A channel states the *document* it lands in and the edit that document
+    needs, because the two channels a caller wants are not the same kind of
+    thing: a damping coefficient is a number inside one element of the model
+    document's ``elements`` **array**, while a wheel moment is a column of a
+    case document's payload **blob**, reached through the descriptor that names
+    it.  Writing a nested mapping into either document -- which is what an
+    earlier version did -- produced a document the kernel never read: the array
+    is not a mapping, and the blob's bytes are what the reader dereferences.
     """
 
     name: str
     unit: str
-    #: Where the value lands in the case document.
-    path: tuple[str, ...]
+    #: Which document this channel writes: ``"model"`` or ``"case"``.
+    document: Literal["model", "case"] = "case"
+    #: The element name, for a channel that edits one entry of ``elements``.
+    element: str = ""
+    #: The element parameters this channel sets, all to the same value.
+    #:
+    #: A damper is not symmetric: the solver picks its coefficient from the sign
+    #: of the relative rate (negative is compression, positive is rebound), so a
+    #: channel that set only one of the two would move the run in one direction
+    #: and leave the other exactly as authored -- measured: setting only
+    #: `compression_damping` on a rig whose relative motion is an extension moved
+    #: the solved state by 0.0.
+    parameters: tuple[str, ...] = ()
+    #: The blob role, for a channel that edits a payload table.
+    role: str = ""
+    #: The entity the role's table is keyed by (a body or a tire name).
+    entity: str = ""
+    #: The columns of one table row this channel sets, as a slice of that row.
+    #:
+    #: A ``body_wrench`` row is ``[fx, fy, fz, mx, my, mz]``, so a moment channel
+    #: sets columns 3..6 and leaves the force columns exactly as the case stated
+    #: them.  Writing the whole row would silently zero a force the caller never
+    #: asked to change.
+    component: slice = slice(0, 0)
     note: str = ""
 
-    def write(self, case_document: Mapping[str, Any], value: float) -> dict[str, Any]:
+    def write(
+        self,
+        document: Mapping[str, Any],
+        blob: bytes,
+        value: float,
+        *,
+        sample: int = -1,
+    ) -> tuple[Mapping[str, Any], bytes]:
         """
-        Return ``case_document`` with this channel's path set to ``value``.
+        Return the document and blob this channel's value belongs in.
 
         The document is not mutated: a run's inputs are its own, and a bus that
         rewrote the caller's mapping would make "the run I already submitted" and
-        "the run I described" the same object.  Missing intermediate mappings are
-        created, because a case document omitting an optional input is legal.
+        "the run I described" the same object.
         """
         if not np.isfinite(value):
             raise BusError(
                 f"channel {self.name!r} was given {value!r}; an actuator command must "
                 "be a finite number"
             )
-        written = _copy_path(case_document, self.path)
-        target = written
-        for key in self.path[:-1]:
-            target = target[key]
-        target[self.path[-1]] = float(value)
-        return written
+        if self.element:
+            return _write_element_parameters(self, document, value), blob
+        if self.role:
+            return document, _write_blob_sample(self, document, blob, value, sample)
+        raise BusError(f"channel {self.name!r} states neither an element nor a role")
 
 
-def _copy_path(document: Mapping[str, Any], path: Sequence[str]) -> dict[str, Any]:
-    """Return a copy of ``document`` with the mappings along ``path`` copied."""
-    copied: dict[str, Any] = dict(document)
-    cursor = copied
-    for key in path[:-1]:
-        existing = cursor.get(key)
-        if existing is None:
-            cursor[key] = {}
-        elif not isinstance(existing, Mapping):
+def _write_element_parameters(
+    channel: ActuatorChannel, document: Mapping[str, Any], value: float
+) -> dict[str, Any]:
+    """
+    Set one parameter of one named element in a model document's array.
+
+    ``elements`` is a list, and each entry carries its own ``parameters``
+    mapping.  The entry is found by name -- never by position, which would
+    silently retarget if the assembly ever reordered its elements -- and a
+    document with no such element is refused by name rather than accepted and
+    ignored, because a write that lands nowhere is worse than a failed one.
+    """
+    written = dict(document)
+    elements = written.get("elements")
+    if not isinstance(elements, list):
+        raise BusError(
+            f"channel {channel.name!r} edits element {channel.element!r}, but the "
+            f"document's 'elements' holds {type(elements).__name__} rather than a list"
+        )
+    names: list[str] = []
+    patched: list[Any] = []
+    found = False
+    for entry in elements:
+        if not isinstance(entry, Mapping):
+            patched.append(entry)
+            continue
+        name = str(entry.get("name", ""))
+        names.append(name)
+        if name != channel.element:
+            patched.append(entry)
+            continue
+        parameters = dict(entry.get("parameters") or {})
+        missing = [name for name in channel.parameters if name not in parameters]
+        if missing:
             raise BusError(
-                f"{'.'.join(path)!r} passes through {key!r}, which holds "
-                f"{type(existing).__name__} rather than a mapping"
+                f"channel {channel.name!r} sets {missing}, which element "
+                f"{channel.element!r} does not carry; it has "
+                f"{sorted(parameters) if parameters else 'no parameters'}"
             )
-        else:
-            cursor[key] = dict(existing)
-        cursor = cursor[key]
-    return copied
+        for name in channel.parameters:
+            parameters[name] = float(value)
+        updated = dict(entry)
+        updated["parameters"] = parameters
+        patched.append(updated)
+        found = True
+    if not found:
+        raise BusError(
+            f"channel {channel.name!r} names element {channel.element!r} and the "
+            f"document carries no such element; it has {names or 'no elements'}"
+        )
+    written["elements"] = patched
+    return written
+
+
+def _write_blob_sample(
+    channel: ActuatorChannel,
+    document: Mapping[str, Any],
+    blob: bytes,
+    value: float,
+    sample: int,
+) -> bytes:
+    """
+    Write one sample of a payload table, at the descriptor's own offset.
+
+    The kernel reads a case table by *dereferencing* the descriptor's
+    ``offset``/``length`` inside the blob, so a value that is to reach the solver
+    has to be written into those bytes.  Setting a JSON key instead changes the
+    document and nothing else -- measured: the solved trajectory did not move at
+    all.  ``sample=-1`` writes the last sample, which is the one a caller
+    inspecting a settled run means by "the command".
+    """
+    entries = document.get("blobs")
+    if not isinstance(entries, list):
+        raise BusError(
+            f"channel {channel.name!r} edits role {channel.role!r}, but the document "
+            f"carries no 'blobs' list (it holds {type(entries).__name__})"
+        )
+    matches = [
+        entry
+        for entry in entries
+        if isinstance(entry, Mapping)
+        and entry.get("role") == channel.role
+        and entry.get("body", entry.get("tire")) == channel.entity
+    ]
+    if not matches:
+        described = sorted(
+            str(entry.get("role"))
+            for entry in entries
+            if isinstance(entry, Mapping) and entry.get("role")
+        )
+        raise BusError(
+            f"channel {channel.name!r} names role {channel.role!r} for "
+            f"{channel.entity!r}, and the document describes none; it has {described}"
+        )
+    descriptor = matches[0]
+    if descriptor.get("dtype") != "float64":
+        raise BusError(
+            f"channel {channel.name!r} writes float64 and role {channel.role!r} "
+            f"declares {descriptor.get('dtype')!r}"
+        )
+    offset = int(descriptor.get("offset", 0))
+    length = int(descriptor.get("length", 0))
+    count = length // 8
+    if count <= 0 or offset < 0 or offset + length > len(blob):
+        raise BusError(
+            f"channel {channel.name!r}: role {channel.role!r} declares offset={offset} "
+            f"length={length} in a {len(blob)}-byte blob"
+        )
+    index = count - 1 if sample < 0 else sample
+    if not 0 <= index < count:
+        raise BusError(
+            f"channel {channel.name!r} was given sample {sample}, and role "
+            f"{channel.role!r} carries {count} of them"
+        )
+    row = int(descriptor.get("shape", [count, 1])[1]) if isinstance(
+        descriptor.get("shape"), list
+    ) and len(descriptor.get("shape") or []) == 2 else 1
+    component = channel.component
+    if component == slice(0, 0):
+        # A channel that names no component addresses a one-value table, which is
+        # the whole row; anything wider would need the channel to say which
+        # column it means rather than have this guess.
+        component = slice(0, row)
+    if component.stop > row or component.start < 0:
+        raise BusError(
+            f"channel {channel.name!r} sets columns {component.start}..{component.stop} "
+            f"of a {row}-wide row"
+        )
+    rows = count // row if row else 0
+    if rows <= 0:
+        raise BusError(
+            f"channel {channel.name!r}: role {channel.role!r} declares a "
+            f"{row}-wide row in {count} values"
+        )
+    # The value reaches every sample of the slot unless one is named: a command
+    # that is to hold over the run is the ordinary case, and a partial write
+    # would leave a table whose earlier rows disagree with its later ones.
+    patched = bytearray(blob)
+    positions = range(rows) if sample < 0 else (sample,)
+    for position in positions:
+        if not 0 <= position < rows:
+            raise BusError(
+                f"channel {channel.name!r} was given sample {sample}, and role "
+                f"{channel.role!r} carries {rows} of them"
+            )
+        for column in range(component.start, component.stop):
+            start = offset + (position * row + column) * 8
+            patched[start : start + 8] = np.float64(value).tobytes()
+    return bytes(patched)
 
 
 #: The tire block's column holding the vertical contact force, in newtons.  The
@@ -274,20 +437,36 @@ ACTUATOR_CHANNELS: tuple[ActuatorChannel, ...] = (
     ActuatorChannel(
         name="variable_damping_L",
         unit="N*s/mm",
-        path=("elements", "damper_L", "parameters", "compression_damping"),
+        # The coefficient lives in the *model* document, inside one element of
+        # its ``elements`` array -- not at a nested key of the document root.
+        document="model",
+        element="damper_L",
+        # The solver picks compression or rebound from the sign of the relative
+        # rate, so "set the damper" means both directions: a channel that set one
+        # would silently leave the other at its authored value.
+        parameters=("compression_damping", "rebound_damping"),
         note=(
-            "the left damper's compression coefficient.  It lives in the model "
-            "document, so a write is a model edit: the same model re-submitted "
-            "with a different coefficient is a different run"
+            "the left damper's compression and rebound coefficients, set on that "
+            "element's own ``parameters``.  It lives in the model document, so a "
+            "write is a model edit: the same model re-submitted with different "
+            "coefficients is a different run"
         ),
     ),
     ActuatorChannel(
         name="motor_torque_FL",
         unit="N*mm",
-        path=("body_wrench", "front_wheel_hub_L", "moment"),
+        # The moment is a per-sample table in the case document's payload blob,
+        # found through the descriptor that names the body it acts on.
+        document="case",
+        role="body_wrench",
+        entity="front_wheel_hub_L",
+        # A wrench row is [fx, fy, fz, mx, my, mz]: this channel is the moment.
+        component=slice(3, 6),
         note=(
-            "the drive moment applied to the front left wheel hub, in the case "
-            "document's own body-wrench table"
+            "the drive moment applied to the front left wheel hub.  The kernel "
+            "reads this table by dereferencing its descriptor inside the case "
+            "blob, so the write lands in those bytes: a value set on the JSON "
+            "root would never reach the solver"
         ),
     ),
 )
@@ -369,6 +548,8 @@ class SignalBus:
 
     raw: Any = None
     case_document: Mapping[str, Any] | None = None
+    model_document: Mapping[str, Any] | None = None
+    case_blob: bytes | None = None
     measurements: tuple[MeasurementChannel, ...] = MEASUREMENT_CHANNELS
     actuators: tuple[ActuatorChannel, ...] = ACTUATOR_CHANNELS
 
@@ -402,32 +583,72 @@ class SignalBus:
         return self.measurement(name).read(self.raw, entity=entity, sample=sample)
 
     def write(
-        self, name: str, value: float, *, document: Mapping[str, Any] | None = None
-    ) -> dict[str, Any]:
+        self,
+        name: str,
+        value: float,
+        *,
+        document: Mapping[str, Any] | None = None,
+        blob: bytes | None = None,
+        sample: int = -1,
+    ) -> tuple[dict[str, Any], bytes]:
         """
-        Return the given document with one actuator channel set to ``value``.
+        Return the document and blob that carry this channel's value.
 
-        ``document`` defaults to the one the bus was opened with, and the original
-        is never mutated.
+        Which document the channel edits is the channel's own declaration: a
+        damping coefficient is a model edit, a wheel moment is a case-table edit.
+        ``document`` defaults to the matching one the bus was opened with, so a
+        caller that opened the bus over both halves does not have to say which.
+        The original is never mutated.
         """
-        target = self.case_document if document is None else document
+        channel = self.actuator(name)
+        target = self._document_for(channel, document)
         if target is None:
             raise BusError(
-                "this bus carries no document to write; pass one to `write`"
+                f"this bus carries no {channel.document} document to write; pass "
+                "one to `write`, or open the bus with the document this channel edits"
             )
-        return self.actuator(name).write(target, value)
+        current_blob = self.case_blob if blob is None else blob
+        if channel.role and current_blob is None:
+            raise BusError(
+                f"channel {name!r} writes a table in the case payload, and no blob "
+                "was supplied; the bytes the descriptor points at are what the "
+                "kernel reads, so a write without them cannot land"
+            )
+        return channel.write(
+            target, current_blob or b"", value, sample=sample
+        )
+
+    def _document_for(
+        self, channel: ActuatorChannel, override: Mapping[str, Any] | None
+    ) -> Mapping[str, Any] | None:
+        """Return the document one channel edits, honouring an explicit override."""
+        if override is not None:
+            return override
+        if channel.document == "model":
+            return self.model_document
+        return self.case_document
 
 
 def open_bus(
-    raw: Any = None, case_document: Mapping[str, Any] | None = None
+    raw: Any = None,
+    case_document: Mapping[str, Any] | None = None,
+    model_document: Mapping[str, Any] | None = None,
+    case_blob: bytes | None = None,
 ) -> SignalBus:
     """
-    Return a bus over a run's results and/or a case document.
+    Return a bus over a run's results and/or the documents it was submitted with.
 
-    Either half may be omitted: a controller that has only submitted its run reads
-    with the first, and one that is still authoring inputs writes with the second.
+    Any half may be omitted: a controller that has only submitted its run reads
+    with the first, and one that is still authoring inputs writes with the rest.
+    The blob is a parameter because a case table reaches the solver through its
+    bytes, and a writer that cannot see them cannot move the solve.
     """
-    return SignalBus(raw=raw, case_document=case_document)
+    return SignalBus(
+        raw=raw,
+        case_document=case_document,
+        model_document=model_document,
+        case_blob=case_blob,
+    )
 
 
 def measurement_channels_without_declaration(

@@ -1,0 +1,11 @@
+=== archive ===
+members: ['binaries/win64/suspension_multibody_axle.dll', 'modelDescription.xml', 'resources/bindings.txt', 'resources/case.bin', 'resources/model.bin']
+grid: start=0.0 step=0.001 samples=201
+fmi2GetVersion: 2.0
+driver input:0  slip output:16 ('tire_output', '0', '7')
+
+set the driver at sample 60
+  samples [0,60) identical bit-for-bit : True
+  max |change| at samples >= 60       : 1.993012e-01
+
+RESULT: PASS

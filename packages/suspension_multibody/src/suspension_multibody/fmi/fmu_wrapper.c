@@ -19,6 +19,7 @@
  * rather than lying about support.
  */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -375,10 +376,20 @@ FMI2_EXPORT fmi2Status fmi2SetReal(fmi2Component c, const fmi2ValueReference ref
         }
         variable->value = values[index];
         /* Write the value through to the bytes the kernel reads.  Every sample
-         * of the slot takes the same number: FMI has no vector-valued real, so
-         * the value a simulator sets is a constant profile over the horizon the
-         * case document states.  Without this the input would be a number in
-         * this struct and nothing the solver ever sees. */
+         * of the slot from the *current* time on takes the same number: FMI has
+         * no vector-valued real, so the value a simulator sets is a constant
+         * profile from here to the horizon the case document states.
+         *
+         * The write starts at the clock rather than at sample zero because the
+         * co-simulation clock is a causal boundary: a simulator that has already
+         * advanced past t1 must not have its history rewritten by an input it
+         * set at t1.  Writing every sample would make the whole trajectory --
+         * including the part already reported -- depend on the value set last,
+         * so the same step sequence would produce different past outputs
+         * depending on when the simulator stopped.  Keeping the earlier samples
+         * as submitted is what makes `fmi2DoStep` a step rather than a re-solve
+         * of a different problem.  Without this the input would also be a number
+         * in this struct and nothing the solver ever sees. */
         const size_t base = instance->case_blob_start + variable->offset;
         if (base + variable->count * sizeof(double) > instance->case_length) {
             snprintf(instance->error, ERROR_CAPACITY,
@@ -386,7 +397,22 @@ FMI2_EXPORT fmi2Status fmi2SetReal(fmi2Component c, const fmi2ValueReference ref
                      reference);
             return fmi2Error;
         }
-        for (size_t sample = 0; sample < variable->count; ++sample) {
+        size_t first = 0;
+        if (instance->grid_step > 0.0) {
+            const double elapsed = instance->time - instance->grid_start;
+            /* The first node *strictly after* the clock.  The kernel integrates
+             * the whole grid on every submit, so the state at a node depends on
+             * the input at every node up to and including it: leaving the node
+             * the clock sits on untouched is what keeps the sample the
+             * simulator already reported bit-for-bit identical, and starting at
+             * the next one is what makes the new value reach the solve. */
+            const double position = elapsed / instance->grid_step;
+            const double bounded = position > 0.0 ? position : 0.0;
+            const double later = floor(bounded) + 1.0;
+            first = (size_t)later;
+        }
+        if (first > variable->count) first = variable->count;
+        for (size_t sample = first; sample < variable->count; ++sample) {
             double written = (double)values[index];
             memcpy(instance->case_payload + base + sample * sizeof(double),
                    &written, sizeof(double));
