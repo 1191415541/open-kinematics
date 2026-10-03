@@ -372,7 +372,36 @@
 本轮为**规划轮**：`EPIC.md` + `SUBTASKS.csv` + `PROGRESS.md` 是交付物，**同时落盘全部 23 个子任务目录**（每个含 `SPEC.md` / `TODO.csv` / `PROGRESS.md` / `raw/`），使 `SUBTASKS.csv` 的 `task_dir` 真实存在、Epic 可执行且可冷启动恢复。子任务的 `SPEC.md` 写「要做什么、写哪些路径、判据与证据落在哪」，`TODO.csv` 是它的步骤表（初始 `TODO`），`PROGRESS.md` 是它的恢复块；子任务开工时按 SPEC 展开步骤，**不得**用规划文本冒充实施记录。临时脚本与中间日志写会话 scratch；`raw/` 只存**已执行**的证据，不存虚构结果。父 `SUBTASKS.csv` 管子任务状态，子 `TODO.csv` 管具体步骤，禁止相互替代。**本轮不将任何子任务置为 `DONE` 或 `IN_PROGRESS`。**
 ---
 
-## Epic 状态：**未结项**（2026-10-02 更新）
+## Epic 状态：**未结项**（2026-10-03 更新）
+
+**状态：27/28 DONE；p5-06 为 IN_PROGRESS。**
+
+### 2026-10-03：skip 阻断已解除
+
+本机安装 Adams 2025.1.1（`G:\MSC.Software\Adams5_1_1`，license passed），
+据 `regenerate_adams_reference.py` / `generate_adams_mode_reference.py` /
+`run_adams_car_handling_case(tire_model="fiala")` 重建了 `artifacts/` 的全部参考数据
+（逐条命令见 `tasks/p5-06-acceptance/raw/artifacts_rebuild.txt`）。效果：
+
+| 项 | 重建前 | 重建后 |
+|---|---|---|
+| `tests/adams` | 166 passed, 47 skipped | **213 passed, 0 skipped** |
+| 全量 | 1700 passed, 47 skipped, 1 xfailed | **1750 passed, 1 xfailed** |
+
+即 **0 skipped / 0 failed / 0 errors**，skip 由基线的 1 降到 **0**，xfail 与基线一致（1）。
+Done-When (i) 的「无新增 skip/xfail」**满足**。
+
+### 仍待修复的阻断项（复核裁决 `40d78977`）
+
+| 项 | 实测 |
+|---|---|
+| (h) p5-03 总线 | `variable_damping_L` 写入直接 `BusError`（`elements` 被当映射，实际是列表）；`motor_torque_FL` 写入成功但状态轨迹差 **0.000000e+00** |
+| (h) p5-04 闭环 | 误差随目标单调收缩成立，但缺固定目标下的收敛断言 |
+| (h) p5-05 FMU | 输入写入覆盖全时域、从原初值重算，缺时间因果性 |
+
+### 前一轮（2026-10-02）
+
+
 
 **状态：27/28 DONE；p5-06 为 IN_PROGRESS。**
 

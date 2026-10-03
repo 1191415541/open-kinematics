@@ -1,0 +1,18 @@
+=== 重建 artifacts/ 后 tests/adams 的 skip 归零（本人实跑）===
+
+$ uv run --no-sync pytest packages/suspension_multibody/tests/adams -q -p no:cacheprovider -rs
+213 passed in 974.76s  (0 skipped)
+
+$ uv run --no-sync pytest packages/suspension_multibody/tests -q -p no:cacheprovider
+1750 passed, 1 xfailed in 1811.61s  (0 skipped, 0 failed, 0 errors)
+
+--- 重建来源（Adams 2025.1.1 @ G:\MSC.Software\Adams\2025_1_1）---
+regenerate_adams_reference.py                        -> artifacts/adams-full-source-2025_1_1/step_steer
+regenerate_adams_reference.py --output-root artifacts/adams-full-source/step_steer
+  run_adams_car_handling_case(tire_model="fiala")    -> artifacts/adams-full-source-fiala/step_steer
+generate_adams_mode_reference.py --mode 23 --native-scope
+generate_adams_mode_reference.py --mode 24 --native-scope   (+ clone 复制为 pac2002_um24_native_scope.tir)
+generate_adams_mode_reference.py --mode 24 --native-scope --case parking_steer
+generate_adams_mode_reference.py --mode 25 --case parking_steer
+generate_adams_mode_reference.py --mode 3|4|13 --base-tire pac2002_235_60R16.tir
+artifacts/adams/correlation-reference-real-si/handling-pac2002-v1/step_steer  <- 取自 adams-full-source/step_steer
