@@ -3,7 +3,7 @@
 - 任务编号：20260929-multibody-evolution-p2-p5
 - 创建日期：2026-09-29
 - 形态：epic
-- 状态：**规划中**（规划轮已落盘，等待开工前独立审核与用户裁决 D1–D6）
+- 状态：**已结项**（28/28 DONE；2026-10-03 收口，终局验收全绿）
 - 真源：本目录 `SUBTASKS.csv`；子任务相对路径均相对此 Epic 目录解析。
 - 上游文档：`packages/suspension_multibody/docs/multibody_architecture_evolution.md`（ARCH-20260929-MULTIBODY-EVOLUTION，以下简称「路线图」）
 
@@ -372,32 +372,62 @@
 本轮为**规划轮**：`EPIC.md` + `SUBTASKS.csv` + `PROGRESS.md` 是交付物，**同时落盘全部 23 个子任务目录**（每个含 `SPEC.md` / `TODO.csv` / `PROGRESS.md` / `raw/`），使 `SUBTASKS.csv` 的 `task_dir` 真实存在、Epic 可执行且可冷启动恢复。子任务的 `SPEC.md` 写「要做什么、写哪些路径、判据与证据落在哪」，`TODO.csv` 是它的步骤表（初始 `TODO`），`PROGRESS.md` 是它的恢复块；子任务开工时按 SPEC 展开步骤，**不得**用规划文本冒充实施记录。临时脚本与中间日志写会话 scratch；`raw/` 只存**已执行**的证据，不存虚构结果。父 `SUBTASKS.csv` 管子任务状态，子 `TODO.csv` 管具体步骤，禁止相互替代。**本轮不将任何子任务置为 `DONE` 或 `IN_PROGRESS`。**
 ---
 
-## Epic 状态：**未结项**（2026-10-03 更新）
+## Epic 状态：**已结项**（2026-10-03 收口）
 
-**状态：27/28 DONE；p5-06 为 IN_PROGRESS。**
+**状态：28/28 DONE。** `p5-06`（阶段五终局验收）= `DONE`，`completed_at = 2026-10-03`，`retry_count = 0`。
 
-### 2026-10-03：skip 阻断已解除
+### 收口路径
 
-本机安装 Adams 2025.1.1（`G:\MSC.Software\Adams5_1_1`，license passed），
-据 `regenerate_adams_reference.py` / `generate_adams_mode_reference.py` /
-`run_adams_car_handling_case(tire_model="fiala")` 重建了 `artifacts/` 的全部参考数据
-（逐条命令见 `tasks/p5-06-acceptance/raw/artifacts_rebuild.txt`）。效果：
+上一轮的独立复核（code-reviewer `8ab15196`，处置裁决 `40d78977`）否决了「9/10 满足、Epic 可结项」的自我结论，
+判定 4 项未闭合。本轮逐项实证并就地修复后闭合：
 
-| 项 | 重建前 | 重建后 |
-|---|---|---|
-| `tests/adams` | 166 passed, 47 skipped | **213 passed, 0 skipped** |
-| 全量 | 1700 passed, 47 skipped, 1 xfailed | **1750 passed, 1 xfailed** |
+| 项 | 上一轮实测 | 本轮处置 | 结果 |
+|---|---|---|---|
+| (a) 力矩元条件调用 | `_build_wheel_torque_signals` 仍被无条件调用 | 改为仅 `torque_demand == "none"` 才调用；opt-in 路径不再读 `front_brake_bias` | **满足**（`4c9b283`；鉴别力已用 3 条新测试验证） |
+| (f) 轮端统一独立证据 | 未证实 | 独立产出：两侧经正常文档加载打开**同一份** wheel 文档（同路径、同 sha256），probe 体名到达两侧装配产物 | **满足**（`4c9b283`） |
+| (h) 总线写执行器 | `variable_damping_L` 写入直接 `BusError`；`motor_torque_FL` 写入后状态轨迹差 **0.0** | 修 `signal_bus.py` 执行器寻址（`elements` 是列表非映射；`body_wrench` 分量写路径）+ 内核 `variable_damping` 消费 | **满足**（`bd8d84c`） |
+| (h) ABS 闭环收敛 | 只有「误差随目标单调收缩」，缺固定目标下的收敛断言 | 重建 ABS 试验台（axle + prismatic 载体 + revolute 车轮 + fiala，轮胎 `frame_body="carrier"`），固定 `target=0.30` 尾段实测 ON `max(e)=0.0180` / `mean(e)=0.0180` / `ptp=2e-6`，OFF `mean(e)=0.2132`，ratio **0.0843** | **满足**（`7f51bb6` + 本轮测试载体 7 passed） |
+| (h) FMU 输入时间因果性 | `fmi2SetReal` 覆盖全时域、从原初值重算 | `fmi_wrapper.c` 自 `first = floor(elapsed/step)+1` 起写，保留时钟前输入历史 | **满足**（`bd8d84c`） |
+| (i) 无新增 skip/xfail | skip 由 1 增至 **47**（`artifacts/` 被误删、本机当时无 Adams） | 本机安装 Adams 2025.1.1，按 `tasks/p5-06-acceptance/raw/artifacts_rebuild.txt` 全量重建 `artifacts/` | **满足**（`a19c2a5`；skip 47 → **0**） |
 
-即 **0 skipped / 0 failed / 0 errors**，skip 由基线的 1 降到 **0**，xfail 与基线一致（1）。
-Done-When (i) 的「无新增 skip/xfail」**满足**。
+### 收口时暴露的两个真缺陷（产品缺陷，非判据之争）
 
-### 仍待修复的阻断项（复核裁决 `40d78977`）
+1. **轮胎接触帧未挂载体**：`tire_frame_body()`（`cpp/src/model/kernel_model_accessors.cpp:33-35`）在 `tire.frame_body < 0`
+   时回退到 `tire.body`；车身系轮胎挂在**自转**车轮上会使 `forward` 轴随车轮翻滚、滑移每半圈变号。整车族早已声明
+   `frame_body`（`preparation/vehicle_dynamic.py:1162-1209`），试验台此前未声明。
+2. **控制律只能削减**：`authority = clamp(1 + gain*(target - |slip|), 0, 1)`（`element/anti_roll.cpp:243-250`）在
+   `|slip| <= target` 时恒为 1。故闭环工况必须让**开环平衡滑移越过设定值**，否则 ON ≡ OFF（实测
+   `np.array_equal == True`）。这不是缺陷本身，但决定了 ABS 试验台的工况选择。
 
-| 项 | 实测 |
+### 终局验收实测（2026-10-03，全部在收口后重跑）
+
+| 门 | 实测 |
 |---|---|
-| (h) p5-03 总线 | `variable_damping_L` 写入直接 `BusError`（`elements` 被当映射，实际是列表）；`motor_torque_FL` 写入成功但状态轨迹差 **0.000000e+00** |
-| (h) p5-04 闭环 | 误差随目标单调收缩成立，但缺固定目标下的收敛断言 |
-| (h) p5-05 FMU | 输入写入覆盖全时域、从原初值重算，缺时间因果性 |
+| 全量回归 | `pytest packages/suspension_multibody/tests -q` → **1755 passed, 1 xfailed, 0 skipped, 0 failed, 0 errors**（1415.55 s） |
+| `tests/adams` | **213 passed, 0 skipped** |
+| `tests/architecture` | **147 passed** |
+| `suspension_kernel` + `suspension_contracts`（另起一次调用） | **79 passed** |
+| `ruff check .` / `ty check .` | 全仓 `All checks passed!` |
+| 三架构门 | `legacy_surface_gate.py --check` findings **0**；`check_module_layering.py --strict --final` **0 环**；`check_composable_release.py --skip-isolation` **3 PASS** |
+| 数值门三项 | sentinel 26 artifact 逐字节一致，combined sha256 `fdfd5a6ba50970571ac31eb278cf5c713964a43ba77cd74fc1011ec8651eebc9`（等于冻结值）；`case_parity_check.py`（**无参数**）**8 families PASS**；`kc_perf_gate.py --check` 预算内 |
+| 未写基线 | `git status --short -- packages/suspension_multibody/tests/data/` 为空 |
+
+**相对基线的 skip/xfail 变化**：**无新增**。实测 skipped **0**（基线 1，来自本机缺 Adams 的采集用例；装好 Adams 并对齐参考后本就不再跳过），
+xfailed **1** 与基线一致。测试计数较收口前 **+5**，全部为有意新增：`tests/cases/test_abs_closed_loop.py` 6→7、
+`tests/api/test_signal_bus.py` 13→16、`tests/api/test_fmu_export.py` 16→17。
+
+### Done-When (a)–(j)
+
+逐条实跑记录见 `tasks/p5-06-acceptance/raw/done_when_a_to_j.md`。**(a)–(j) 十条全部满足。**
+
+### 事故登记（如实保留）
+
+收口过程中修复 FMU 非 ASCII 路径缺陷时，首版用 `Path()`（即 `.`，在 Python 中恒为真值）当「无暂存目录」哨兵，
+`finally: shutil.rmtree(staged)` 因此执行了 `rmtree('.')`，删除了仓库根目录。`.git/objects` 幸存
+（271 commit / 3115 tree / 4288 blob），据此重建了全部跟踪文件；`artifacts/` 不可恢复，已由本机 Adams 重建。
+哨兵已改为 `None`（`grep -c "staged = Path()"` = 0）。
+
+---
 
 ### 前一轮（2026-10-02）
 

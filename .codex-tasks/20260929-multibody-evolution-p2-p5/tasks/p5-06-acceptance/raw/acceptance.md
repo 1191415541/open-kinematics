@@ -349,7 +349,8 @@ skipped：**47**（基线 1，**+46**），全部源于缺陷 C 的 `artifacts/`
 
 - 修复 A 与修复 B 合并后：`pytest tests/api tests/adams/test_full_vehicle_correlation.py tests/subsystems tests/architecture -q`
   → **427 passed**（EXIT=0）。
-- 全量合并后：**1700 passed / 47 skipped / 1 xfailed**（EXIT=0）。
+- 全量合并后（**当时快照**，`artifacts/` 尚未重建）：**1700 passed / 47 skipped / 1 xfailed**（EXIT=0）。
+  终态见第 6 节。
 - 内核重建后镜像新鲜：`build_axle_native.py` → `suspension_kernel.dll` 2251625 B。
 
 ---
@@ -360,7 +361,7 @@ skipped：**47**（基线 1，**+46**），全部源于缺陷 C 的 `artifacts/`
 判定该结论偏宽，处置裁决（`40d78977`）裁定**不能结项**。主代理逐条独立实证后确认成立，
 逐条处置见 `review_findings.md`。
 
-更正后的实测结论：
+更正后的实测结论（**当日读数，已被第 6 节取代**）：
 
 | Done-When | 结论 | 依据 |
 |---|---|---|
@@ -381,3 +382,30 @@ skipped：**47**（基线 1，**+46**），全部源于缺陷 C 的 `artifacts/`
 **已并入的真实缺陷修复**（提交 `7e9f2dd`）：FMU 构建在非 ASCII 仓库路径下的产物落盘；
 转向输出按声明口径换算。**待修复**（裁决 `40d78977`）：p5-03 总线写路径、
 p5-04 固定目标收敛断言、p5-05 FMU 输入时间因果性。
+
+---
+
+## 6. 终态结论（2026-10-03 收口 · **Epic 关闭**）
+
+第 5 节列出的全部未达成项与待修复项**已逐项就地修复并复验**，判据未弱化、基线未重录。
+
+| Done-When | 终态 | 依据 |
+|---|---|---|
+| (a) 力矩内建 | **满足** | `_build_wheel_torque_signals` 仅在 `torque_demand == "none"` 分支被调用（提交 `4c9b283`）；3 条新测试验证鉴别力（还原旧实现即失败）；默认路径 sentinel 逐字节一致、8 cases bit-identical |
+| (b)(c)(e)(g)(j) | **满足** | 同第 5 节；终局复跑未变 |
+| (d) 广义静平衡 | **满足** | 静平衡 4 项实证；动态通道子项由 `tests/metrics/test_placement_channels.py` 实跑覆盖——**7 passed**（2026-10-03 复跑），其中 `test_the_third_axle_of_a_six_wheel_run_is_a_real_placement_not_a_rounding` 断言纵向加速度下 `normal_load_axle_front` 下降、`normal_load_axle_rear` 上升、`load_transfer_front_minus_rear < 0` |
+| (f) 轮端统一 | **满足** | 两侧经正常文档加载打开同一份 wheel 文档（同解析路径、同 sha256），probe 体名到达两侧装配产物（提交 `4c9b283`） |
+| (h) 总线 | **满足** | `variable_damping_L` / `motor_torque_FL` 写入均成功**且改变同次仿真的状态轨迹**（提交 `bd8d84c`；`tests/api/test_signal_bus.py` 16 passed） |
+| (h) 闭环 | **满足** | ABS 试验台固定 `target=0.30`，尾段 `[120:201]` 实测 ON `mean(e)=0.0180` / `max(e)=0.0180` / `ptp=2e-6`，OFF `mean(e)=0.2132`，ratio **0.0843**；四条预置线全部满足。独立复核实跑吻合。取证 `raw/p504_convergence.md` |
+| (h) FMU | **满足** | 输入写入保留时钟前历史（自 `floor(elapsed/step)+1` 起），`tests/api/test_fmu_export.py` 17 passed；仓库外独立脚本轨迹断言（输入 `0.0→0.9` 使滑移时程最大差 **2.188280**） |
+| (i) 零回归 | **满足** | 本机 Adams 2025.1.1 重建 `artifacts/`，skip 47 → **0**（提交 `a19c2a5`）；全量 **1755 passed, 1 xfailed, 0 skipped, 0 failed, 0 errors**（2026-10-03 收口后重跑，1443.82 s）；`tests/data/` 未写 |
+
+**结论：Done-When (a)–(j) 十条全部满足。`p5-06 → DONE`（`completed_at = 2026-10-03`），
+`Counter({'DONE': 28})`，Epic 关闭。**
+
+**skip/xfail**：无新增。skipped **0**（基线 1，源于本机缺 Adams 的采集用例），xfailed **1** 与基线一致。
+测试计数 +5 全部为有意新增（`test_abs_closed_loop.py` 6→7、`test_signal_bus.py` 13→16、
+`test_fmu_export.py` 16→17），无不明的计数增长。
+
+**ABI**：本 Epic 仅发生 p2-02 一次变更（`16/31/1 → 17/32/1`）。D2 终裁（`a8312da6`）判定闭环
+**不需要**内核单步接口，`controller_output` 属结果契约扩展，故第二次 ABI 变更**未发生**。

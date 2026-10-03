@@ -2,18 +2,21 @@
 
 - 任务编号：20260929-multibody-evolution-p2-p5
 - 形态：epic
-- 状态：**规划中**（规划轮已落盘；等待开工前独立审核与用户裁决 D1–D6；前置阶段一未收口，任何行不得置 `IN_PROGRESS`）
-- 真源：本目录 `SUBTASKS.csv`（23 行；全部 `TODO`）
+- 状态：**已结项**（28/28 DONE；2026-10-03 收口，终局验收全绿）
+- 真源：本目录 `SUBTASKS.csv`（28 行；全部 `DONE`）
 - 上游文档：`packages/suspension_multibody/docs/multibody_architecture_evolution.md`
 
 ## 恢复块（冷启动从这里读）
 
 1. `任务:` 完成路线图阶段二~五（力矩内建与多轴转向、通用微分运动学、ARB 独立化与轮端统一、公共 API 与信号闭环总线）
 2. `形态:` epic
-3. `进度:` **0/23** 子任务完成（全部 `TODO`；本轮为规划轮，未动任何生产代码）
-4. `当前:` 规划已落盘（EPIC + SUBTASKS + 23 个子任务协议目录 + 本文件的总纲）；待裁决 D1–D6；待阶段一 Epic 收口
-5. `文件:` `.codex-tasks/20260929-multibody-evolution-p2-p5/{EPIC.md,SUBTASKS.csv,PROGRESS.md}`
-6. `下一步:` (1) 用户裁决 D1–D6；(2) 派只读 `code-reviewer` 做开工前独立审核（输入必须含路线图原文与本 EPIC）；(3) 等阶段一 Epic `20260929-assembly-layer-rework` 的 03–07 全部 `DONE`；(4) 从 `tasks/p2-01-freeze/` 开工
+3. `进度:` **28/28** 子任务完成（`Counter({'DONE': 28})`）
+4. `当前:` **Epic 已结项**（2026-10-03）。终局验收全绿：全量 **1755 passed, 1 xfailed, 0 skipped**；
+   `tests/adams` 213 passed / 0 skipped；`tests/architecture` 147 passed；kernel+contracts 79 passed；
+   ruff/ty 全仓 0；三架构门全绿；数值门三项全绿（sentinel combined sha256 逐字节等于冻结值）
+5. `文件:` `.codex-tasks/20260929-multibody-evolution-p2-p5/{EPIC.md,SUBTASKS.csv,PROGRESS.md}`；
+   证据见 `tasks/p5-06-acceptance/raw/done_when_a_to_j.md`
+6. `下一步:` 无（Epic 关闭）。若需回溯，先读本文件末尾的「2026-10-03 收口轮」一节与 EPIC.md 的「Epic 状态」一节
 
 ## 2026-09-29 第一轮：规划交付
 
@@ -306,3 +309,49 @@ p5-06 完成。Done-When (a)-(j) 逐条实跑（`tasks/p5-06-acceptance/raw/done
 三架构门全绿（findings 0 / 0 环 / 3 PASS）；数值门三项全绿（sentinel 26 artifact 逐字节一致，
 combined sha256 `fdfd5a6ba50970571ac31eb278cf5c713964a43ba77cd74fc1011ec8651eebc9` 等于冻结值；
 `case_parity` 8 families；`kc_perf` 预算内）。`tests/data` 未写。
+
+---
+
+## 2026-10-03 收口轮：p5-06 终局验收（Epic 28/28 DONE · 关闭）
+
+**状态**：`SUBTASKS.csv` 的 **p5-06 → DONE**（`completed_at = 2026-10-03`，`retry_count = 0`）。
+`Counter({'DONE': 28})`，Epic **关闭**。
+
+**背景**：上一轮的自我结论「9/10 满足、Epic 28/28 DONE」被独立复核（code-reviewer `8ab15196`，
+处置裁决 `40d78977`）否决，判定 (a)(f)(h)(i) 四项未闭合。本轮逐项实证并**就地修复**后闭合，
+不弱化任何判据、不重录任何基线。
+
+| 项 | 上一轮实测 | 本轮处置 | 结果 |
+|---|---|---|---|
+| (a) | `_build_wheel_torque_signals` 仍被无条件调用 | 改为仅 `torque_demand == "none"` 才调用；opt-in 路径不再读 `front_brake_bias` | 满足（`4c9b283`，3 条新测试验证鉴别力） |
+| (f) | 未证实 | 独立产出证据：两侧经正常文档加载打开同一份 wheel 文档（同路径、同 sha256） | 满足（`4c9b283`） |
+| (h) 总线 | `variable_damping_L` 写入直接 `BusError`；`motor_torque_FL` 写入后轨迹差 **0.0** | 修总线执行器寻址与内核消费路径 | 满足（`bd8d84c`） |
+| (h) 闭环 | 只有「误差随目标单调收缩」，缺固定目标收敛断言 | 重建 ABS 试验台并实跑固定目标收敛 | 满足（`7f51bb6` + 测试载体 7 passed） |
+| (h) FMU | 输入写入覆盖全时域、从原初值重算 | `fmi2SetReal` 自 `floor(elapsed/step)+1` 起写，保留时钟前历史 | 满足（`bd8d84c`） |
+| (i) | skip 由 1 增至 **47**（`artifacts/` 被误删、本机当时无 Adams） | 本机 Adams 2025.1.1 全量重建 `artifacts/` | 满足（`a19c2a5`，skip 47 → **0**） |
+
+**p5-04 收敛口径（不事后挑参数、不放宽预置线）**：预置线为 target=0.30 / 尾段 `[120:201]` /
+ON `max(e)≤0.05` 且 `mean(e)≤0.03` / OFF `mean(e)≥0.10` / ratio `≤0.8`，`sx` 读 `tire_output[:,0,10]`。
+达成靠修两个真缺陷（轮胎接触帧挂**不旋转的载体**而非自转车轮；开环平衡滑移必须越过设定值，
+因为 `authority` 在 `|slip| <= target` 时恒为 1）并让两个时间常数（`I·V/(r_l²·cslip)` ≈13 ms、
+`relax/V` ≈100 ms）远小于 0.2 s 窗口。实测 ON `mean(e)=0.0180` / `max(e)=0.0180` / `ptp=2e-6`，
+OFF `mean(e)=0.2132`，ratio **0.0843**。独立复核（explorer `8d135895`，实跑非采信）逐项吻合。
+证据：`tasks/p5-06-acceptance/raw/p504_convergence.md`。
+
+**终局验收实测（全部在收口后重跑）**：
+
+| 门 | 实测 |
+|---|---|
+| 全量回归 | **1755 passed, 1 xfailed, 0 skipped, 0 failed, 0 errors**（1415.55 s） |
+| `tests/adams` | **213 passed, 0 skipped** |
+| `tests/architecture` | **147 passed** |
+| `suspension_kernel` + `suspension_contracts` | **79 passed**（单独一次调用） |
+| `ruff check .` / `ty check .` | 全仓 0 |
+| 三架构门 | findings **0** / **0 环** / **3 PASS** |
+| 数值门三项 | sentinel 26 artifact 逐字节一致 + combined sha256 `fdfd5a6ba50970571ac31eb278cf5c713964a43ba77cd74fc1011ec8651eebc9`；`case_parity_check.py`（**无参数**）8 families PASS；`kc_perf_gate.py --check` 预算内 |
+| 未写基线 | `git status --short -- packages/suspension_multibody/tests/data/` 为空 |
+
+**skip/xfail**：无新增。实测 skipped **0**（基线 1，来自本机缺 Adams 的采集用例），xfailed **1** 与基线一致。
+测试计数 +5，全部为有意新增（`test_abs_closed_loop.py` 6→7、`test_signal_bus.py` 13→16、`test_fmu_export.py` 16→17）。
+
+**Done-When (a)–(j)**：**十条全部满足**，逐条实跑记录见 `tasks/p5-06-acceptance/raw/done_when_a_to_j.md`。

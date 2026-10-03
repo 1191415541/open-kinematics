@@ -1,0 +1,7 @@
+  k-100: median 0.8516 s, best 0.8488 s over 5 runs (100 states)
+  c-66: median 1.1946 s, best 1.1914 s over 5 runs (66 states)
+  k-100: 0.8488 s vs baseline 1.0230 s (x0.830)
+  c-66: 1.1914 s vs baseline 1.4904 s (x0.799)
+
+OK: benchmarks are within the recorded budget
+EXIT=0

@@ -1,10 +1,26 @@
 # p5-06 证据索引
 
+> **终态提示（2026-10-03 收口）**：Epic **28/28 DONE，已关闭**。下方 `.final.txt` 后缀的文件是
+> 收口后重跑的原文；不带后缀的是收口过程中的历史读数，保留为过程痕迹，**不代表终态**。
+> 主验收记录请直接读 `acceptance.md` 第 6 节「终态结论」。
+
 | 文件 | 内容 | 命令 | 退出码 |
 |---|---|---|---|
-| `acceptance.md` | **主验收记录**：Done-When (a)–(j)、缺陷 A/B/C、结论 | — | — |
-| `full_regression.txt` | 修复后全量原文 | `pytest packages/suspension_multibody/tests -q -p no:cacheprovider` | 0 |
-| `skip_register.txt` | 47 个 skip 逐条原文（`-rs`） | 同上 `-rs` | 0 |
+| `acceptance.md` | **主验收记录**：Done-When (a)–(j)、缺陷 A/B/C；**第 6 节为终态结论** | — | — |
+| `done_when_a_to_j.md` | (a)–(j) 逐条命令、退出码、依据行号（终态） | — | — |
+| `p504_convergence.md` | p5-04 ABS 固定目标收敛的达成过程与独立复核（§10） | 见文内 | 0 |
+| `full_regression.txt` | 全量原文（末尾追加 2026-10-03 收口后重跑：**1755 passed, 1 xfailed**） | `pytest packages/suspension_multibody/tests -q` | 0 |
+| `numeric_sentinel.final.txt` | sentinel 26 artifact / combined sha256（终态） | `dynamic_hash_sentinel.py --check` | 0 |
+| `numeric_case_parity.final.txt` | 8 families PASS（终态） | `case_parity_check.py`（无参数） | 0 |
+| `gate_kc_perf.final.txt` | 性能预算内（终态） | `kc_perf_gate.py --check` | 0 |
+| `gate_legacy_surface.final.txt` | findings 0（终态） | `legacy_surface_gate.py --check` | 0 |
+| `gate_module_layering.final.txt` | 0 环（终态） | `check_module_layering.py --strict --final` | 0 |
+| `gate_composable_release.final.txt` | 3 PASS（终态） | `check_composable_release.py --skip-isolation` | 0 |
+| `evidence_signal_bus.final.txt` | **16 passed**（终态） | `pytest tests/api/test_signal_bus.py -q` | 0 |
+| `evidence_abs_closed_loop.final.txt` | **7 passed**（终态） | `pytest tests/cases/test_abs_closed_loop.py -q` | 0 |
+| `evidence_fmu_export.final.txt` | **17 passed**（终态） | `pytest tests/api/test_fmu_export.py -q` | 0 |
+| `evidence_bus_fmu.final.txt` | **33 passed**（终态） | 总线 + FMU 合并 | 0 |
+| `skip_register.txt` | **历史**：`artifacts/` 缺失期间的 47 个 skip（已被取代） | 同上 `-rs` | 0 |
 | `numeric_sentinel.txt` | sentinel 26 artifact / combined sha256 | `dynamic_hash_sentinel.py --check` | 0 |
 | `numeric_case_parity.txt` | 8 families accepted | `case_parity_check.py`（无参数） | 0 |
 | `gate_kc_perf.txt` | 性能预算内 | `kc_perf_gate.py --check` | 0 |
@@ -26,6 +42,10 @@
 
 | 项 | 命令 | 结果 |
 |---|---|---|
+| (d) 动态通道子项 | `pytest tests/metrics/test_placement_channels.py -q` | **7 passed**；断言加速度下 front 降 / rear 升 / `load_transfer_front_minus_rear < 0` |
+| (h) 总线写改变轨迹 | `pytest tests/api/test_signal_bus.py -q` | **16 passed**；含 `test_a_damping_write_changes_the_solved_trajectory`、`test_a_motor_torque_write_changes_the_solved_trajectory`（断言 `delta > _TRAJECTORY_TOLERANCE`） |
+| (h) FMU 时间因果性 | `pytest tests/api/test_fmu_export.py -q` | **17 passed**；含 `test_the_clock_is_causal_a_later_input_does_not_rewrite_the_past` |
+| (h) ABS 收敛 | `raw/p504_convergence.md` §10 | 独立复核（`explorer 8d135895`）实跑复算：ON `mean(e)=0.017964`；ratio `0.084274`，与主代理读数吻合 |
 | (f) 全仓只有一个 `role = "wheel"` 子系统文件 | `grep -rln '^role = "wheel"' src/` | 唯一命中 `subsystems/wheel.py` |
 | (f) 该文件内容指纹 | `sha256sum src/suspension_multibody/subsystems/wheel.py` | `6313b9c8898f8d4b2ec0b35539d45f42c2c3c00bfdb6ddd3b9d01ebda3091729` |
 | (f) `VerticalTireElement` 在装配路径无命中 | `grep -c VerticalTireElement src/.../assembler.py` | `0` |

@@ -1,0 +1,9 @@
+release probe: E:\тс╪Ч\open-kinematics
+scratch      : C:\Users\zzy11\AppData\Local\Temp\suspension-release-qtl_68yh
+
+[PASS] migration list: 0 retained legacy imports (0 production, 0 test) and 4 retired packages gone
+[PASS] documentation roots: 16 documented modules present, 4 retired ones absent
+[PASS] documentation examples: 3 example(s) executed: E-1, E-2, E-3
+
+OK: 3 release checks passed
+EXIT=0

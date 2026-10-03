@@ -1,0 +1,47 @@
+=== p5-04 有效 ABS 工况诊断（按复核裁决 003e00a0 的诊断顺序）===
+
+构型（scratch: $PI_SCRATCH_DIR/p506/probe_abs_valid.py）:
+  ground(fixed) -> carrier(300kg, x 向 prismatic, 初速 10 m/s)
+                 -> wheel(20kg, y 向 revolute, 初速 10 m/s + 自旋 10/0.3)
+  轮胎 fiala; 制动力矩元 rotational_torque 接 carrier<->wheel, demand_source=2(brake)
+  road_velocity=0; 201 样本 / 0.2 s; 制动压力为坡道。
+
+--- 裁决步骤 1：OFF 恒定压力尾段能否达到 target=0.30？ ---
+
+  peak=0.05: tail |sx| mean=0.2559 min=0.0877 max=0.5311
+  peak=0.10: tail |sx| mean=0.2547 min=0.0806 max=0.5267
+  peak=0.20: tail |sx| mean=0.2579 min=0.0685 max=0.5180
+  peak=0.30: tail |sx| mean=0.2645 min=0.0583 max=0.5104
+  peak=0.50: tail |sx| mean=0.2802 min=0.0411 max=0.4891
+  peak=0.80: tail |sx| mean=0.3286 min=0.0510 max=0.4486   <-- 可达/超过 target
+  peak=1.00: tail |sx| mean=0.3762 min=0.1467 max=0.4141   <-- 可达
+
+结论：peak>=0.8 时 OFF 能越过 target，故执行器权限不是限制。
+
+--- 裁决步骤 2：peak=1.0（可越过 target），target=0.30，尾段 [120:201]，扫 gain ---
+
+  gain=2000: ON max_e=0.2149 mean_e=0.1354 band[0.085,0.490] OFF mean_e=0.1028 ratio=1.316
+  gain= 500: ON max_e=0.2149 mean_e=0.1354 band[0.085,0.490] OFF mean_e=0.1028 ratio=1.316
+  gain= 200: ON max_e=0.2155 mean_e=0.1354 band[0.084,0.489] OFF mean_e=0.1028 ratio=1.316
+  gain=  50: ON max_e=0.2155 mean_e=0.1348 band[0.084,0.487] OFF mean_e=0.1028 ratio=1.311
+  gain=  20: ON max_e=0.2131 mean_e=0.1334 band[0.087,0.485] OFF mean_e=0.1028 ratio=1.297
+  gain=   5: ON max_e=0.2072 mean_e=0.1228 band[0.093,0.455] OFF mean_e=0.1028 ratio=1.194
+
+--- 裁决步骤 3：放缓压力坡道 ---
+
+  rise=0.02: ON mean_e=0.1354 max=0.2155 band[0.084,0.489] OFF mean_e=0.1028 ratio=1.316
+  rise=0.05: ON mean_e=0.1470 max=0.2422 band[0.058,0.503] OFF mean_e=0.1365 ratio=1.077
+  rise=0.10: ON mean_e=0.1508 max=0.2497 band[0.050,0.519] OFF mean_e=0.1676 ratio=0.900
+
+--- 裁决步骤 4：延长时限（瞬态是否衰减？） ---
+
+  2 s 时限（2001 样本）在 t=0.4415 s 报 status 5: Newton solve did not converge。
+  即瞬态不衰减，窗口不是问题。
+
+--- 诊断结论 ---
+
+该构型的 |sx| 尾段带宽始终约 [0.05, 0.52]，与 pressure peak、gain、坡道快慢基本无关，
+且 controller_output 显示 demand 在 0 与 driver 之间开关式摆动。
+满足不了复核预置的验收线（ON 尾段 max(e)<=0.05、mean(e)<=0.03、ON<=0.8*OFF）。
+原因是该装置缺少可衰减瞬态的耗散路径（prismatic+revolute 理想关节、无悬挂阻尼），
+轮胎松弛态在制动下形成极限环而非收敛到工作点。
