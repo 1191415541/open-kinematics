@@ -141,7 +141,7 @@ int main() {
   check(contract_case_family_known("ride_four_post"), "four-post case family known");
   check(!contract_case_family_known("rally"), "unknown case family rejected");
   check(contract_registry_size(0) == 10, "ten joint types registered");
-  check(contract_registry_size(1) == 11, "eleven element types registered");
+  check(contract_registry_size(1) == 14, "fourteen element types registered");
   check(contract_registry_size(2) == 4, "four tire models registered");
   check(contract_registry_size(3) == 8, "eight case families registered");
 

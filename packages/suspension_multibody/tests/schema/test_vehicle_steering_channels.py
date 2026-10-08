@@ -1,7 +1,7 @@
 """
 The steering-channel declarations, and what they must not change.
 
-Subtask p2-06 keeps `VehicleModel.steering` exactly what it was -- the mandatory
+Subtask p2-06 keeps `VehicleDeclaration.steering` exactly what it was -- the mandatory
 compatibility primary channel -- and adds the *additional* channels beside it as
 `steering_channels`, excluded from `model_dump` for the same reason several other
 fields are: `api.py` hashes that dump into `Provenance.model_hash`.
@@ -23,11 +23,8 @@ import pytest
 from pydantic import ValidationError
 
 from suspension_multibody.io import canonical_hash
-from suspension_multibody.schema import (
-    SteeringChannelSpec,
-    SteeringSystemSpec,
-    VehicleModel,
-)
+from suspension_multibody.schema import SteeringChannelSpec, SteeringSystemSpec
+from suspension_multibody.schema.vehicle import VehicleDeclaration
 
 #: `canonical_hash(model.model_dump(mode="json"))` for the `full_vehicle_model`
 #: fixture as it stood before steering channels existed.  Recorded rather than
@@ -38,7 +35,7 @@ FROZEN_ONE_CHANNEL_HASH = (
 )
 
 
-def test_the_model_still_has_twelve_dumped_keys(full_vehicle_model: VehicleModel) -> None:
+def test_the_model_still_has_twelve_dumped_keys(full_vehicle_model: VehicleDeclaration) -> None:
     """The dump's key set is the model's public shape, and it did not move."""
     payload = full_vehicle_model.model_dump(mode="json")
 
@@ -62,7 +59,7 @@ def test_the_model_still_has_twelve_dumped_keys(full_vehicle_model: VehicleModel
 
 
 def test_the_declared_channel_adds_no_key_to_the_dump(
-    full_vehicle_model: VehicleModel,
+    full_vehicle_model: VehicleDeclaration,
 ) -> None:
     """
     A second channel is declared, and the hash does not move.
@@ -92,7 +89,7 @@ def test_the_declared_channel_adds_no_key_to_the_dump(
 
 
 def test_the_one_channel_hash_is_the_recorded_value(
-    full_vehicle_model: VehicleModel,
+    full_vehicle_model: VehicleDeclaration,
 ) -> None:
     """The frozen reference itself, measured against the fixture."""
     assert (
@@ -103,15 +100,15 @@ def test_the_one_channel_hash_is_the_recorded_value(
 
 def test_steering_remains_a_required_singleton() -> None:
     """`steering` was, and is, the one field a vehicle cannot leave out."""
-    assert VehicleModel.model_fields["steering"].is_required()
-    assert "steering" in VehicleModel.model_fields
-    assert "steering_channels" in VehicleModel.model_fields
+    assert VehicleDeclaration.model_fields["steering"].is_required()
+    assert "steering" in VehicleDeclaration.model_fields
+    assert "steering_channels" in VehicleDeclaration.model_fields
     # The additional channels are optional and default to none of them.
-    assert not VehicleModel.model_fields["steering_channels"].is_required()
+    assert not VehicleDeclaration.model_fields["steering_channels"].is_required()
 
 
 def test_the_primary_channel_is_addressable_and_placed_by_default(
-    full_vehicle_model: VehicleModel,
+    full_vehicle_model: VehicleDeclaration,
 ) -> None:
     """The compatibility channel carries the name and placement it always had."""
     assert full_vehicle_model.steering.channel_name == "front_rack"
@@ -131,7 +128,7 @@ def test_a_channel_name_is_stated_by_the_additional_channel() -> None:
         SteeringChannelSpec(rack_body="rack", ratio=1.0, channel_name="rear_rack")
 
 
-def _with_channels(full_vehicle_model: VehicleModel, **updates) -> VehicleModel:
+def _with_channels(full_vehicle_model: VehicleDeclaration, **updates) -> VehicleDeclaration:
     """
     Return the fixture vehicle with ``updates`` applied, *through validation*.
 
@@ -140,11 +137,11 @@ def _with_channels(full_vehicle_model: VehicleModel, **updates) -> VehicleModel:
     always be "the object was copied".  Re-validating the fields is what puts the
     question to `_topology`, which is where the rules live.
     """
-    return VehicleModel.model_validate(
+    return VehicleDeclaration.model_validate(
         {
             **{
                 name: getattr(full_vehicle_model, name)
-                for name in VehicleModel.model_fields
+                for name in VehicleDeclaration.model_fields
             },
             **updates,
         }
@@ -152,7 +149,7 @@ def _with_channels(full_vehicle_model: VehicleModel, **updates) -> VehicleModel:
 
 
 def test_two_channels_with_one_name_are_refused_by_name(
-    full_vehicle_model: VehicleModel,
+    full_vehicle_model: VehicleDeclaration,
 ) -> None:
     """A duplicated name would make the channel unaddressable."""
     with pytest.raises(ValidationError, match="rear_rack"):
@@ -186,7 +183,7 @@ def test_two_channels_with_one_name_are_refused_by_name(
 
 
 def test_two_channels_at_one_placement_are_refused_by_name(
-    full_vehicle_model: VehicleModel,
+    full_vehicle_model: VehicleDeclaration,
 ) -> None:
     """Two channels at one placement would drive the same axle twice."""
     with pytest.raises(ValidationError, match="rear"):
@@ -206,7 +203,7 @@ def test_two_channels_at_one_placement_are_refused_by_name(
         )
 
 
-def test_a_blank_primary_name_is_refused(full_vehicle_model: VehicleModel) -> None:
+def test_a_blank_primary_name_is_refused(full_vehicle_model: VehicleDeclaration) -> None:
     """A channel addressed by whitespace has no name to be addressed by."""
     with pytest.raises(ValidationError, match="channel_name"):
         _with_channels(
@@ -217,7 +214,7 @@ def test_a_blank_primary_name_is_refused(full_vehicle_model: VehicleModel) -> No
         )
 
 
-def test_a_blank_primary_placement_is_refused(full_vehicle_model: VehicleModel) -> None:
+def test_a_blank_primary_placement_is_refused(full_vehicle_model: VehicleDeclaration) -> None:
     """A channel that steers no named axle would have its rack resolved by guessing."""
     with pytest.raises(ValidationError, match="placement"):
         _with_channels(
@@ -226,7 +223,7 @@ def test_a_blank_primary_placement_is_refused(full_vehicle_model: VehicleModel) 
         )
 
 
-def test_an_actuator_against_itself_is_refused(full_vehicle_model: VehicleModel) -> None:
+def test_an_actuator_against_itself_is_refused(full_vehicle_model: VehicleDeclaration) -> None:
     """
     A channel whose actuator body and reaction body are the same is not a load path.
 
@@ -245,7 +242,7 @@ def test_an_actuator_against_itself_is_refused(full_vehicle_model: VehicleModel)
         )
 
 
-def test_an_empty_body_name_is_refused(full_vehicle_model: VehicleModel) -> None:
+def test_an_empty_body_name_is_refused(full_vehicle_model: VehicleDeclaration) -> None:
     """A channel naming an empty rack body names no rack."""
     with pytest.raises(ValidationError, match="rack_body"):
         _with_channels(
@@ -265,7 +262,7 @@ def test_the_spec_is_a_public_schema_name() -> None:
 
 
 def test_channel_identity_is_not_read_off_a_placement_name(
-    full_vehicle_model: VehicleModel,
+    full_vehicle_model: VehicleDeclaration,
 ) -> None:
     """
     Nothing in the model refuses a channel because of the word it places itself at.

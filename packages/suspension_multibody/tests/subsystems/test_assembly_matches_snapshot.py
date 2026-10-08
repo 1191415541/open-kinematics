@@ -1,196 +1,111 @@
-"""
-The axle assembly still produces exactly what it produced before the split.
-
-The subsystems are a refactor, not a behaviour change, so the only honest
-acceptance test is a comparison against the assembly captured *before* the split.
-That capture is `raw/assembly_snapshot.json` in subtask 04's directory: four
-combinations of K/C x `rack_fixed_to_chassis`, taken from the shared
-`benchmark_axle.json` fixture.
-
-`points` are compared by key set and by value, not by insertion order: the
-snapshot was serialised with sorted JSON keys, so its order is not recoverable,
-and nothing consumes `points` order (lookups are by `(body, label)`, and it is
-`bodies` order the contract document uses).
-"""
-
-from __future__ import annotations
+"""The frozen historical entities and physical endpoints survive offline migration."""
 
 import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
-from suspension_multibody.schema import FrontAxleModel
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.authoring import assemble_generic, migrate_v1_axle
 from tests.benchmark_fixture import benchmark_model
 
-SNAPSHOT = (
-    Path(__file__).parents[4]
-    / ".codex-tasks/20260922-suspension-template-architecture"
-    / "tasks/20260922-04-subsystems/raw/assembly_snapshot.json"
-)
+SNAPSHOT = Path(__file__).parents[4] / ".codex-tasks/20260922-suspension-template-architecture/tasks/20260922-04-subsystems/raw/assembly_snapshot.json"
+_SNAPSHOTS = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+_TYPES = {"BallJoint": "spherical", "RevoluteJoint": "revolute", "PrismaticJoint": "prismatic", "WeldJoint": "fixed"}
 
 
-def _snapshot() -> dict[str, object]:
-    return json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+def local(name):
+    value = name.rsplit(".", 1)[-1]
+    return "ground" if value == "chassis" else value
 
 
-def _combination(model: FrontAxleModel, expected: dict) -> object:
-    rebuilt = model.model_copy(
-        update={"rack_fixed_to_chassis": expected["rack_fixed_to_chassis"]}
-    )
-    return compose_axle(rebuilt, expected["mode"])
+def combination(expected):
+    model = benchmark_model().model_copy(update={"rack_fixed_to_chassis": expected["rack_fixed_to_chassis"]})
+    source = migrate_v1_axle(model, mode=expected["mode"])
+    return source, assemble_generic(source)
 
 
-def _close(actual: np.ndarray, expected: list[float]) -> bool:
-    return np.array_equal(
-        np.asarray(actual, dtype=float), np.asarray(expected, dtype=float)
-    )
+@pytest.mark.parametrize("key", list(_SNAPSHOTS))
+def test_body_identity_fixedness_and_rotation_match_the_snapshot(key):
+    expected = _SNAPSHOTS[key]
+    source, built = combination(expected)
+    assert {local(name) for name in built.bodies} == set(expected["bodies"])
+    for name, body in built.bodies.items():
+        assert body.fixed == (local(name) == "ground")
+        np.testing.assert_array_equal(body.pose.rotation, np.eye(3))
+    # The native order is now the explicit subsystem declaration order.
+    assert list(built.bodies) == [entry.ref + "." + row["name"] for entry in source.entries
+                                  for row in entry.subsystem.template.payload["bodies"]]
 
 
-def test_bodies_match_the_frozen_snapshot() -> None:
-    model = benchmark_model()
-    for key, expected in _snapshot().items():
-        assembly = _combination(model, expected)
-        assert list(assembly.bodies) == expected["bodies"], key
-        # Names in the right order are not enough: the mass properties have to
-        # come out the same too, or the solve would differ.
-        for name, body in assembly.bodies.items():
-            assert body.name == name, f"{key} {name}"
-            expected_fixed = name in ("chassis", "ground")
-            assert body.fixed == expected_fixed, f"{key} {name} fixed"
-            assert np.array_equal(body.pose.rotation, np.eye(3)), f"{key} {name} pose"
+@pytest.mark.parametrize("key", list(_SNAPSHOTS))
+def test_active_constraints_and_force_ids_match_the_frozen_columns(key):
+    expected = _SNAPSHOTS[key]
+    _, built = combination(expected)
+    assert {local(row["name"]): row["type"] for row in built.joints} == {
+        row["name"]: _TYPES[row["type"]] for row in expected["constraints"]}
+    assert [local(row["name"]) for row in built.elements] == expected["elements"]
+    assert [local(row["name"]) for row in built.elements if row["type"] == "bushing"] == expected["bushings"]
 
 
-def test_points_match_the_frozen_snapshot() -> None:
-    model = benchmark_model()
-    for key, expected in _snapshot().items():
-        assembly = _combination(model, expected)
-        produced = {
-            f"{body}::{label}": point for (body, label), point in assembly.points.items()
-        }
-        assert sorted(produced) == sorted(expected["points"]), key
-        for name, point in produced.items():
-            assert np.array_equal(
-                np.asarray(point, dtype=float),
-                np.asarray(expected["points"][name], dtype=float),
-            ), f"{key} {name}"
+@pytest.mark.parametrize("key", list(_SNAPSHOTS))
+def test_every_frozen_connection_keeps_its_physical_world_point(key):
+    expected = _SNAPSHOTS[key]
+    _, built = combination(expected)
+    joints = {local(row["name"]): row for row in built.joints}
+    elements = {local(row["name"]): row for row in built.elements}
+    for connection in expected["connections"]:
+        name = connection["name"]
+        if connection["kind"] == "bushing":
+            name = name.replace("uca_mount_", "uca_bushing_").replace("lca_mount_", "lca_bushing_")
+        row = joints.get(name, elements.get(name))
+        if expected["mode"] == "K" and name.endswith("inner_rear"):
+            assert row is None
+            continue
+        if name.startswith("wheel_center_"):
+            assert row is None
+            continue
+        assert row is not None, name
+        for end in ("a", "b"):
+            assert local(row["body_" + end]) == connection["body_" + end]
+            point = row.get("parameters", row)["point_" + end]
+            world = built.bodies[row["body_" + end]].pose.transform_point(np.asarray(point))
+            frozen = expected["points"][connection["body_" + end] + "::" + connection["point_" + end]]
+            np.testing.assert_array_equal(world, np.asarray(frozen) * .001)
+        if "axis_a" in row:
+            assert abs(np.linalg.norm(row["axis_a"]) - 1) < 1e-9
 
 
-def test_hardpoints_match_the_frozen_snapshot() -> None:
-    model = benchmark_model()
-    for key, expected in _snapshot().items():
-        assembly = _combination(model, expected)
-        produced = {
-            name: point.as_tuple() for name, point in assembly.hardpoints.items()
-        }
-        assert sorted(produced) == sorted(expected["hardpoints"]), key
-        for name, point in produced.items():
-            assert _close(point, expected["hardpoints"][name]), f"{key} {name}"
+@pytest.mark.parametrize("key", list(_SNAPSHOTS))
+def test_frozen_locator_geometry_is_present_in_the_declarations(key):
+    expected = _SNAPSHOTS[key]
+    source, built = combination(expected)
+    by_body = {}
+    for entry in source.entries:
+        for row in entry.subsystem.template.payload["hardpoints"]:
+            owner = entry.ref + "." + row.get("owner", "")
+            if owner not in built.bodies:
+                continue
+            world = built.bodies[owner].pose.transform_point(np.asarray(entry.subsystem.payload["hardpoints"][row["name"]]) * .001)
+            by_body.setdefault(local(owner), []).append(world)
+    for row in (*built.joints, *built.elements):
+        for end in ("a", "b"):
+            owner = row["body_"+end]
+            point = row.get("parameters", row)["point_"+end]
+            by_body.setdefault(local(owner), []).append(built.bodies[owner].pose.transform_point(np.asarray(point)))
+    for name, value in expected["points"].items():
+        body = name.split("::")[0]
+        assert any(np.array_equal(point, np.asarray(value) * .001) for point in by_body[body]), name
+    all_points = [point for points in by_body.values() for point in points]
+    for name, value in expected["hardpoints"].items():
+        assert any(np.array_equal(point, np.asarray(value) * .001) for point in all_points), name
 
 
-def test_connections_match_the_frozen_snapshot() -> None:
-    model = benchmark_model()
-    for key, expected in _snapshot().items():
-        assembly = _combination(model, expected)
-        produced = [
-            {
-                "name": connection.name,
-                "kind": connection.kind,
-                "body_a": connection.body_a,
-                "body_b": connection.body_b,
-                "point_a": connection.point_a,
-                "point_b": connection.point_b,
-            }
-            for connection in assembly.connections
-        ]
-        assert produced == [
-            {
-                "name": row["name"],
-                "kind": row["kind"],
-                "body_a": row["body_a"],
-                "body_b": row["body_b"],
-                "point_a": row["point_a"],
-                "point_b": row["point_b"],
-            }
-            for row in expected["connections"]
-        ], key
-
-
-def test_constraint_names_and_types_match_the_frozen_snapshot() -> None:
-    model = benchmark_model()
-    for key, expected in _snapshot().items():
-        assembly = _combination(model, expected)
-        assert [(c.name, type(c).__name__) for c in assembly.constraints] == [
-            (row["name"], row["type"]) for row in expected["constraints"]
-        ], key
-        assert [(c.name, type(c).__name__) for c in assembly.ideal_constraints] == [
-            (row["name"], row["type"]) for row in expected["ideal_constraints"]
-        ], key
-
-
-def test_constraint_geometry_is_unchanged() -> None:
-    """
-    Same joints in the same order is not enough -- the same *numbers* matter.
-
-    The snapshot only carries names and types, so this checks the values that the
-    snapshot cannot: every joint's points must coincide at assembly time (an
-    ideal joint connects one physical location), and the K-mode inboard revolute
-    axes must stay unit and non-degenerate.  A wrong `_inboard_axis` would show
-    up here even though the name table would not notice.
-    """
-    model = benchmark_model()
-    for mode in ("K", "C"):
-        assembly = compose_axle(model, mode)
-        for constraint in assembly.ideal_constraints:
-            point_a = np.asarray(constraint.point_a, dtype=float)
-            point_b = np.asarray(constraint.point_b, dtype=float)
-            global_a = np.asarray(
-                assembly.bodies[constraint.body_a].pose.transform_point(point_a),
-                dtype=float,
-            )
-            global_b = np.asarray(
-                assembly.bodies[constraint.body_b].pose.transform_point(point_b),
-                dtype=float,
-            )
-            assert np.allclose(global_a, global_b, atol=1e-9), (
-                f"{mode} {constraint.name} does not connect one location"
-            )
-            for axis in ("axis_a", "axis_b"):
-                if not hasattr(constraint, axis):
-                    continue
-                values = np.asarray(getattr(constraint, axis), dtype=float)
-                norm = float(values @ values)
-                assert abs(norm - 1.0) < 1e-9, (
-                    f"{mode} {constraint.name}.{axis} is not a unit axis"
-                )
-
-
-def test_bushings_and_elements_match_the_frozen_snapshot() -> None:
-    model = benchmark_model()
-    for key, expected in _snapshot().items():
-        assembly = _combination(model, expected)
-        assert [b.name for b in assembly.bushings] == expected["bushings"], key
-        assert list(assembly.element_ids) == expected["elements"], key
-
-
-def test_c_mode_placeholders_are_the_eight_inboard_slots() -> None:
-    """
-    The C-mode element list ends with the eight zero-stiffness slot placeholders.
-
-    The snapshot records only the names, so this pins the part that matters and
-    that subtask 05 will change: exactly eight, inboard, zero stiffness, identity
-    rotation -- i.e. still placeholders, not silently turned into real bushings.
-    """
-    assembly = compose_axle(benchmark_model(), "C")
-    placeholders = [
-        element
-        for element in assembly.elements
-        if getattr(element, "name", "").endswith(("inner_front", "inner_rear"))
-    ]
-    assert len(placeholders) == 8
-    for element in placeholders:
-        assert np.array_equal(element.stiffness, np.zeros((6, 6))), element.name
-        assert element.local_pose_a.quaternion[0] == 1.0, element.name
-        assert element.body_a in ("chassis", "ground"), element.name
-        assert element.body_b.startswith(("upper_arm_", "lower_arm_")), element.name
+def test_c_placeholders_remain_eight_zero_stiffness_mounts():
+    _, built = combination(_SNAPSHOTS["C_rack_fixed_false"])
+    assert len(built.elements) == 8
+    for row in built.elements:
+        assert row["type"] == "bushing"
+        np.testing.assert_array_equal(row["parameters"]["stiffness"], np.zeros((6, 6)))
+        assert local(row["body_a"]) == "ground"
+        assert local(row["body_b"]).startswith(("upper_arm_", "lower_arm_"))

@@ -8,13 +8,24 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from ..api import run_dynamic_case
-from ..schema import DynamicCaseSpec, FrontAxleModel, TimeSignal
+import numpy as np
+
+from ..api import validate
+from ..authoring import (
+    AssemblyDocument,
+    CaseDocument,
+    SubsystemDocument,
+    TemplateDocument,
+)
+from ..results.envelope import ResultEnvelope
+from ..schema import DynamicCaseSpec, TimeSignal, UnitSystem
+from ..schema.model import AxleDeclaration
+from ..simulation.runner import run_compiled
 from .probe import AdamsProfile, _adams_environment, producer_id
 from .time_domain import (
     AdamsResultChannel,
+    TimeHistory,
     TimeHistoryTolerance,
-    history_from_result_series,
     parse_adams_result_history,
     write_time_history,
 )
@@ -27,9 +38,59 @@ from .time_domain_gate import (
 VEHICLE_KC_CHANNELS = ("body_roll",)
 
 
+def _roll_time_history(case: DynamicCaseSpec, roll: TimeSignal) -> TimeHistory:
+    """Submit the same rigid-body rotational fixture used by the Adams runner."""
+    from ..authoring.signals import time_grid
+
+    assert case.vehicle is not None
+    scale = .001 if case.units == UnitSystem.ENGINEERING else 1
+    common = {"document": "template", "schema_version": 1, "functional_role": "generic",
+        "allowed_placement_roles": ["any"], "symmetry": "asymmetric", "units": {"length": "m"},
+        "elements": [], "property_slots": []}
+    body_template = TemplateDocument.from_payload({**common, "name": "roll_body",
+        "bodies": [{"name": "body", "mass": case.vehicle.mass,
+            "inertia": (np.asarray(case.vehicle.inertia)*scale**2).tolist()}],
+        "joints": [], "hardpoints": [{"name": "center", "owner": "body", "space": "body"}],
+        "ports": [{"name": "mount", "owner": "body", "point": "center", "role": "roll_mount"}]})
+    rig_template = TemplateDocument.from_payload({**common, "name": "roll_rig",
+        "bodies": [{"name": "ground", "fixed": True}],
+        "hardpoints": [{"name": "origin", "owner": "ground", "space": "body"}],
+        "needs": [{"name": "body", "role": "roll_mount", "count": 1, "required": True}],
+        "joints": [{"name": "bearing", "type": "revolute", "body_a": "ground", "body_b": "@body",
+            "point_a": "origin", "point_b": "@body", "axis": [1, 0, 0]}],
+        "coordinates": [{"name": "roll", "joint": "bearing", "kind": "rotation", "reference": 0}]})
+    documents = {name: SubsystemDocument.from_payload({"document": "subsystem", "schema_version": 1,
+        "name": name, "template": template.name, "functional_role": "generic", "placement_role": "any",
+        "hardpoints": points, "property_bindings": {}}, template=template)
+        for name, template, points in (("body", body_template, {"center": [0, 0, 0]}),
+            ("rig", rig_template, {"origin": [0, 0, 0]}))}
+    document = AssemblyDocument.from_payload({"document": "assembly", "schema_version": 1,
+        "name": case.name, "assembly_kind": "generic_multibody", "mode": "K", "gravity": [0, 0, 0],
+        "subsystems": [{"ref": "body", "functional_role": "generic", "placement_role": "any"},
+            {"ref": "rig", "functional_role": "generic", "placement_role": "any",
+                "pairings": [{"requirement_role": "body", "port": "body.mount"}]}]}, subsystems=documents)
+    times = time_grid(case)
+    angle, speed = roll.value_at(times[0]), roll.derivative_at(times[0])
+    study = CaseDocument({"schema_version": 1, "name": case.name, "study": "dynamic",
+        "protocol": "vehicle_dynamic", "samples": list(times),
+        "solver": {"initialization_mode": "provided_consistent_state", "internal_step_s": case.solver.internal_step_size},
+        "initial_state": {"body.body": {"quaternion": [np.cos(angle/2), np.sin(angle/2), 0, 0], "omega": [speed, 0, 0]}},
+        "boundaries": [{"name": "roll_motion", "coordinate": "rig.roll", "mode": "prescribed_angle",
+            "units": "rad", "program": "roll"}],
+        "inputs": [{"name": "roll", "values": [roll.value_at(time) for time in times],
+            "rates": [roll.derivative_at(time) for time in times]}], "outputs": []})
+    result = run_compiled(validate(document, study)).result
+    if not isinstance(result, ResultEnvelope):
+        raise TypeError("document simulation must return ResultEnvelope")
+    quaternion = result.body_state("body.body")[:, 3:7]
+    angles = np.unwrap(2*np.arctan2(quaternion[:, 1], quaternion[:, 0]))
+    angles += 2*np.pi*round((angle-angles[0])/(2*np.pi))
+    return TimeHistory(time=tuple(result.times_s), channels={"body_roll": tuple(angles)}, units={"body_roll": "rad"})
+
+
 def validate_vehicle_kc_time_domain(
     profile: AdamsProfile,
-    model: FrontAxleModel,
+    model: AxleDeclaration,
     case: DynamicCaseSpec,
     *,
     runner: TimeDomainRunner | None = None,
@@ -40,12 +101,7 @@ def validate_vehicle_kc_time_domain(
         raise ValueError("vehicle KC Adams gate requires mode='vehicle_kc_dynamic'")
     if case.vehicle is None:
         raise ValueError("vehicle KC Adams gate requires a vehicle body model")
-    reference = history_from_result_series(
-        run_dynamic_case(model, case),
-        body=case.vehicle.name,
-        channels=VEHICLE_KC_CHANNELS,
-        units={"body_roll": "rad"},
-    )
+    reference = _roll_time_history(case, _supported_roll_signal(case))
     return AdamsTimeDomainAdapter(
         profile,
         runner if runner is not None else run_vehicle_kc_roll_adams,

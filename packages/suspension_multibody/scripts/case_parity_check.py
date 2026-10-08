@@ -97,10 +97,10 @@ def _load_acceptance():
 
 
 def _load_vehicle_fixture():
-    """Load the native vehicle fixtures so both gates use one model."""
+    """Load shared declaration data without importing a legacy producer."""
     path = (
         REPOSITORY_ROOT
-        / "packages/suspension_multibody/tests/vehicle/test_native_vehicle.py"
+        / "packages/suspension_multibody/tests/vehicle/vehicle_fixtures.py"
     )
     spec = importlib.util.spec_from_file_location("case_parity_vehicle", path)
     assert spec is not None and spec.loader is not None
@@ -109,204 +109,50 @@ def _load_vehicle_fixture():
     return module
 
 
-def _k_grid_records(assembly) -> list[dict[str, object]]:
-    """Solve the K grid through the unified simulation service."""
-    from suspension_multibody.cases.kc_quasi_static import (
-        NativeKcError,
-        case_document,
-        model_document,
-    )
-    from suspension_multibody.cases.kc_quasi_static.workflow import (
-        DEFAULT_SETTINGS,
-        DEFAULT_TIMES,
-        _side_fields,
-    )
-    from suspension_multibody.simulation import SimulationRequest, run_request
+def _k_grid_records(model) -> list[dict[str, object]]:
+    """Solve K through the ordinary document route and explicit report frames."""
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring import migrate_v1_kc_case
+    from suspension_multibody.report.kc_evidence import k_records
+    from suspension_multibody.results.envelope import ResultEnvelope
+    from suspension_multibody.simulation import run_compiled
 
-    wheels = (-10.0, 0.0, 10.0)
-    racks = (-5.0, 0.0, 5.0)
-    model = model_document(assembly, name="native-k", drive_wheels=True)
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
-        name="kc-k",
-        wheel_values_mm=wheels,
-        rack_values_mm=racks,
-        times_s=DEFAULT_TIMES,
-        settings=DEFAULT_SETTINGS,
-        drive_wheels=True,
-    )
-    run = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
-    left_states = run.body_state("upright_L")
-    right_states = run.body_state("upright_R")
-    records: list[dict[str, object]] = []
-    for index, entry in enumerate(run.cases):
-        wheel = wheels[index // len(racks)]
-        rack = racks[index % len(racks)]
-        case_id = f"k-w{wheel:+.0f}-r{rack:+.0f}"
-        # The case layer expands the grid in document order; checking the name
-        # it reported turns a silent reordering into a failure.
-        if str(entry["name"]) != case_id:
-            raise NativeKcError(
-                f"the kernel expanded {entry['name']!r} where {case_id!r} was expected"
-            )
-        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
-        record: dict[str, object] = {
-            "case_id": case_id,
-            "wheel_travel_mm": float(wheel),
-            "rack_displacement_mm": float(rack),
-        }
-        record.update(
-            _side_fields(assembly, "L", left_states[last, :3], left_states[last, 3:7])
-        )
-        record.update(
-            _side_fields(assembly, "R", right_states[last, :3], right_states[last, 3:7])
-        )
-        records.append(record)
-    return records
+    wheels, racks = (-10., 0., 10.), (-5., 0., 5.)
+    assembly, case = migrate_v1_kc_case(model, mode="K", wheel_values_mm=wheels, rack_values_mm=racks)
+    result = run_compiled(validate(assembly, case)).result
+    if not isinstance(result, ResultEnvelope):
+        raise TypeError("K/C documents must produce ResultEnvelope")
+    return k_records(result, frames={side: "wheel.sub.json.wheel_center_"+side for side in ("L", "R")},
+        wheel_values=wheels, rack_values=racks)
 
 
-def _c_path_records(assembly, *, paths: tuple[str, ...]) -> list[dict[str, object]]:
-    """Solve the C load paths through the unified simulation service."""
-    from suspension_multibody.cases.kc_quasi_static import (
-        AXIS_ORDER,
-        MM,
-        NativeKcError,
-        case_document,
-        model_document,
-        quaternion_to_rotation,
-    )
-    from suspension_multibody.cases.kc_quasi_static.workflow import (
-        DEFAULT_SETTINGS,
-        DEFAULT_TIMES,
-        SIDES,
-        _assembling_pose,
-        _side_fields,
-        quaternion_conjugate,
-        quaternion_multiply,
-        wheel_center_world,
-    )
-    from suspension_multibody.modeling.primitives import quaternion_to_rotation_vector
-    from suspension_multibody.simulation import SimulationRequest, run_request
+def _c_path_records(model, *, paths: tuple[str, ...]) -> list[dict[str, object]]:
+    """Solve C through the ordinary document route and explicit report frames."""
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring import migrate_v1_kc_case
+    from suspension_multibody.report.kc_evidence import c_records
+    from suspension_multibody.results.envelope import ResultEnvelope
+    from suspension_multibody.simulation import run_compiled
 
-    levels = 11
-    maximum = 1.0
-    model = model_document(assembly, name="native-c", drive_wheels=False)
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
-        name="kc-c",
-        paths=tuple(paths),
-        levels=levels,
-        maximum=maximum,
-        side_mode="single",
-        times_s=DEFAULT_TIMES,
-        settings=DEFAULT_SETTINGS,
-        drive_wheels=False,
-    )
-    run = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
-    left_states = run.body_state("upright_L")
-    right_states = run.body_state("upright_R")
-    # The C deformation is measured against the neutral K pose, which is the
-    # assembling pose: at the design separation every driven target has zero
-    # residual, so the reference is the model document's own initial state.
-    reference = {side: _assembling_pose(model, side) for side in SIDES}
-    # The K reference the C response is measured from.  The driven case's zero
-    # target resolves to the separation the model was assembled with, so the
-    # assembling pose *is* the K reference -- the same thing the Python solver's
-    # `KReferenceCache` solves for, reached without solving it again.
-    reference_metrics = {
-        ("left" if side == "L" else "right"): _side_fields(
-            assembly, side, reference[side][0], reference[side][1]
-        )
-        for side in SIDES
-    }
-
-    records: list[dict[str, object]] = []
-    for index, entry in enumerate(run.cases):
-        axis = paths[index // levels]
-        position_in_path = index % levels
-        if position_in_path == 0:
-            level = -maximum
-        elif position_in_path == levels - 1:
-            level = maximum
-        else:
-            level = -maximum + position_in_path * (2.0 * maximum / (levels - 1))
-        case_id = f"c-{axis}-{level:+.2f}"
-        if str(entry["name"]) != case_id:
-            raise NativeKcError(
-                f"the kernel expanded {entry['name']!r} where {case_id!r} was expected"
-            )
-        load = [0.0] * 6
-        load[AXIS_ORDER.index(axis)] = float(level)
-        record = {
-            "case_id": case_id,
-            "path": axis,
-            "level": float(level),
-            "side_mode": "single",
-            "load_left": list(load),
-            "load_right": [0.0] * 6,
-        }
-        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
-        metrics: dict[str, dict[str, float]] = {}
-        for side, key, states in (
-            ("L", "deformation_left", left_states),
-            ("R", "deformation_right", right_states),
-        ):
-            state = states[last]
-            metrics["left" if side == "L" else "right"] = _side_fields(
-                assembly, side, state[:3], state[3:7]
-            )
-            ref_position, ref_quaternion = reference[side]
-            centre = wheel_center_world(assembly, side, state[:3], state[3:7])
-            ref_centre = wheel_center_world(assembly, side, ref_position, ref_quaternion)
-            relative = quaternion_multiply(
-                quaternion_conjugate(np.asarray(ref_quaternion, dtype=float)),
-                np.asarray(state[3:7], dtype=float),
-            )
-            rotation = quaternion_to_rotation(
-                ref_quaternion
-            ) @ quaternion_to_rotation_vector(relative)
-            record[key] = [
-                float(value)
-                for value in np.concatenate(((centre - ref_centre) / MM, rotation))
-            ]
-        record["metrics"] = metrics
-        record["c_minus_k"] = {
-            key: float(value - reference_metrics[side][key])
-            for side in ("left", "right")
-            for key, value in metrics[side].items()
-        }
-        records.append(record)
-    return records
+    assembly, case = migrate_v1_kc_case(model, mode="C", paths=paths, levels=11, maximum=1.)
+    result = run_compiled(validate(assembly, case)).result
+    if not isinstance(result, ResultEnvelope):
+        raise TypeError("K/C documents must produce ResultEnvelope")
+    return c_records(result, frames={side: "wheel.sub.json.wheel_center_"+side for side in ("L", "R")},
+        paths=paths, levels=11, maximum=1.)
 
 
 def _benchmark_model() -> Any:
     """Build the shared benchmark axle from the declarative fixture."""
-    from suspension_multibody.schema import FrontAxleModel
+    from suspension_multibody.schema.model import AxleDeclaration
 
     payload = json.loads(BENCHMARK_FIXTURE.read_text(encoding="utf-8"))
-    return FrontAxleModel.model_validate(payload["model"])
+    return AxleDeclaration.model_validate(payload["model"])
 
 
 def check_kc_quasi_static() -> tuple[bool, str]:
     """Compare the contract-path K grid and C load paths with the snapshot."""
     from suspension_multibody.cases.kc_quasi_static import AXIS_ORDER
-    from suspension_multibody.subsystems.entry import compose_axle
 
     # Loaded by path rather than imported: the fixture is a test module, and a
     # module reached through `sys.path` is neither resolvable by a type checker
@@ -325,7 +171,7 @@ def check_kc_quasi_static() -> tuple[bool, str]:
         state["case_id"]: state
         for state in json.loads((TEST_DATA / "k_states.json").read_text(encoding="utf-8"))
     }
-    k_produced = _k_grid_records(compose_axle(_benchmark_model(), "K"))
+    k_produced = _k_grid_records(_benchmark_model())
     if {state["case_id"] for state in k_produced} != set(k_expected):
         return False, "the K grid did not cover the frozen case set"
     for state in k_produced:
@@ -343,7 +189,7 @@ def check_kc_quasi_static() -> tuple[bool, str]:
         for state in json.loads((TEST_DATA / "c_states.json").read_text(encoding="utf-8"))
     }
     c_produced = _c_path_records(
-        compose_axle(_compliant_model(), "C"), paths=AXIS_ORDER
+        _compliant_model(), paths=AXIS_ORDER
     )
     if {state["case_id"] for state in c_produced} != set(c_expected):
         return False, "the C load paths did not cover the frozen case set"
@@ -362,7 +208,7 @@ def check_kc_quasi_static() -> tuple[bool, str]:
 
 
 #: The frozen axle-dynamics snapshot.  It was recorded from the flat ctypes route
-#: (`axle_run`) just before the public `run_axle_dynamics` moved to the contract,
+#: (`axle_run`) just before the public `run_axle` moved to the contract,
 #: which is the only moment at which the independent implementation could still
 #: be asked: the digests are of the float64 bytes of each array, so a match is
 #: bit-identity and the arrays themselves do not have to be committed.  That
@@ -421,7 +267,7 @@ def _array_digest(array: np.ndarray) -> str:
 
 def check_axle_dynamic() -> tuple[bool, str]:
     """Compare the axle family's public run with the frozen ctypes snapshot."""
-    from suspension_multibody.axle_dynamics import run_axle_dynamics
+    from suspension_multibody.adams.axle_equivalence import _run_document_evidence
 
     acceptance = _load_acceptance()
     expected = json.loads(_AXLE_BASELINE.read_text(encoding="utf-8"))["cases"]
@@ -429,7 +275,7 @@ def check_axle_dynamic() -> tuple[bool, str]:
     failures: list[str] = []
     for case_name in acceptance._CASE_DURATIONS:
         case = acceptance.build_case(case_name)
-        result = run_axle_dynamics(model, case)
+        result = _run_document_evidence(model, case)
         for field in _AXLE_LEDGERS:
             produced = _array_digest(np.asarray(getattr(result, field)))
             if produced != expected[case_name][field]:
@@ -440,7 +286,7 @@ def check_axle_dynamic() -> tuple[bool, str]:
 
 
 #: The frozen vehicle-dynamics snapshot, recorded from the ctypes vehicle entry
-#: just before the public `run_vehicle_dynamics` moved to the contract.  Digests
+#: just before the public `vehicle_dynamics_run` moved to the contract.  Digests
 #: of the float64 bytes: a match is bit-identity, and the arrays do not have to
 #: be committed for that claim to be checkable.
 _VEHICLE_BASELINE = (
@@ -578,22 +424,150 @@ def _vehicle_case_matrix(fixture):
     }
 
 
-def check_vehicle_dynamic() -> tuple[bool, str]:
-    """Compare the public contract route with the frozen ctypes snapshot."""
-    from suspension_multibody.vehicle.service import run_vehicle_dynamics
+def check_vehicle_dynamic(*, artifact_dir: Path | None = None) -> tuple[bool, str]:
+    """Keep original hashes and separately judge approved contact-frame physics."""
+    from suspension_multibody.results.envelope import ResultEnvelope
+    from suspension_multibody.simulation import run_compiled
 
+    path = Path(__file__).with_name("vehicle_physical_evidence.py")
+    spec = importlib.util.spec_from_file_location("vehicle_physical_evidence", path)
+    assert spec is not None and spec.loader is not None
+    evidence = cast(Any, importlib.util.module_from_spec(spec))
+    spec.loader.exec_module(evidence)
     fixture = _load_vehicle_fixture()
     cases = _vehicle_case_matrix(fixture)
     expected = json.loads(_VEHICLE_BASELINE.read_text(encoding="utf-8"))["cases"]
+    identity = json.loads(_VEHICLE_BASELINE.with_name("entity_layout.json").read_text(encoding="utf-8"))
+    if identity["baseline_sha256"] != evidence.digest(_VEHICLE_BASELINE.read_bytes()):
+        return False, "entity layout is not anchored to original frozen baseline"
+    layouts = identity["cases"]
+    if set(cases) != set(expected) or set(cases) != set(layouts):
+        return False, "vehicle case inventory differs from frozen evidence"
+    destination = artifact_dir or REPOSITORY_ROOT / "artifacts/vehicle-physical-evidence"
+    destination.mkdir(parents=True, exist_ok=True)
+    report = {"schema_version": 1, "producer": str(Path(__file__).relative_to(REPOSITORY_ROOT)),
+              "baseline_sha256": evidence.digest(_VEHICLE_BASELINE.read_bytes()),
+              "approved_change": "nonspinning carrier contact frame", "cases": {}}
     failures: list[str] = []
-    for name, (model, case) in cases.items():
-        produced = _vehicle_digests(run_vehicle_dynamics(model, case))
-        for field, digest in expected[name].items():
-            if produced.get(field) != digest:
-                failures.append(f"{name}: {field} differs from the snapshot")
+    for index, (name, (model, case)) in enumerate(cases.items()):
+        case = case.model_copy(update={"vehicle": model})
+        old_model, old_case, model_blob, case_blob, original, reference = evidence.reference_case(
+            _VEHICLE_BASELINE.parent / "reference", name, _VEHICLE_BASELINE)
+        compiled = evidence.compile_evidence(case, layouts[name])
+        result = run_compiled(compiled).result
+        if not isinstance(result, ResultEnvelope):
+            raise TypeError("vehicle documents must produce ResultEnvelope")
+        arrays = evidence.document_arrays(result, layouts[name])
+        produced = evidence.array_digests(arrays)
+        mismatch = [field for field, value in expected[name].items() if produced.get(field) != value]
+        model_delta, case_delta, fingerprints = evidence.input_differences(
+            compiled, old_model, old_case, model_blob, case_blob, layouts[name])
+        input_checks = evidence.allowed_input_changes(model_delta, case_delta)
+        source_matches = evidence.digest(case.model_dump_json().encode()) == reference["source_sha256"]
+        spin = evidence.spin_checks(compiled)
+        physical = evidence.physical_checks(result, compiled, layouts[name]) if name in evidence.PHYSICAL_CASES else None
+        accepted = source_matches and input_checks["passed"] and spin["passed"]
+        accepted = accepted and (physical["passed"] if physical is not None else not mismatch)
+        if not accepted:
+            failures.append(f"{name}: evidence failed; original mismatches={mismatch}")
+        prefix = str(index)
+        np.savez_compressed(destination / (prefix+".npz"), **arrays)
+        np.savez_compressed(destination / (prefix+".native.npz"), **result.raw.blocks)
+        for kind in ("model", "case"):
+            (destination / (prefix+"."+kind+".json")).write_text(
+                json.dumps(getattr(compiled, kind+"_document"), indent=2)+"\n", encoding="utf-8")
+            (destination / (prefix+"."+kind+".mbc")).write_bytes(getattr(compiled, kind+"_payload"))
+        report["cases"][name] = {"status": "PHYSICAL_DIFFERENCE" if physical is not None else "STRICT",
+            "accepted": bool(accepted), "original_hashes_match": not mismatch, "original_mismatches": mismatch,
+            "source_matches": source_matches, "fingerprints": fingerprints,
+            "model_differences": model_delta, "case_differences": case_delta,
+            "input_checks": input_checks, "spin_checks": spin, "physical_checks": physical,
+            "channel_differences": evidence.channel_differences(original, arrays, layouts[name], compiled.model_document),
+            "files": {item.name: evidence.digest(item.read_bytes()) for item in destination.glob(prefix+".*")}}
+    report["passed"] = not failures
+    (destination / "report.json").write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     if failures:
-        return False, "; ".join(failures)
-    return True, f"{len(cases)} cases, bit-identical to the frozen snapshot"
+        return False, "; ".join(failures)+"; details: artifacts/vehicle-physical-evidence/report.json"
+    return True, "5 STRICT (original hashes); 3 PHYSICAL_DIFFERENCE (original mismatches retained); complete evidence in artifacts/vehicle-physical-evidence/report.json"
+
+
+def _vehicle_document_digests(result, layout):
+    """Hash stable-ID channels in the captured order of the frozen evidence."""
+    from types import SimpleNamespace
+
+    states = np.stack([result.body_state(name) for name in layout["bodies"]], axis=1)
+    native_joints = tuple(row["name"] for row in result.raw.model_document["joints"])
+    constraints = result.raw.block("constraint_wrench")[:, [native_joints.index(name) for name in layout["constraints"]]]
+    digests = {"states": _array_digest(states), "constraint_wrench": _array_digest(constraints),
+        "energy": _array_digest(result.energy)}
+    for kind, block, width in (("spring", "spring_output", 4), ("bushing", "bushing_output", 12),
+        ("anti_roll_bar", "anti_roll_output", 3), ("tire", "tire_output", 41),
+        ("steering_actuator", "steering_output", 4)):
+        values = [result.element_state(name) for name in layout["ledgers"][kind]]
+        array = np.stack(values, axis=1) if values else np.zeros((len(result.times_s), 0, width))
+        digests[block] = _array_digest(array)
+    diagnostic = result.raw.block("diagnostics")[:len(result.times_s)]
+    integers = {"internal_steps", "rejected_attempts", "newton_iterations", "active_contacts", "contact_events", "failure_code", "pinned_null_directions"}
+    typed = SimpleNamespace(**{name: diagnostic[:, column].astype(bool) if name == "accepted" else
+        diagnostic[:, column].astype(int) if name in integers else diagnostic[:, column]
+        for column, name in enumerate(_DIAGNOSTIC_FIELDS)})
+    digests["diagnostics"] = _vehicle_diagnostics_digest(typed)
+    return digests
+
+
+def _vehicle_analysis(model, case):
+    """Convert declarations to the ordinary assembly and analysis documents."""
+    from suspension_multibody.authoring import migrate_v1_vehicle_case
+
+    return migrate_v1_vehicle_case(case.model_copy(update={"vehicle": model}))
+
+
+def _document_run(assembly, case):
+    """Submit every evidence producer through the single document compiler."""
+    from suspension_multibody.api import validate
+    from suspension_multibody.simulation import run_compiled
+
+    return run_compiled(validate(assembly, case)).raw
+
+
+def _vehicle_protocol(base, source, model):
+    """Bind an excitation protocol to stable entities without rebuilding physics."""
+    from suspension_multibody.authoring import CaseDocument, migrate_v1_case
+
+    ids = {wheel.name: "wheel_"+wheel.name+"."+wheel.name for wheel in model.wheels}
+    ids.update({channel.channel_name: "steering_"+channel.channel_name+"."+channel.channel_name
+        for channel in (model.steering, *model.steering_channels) if channel.enabled})
+    plan = migrate_v1_case(source, entity_ids=ids)
+    source_payload = plan.to_payload()
+    base_payload = base.to_payload()
+    excitation = dict(source_payload["excitation"])
+    # The shared dynamic migration supplies the solver's initial-state controls;
+    # the family document supplies the actual protocol expansion.  No sampled
+    # table is copied into a family that does not read generic tables.
+    if "inputs" in base_payload.get("excitation", {}):
+        excitation["inputs"] = base_payload["excitation"]["inputs"]
+    return CaseDocument({**source_payload, "initial_state": base_payload["initial_state"],
+        "boundaries": base_payload["boundaries"], "excitation": excitation, "inputs": []})
+
+
+def _sampled_protocol(plan, values, rates, *, role):
+    """Form the independent sampled reference using the same model and solver."""
+    from suspension_multibody.authoring import CaseDocument
+
+    base_payload = plan.to_payload()
+    sampled = [row for row in base_payload.get("inputs", ())
+        if row["role"] not in {"road_height", "road_velocity", "steering_target", "steering_rate"}]
+    for name, data in values.items():
+        target = ("wheel_" if role == "road" else "steering_")+name+"."+name
+        for kind, signal in (("road_height" if role == "road" else "steering_target", data),
+            ("road_velocity" if role == "road" else "steering_rate", rates[name])):
+            row = {"name": kind+":"+target, "role": kind,
+                "tire" if role == "road" else "actuator": target, "values": np.asarray(signal).tolist()}
+            if role == "steering":
+                row["quantity"] = "translation"
+            sampled.append(row)
+    return CaseDocument({**base_payload, "protocol": "vehicle_dynamic", "inputs": sampled,
+        "excitation": {"inputs": base_payload["excitation"]["inputs"]}})
 
 
 def check_ride_four_post() -> tuple[bool, str]:
@@ -603,66 +577,33 @@ def check_ride_four_post() -> tuple[bool, str]:
     A family whose job is to expand a declaration can only be checked by
     expanding it twice: once in the kernel and once here, and running both.
     """
-    from dataclasses import replace
-
-    from suspension_contracts import pack_container
-
     from suspension_multibody.axle_dynamics.schema import AxleSolverSettings
     from suspension_multibody.cases import (
         FourPostCorner,
         ride_four_post_case_document,
         ride_four_post_corner_signals,
-        vehicle_dynamic_model_document,
     )
-    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
-    from suspension_multibody.simulation import SimulationRequest, run_request
 
     fixture = _load_vehicle_fixture()
     model = fixture._positioned_vehicle(fixture._vehicle())
     case = fixture._case(model)
-    prepared = prepare_vehicle_run(model, case)
     corners = (
         FourPostCorner("front_left", amplitude_m=0.002, frequency_hz=8.0),
         FourPostCorner("front_right", amplitude_m=0.002, frequency_hz=8.0),
         FourPostCorner("rear_left", amplitude_m=0.0015, frequency_hz=6.0, phase_rad=0.3),
         FourPostCorner("rear_right", amplitude_m=0.0015, frequency_hz=6.0, phase_rad=-0.3),
     )
-    times = tuple(float(value) for value in prepared.times)
+    assembly, base = _vehicle_analysis(model, case)
+    times = tuple(base.to_payload()["samples"])
     document = ride_four_post_case_document(
         name="ride-four-post", corners=corners, times_s=times,
         settings=AxleSolverSettings(),
     )
-    model_document, model_blob = vehicle_dynamic_model_document(model, prepared)
-    model_payload = pack_container(model_document, model_blob)
-    produced = run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="ride_four_post",
-            model=model_document,
-            case=document,
-            context={"model_payload": model_payload},
-        )
-    ).raw
+    plan = _vehicle_protocol(base, document, model)
+    produced = _document_run(assembly, plan)
 
     height, velocity = ride_four_post_corner_signals(corners, times)
-    # The explicit reference has to run on the solver block the family document
-    # declares, so it is prepared with that solver rather than the fixture
-    # case's own settings.
-    explicit = replace(
-        prepared,
-        road_height=height,
-        road_velocity=velocity,
-        solver=AxleSolverSettings(),
-    )
-    reference = run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="vehicle_dynamic",
-            model=model,
-            case=case,
-            context={"prepared": explicit},
-        )
-    ).raw
+    reference = _document_run(assembly, _sampled_protocol(plan, height, velocity, role="road"))
     difference = float(
         np.abs(produced.block("body_state") - reference.block("body_state")).max()
     )
@@ -680,21 +621,14 @@ def check_handling() -> tuple[bool, str]:
     runs are compared.  The scope is the open-loop manoeuvres; a closed-loop one
     is a driver model and is refused by name, which this check also confirms.
     """
-    from dataclasses import replace
-
-    from suspension_contracts import pack_container
-
     from suspension_multibody.axle_dynamics.schema import AxleSolverSettings
     from suspension_multibody.cases import (
         SteeringShape,
         handling_case_document,
         handling_steering_signals,
-        vehicle_dynamic_model_document,
     )
     from suspension_multibody.kernel import KernelContractError
-    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
     from suspension_multibody.schema import Vec3
-    from suspension_multibody.simulation import SimulationRequest, run_request
 
     fixture = _load_vehicle_fixture()
     model = fixture._positioned_vehicle(fixture._vehicle())
@@ -714,11 +648,9 @@ def check_handling() -> tuple[bool, str]:
             )
         }
     )
-    prepared = prepare_vehicle_run(model, case)
-    times = tuple(float(value) for value in prepared.times)
-    actuator = prepared.steering.names[0]
-    model_document, model_blob = vehicle_dynamic_model_document(model, prepared)
-    model_payload = pack_container(model_document, model_blob)
+    assembly, base = _vehicle_analysis(model, case)
+    times = tuple(base.to_payload()["samples"])
+    actuator = model.steering.channel_name
 
     worst = 0.0
     for shape in ("constant", "ramp", "step", "sine"):
@@ -732,36 +664,10 @@ def check_handling() -> tuple[bool, str]:
             name=f"handling-{shape}", shapes=shapes, times_s=times,
             settings=AxleSolverSettings(),
         )
-        produced = run_request(
-            SimulationRequest(
-                assembly="vehicle",
-                family="handling",
-                model=model_document,
-                case=document,
-                context={"model_payload": model_payload},
-            )
-        ).raw
+        plan = _vehicle_protocol(base, document, model)
+        produced = _document_run(assembly, plan)
         target, rate = handling_steering_signals(shapes, times)
-        steering = replace(
-            prepared.steering,
-            target=np.asarray(target[actuator], dtype=float),
-            target_rate=np.asarray(rate[actuator], dtype=float),
-        )
-        # The explicit reference has to run on the solver block the family
-        # document declares, so it is prepared with that solver rather than the
-        # fixture case's own settings.
-        explicit = replace(
-            prepared, steering=steering, solver=AxleSolverSettings()
-        )
-        reference = run_request(
-            SimulationRequest(
-                assembly="vehicle",
-                family="vehicle_dynamic",
-                model=model,
-                case=case,
-                context={"prepared": explicit},
-            )
-        ).raw
+        reference = _document_run(assembly, _sampled_protocol(plan, target, rate, role="steering"))
         difference = float(
             np.abs(produced.block("body_state") - reference.block("body_state")).max()
         )
@@ -776,15 +682,7 @@ def check_handling() -> tuple[bool, str]:
     )
     closed["handling"]["steering"][0]["shape"] = "iso_lane_change"
     try:
-        run_request(
-            SimulationRequest(
-                assembly="vehicle",
-                family="handling",
-                model=model_document,
-                case=closed,
-                context={"model_payload": model_payload},
-            )
-        )
+        _document_run(assembly, _vehicle_protocol(base, closed, model))
     except KernelContractError:
         pass
     else:
@@ -801,26 +699,19 @@ def check_ride_random_road() -> tuple[bool, str]:
     The spatial-to-temporal conversion is the whole family, so it is performed
     twice -- once by the kernel, once here -- and the two runs are compared.
     """
-    from dataclasses import replace
-
-    from suspension_contracts import pack_container
-
     from suspension_multibody.axle_dynamics.schema import AxleSolverSettings
     from suspension_multibody.cases import (
         RandomRoadWheel,
         RoadComponent,
         ride_random_road_case_document,
         ride_random_road_signals,
-        vehicle_dynamic_model_document,
     )
-    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
-    from suspension_multibody.simulation import SimulationRequest, run_request
 
     fixture = _load_vehicle_fixture()
     model = fixture._positioned_vehicle(fixture._vehicle())
     case = fixture._case(model)
-    prepared = prepare_vehicle_run(model, case)
-    times = tuple(float(value) for value in prepared.times)
+    assembly, base = _vehicle_analysis(model, case)
+    times = tuple(base.to_payload()["samples"])
     profile = (
         RoadComponent(amplitude_m=0.004, wavelength_m=25.0),
         RoadComponent(amplitude_m=0.002, wavelength_m=8.0, phase_rad=0.7),
@@ -848,37 +739,11 @@ def check_ride_random_road() -> tuple[bool, str]:
         name="ride-random-road", wheels=wheels, speed_mps=speed, times_s=times,
         settings=AxleSolverSettings(),
     )
-    model_document, model_blob = vehicle_dynamic_model_document(model, prepared)
-    model_payload = pack_container(model_document, model_blob)
-    produced = run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="ride_random_road",
-            model=model_document,
-            case=document,
-            context={"model_payload": model_payload},
-        )
-    ).raw
+    plan = _vehicle_protocol(base, document, model)
+    produced = _document_run(assembly, plan)
 
     height, velocity = ride_random_road_signals(wheels, speed, times)
-    # The explicit reference has to run on the solver block the family document
-    # declares, so it is prepared with that solver rather than the fixture
-    # case's own settings.
-    explicit = replace(
-        prepared,
-        road_height=height,
-        road_velocity=velocity,
-        solver=AxleSolverSettings(),
-    )
-    reference = run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="vehicle_dynamic",
-            model=model,
-            case=case,
-            context={"prepared": explicit},
-        )
-    ).raw
+    reference = _document_run(assembly, _sampled_protocol(plan, height, velocity, role="road"))
     difference = float(
         np.abs(produced.block("body_state") - reference.block("body_state")).max()
     )
@@ -906,17 +771,6 @@ _VEHICLE_KC_STIFFNESS = tuple(
 #: stepper, and 2 samples over it is rejected at ``t = 0``.
 _VEHICLE_KC_WINDOW_S = 2e-2
 _VEHICLE_KC_SAMPLES = 21
-
-#: The four driven wheel coordinates the sweep names, in grid order: the bodies
-#: that *declare* the wheel centre, which 方式 A puts on the wheel hub -- the
-#: upright keeps the spindle the hub turns on and no wheel centre of its own.
-_VEHICLE_KC_WHEELS = (
-    "front_wheel_hub_L",
-    "front_wheel_hub_R",
-    "rear_wheel_hub_L",
-    "rear_wheel_hub_R",
-)
-
 
 def _bushed(axle):
     """Give one axle the four compliant inboard mounts the C mode expects."""
@@ -959,14 +813,11 @@ def check_vehicle_kc() -> tuple[bool, str]:
     travel it was given, and the grid the kernel reports must be the grid the
     document asked for.
     """
-    from suspension_multibody.axle_dynamics.schema import AxleSolverSettings
-    from suspension_multibody.cases import (
-        vehicle_kc_case_document,
-        vehicle_kc_model_document,
-    )
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring import migrate_v1_vehicle_kc_case
     from suspension_multibody.modeling.primitives import quaternion_to_matrix
-    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
-    from suspension_multibody.simulation import SimulationRequest, run_request
+    from suspension_multibody.results.envelope import ResultEnvelope
+    from suspension_multibody.simulation import run_compiled
 
     fixture = _load_vehicle_fixture()
     rigid = fixture._positioned_vehicle(fixture._vehicle())
@@ -976,41 +827,28 @@ def check_vehicle_kc() -> tuple[bool, str]:
             "rear_axle": _bushed(rigid.rear_axle),
         }
     )
-    base = prepare_vehicle_run(model, fixture._case(model))
     wheels = (0.0, 10.0)
     racks = (0.0,)
-    sweep = vehicle_kc_case_document(
+    assembly, sweep = migrate_v1_vehicle_kc_case(
+        fixture._case(model),
         name="vehicle-kc-gate",
         wheel_values_mm=wheels,
         rack_values_mm=racks,
         times_s=tuple(
             np.linspace(0.0, _VEHICLE_KC_WINDOW_S, _VEHICLE_KC_SAMPLES).tolist()
         ),
-        settings=AxleSolverSettings(),
     )
-    model_document_pair = vehicle_kc_model_document(model, base)
-    produced = run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="vehicle_kc",
-            model=model_document_pair,
-            case=sweep,
-            context={
-                "model_document_pair": model_document_pair,
-                "wheels": (),
-                "vehicle_assembly": base.assembly,
-            },
-        )
-    ).raw
+    compiled = validate(assembly, sweep)
+    result = run_compiled(compiled).result
+    if not isinstance(result, ResultEnvelope):
+        raise TypeError("vehicle K/C must produce ResultEnvelope")
+    produced = result.raw
 
     expected = [f"k-w{w:+.0f}-r{r:+.0f}" for w in wheels for r in racks]
     given = [str(entry["name"]) for entry in produced.cases]
     if given != expected:
         return False, f"the driven grid expanded to {given}, not {expected}"
 
-    # prepare_vehicle_run keeps its assembly behind a field whose concrete
-    # type the package does not export, so the point table is read reflectively.
-    assembly = cast(Any, base.assembly)
     names = list(produced.document["manifest"]["bodies"])
     states = produced.block("body_state")
     last = {
@@ -1021,35 +859,28 @@ def check_vehicle_kc() -> tuple[bool, str]:
     # A zero sweep is resolved to the separation the model was assembled with,
     # so the final state is the assembling pose.
     zero_row = states[last[expected[0]]]
-    for body in base.native_model.bodies:
-        found = zero_row[names.index(body.name)]
+    for body in compiled.model_document["bodies"]:
+        found = zero_row[names.index(body["name"])]
         drift = max(
-            abs(float(found[axis]) - float(body.position_m[axis])) for axis in range(3)
+            abs(float(found[axis]) - float(body["position"][axis])) for axis in range(3)
         )
         if drift > 1e-9:
-            return False, f"a zero sweep moved {body.name} by {drift:.3e} m"
+            return False, f"a zero sweep moved {body['name']} by {drift:.3e} m"
 
-    def driven(body: str, row) -> float:
+    def driven(frame: str, sample: int) -> float:
         """Return the wheel-centre separation the kernel's driven row measures."""
-        entry = row[names.index(body)]
-        origin = row[names.index("chassis")]
-        local = (
-            np.asarray(assembly.points[(body, "wheel_center")], dtype=float)
-            / 1e3
-        )
-        world = np.asarray(entry[:3], dtype=float) + quaternion_to_matrix(
-            np.asarray(entry[3:7], dtype=float)
-        ) @ local
+        origin = states[sample, names.index("body."+model.chassis.name)]
+        world = result.frame_pose(frame)[sample, :3, 3]
         axis = quaternion_to_matrix(
             np.asarray(origin[3:7], dtype=float)
         ) @ np.array([0.0, 0.0, 1.0])
         return float(np.dot(world - np.asarray(origin[:3], dtype=float), axis))
 
-    bump_row = states[last[expected[1]]]
-    for body in _VEHICLE_KC_WHEELS:
-        advance = driven(body, bump_row) - driven(body, zero_row)
+    for wheel in model.wheels:
+        frame = "wheel_"+wheel.name+".center"
+        advance = driven(frame, last[expected[1]]) - driven(frame, last[expected[0]])
         if abs(advance - 0.010) > 1e-6:
-            return False, f"{body} advanced {advance * 1e3:.4f} mm, not 10 mm"
+            return False, f"{frame} advanced {advance * 1e3:.4f} mm, not 10 mm"
 
     return True, "grid matches an independent expansion; 10 mm reaches every wheel drive"
 
@@ -1092,25 +923,27 @@ def _record_snapshots() -> int:
     the live checks first and refuses to write when any family fails.  The
     resulting files are the same shape the gate reads.
     """
-    from suspension_multibody.axle_dynamics import run_axle_dynamics
+    from suspension_multibody.adams.axle_equivalence import _run_document_evidence
 
     acceptance = _load_acceptance()
     model = acceptance.build_axle_model()
     axle_cases: dict[str, dict[str, str]] = {}
     for case_name in acceptance._CASE_DURATIONS:
-        result = run_axle_dynamics(model, acceptance.build_case(case_name))
+        result = _run_document_evidence(model, acceptance.build_case(case_name))
         axle_cases[case_name] = {
             field: _array_digest(np.asarray(getattr(result, field)))
             for field in _AXLE_LEDGERS
         }
 
-    from suspension_multibody.vehicle.service import run_vehicle_dynamics
-
     fixture = _load_vehicle_fixture()
-    vehicle_cases = {
-        name: _vehicle_digests(run_vehicle_dynamics(model, case))
-        for name, (model, case) in _vehicle_case_matrix(fixture).items()
-    }
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring import migrate_v1_vehicle_case
+    from suspension_multibody.simulation import run_compiled
+    layouts = json.loads(_VEHICLE_BASELINE.with_name("entity_layout.json").read_text(encoding="utf-8"))["cases"]
+    vehicle_cases = {}
+    for name, (_, case) in _vehicle_case_matrix(fixture).items():
+        assembly, plan = migrate_v1_vehicle_case(case)
+        vehicle_cases[name] = _vehicle_document_digests(run_compiled(validate(assembly, plan)).result, layouts[name])
 
     previous = json.loads(_AXLE_BASELINE.read_text(encoding="utf-8"))
     _AXLE_BASELINE.write_text(

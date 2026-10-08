@@ -24,6 +24,10 @@
 #include "mb_energy/types.hpp"
 
 namespace axle_kernel {
+double evaluate_function(const FunctionProgram& program, const State& state, const SampleInput& input);
+DirectionalScalar evaluate_function_directional(const FunctionProgram& program, const State& state, const SampleInput& input, const DirectionalState& direction, bool& smooth);
+void assemble_function_forces(const Model& model, const State& state, const SampleInput& input, std::vector<Vec3>& force, std::vector<Vec3>& torque, EnergyRates* energy_rates, bool record_energy, bool brush_only, double force_scale, double& external_power);
+void assemble_function_directional(const Model& model, const State& state, const SampleInput& input, const DirectionalState& direction, std::vector<Vec3>& force, std::vector<Vec3>& torque, double force_scale, bool& smooth);
 std::pair<double, double> bushing_curve_value_slope( const Bushing& bushing, std::size_t axis, double value );
 
 double integrate_bushing_curve_from_zero( const Bushing& bushing, std::size_t axis, double value );

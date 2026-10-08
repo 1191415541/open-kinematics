@@ -1,0 +1,5 @@
+{
+  "document": "element_properties", "schema_version": 1, "name": "wheel_inertia",
+  "element_type": "inertia", "model": "linear", "units": {"mass": "kg", "length": "m", "force": "N"},
+  "matrix": {"name": "inertia", "rows": [[2, -0.1, 0], [-0.1, 2, 0], [0, 0, 2]]}
+}

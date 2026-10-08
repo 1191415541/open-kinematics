@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 import numpy as np
 
+from ..results.envelope import ResultEnvelope
 from .time_domain import TimeHistory
 
 #: The steering actuator kinds the vehicle schema declares.
@@ -22,9 +23,10 @@ SteeringActuatorMode = Literal[
 
 
 def full_vehicle_time_history(
-    run: Any,
+    run: ResultEnvelope,
     category: Literal["handling_stability", "ride"],
     *,
+    chassis_body_id: str,
     steering_ratio_m_per_rad: float | None = None,
     steering_channel: str | None = None,
     steering_actuator_mode: SteeringActuatorMode = "rack_translation",
@@ -38,47 +40,14 @@ def full_vehicle_time_history(
     be.  Both are required for a ``handling_stability`` history and are taken
     from the case's own ``vehicle.steering`` declaration; neither is inferred.
     """
-    if hasattr(run, "times_s") and hasattr(run, "body_state"):
-        return _native_vehicle_time_history(
-            run,
-            category,
-            steering_ratio_m_per_rad=steering_ratio_m_per_rad,
-            steering_channel=steering_channel,
-            steering_actuator_mode=steering_actuator_mode,
-            chassis_center_of_mass_m=chassis_center_of_mass_m,
-        )
-    if len(run.samples) < 2:
-        raise ValueError("full-vehicle run requires at least two samples")
-    names = (
-        (
-            "steering_angle",
-            "lateral_acceleration",
-            "yaw_rate",
-            "body_roll",
-        )
-        if category == "handling_stability"
-        else (
-            "body_heave",
-            "body_pitch",
-            "body_roll",
-            "body_accel_z",
-        )
-    )
-    all_units = {
-        "steering_angle": "rad",
-        "lateral_acceleration": "mm/s^2",
-        "yaw_rate": "rad/s",
-        "body_roll": "rad",
-        "body_heave": "mm",
-        "body_pitch": "rad",
-        "body_accel_z": "mm/s^2",
-    }
-    return TimeHistory(
-        time=tuple(sample.time for sample in run.samples),
-        channels={
-            name: tuple(sample.metrics[name] for sample in run.samples) for name in names
-        },
-        units={name: all_units[name] for name in names},
+    return _native_vehicle_time_history(
+        run,
+        category,
+        chassis_body_id=chassis_body_id,
+        steering_ratio_m_per_rad=steering_ratio_m_per_rad,
+        steering_channel=steering_channel,
+        steering_actuator_mode=steering_actuator_mode,
+        chassis_center_of_mass_m=chassis_center_of_mass_m,
     )
 
 
@@ -86,6 +55,7 @@ def _native_vehicle_time_history(
     run: Any,
     category: Literal["handling_stability", "ride"],
     *,
+    chassis_body_id: str,
     steering_ratio_m_per_rad: float | None,
     steering_channel: str | None,
     steering_actuator_mode: SteeringActuatorMode,
@@ -95,7 +65,7 @@ def _native_vehicle_time_history(
     times = np.asarray(run.times_s, dtype=float)
     if times.ndim != 1 or len(times) < 2:
         raise ValueError("full-vehicle run requires at least two samples")
-    chassis = np.asarray(run.body_state("chassis"), dtype=float)
+    chassis = np.asarray(run.body_state(chassis_body_id), dtype=float)
     if chassis.shape != (len(times), 19):
         raise ValueError("native chassis state has an invalid shape")
     rotations = np.empty((len(times), 3, 3), dtype=float)
@@ -175,12 +145,11 @@ def _native_vehicle_time_history(
                 )
             rack_ratio_m_per_rad = float(steering_ratio_m_per_rad)
         try:
-            steering = np.asarray(run.steering_state(steering_channel), dtype=float)
+            steering = np.asarray(run.element_state(steering_channel), dtype=float)
         except KeyError as exc:
-            reported = tuple(getattr(run, "steering_names", ()))
             raise ValueError(
                 f"native handling history has no steering channel "
-                f"{steering_channel!r}; the run reports {reported!r}"
+                f"{steering_channel!r}"
             ) from exc
         if steering.shape != (len(times), 4):
             raise ValueError("native steering output has an invalid shape")

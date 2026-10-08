@@ -33,7 +33,6 @@ from typing import Any
 
 import numpy as np
 
-from ..subsystems.runtime import wheel_centre_local
 from .declarations import DeclarationSet, OutputDeclaration
 from .derived import BUILTIN, DerivedOutput, MinimumUnitOutputs
 
@@ -958,7 +957,7 @@ register_builtins()
 # --- the adapter from a decoded result to minimum-unit outputs ----------------
 
 
-def kc_minimum_unit_outputs(state: Any, assembly: Any, side: str) -> dict[str, Any]:
+def kc_minimum_unit_outputs(result: Any, frame_id: str, side: str) -> dict[str, Any]:
     """
     Return the minimum-unit pose outputs for one side of a K&C state.
 
@@ -970,21 +969,21 @@ def kc_minimum_unit_outputs(state: Any, assembly: Any, side: str) -> dict[str, A
     if normalized not in {"L", "R"}:
         raise ValueError(f"unknown wheel side {side!r}")
     name = "left" if normalized == "L" else "right"
-    upright = f"upright_{normalized}"
-    pose = state.pose(upright)
+    pose = result.frame_pose(frame_id)[-1]
     return {
-        _UPRIGHT_ROTATION[name]: np.asarray(pose.rotation, dtype=float),
-        _UPRIGHT_TRANSLATION[name]: np.asarray(pose.translation, dtype=float),
-        _WHEEL_CENTER_LOCAL[name]: wheel_centre_local(assembly, upright),
+        _UPRIGHT_ROTATION[name]: pose[:3, :3],
+        _UPRIGHT_TRANSLATION[name]: pose[:3, 3] * 1000,
+        _WHEEL_CENTER_LOCAL[name]: np.zeros(3),
     }
 
 
 def minimum_unit_outputs(
     result: Any,
     *,
-    state: Any = None,
-    assembly: Any = None,
+    wheel_frames: Mapping[str, str] | None = None,
     wheel_loads: Mapping[str, float] | None = None,
+    steering_ids: tuple[str, ...] = (),
+    native_kernel_wall_time_s: float | None = None,
 ) -> dict[str, Any]:
     """
     Read a decoded result into the declared minimum-unit outputs.
@@ -998,24 +997,27 @@ def minimum_unit_outputs(
     times = getattr(result, "times_s", None)
     if times is not None:
         values["time_s"] = np.asarray(times, dtype=float).reshape(-1)
-    tire_output = getattr(result, "tire_output", None)
-    if tire_output is not None:
-        array = np.asarray(tire_output, dtype=float)
-        if array.ndim == 3:
-            for name, column in zip(_TIRE_FORCES, (4, 5, 6)):
-                if array.shape[2] > column and array.shape[1] != 0:
-                    values[name] = array[:, :, column]
+    tire_ids = getattr(result, "tire_ids", ())
+    if tire_ids:
+        for name, column in zip(_TIRE_FORCES, (4, 5, 6)):
+            values[name] = np.column_stack([result.tire_state(entity)[:, column] for entity in tire_ids])
+    else:
+        tire_output = getattr(result, "tire_output", None)
+        if tire_output is not None:
+            array = np.asarray(tire_output, dtype=float)
+            if array.ndim == 3:
+                for name, column in zip(_TIRE_FORCES, (4, 5, 6)):
+                    if array.shape[2] > column and array.shape[1] != 0:
+                        values[name] = array[:, :, column]
     diagnostics = getattr(result, "diagnostics", None)
     values["diagnostics_available"] = diagnostics is not None
     if diagnostics is not None:
         if hasattr(diagnostics, "accepted"):
             values["diagnostic_accepted"] = np.asarray(diagnostics.accepted, dtype=bool)
-            values["diagnostic_rejected_attempts"] = np.asarray(
-                diagnostics.rejected_attempts, dtype=float
-            )
-            values["diagnostic_newton_iterations"] = np.asarray(
-                diagnostics.newton_iterations, dtype=float
-            )
+            values["diagnostic_rejected_attempts"] = np.asarray(diagnostics.rejected_attempts, dtype=float)
+            values["diagnostic_newton_iterations"] = np.asarray(diagnostics.newton_iterations, dtype=float)
+            values["diagnostic_active_contacts"] = np.asarray(diagnostics.active_contacts, dtype=float)
+            values["diagnostic_contact_events"] = np.asarray(diagnostics.contact_events, dtype=float)
         else:
             rows = np.asarray(diagnostics, dtype=float)
             if rows.ndim == 2 and rows.shape[1] >= 4:
@@ -1025,26 +1027,16 @@ def minimum_unit_outputs(
             if rows.ndim == 2 and rows.shape[1] >= 12:
                 values["diagnostic_active_contacts"] = rows[:, 10]
                 values["diagnostic_contact_events"] = rows[:, 11]
-        if hasattr(diagnostics, "active_contacts"):
-            values["diagnostic_active_contacts"] = np.asarray(
-                diagnostics.active_contacts, dtype=float
-            )
-            values["diagnostic_contact_events"] = np.asarray(
-                diagnostics.contact_events, dtype=float
-            )
-    steering = getattr(result, "steering_output", None)
-    if steering is not None:
-        values["steering_output"] = np.asarray(steering, dtype=float)
-    wall = getattr(result, "native_kernel_wall_time_s", None)
-    if wall is not None:
-        values["native_kernel_wall_time_s"] = float(wall)
+    if steering_ids:
+        values["steering_output"] = np.stack([result.element_state(entity) for entity in steering_ids], axis=1)
+    if native_kernel_wall_time_s is not None:
+        values["native_kernel_wall_time_s"] = float(native_kernel_wall_time_s)
     if wheel_loads is not None:
         for wheel in _WHEELS:
             if wheel in wheel_loads:
                 values[f"wheel_load_{wheel}"] = float(wheel_loads[wheel])
-    if state is not None and assembly is not None:
-        for side in ("L", "R"):
-            values.update(kc_minimum_unit_outputs(state, assembly, side))
+    for side, frame_id in (wheel_frames or {}).items():
+        values.update(kc_minimum_unit_outputs(result, frame_id, side))
     return values
 
 

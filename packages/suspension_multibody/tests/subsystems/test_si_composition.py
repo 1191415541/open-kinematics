@@ -1,215 +1,74 @@
-"""
-The composed SI assembly matches the one the package already builds.
+"""File and memory authors produce a complete, deterministic SI graph."""
 
-Subtask 06's contract is that the new path is a *reorganisation* and not a
-behaviour change, so the honest test is a comparison against the historical
-assembly: same bodies in the same recorded order, the same point set, the same
-number of active constraints in each mode.  Anything weaker -- "the new path
-produces something plausible" -- would let a silent difference through.
-
-The composition is allowed to be *better* in one respect only: it refuses a
-half-built model.  Everything else has to agree.
-"""
-
-from __future__ import annotations
-
+import numpy as np
 import pytest
+from suspension_contracts import ContractError
 
-from suspension_multibody.modeling import SimulationAssembly
-from suspension_multibody.schema import FrontAxleModel, MassSpec, Vec3
-from suspension_multibody.subsystems.composition import (
-    CompositionError,
-    SubsystemContribution,
-    compose_simulation_assembly,
-    fingerprint_assembly,
-)
-from suspension_multibody.subsystems.entry import compose_axle
-from suspension_multibody.subsystems.si_assembly import (
-    contributions_for_axle,
-    si_assembly_for_axle,
-)
-from suspension_multibody.subsystems.types import AssemblyRequest, SubsystemOutput
+from suspension_multibody.authoring import AssemblyDocument, assemble_generic
+from suspension_multibody.authoring.errors import AuthoringError
+from suspension_multibody.authoring.migration import save_migrated_assembly
+from suspension_multibody.modeling.resolved import ResolvedModel
+from suspension_multibody.schema import Vec3
+from tests.benchmark_fixture import benchmark_model
 
-
-def _model() -> FrontAxleModel:
-    return FrontAxleModel(
-        hardpoints={
-            "uca_front": Vec3(x=-100, y=-500, z=400),
-            "uca_rear": Vec3(x=100, y=-500, z=400),
-            "uca_outer": Vec3(x=0, y=-700, z=450),
-            "lca_front": Vec3(x=-120, y=-500, z=150),
-            "lca_rear": Vec3(x=120, y=-500, z=150),
-            "lca_outer": Vec3(x=0, y=-700, z=150),
-            "tierod_inner": Vec3(x=100, y=-400, z=250),
-            "tierod_outer": Vec3(x=50, y=-700, z=250),
-            "wheel_center": Vec3(x=0, y=-700, z=300),
-            "rack_center": Vec3(x=0, y=0, z=250),
-        },
-        mass=MassSpec(sprung_mass=1000),
-    )
+from ._generic import axle_source, reordered, resolved
 
 
 @pytest.mark.parametrize("mode", ["K", "C"])
-def test_the_composed_bodies_match_the_historical_order(mode: str) -> None:
-    """
-    Order included, because the contract document lists bodies in sequence.
-
-    A composed model with the right set of bodies in the wrong order would emit a
-    different document, which is exactly the kind of difference that is invisible
-    in a summary and visible in every recorded artifact.
-    """
-    historical = compose_axle(_model(), mode)
-    composed = si_assembly_for_axle(_model(), request=AssemblyRequest(mode=mode))
-    assert list(composed.assembly.fragment.bodies) == list(historical.bodies)
-
-
-@pytest.mark.parametrize("mode", ["K", "C"])
-def test_the_composed_points_match_the_historical_set(mode: str) -> None:
-    historical = compose_axle(_model(), mode)
-    composed = si_assembly_for_axle(_model(), request=AssemblyRequest(mode=mode))
-    assert set(composed.assembly.fragment.points) == set(historical.points)
+def test_file_and_memory_preserve_body_and_frame_order(tmp_path, mode):
+    source = axle_source(mode)
+    loaded = AssemblyDocument.load(save_migrated_assembly(source, tmp_path))
+    before, after = [resolved(row).to_document() for row in (source, loaded)]
+    for section in ("bodies", "frames", "joints", "elements", "tires"):
+        assert before[section] == after[section]
+    assert resolved(source).fingerprint == resolved(loaded).fingerprint
 
 
 @pytest.mark.parametrize("mode,expected", [("K", 16), ("C", 12)])
-def test_the_active_constraint_count_is_preserved(mode: str, expected: int) -> None:
-    """K has 16 joints and C has 12 (including wheel spin joints and housing mount)."""
-    historical = compose_axle(_model(), mode)
-    composed = si_assembly_for_axle(_model(), request=AssemblyRequest(mode=mode))
-    assert len(historical.constraints) == expected
-    assert len(composed.assembly.fragment.joints) == expected
+def test_the_active_constraint_count_is_preserved(mode, expected):
+    assert len(resolved(axle_source(mode)).to_document()["joints"]) == expected
 
 
-def test_an_assembly_without_steering_has_no_rack_and_grounds_tie_rods() -> None:
-    """
-    Steering mechanism disappears, while tie rods belong to suspension and ground.
-    """
-    request = AssemblyRequest(
-        mode="K",
-        subsystems=frozenset({"chassis", "suspension", "wheel"}),
-    )
-    composed = si_assembly_for_axle(_model(), request=request)
-    bodies = set(composed.assembly.fragment.bodies)
-    assert "rack" not in bodies
-    assert "rack_housing" not in bodies
-    assert any(name.startswith("tie_rod") for name in bodies)
+def test_fingerprint_tracks_geometry_and_is_stable():
+    model = benchmark_model()
+    first = resolved(axle_source(model=model))
+    assert resolved(axle_source(model=model)).fingerprint == first.fingerprint
+    points = {**model.hardpoints, "wheel_center": Vec3(x=5, y=-700, z=300)}
+    changed = model.model_copy(update={"hardpoints": points})
+    assert resolved(axle_source(model=changed)).fingerprint != first.fingerprint
 
 
-def test_the_composed_assembly_reports_the_roles_it_carries() -> None:
-    composed = si_assembly_for_axle(_model())
-    assert composed.assembly.subsystems >= {"suspension", "steering"}
-    assert "chassis" not in composed.assembly.subsystems
-    assert "brake" not in composed.assembly.subsystems
-    assert "drive" not in composed.assembly.subsystems
+def test_fingerprint_ignores_collection_order():
+    source = axle_source()
+    assert resolved(reordered(source)).fingerprint == resolved(source).fingerprint
 
 
-def test_the_fingerprint_is_structural_and_stable() -> None:
-    """
-    Two compositions of the same model agree; a different model does not.
-
-    This is the property ``A6`` leans on: the same assembly read by two studies
-    reports one fingerprint, so "same model, two studies" is an identity check
-    rather than a hope.
-    """
-    first = si_assembly_for_axle(_model())
-    second = si_assembly_for_axle(_model())
-    assert first.fingerprint == second.fingerprint
-
-    other = _model().model_copy(
-        update={"hardpoints": {**_model().hardpoints, "wheel_center": Vec3(x=5, y=-700, z=300)}}
-    )
-    assert si_assembly_for_axle(other).fingerprint != first.fingerprint
+def test_a_duplicate_instance_is_refused():
+    source = axle_source()
+    payload = source.to_payload()
+    payload["subsystems"].append(payload["subsystems"][0])
+    with pytest.raises(AuthoringError, match="repeats a subsystem reference"):
+        resolved(AssemblyDocument.from_payload(payload, subsystems={row.ref: row.subsystem for row in source.entries}))
 
 
-def test_the_fingerprint_ignores_the_subsystem_collection_order() -> None:
-    """
-    Requirements are resolved after all contributions are in hand, so order is
-    not an input to the result.
-    """
-    contributions = contributions_for_axle(_model())
-    forward = compose_simulation_assembly(contributions, body_order=tuple(("rack", "upper_arm_L")))
-    reversed_contributions = tuple(reversed(contributions))
-    backward = compose_simulation_assembly(
-        reversed_contributions, body_order=tuple(("rack", "upper_arm_L"))
-    )
-    assert forward.fingerprint == backward.fingerprint
+def test_an_empty_assembly_is_refused():
+    with pytest.raises(AuthoringError):
+        AssemblyDocument.from_payload({"document": "assembly", "schema_version": 1, "name": "empty",
+            "assembly_kind": "generic_multibody", "subsystems": []}, subsystems={})
 
 
-def test_a_role_contributed_twice_is_refused() -> None:
-    contribution = SubsystemContribution(
-        role="chassis", output=SubsystemOutput(), ports={}
-    )
-    with pytest.raises(CompositionError, match="contributed twice"):
-        compose_simulation_assembly([contribution, contribution])
+def test_a_dangling_frame_is_refused():
+    graph = resolved(axle_source()).to_document()
+    graph["frames"][0]["body"] = "ghost"
+    with pytest.raises(ContractError, match="ghost"):
+        ResolvedModel(graph)
 
 
-def test_an_unknown_role_is_refused_where_it_is_written() -> None:
-    with pytest.raises(CompositionError, match="unknown subsystem role"):
-        SubsystemContribution(role="spoiler", output=SubsystemOutput(), ports={})
-
-
-def test_an_empty_composition_is_refused() -> None:
-    with pytest.raises(CompositionError, match="at least one contribution"):
-        compose_simulation_assembly([])
-
-
-def test_a_body_order_naming_a_missing_body_is_refused() -> None:
-    """The caller's expectation and the model disagreeing is an error, not a no-op."""
-    contributions = contributions_for_axle(_model())
-    with pytest.raises(CompositionError, match="no contribution produced"):
-        compose_simulation_assembly(contributions, body_order=("chassis", "no_such_body"))
-
-
-def test_the_result_is_a_simulation_assembly() -> None:
-    composed = si_assembly_for_axle(_model())
-    assert isinstance(composed, SimulationAssembly)
-    assert composed.root_kind == "axle"
-
-
-def test_composition_does_not_need_the_legacy_path() -> None:
-    """
-    The composed value is built from the subsystems directly.
-
-    Checked by composing without ever calling the historical builder: if the new
-    path secretly depended on the old one having run, the two would be one path
-    wearing two names, and 07 could not switch over.
-    """
-    composed = si_assembly_for_axle(_model())
-    assert composed.assembly.fragment.bodies
-    assert fingerprint_assembly(composed.assembly) == composed.fingerprint
-
-
-def test_a_composed_assembly_with_a_dangling_reference_is_refused() -> None:
-    """
-    The completeness check lives at the assembly level, and it has to bite.
-
-    A composition whose merged model still has a point on a body nobody declared
-    is not a model, and the refusal has to happen when the simulation assembly is
-    built rather than when someone finally tries to solve it.
-    """
-    from suspension_multibody.modeling import (
-        Assembly,
-        AssemblyError,
-        EntityId,
-        GeometryPort,
-        ModelFragment,
-        SimulationAssembly,
-    )
-
-    fragment = ModelFragment(
-        bodies={"arm": object()},
-        points={("ghost", "tip"): object()},
-    ).mounted(("axle",))
-    port = GeometryPort(
-        id=EntityId(("axle",), "p"), owner=EntityId(("axle",), "arm"), role="body"
-    )
-    assembly = Assembly(name="axle", fragment=fragment, ports={"p": port})
-    with pytest.raises(AssemblyError, match="resolve every reference"):
-        SimulationAssembly(
-            name="axle", assembly=assembly, rig=Assembly(name="none", fragment=ModelFragment())
-        )
-
-
-def test_a_composed_assembly_with_every_reference_resolved_is_accepted() -> None:
-    """The check must not fire on a model that is complete."""
-    composed = si_assembly_for_axle(_model())
-    assert composed.assembly.fragment.bodies
+def test_every_joint_endpoint_is_declared_and_coincident():
+    built = assemble_generic(axle_source())
+    graph = built.resolved_model().to_document()
+    for row in graph["joints"]:
+        a, b = [built.bodies[row["body_"+end]].pose.transform_point(np.asarray(row["point_"+end])) for end in ("a", "b")]
+        np.testing.assert_allclose(a, b, atol=1e-9, rtol=0)
+        if "axis_a" in row:
+            assert abs(np.linalg.norm(row["axis_a"])-1) < 1e-9

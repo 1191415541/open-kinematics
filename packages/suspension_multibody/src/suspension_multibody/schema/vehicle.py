@@ -16,7 +16,7 @@ from .common import (
     Vec3,
 )
 from .dynamic import DynamicSolverSettings, InitialBodyState, TimeSignal, TireModelSpec
-from .model import FrontAxleModel, RigidBodySpec
+from .model import AxleDeclaration, RigidBodySpec
 
 # The road surface is shared with the axle model, so it lives in its own module and is
 # re-exported here: callers that already import it from the vehicle schema keep working.
@@ -46,7 +46,7 @@ class WheelSpec(StrictModel):
     #: The wheel's own name.  Deliberately not a four-corner ``Literal``: which wheel
     #: ends exist is the assembly's declaration, and a three-axle truck names six.  The
     #: *four-corner* requirement of a full vehicle is stated once, in
-    #: :meth:`VehicleModel._topology`, so widening this field does not relax it -- an
+    #: :meth:`VehicleDeclaration._topology`, so widening this field does not relax it -- an
     #: existing vehicle model still has to name exactly the four corners it always did.
     name: str = Field(min_length=1)
     body: str
@@ -290,16 +290,34 @@ class DrivelineSpec(StrictModel):
         return self
 
 
-class VehicleModel(StrictModel):
-    """Explicit four-corner full-vehicle multibody model."""
+class VehicleDeclaration(StrictModel):
+    """
+    One full vehicle's facts, as a v1 vehicle document states them.
+
+    The same reasoning as :class:`~suspension_multibody.schema.AxleDeclaration`,
+    one level up: this is the *value* a vehicle document is, and the vehicle
+    composition reads its inputs through the ``VehicleInput`` protocol rather
+    than through this class.  A declaration is data about a vehicle -- its
+    chassis, its wheels, its named axles and the steering system between them --
+    and the assembly layer is what turns it into a vehicle.
+
+    The field names, defaults and the topology rules below are the v1 vehicle
+    document's, so a document written before this class existed still reads and
+    its dump still parses the same way.  ``_topology`` and
+    ``_check_steering_channels`` stay here because they are rules about the
+    *declaration*: four named corners, one chassis body, a driveline that names
+    wheels it has, a steering channel that does not actuate a body against
+    itself.  Which of those facts an assembly then relies on is the assembly's
+    business.
+    """
 
     schema_version: int = Field(default=1, ge=1)
     name: str = "full_vehicle"
     units: UnitSystem = UnitSystem.ENGINEERING
     coordinate_system: CoordinateSystem = CoordinateSystem.VEHICLE
     chassis: RigidBodySpec
-    front_axle: FrontAxleModel
-    rear_axle: FrontAxleModel
+    front_axle: AxleDeclaration
+    rear_axle: AxleDeclaration
     wheels: tuple[WheelSpec, ...]
     steering: SteeringSystemSpec
     #: The additional steering channels (subtask p2-06).
@@ -325,7 +343,7 @@ class VehicleModel(StrictModel):
     aerodynamic_drag: AerodynamicDragSpec | None = None
 
     @model_validator(mode="after")
-    def _topology(self) -> VehicleModel:
+    def _topology(self) -> VehicleDeclaration:
         names = tuple(wheel.name for wheel in self.wheels)
         required = {"front_left", "front_right", "rear_left", "rear_right"}
         if set(names) != required or len(names) != 4:
@@ -455,13 +473,13 @@ class VehicleDynamicCase(StrictModel):
 
     name: str = "full_vehicle_dynamic"
     solver: DynamicSolverSettings
-    vehicle: VehicleModel
+    vehicle: VehicleDeclaration
     road: RoadSurfaceSpec = Field(default_factory=RoadSurfaceSpec)
     steering_input: TimeSignal = Field(default_factory=lambda: TimeSignal(constant=0.0))
     brake_input: TimeSignal = Field(default_factory=lambda: TimeSignal(constant=0.0))
     drive_input: TimeSignal = Field(default_factory=lambda: TimeSignal(constant=0.0))
     # These optional signals are direct per-wheel torque overrides in the
-    # VehicleModel torque units.  They are intentionally separate from the
+    # VehicleDeclaration torque units.  They are intentionally separate from the
     # normalized global drive/brake commands.
     wheel_drive_torque: tuple[tuple[str, TimeSignal], ...] = ()
     wheel_brake_torque: tuple[tuple[str, TimeSignal], ...] = ()

@@ -1,0 +1,19 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/authoring/test_offline_model_migration.py",
+    "packages/suspension_multibody/tests/simulation/test_document_route_reaches_every_registered_family.py",
+    "packages/suspension_multibody/tests/authoring/test_vehicle_assembly_documents.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T21:51:33.637189+00:00",
+  "finished_at": "2026-10-06T21:51:43.122433+00:00",
+  "log": "raw\\validation\\child-9-step-1.log",
+  "log_sha256": "13e51ba4d52874be29a0cf5ba33e361567c2cb074765fc5d449062ad6e2d8e78"
+}

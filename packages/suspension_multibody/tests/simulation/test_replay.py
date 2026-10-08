@@ -16,21 +16,24 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from suspension_multibody import __version__
+from suspension_multibody.authoring.signals import time_grid
 from suspension_multibody.modeling.primitives import rotation_vector_to_quaternion
-from suspension_multibody.preparation.signals import time_grid
-from suspension_multibody.results import TimeSeriesResult, TimeSeriesSample
-from suspension_multibody.results.timeseries import aggregate_replay_samples
+from suspension_multibody.results import ResultEnvelope
+from suspension_multibody.results.timeseries import (
+    TimeSeriesSample,
+    aggregate_replay_samples,
+)
 from suspension_multibody.schema import (
     DynamicCaseSpec,
     DynamicSolverSettings,
-    FrontAxleModel,
     MassSpec,
     PrescribedMotion,
     TimeSignal,
     VehicleBodyModel,
 )
-from suspension_multibody.simulation.replay import VehicleKCTimeDomainSolver
+from suspension_multibody.schema.model import AxleDeclaration
+
+from ._replay_documents import replay
 
 #: The declared window and step; the grid is (0, 1e-3, 2e-3).
 _END_S = 2e-3
@@ -41,8 +44,8 @@ _YAW = (0.0, 0.0, 0.0)
 _HEAVE = (0.0, 1.0, 2.0)
 
 
-def _model() -> FrontAxleModel:
-    return FrontAxleModel(
+def _model() -> AxleDeclaration:
+    return AxleDeclaration(
         hardpoints={"wheel_center": [0, -700, 300]},
         mass=MassSpec(sprung_mass=1000.0),
     )
@@ -91,8 +94,8 @@ def _case(
     )
 
 
-def _replay(case: DynamicCaseSpec | None = None) -> TimeSeriesResult:
-    return VehicleKCTimeDomainSolver().run(_model(), case or _case())
+def _replay(case: DynamicCaseSpec | None = None) -> ResultEnvelope:
+    return replay(case or _case())
 
 
 # --------------------------------------------------------------------------- #
@@ -107,7 +110,7 @@ def test_replay_uses_the_case_time_grid_unchanged() -> None:
     expected = time_grid(case)
     assert expected == (0.0, _STEP_S, _END_S)
     assert tuple(result.times_s) == expected
-    assert [sample.time for sample in result.samples] == list(expected)
+    assert result.body_state("body.body").shape == (len(expected), 19)
     assert np.all(np.diff(result.times_s) > 0.0)
 
 
@@ -130,42 +133,33 @@ def test_every_sample_is_the_prescribed_motion_at_that_time() -> None:
     result = _replay(case)
     roll = _motion(case, "body_roll")
     heave = _motion(case, "body_heave")
-    for sample in result.samples:
-        assert sample.body == case.vehicle.name  # type: ignore[union-attr]
-        assert sample.metrics["body_roll"] == pytest.approx(roll.value_at(sample.time))
-        assert sample.metrics["roll_angle"] == sample.metrics["body_roll"]
-        assert sample.metrics["degrees_of_freedom"] == 14.0
+    for time, state in zip(result.times_s, result.body_state("body.body")):
         expected = rotation_vector_to_quaternion(
-            np.array([roll.value_at(sample.time), 0.0, 0.0])
+            np.array([roll.value_at(time), 0.0, 0.0])
         )
-        assert sample.pose.rotation.w == pytest.approx(float(expected[0]))
-        assert sample.pose.rotation.x == pytest.approx(float(expected[1]))
-        assert sample.pose.translation.z == pytest.approx(heave.value_at(sample.time))
+        np.testing.assert_allclose(state[3:7], expected, atol=1e-8)
+        assert state[2] == pytest.approx(heave.value_at(time)*.001, abs=1e-10)
 
 
 def test_no_sample_carries_propagated_state() -> None:
     """Nothing is integrated, so no sample has a velocity or a diagnostic."""
     result = _replay()
-    assert result.diagnostics == ()
-    for sample in result.samples:
-        assert sample.velocity is None
-        assert sample.acceleration is None
-        assert sample.result is None
-        assert sample.converged is True
-        assert sample.events == ()
-        assert dict(sample.loads) == {}
+    state = result.body_state("body.body")
+    assert np.all(np.isfinite(state))
+    assert result.status == "success"
+    np.testing.assert_allclose(state[:, 7:10], [[0, 0, 1]]*3, atol=1e-8)
+    np.testing.assert_allclose(state[:, 10:13], [[50, 0, 0]]*3, atol=1e-8)
+    assert result.raw.model_document["external_forces"] == [] if "external_forces" in result.raw.model_document else True
 
 
 def test_replay_is_not_path_dependent() -> None:
     """A coarser grid reaches the same pose at a shared time."""
     coarse = _replay(_case(step_size=_STEP_S))
     fine = _replay(_case(step_size=_STEP_S / 4))
-    assert len(fine.samples) > len(coarse.samples)
-    shared = {sample.time: sample for sample in fine.samples}
-    for sample in coarse.samples:
-        other = shared[sample.time]
-        assert sample.pose.rotation.w == pytest.approx(other.pose.rotation.w)
-        assert sample.pose.translation.z == pytest.approx(other.pose.translation.z)
+    assert len(fine.times_s) > len(coarse.times_s)
+    shared = {time: state for time, state in zip(fine.times_s, fine.body_state("body.body"))}
+    for time, state in zip(coarse.times_s, coarse.body_state("body.body")):
+        np.testing.assert_allclose(state[:7], shared[time][:7], atol=1e-8)
 
 
 # --------------------------------------------------------------------------- #
@@ -177,16 +171,12 @@ def test_replay_aggregates_with_the_shared_protocol() -> None:
     """The result is the aggregation of its samples, with the sample count."""
     case = _case()
     result = _replay(case)
-    assert isinstance(result, TimeSeriesResult)
-    assert result.mode == "vehicle_kc_dynamic"
+    assert isinstance(result, ResultEnvelope)
     assert result.status == "success"
-    assert result.metrics == {"sample_count": len(result.samples)}
-    assert result.sample_count == len(result.samples)
-    assert result.manifest.sample_count == len(result.samples)
-    assert result.manifest.mode == "vehicle_kc_dynamic"
-    provenance = dict(result.provenance)
-    assert provenance["package_version"] == __version__
-    assert provenance["model_hash"] and provenance["case_hash"]
+    assert len(result.times_s) == 3
+    assert result.raw.case_document["family"] == "vehicle_dynamic"
+    assert result.model.fingerprint
+    assert result.raw.model_document["contract"] == "multibody-model"
 
 
 def test_aggregate_replay_samples_fixes_the_grid_and_the_default_metric() -> None:

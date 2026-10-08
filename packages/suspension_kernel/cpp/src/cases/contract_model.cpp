@@ -26,8 +26,10 @@
 // here so the definition can index `Model::tires`.  The module edge this adds is
 // one `mb_cases` already has in its translation units.
 #include "mb_model/types.hpp"
+#include "mb_numeric/functions.hpp"
 
 #include <string>
+#include <algorithm>
 #include <unordered_map>
 
 namespace axle_kernel {
@@ -338,6 +340,71 @@ static bool read_units(const Json& document, double& length_scale,
   return true;
 }
 
+static const double* function_number(const Json& object, const char* key) {
+  const Json* value = object.find(key);
+  return value != nullptr && value->kind == JsonKind::Number ? &value->number : nullptr;
+}
+
+static bool function_index(double value, std::size_t size) {
+  return std::isfinite(value) && value >= 0 && std::floor(value) == value &&
+         value < static_cast<double>(size);
+}
+
+static bool read_function_programs(const Json& document, std::string& error) {
+  const Json* programs = document.find("function_programs");
+  if (programs == nullptr) return true;
+  if (!programs->is_array()) return fail(error, "function_programs must be an array");
+  static const char* kOps[] = {"constant", "binding", "identity", "neg", "add", "sub", "mul", "div", "pow", "sin", "cos", "tanh", "exp", "sqrt", "step", "curve", "surface"};
+  for (std::size_t p = 0; p < programs->items.size(); ++p) {
+    const Json& program = programs->items[p];
+    const double* version = function_number(program, "program_version");
+    if (version == nullptr || *version != 1.0) return fail(error, "function_programs[" + std::to_string(p) + "] has unsupported program_version");
+    const Json* nodes = program.find("nodes");
+    const Json* outputs = program.find("outputs");
+    if (nodes == nullptr || !nodes->is_array() || nodes->items.empty() || outputs == nullptr || !outputs->is_object()) return fail(error, "function program requires nodes and outputs");
+    for (std::size_t n = 0; n < nodes->items.size(); ++n) {
+      const Json& node = nodes->items[n];
+      const std::string* op = node.find_string("op");
+      if (op == nullptr || std::none_of(std::begin(kOps), std::end(kOps), [&](const char* name) { return *op == name; })) return fail(error, "function node has unsupported op");
+      const Json* args = node.find("args");
+      const std::size_t arity = *op == "constant" || *op == "binding" ? 0 :
+          (*op == "step" ? 5 : (*op == "add" || *op == "sub" || *op == "mul" ||
+          *op == "div" || *op == "pow" || *op == "surface" ? 2 : 1));
+      if ((args == nullptr && arity != 0) || (args != nullptr &&
+          (!args->is_array() || args->items.size() != arity)))
+        return fail(error, "function node has invalid argument count");
+      if (args != nullptr) {
+        if (!args->is_array()) return fail(error, "function node args must be an array");
+        for (const Json& arg : args->items) {
+          if (arg.kind != JsonKind::Number || !function_index(arg.number, n)) return fail(error, "function program must be a forward-indexed DAG");
+        }
+      }
+      const std::string* unit = node.find_string("unit");
+      if (unit == nullptr || unit->empty()) return fail(error, "function node has no unit");
+      if (node.kind == JsonKind::Object && node.find("value") != nullptr && node.find("value")->kind != JsonKind::Number) return fail(error, "function constant value must be numeric");
+      if (*op == "constant" && (function_number(node, "value") == nullptr ||
+          !std::isfinite(*function_number(node, "value"))))
+        return fail(error, "function constant requires a finite value");
+      if (*op == "pow") {
+        const Json& exponent = nodes->items[static_cast<std::size_t>(args->items[1].number)];
+        const double* value = function_number(exponent, "value");
+        if (exponent.find_string("op") == nullptr || *exponent.find_string("op") != "constant" ||
+            value == nullptr || std::floor(*value) != *value)
+          return fail(error, "function power exponent must be an integer constant");
+      }
+      for (const char* key : {"binding", "table"}) {
+        const double* value = function_number(node, key);
+        if (value != nullptr && (!std::isfinite(*value) || *value < 0 || std::floor(*value) != *value))
+          return fail(error, "function node index must be a nonnegative integer");
+      }
+    }
+    const double* output = function_number(*outputs, "value");
+    if (output == nullptr || !function_index(*output, nodes->items.size())) return fail(error, "function output names an unknown node");
+    if (outputs->find_string("unit") == nullptr) return fail(error, "function output has no unit");
+  }
+  return true;
+}
+
 bool ContractModel::read(const JsonValue& document, const std::string& blob,
                          std::string& error) {
   error.clear();
@@ -352,6 +419,25 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
     return fail(error, "model document has no name");
   }
   if (!read_units(document, length_scale_, error)) return false;
+  if (!read_function_programs(document, error)) return false;
+  function_programs_.clear();
+  if (const Json* programs = document.find("function_programs"); programs != nullptr) {
+    for (const Json& source : programs->items) {
+      FunctionProgram target;
+      const Json* nodes = source.find("nodes");
+      for (const Json& item : nodes->items) {
+        FunctionNode node;
+        if (const std::string* op = item.find_string("op")) node.op = *op;
+        if (const double* value = function_number(item, "value")) node.value = *value;
+        if (const double* binding = function_number(item, "binding")) node.binding = static_cast<int>(*binding);
+        if (const double* table = function_number(item, "table")) node.table = static_cast<int>(*table);
+        if (const Json* args = item.find("args")) for (const Json& arg : args->items) node.args.push_back(static_cast<int>(arg.number));
+        target.nodes.push_back(std::move(node));
+      }
+      target.output = static_cast<int>(*function_number(*source.find("outputs"), "value"));
+      function_programs_.push_back(std::move(target));
+    }
+  }
 
   name_ = *name;
 
@@ -458,6 +544,119 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
     body_fixed_.push_back(fixed ? 1 : 0);
   }
 
+  const auto read_function_marker = [&](const Json& source, FunctionMarker& target) -> bool {
+    const std::string* body = source.find_string("body");
+    if (body == nullptr || body_lookup.find(*body) == body_lookup.end()) return fail(error, "function marker names an unknown body");
+    target.body = body_lookup.at(*body);
+    double zero[3] = {0,0,0}, point[3], quaternion[4];
+    if (!optional_vec3(source, "point", zero, point) || !optional_quaternion(source, "quaternion", quaternion)) return fail(error, "function marker has malformed pose");
+    target.point = Vec3{point[0]*length_scale_, point[1]*length_scale_, point[2]*length_scale_};
+    target.quaternion = Quat{quaternion[0], quaternion[1], quaternion[2], quaternion[3]};
+    double norm = 0.0;
+    for (double value : quaternion) norm += value * value;
+    if (std::abs(norm - 1.0) > 1e-10) return fail(error, "function marker quaternion must be normalized");
+    return true;
+  };
+  if (const Json* programs = document.find("function_programs"); programs != nullptr) {
+    for (std::size_t p = 0; p < programs->items.size(); ++p) {
+      const Json& source = programs->items[p];
+      FunctionProgram& target = function_programs_[p];
+      const Json* bindings = source.find("bindings");
+      if (bindings == nullptr || !bindings->is_array()) return fail(error, "function program bindings must be an array");
+      for (const Json& item : bindings->items) {
+        FunctionBinding binding;
+        const std::string* kind = item.find_string("source");
+        binding.source = kind == nullptr ? "constant" : *kind;
+        binding.value = number_or_default(item, "value", 0.0);
+        binding.scale = number_or_default(item, "scale", 1.0);
+        if (!std::isfinite(binding.value) || !std::isfinite(binding.scale)) return fail(error, "function binding must be finite");
+        if ((binding.source == "constant" || binding.source == "property") && function_number(item, "value") == nullptr)
+          return fail(error, "function constant/property binding requires a value");
+        if (binding.source == "measurement") {
+          const std::string* measurement = item.find_string("measurement");
+          if (measurement == nullptr) return fail(error, "function binding has no measurement type");
+          binding.measurement = *measurement;
+          if (binding.measurement != "position" && binding.measurement != "relative_position" &&
+              binding.measurement != "relative_velocity" && binding.measurement != "relative_angular_velocity")
+            return fail(error, "unsupported function measurement " + binding.measurement);
+          for (const auto& pair : {std::pair<const char*, FunctionMarker*>{"action", &binding.action}, {"reaction", &binding.reaction}, {"reference", &binding.reference}}) {
+            const Json* marker = item.find(pair.first);
+            if (marker == nullptr || !marker->is_object() || !read_function_marker(*marker, *pair.second)) return fail(error, "function measurement requires explicit marker poses");
+          }
+          double fallback[3] = {0,0,1}, axis[3];
+          if (!optional_vec3(item, "axis", fallback, axis)) return fail(error, "function measurement axis is invalid");
+          binding.axis = Vec3{axis[0], axis[1], axis[2]};
+          if (std::abs(binding.axis.x * binding.axis.x + binding.axis.y * binding.axis.y + binding.axis.z * binding.axis.z - 1.0) > 1e-10) return fail(error, "function measurement axis must be a unit vector");
+        } else if (binding.source == "channel" || binding.source == "signal") {
+          const Json* samples = item.find("samples");
+          if (samples == nullptr || !samples->is_array() || samples->items.size() < 2) return fail(error, "function signal requires at least two time samples");
+          for (const Json& sample : samples->items) {
+            double pair[2];
+            if (!pair_at(sample, pair) || (!binding.times.empty() && pair[0] <= binding.times.back())) return fail(error, "function signal times must strictly increase");
+            binding.times.push_back(pair[0]); binding.values.push_back(pair[1]);
+          }
+        } else if (binding.source != "time" && binding.source != "constant" && binding.source != "property") {
+          return fail(error, "unsupported function binding source " + binding.source);
+        }
+        target.bindings.push_back(std::move(binding));
+      }
+      for (const FunctionNode& node : target.nodes) {
+        if (node.op == "binding" && (node.binding < 0 || node.binding >= static_cast<int>(target.bindings.size()))) return fail(error, "function node names an unknown binding");
+      }
+      if (const Json* tables = source.find("tables"); tables != nullptr) {
+        if (!tables->is_array()) return fail(error, "function tables must be an array");
+        for (const Json& item : tables->items) {
+          FunctionTable table;
+          table.dimension = static_cast<int>(number_or_default(item, "dimension", 1));
+          const std::string* interpolation = item.find_string("interpolation");
+          const std::string* extrapolation = item.find_string("extrapolation");
+          if (interpolation == nullptr || extrapolation == nullptr) return fail(error, "function table requires interpolation and extrapolation");
+          table.interpolation = *interpolation; table.extrapolation = *extrapolation;
+          if (table.extrapolation != "clamp" && table.extrapolation != "linear" && table.extrapolation != "error") return fail(error, "unsupported function table extrapolation");
+          if (table.dimension == 1) {
+            if (table.interpolation != "piecewise_linear" && table.interpolation != "akima") return fail(error, "unsupported function curve interpolation");
+            const Json* points = item.find("points");
+            if (points == nullptr || !points->is_array()) return fail(error, "function curve needs points");
+            for (const Json& point : points->items) {
+              double pair[2];
+              if (!pair_at(point, pair) || (!table.x.empty() && pair[0] <= table.x.back())) return fail(error, "function curve must strictly increase");
+              table.x.push_back(pair[0]); table.values.push_back(pair[1]);
+            }
+          } else if (table.dimension == 2) {
+            if (table.interpolation != "bilinear") return fail(error, "unsupported function surface interpolation");
+            const Json* xs = item.find("x_axis"); const Json* ys = item.find("y_axis"); const Json* values = item.find("values");
+            if (xs == nullptr || ys == nullptr || values == nullptr || !xs->is_array() || !ys->is_array() || !values->is_array()) return fail(error, "function surface needs axes and values");
+            for (const auto& pair : {std::pair<const Json*, std::vector<double>*>{xs, &table.x}, {ys, &table.y}}) {
+              for (const Json& entry : pair.first->items) {
+                if (entry.kind != JsonKind::Number || !std::isfinite(entry.number) ||
+                    (!pair.second->empty() && entry.number <= pair.second->back()))
+                  return fail(error, "function surface axes must strictly increase");
+                pair.second->push_back(entry.number);
+              }
+            }
+            if (values->items.size() != table.x.size()) return fail(error, "function surface values must match its axes");
+            for (const Json& row : values->items) {
+              if (!row.is_array() || row.items.size() != table.y.size()) return fail(error, "function surface values must match its axes");
+              for (const Json& value : row.items) {
+                if (value.kind != JsonKind::Number || !std::isfinite(value.number)) return fail(error, "function surface values must be finite");
+                table.values.push_back(value.number);
+              }
+            }
+          } else return fail(error, "unsupported function table dimension");
+          if (table.x.size() < 2 || (table.dimension == 2 && table.y.size() < 2)) return fail(error, "function table needs at least two axis samples");
+          target.tables.push_back(std::move(table));
+        }
+      }
+      for (const FunctionNode& node : target.nodes) {
+        if (node.op == "curve" || node.op == "surface") {
+          if (node.table < 0 || node.table >= static_cast<int>(target.tables.size()) ||
+              target.tables[static_cast<std::size_t>(node.table)].dimension != (node.op == "curve" ? 1 : 2))
+            return fail(error, "function node names an incompatible table");
+        }
+      }
+    }
+  }
+
   // --- joints -------------------------------------------------------------
   const Json* joint_items = document.find("joints");
   if (joint_items != nullptr) {
@@ -548,6 +747,7 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
     }
   }
 
+  function_elements_.clear();
   // --- bushings -----------------------------------------------------------
   const Json* element_items = document.find("elements");
   if (element_items != nullptr) {
@@ -558,6 +758,43 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
       const std::string* type_name = element.find_string("type");
       if (element_name == nullptr || type_name == nullptr) {
         return fail(error, "an element entry is missing name/type");
+      }
+      if (*type_name == "force" || *type_name == "torque" || *type_name == "wrench") {
+        const Json* parameters = element.find("parameters");
+        if (parameters == nullptr || !parameters->is_object()) return fail(error, "function element has no parameters");
+        const double* program = function_number(*parameters, "program_id");
+        if (*type_name != "wrench" && (program == nullptr || !function_index(*program, function_programs_.size()))) return fail(error, "function element names an unknown program_id");
+        FunctionElement item;
+        item.name = *element_name;
+        item.kind = *type_name == "force" ? 0 : (*type_name == "torque" ? 1 : 2);
+        if (program != nullptr) item.programs.push_back(static_cast<int>(*program));
+        for (const auto& pair : {std::pair<const char*, FunctionMarker*>{"action", &item.action}, {"reaction", &item.reaction}, {"reference", &item.reference}}) {
+          const Json* marker = parameters->find(pair.first);
+          if (marker == nullptr || !marker->is_object() || !read_function_marker(*marker, *pair.second)) return fail(error, "function element requires explicit marker poses");
+        }
+        double fallback[3] = {0,0,1}, axis[3];
+        if (!optional_vec3(*parameters, "axis", fallback, axis)) return fail(error, "function element axis is invalid");
+        item.axis = Vec3{axis[0],axis[1],axis[2]};
+        if (std::abs(item.axis.x * item.axis.x + item.axis.y * item.axis.y + item.axis.z * item.axis.z - 1.0) > 1e-10) return fail(error, "function element axis must be a unit vector");
+        if (item.kind == 2) {
+          const Json* programs = parameters->find("program_ids");
+          if (programs == nullptr || !programs->is_array() || programs->items.size() != 6) return fail(error, "function wrench requires six program_ids");
+          item.programs.clear();
+          for (const Json& value : programs->items) {
+            if (value.kind != JsonKind::Number || !function_index(value.number, function_programs_.size())) return fail(error, "function wrench names an unknown program");
+            item.programs.push_back(static_cast<int>(value.number));
+          }
+        }
+        const Json* declarations = document.find("function_programs");
+        for (std::size_t component = 0; component < item.programs.size(); ++component) {
+          const Json& declaration = declarations->items[static_cast<std::size_t>(item.programs[component])];
+          const std::string* unit = declaration.find("outputs")->find_string("unit");
+          const std::string expected = item.kind == 0 || (item.kind == 2 && component < 3) ? "N" : "Nm";
+          if (unit == nullptr || (*unit != expected && !(expected == "Nm" && *unit == "N*m")))
+            return fail(error, "function element output unit must be " + expected);
+        }
+        function_elements_.push_back(std::move(item));
+        continue;
       }
       // The two bodies and the two attachment points are common to all three
       // axial structures; only the coefficients differ.  Reading them once
@@ -1261,11 +1498,27 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
       // document it arrives in kg*mm^2 and the kernel wants kg*m^2.  The mass
       // needs no conversion: the contract fixes the mass unit to kilograms.
       const double tire_inertia_factor = inertia_scale();
-      for (double& entry : tire_inertia) {
-        if (entry < 0.0) {
-          return fail(error, "tire " + quote(*tire_name) +
-                                  " declares a negative inertia");
+      double tensor_scale = 0.0;
+      for (double entry : tire_inertia) tensor_scale = std::max(tensor_scale, std::abs(entry));
+      if (tensor_scale > 0.0) {
+        double normalized[9];
+        for (int i = 0; i < 9; ++i) normalized[i] = tire_inertia[i] / tensor_scale;
+        if (std::abs(normalized[1] - normalized[3]) > 1e-12 ||
+            std::abs(normalized[2] - normalized[6]) > 1e-12 ||
+            std::abs(normalized[5] - normalized[7]) > 1e-12) {
+          return fail(error, "tire " + quote(*tire_name) + " inertia must be symmetric");
         }
+        const double half_trace = (normalized[0] + normalized[4] + normalized[8]) * 0.5;
+        const double a = half_trace - normalized[0];
+        const double b = half_trace - normalized[4];
+        const double c = half_trace - normalized[8];
+        const double d = -normalized[1], e = -normalized[2], f = -normalized[5];
+        const double determinant = a*b*c + 2*d*e*f - a*f*f - b*e*e - c*d*d;
+        if (std::min({a, b, c, a*b-d*d, a*c-e*e, b*c-f*f, determinant}) < -1e-12) {
+          return fail(error, "tire " + quote(*tire_name) + " inertia must be physically positive semidefinite");
+        }
+      }
+      for (double& entry : tire_inertia) {
         entry *= tire_inertia_factor;
       }
       // The frame a tire is measured against is not always the body its force
@@ -1567,6 +1820,17 @@ bool ContractModel::read(const JsonValue& document, const std::string& blob,
   for (std::size_t index = 0; index < driven_total; ++index) {
     const std::size_t a = static_cast<std::size_t>(driven_body_[index]);
     const std::size_t b = static_cast<std::size_t>(driven_reaction_body_[index]);
+    if (driven_type_[index] == AXLE_DRIVEN_ROTATION) {
+      const double* qa = &body_pose_[a*7+3];
+      const double* qb = &body_pose_[b*7+3];
+      const double* qr = &driven_reference_[index*4];
+      const Quat relative = qmul(qconj(Quat{qb[0], qb[1], qb[2], qb[3]}), Quat{qa[0], qa[1], qa[2], qa[3]});
+      const Quat delta = qmul(relative, qconj(Quat{qr[0], qr[1], qr[2], qr[3]}));
+      const double* axis = &driven_axis_[index*3];
+      const Vec3 unit = normalized(Vec3{axis[0], axis[1], axis[2]});
+      driven_separation_[index] = 2.0*std::atan2(dot(Vec3{delta.x, delta.y, delta.z}, unit), delta.w);
+      continue;
+    }
     double rotation_a[9];
     double rotation_b[9];
     quaternion_to_rotation(&body_pose_[a * 7 + 3], rotation_a);

@@ -1,0 +1,53 @@
+.................F...................................................... [ 93%]
+.....                                                                    [100%]
+================================== FAILURES ===================================
+_____________ test_vehicle_entity_data_matches_existing_producer ______________
+
+    def test_vehicle_entity_data_matches_existing_producer():
+        from suspension_multibody.compilation.resolved import native_model_document
+        from tests.vehicle.vehicle_fixtures import _positioned_vehicle, _vehicle
+    
+        reference = Path(__file__).parents[1]/"data/vehicle_dynamics_baseline/reference"
+        old = json.loads((reference/"0.model.json").read_text())
+        old_payload = (reference/"0.model.bin").read_bytes()
+        migrated = assemble_generic(migrate_v1_vehicle(_positioned_vehicle(_vehicle()))).resolved_model()
+        new = native_model_document(migrated)
+        old_bodies = {row["name"]: row for row in old["bodies"]}
+        new_bodies = {_legacy_entity_id(row["name"]): row for row in new["bodies"]}
+        assert old_bodies.keys() == new_bodies.keys()
+        for name, body in old_bodies.items():
+            for key in ("mass", "inertia", "position", "quaternion", "fixed", "velocity", "omega"):
+                np.testing.assert_array_equal(new_bodies[name].get(key, [0, 0, 0]), body[key])
+        old_joints = {(row["body_a"], row["body_b"], row["type"]): row for row in old["joints"]}
+        new_joints = {(_legacy_entity_id(row["body_a"]), _legacy_entity_id(row["body_b"]), row["type"]): row for row in new["joints"]}
+        assert old_joints.keys() == new_joints.keys()
+        assert len(old_joints) == len(old["joints"]) == len(new["joints"])
+        for key, joint in old_joints.items():
+            fields = ("point_a", "point_b") if joint["type"] in {"fixed", "spherical"} else ("point_a", "point_b", "axis_a", "axis_b")
+            for field in fields:
+                np.testing.assert_array_equal(new_joints[key][field], joint[field])
+        steering_old = next(row["parameters"] for row in old["elements"] if row["type"] == "steering_actuator")
+        steering_new = next(row["parameters"] for row in new["elements"] if row["type"] == "steering_actuator")
+        for key, value in steering_old.items():
+            actual = _legacy_entity_id(steering_new[key]) if key in {"body", "reaction_body"} else steering_new[key]
+            if isinstance(value, str):
+                assert actual == value
+            else:
+                np.testing.assert_array_equal(actual, value)
+        for tire_old, tire_new in zip(old["tires"], new["tires"]):
+            assert _legacy_entity_id(tire_new["body"]) == tire_old["body"]
+            assert tire_new["model"] == tire_old["model"]
+            for key, value in tire_old["parameters"].items():
+                if key not in {"frame_body", "frame_center_local", "blob"}:
+                    np.testing.assert_array_equal(tire_new["parameters"][key], value)
+            # The declared non-spinning carrier replaces the old spinning hub.
+            assert tire_old["parameters"]["frame_body"].endswith(("wheel_hub_L", "wheel_hub_R"))
+            assert tire_new["parameters"]["frame_body"].endswith(("upright_L", "upright_R"))
+            for document, payload, tire in ((old, old_payload, tire_old), (new, migrated.resource_payload, tire_new)):
+>               descriptor = next(row for row in document["blobs"] if row["name"] == tire["parameters"]["blob"])
+E               KeyError: 'blobs'
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:335: KeyError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_vehicle_entity_data_matches_existing_producer
+1 failed, 76 passed in 11.71s

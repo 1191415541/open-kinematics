@@ -18,10 +18,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from suspension_multibody.cases.kc_quasi_static import case_document, model_document
-from suspension_multibody.simulation import SimulationRequest, run_request
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.api import validate
 
+from ._documents import body_id, documents
+from ._documents import run as _run
 from .kc_fixtures import _compliant_model
 
 _TIMES_S = (0.0, 1e-3)
@@ -46,25 +46,12 @@ def _c_case(loads, *, side_mode: str = "single", mirror: bool = True) -> dict:
     }
 
 
-def _run(model: dict, case: dict):
-    """Run one C document pair through the unified simulation runner."""
-    return run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
-
-
 def _upright_names() -> tuple[str, str]:
     return "upright_L", "upright_R"
 
 
 def test_a_mirror_is_required_when_both_sides_are_loaded() -> None:
-    assembly = compose_axle(_compliant_model(), "C")
-    model = model_document(assembly, name="c-loads", drive_wheels=False)
+    model = documents(_compliant_model(), "C", driven=False)
     case = _c_case([{"fz": 100.0}], side_mode="symmetric", mirror=False)
     with pytest.raises(Exception, match="mirror_marker"):
         _run(model, case)
@@ -72,22 +59,13 @@ def test_a_mirror_is_required_when_both_sides_are_loaded() -> None:
 
 def test_an_explicit_load_list_is_the_sweep_it_replaces() -> None:
     """`c.loads` and `paths`+`levels`+`maximum` must agree load for load."""
-    assembly = compose_axle(_compliant_model(), "C")
-    model = model_document(assembly, name="c-loads", drive_wheels=False)
+    model = documents(_compliant_model(), "C", driven=False)
     maximum = 100.0
     explicit = _c_case(
         [{"my": value} for value in (-maximum, 0.0, maximum)]
     )
-    sweep = case_document(
-        assembly,
-        family="kc_quasi_static",
-        name="c-loads",
-        paths=("my",),
-        levels=3,
-        maximum=maximum,
-        times_s=_TIMES_S,
-        drive_wheels=False,
-    )
+    sweep = _c_case([])
+    sweep["c"] = {"paths": ["my"], "levels": 3, "maximum": maximum, "load_marker": "wheel_center_L"}
     produced = _run(model, explicit)
     reference = _run(model, sweep)
     assert len(produced.cases) == 3
@@ -97,8 +75,7 @@ def test_an_explicit_load_list_is_the_sweep_it_replaces() -> None:
 
 
 def test_the_side_modes_load_the_mirror_in_phase_and_in_anti_phase() -> None:
-    assembly = compose_axle(_compliant_model(), "C")
-    model = model_document(assembly, name="c-loads", drive_wheels=False)
+    model = documents(_compliant_model(), "C", driven=False)
     load = [{"fz": 100.0}]
     states = {}
     for mode in ("single", "symmetric", "opposite"):
@@ -106,20 +83,21 @@ def test_the_side_modes_load_the_mirror_in_phase_and_in_anti_phase() -> None:
         bodies = list(run.document["manifest"]["bodies"])
         block = run.block("body_state")
         last = int(run.cases[0]["sample_offset"]) + int(run.cases[0]["sample_count"]) - 1
-        left, right = _upright_names()
+        left, right = (body_id(run, name) for name in _upright_names())
         states[mode] = (
             block[last, bodies.index(left), :3],
             block[last, bodies.index(right), :3],
         )
 
+    model_doc = validate(*model).model_document
     left_assembled = np.asarray(
-        next(b for b in model["bodies"] if b["name"] == "upright_L")["position"],
+        next(b for b in model_doc["bodies"] if b["name"].endswith(".upright_L"))["position"],
         dtype=float,
-    ) * 1e-3
+    )
     right_assembled = np.asarray(
-        next(b for b in model["bodies"] if b["name"] == "upright_R")["position"],
+        next(b for b in model_doc["bodies"] if b["name"].endswith(".upright_R"))["position"],
         dtype=float,
-    ) * 1e-3
+    )
 
     single_left, single_right = states["single"]
     assert np.allclose(single_right, right_assembled, rtol=0.0, atol=1e-12), (

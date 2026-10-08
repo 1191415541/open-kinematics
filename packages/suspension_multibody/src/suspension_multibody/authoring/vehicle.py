@@ -3,7 +3,7 @@ The vehicle-level numbers a full-vehicle assembly states, and how they round-tri
 
 A `full_vehicle` assembly names six subsystems, and until now that was the whole
 of what a file could say about a vehicle: the chassis mass, the four wheel ends,
-the steering ratio and the driveline were `VehicleModel` data with no file
+the steering ratio and the driveline were `VehicleDeclaration` data with no file
 spelling, so "assemble a vehicle from files" stopped at the role set plus two file
 axles.  The `vehicle` section closes that: it carries the four objects the
 subsystems do not, and this module converts both ways.
@@ -23,7 +23,6 @@ Two boundaries are deliberate and stated here rather than left to be inferred:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
@@ -33,22 +32,22 @@ from ..schema import (
     RigidBodySpec,
     SteeringChannelSpec,
     SteeringSystemSpec,
-    VehicleModel,
     WheelSpec,
 )
 from ..schema.common import StrictModel
+from ..schema.vehicle import VehicleDeclaration
+from .bridge import axle_declaration_from
 from .documents import AssemblyDocument, SimulationAssembly
 from .errors import AuthoringError
-from .solver import file_axles_from
 
-__all__ = ["vehicle_document_from", "vehicle_model_from"]
+__all__ = ["vehicle_declaration_from", "vehicle_document_from"]
 
 
-def vehicle_document_from(model: VehicleModel) -> dict[str, Any]:
+def vehicle_document_from(model: VehicleDeclaration) -> dict[str, Any]:
     """
     Export one vehicle model's vehicle-level numbers to the file format.
 
-    This is the other direction of `vehicle_model_from`, and it is what makes the
+    This is the other direction of `vehicle_declaration_from`, and it is what makes the
     `vehicle` section a *faithful* spelling of a vehicle rather than a subset of
     one.  The two axles are left out because they are subsystems: the assembly
     document refers to them by file, and writing them here as well would be a
@@ -88,11 +87,11 @@ def _stated(value: Any) -> dict[str, Any]:
     return payload
 
 
-def vehicle_model_from(
+def vehicle_declaration_from(
     document: AssemblyDocument | SimulationAssembly,
     *,
     name: str | None = None,
-) -> VehicleModel:
+) -> VehicleDeclaration:
     """
     Build a full-vehicle model from one assembly document.
 
@@ -108,17 +107,23 @@ def vehicle_model_from(
     assembly = document.assembly if isinstance(document, SimulationAssembly) else document
     if assembly.assembly_kind != "full_vehicle":
         raise AuthoringError(
-            f"{assembly.path}: a vehicle model needs a full_vehicle assembly; "
+            f"{assembly.where}: a vehicle model needs a full_vehicle assembly; "
             f"this document is a {assembly.assembly_kind!r}"
         )
     section = assembly.payload.get("vehicle")
     if section is None:
         raise AuthoringError(
-            f"{assembly.path}: a full-vehicle assembly needs a 'vehicle' section "
+            f"{assembly.where}: a full-vehicle assembly needs a 'vehicle' section "
             "stating the chassis, the four wheels and the steering system; this "
             "document states none"
         )
-    axles = file_axles_from(assembly)
+    axles = {entry.placement_role: axle_declaration_from(entry.effective(),
+        name=f"{entry.placement_role}_{assembly.name}") for entry in assembly.entries
+        if entry.functional_role == "suspension"}
+    missing = sorted({"front", "rear"}-set(axles))
+    if missing:
+        raise AuthoringError(f"{assembly.where}: a vehicle model needs a suspension at {missing}; "
+            f"this document places them at {sorted(axles)}")
     # The axles come back exactly as their own subsystem files describe them,
     # including whether each rack is bolted to the chassis.  A vehicle may declare
     # several steering channels (subtask p2-06), so "the file states one steering
@@ -130,25 +135,25 @@ def vehicle_model_from(
     # `model_validate` reports its own field (`ratio`) and loses which object the
     # field was in, and "ratio must be greater than 0" is a worse report than
     # "vehicle.steering: ratio must be greater than 0".
-    chassis = _validated(assembly.path, "chassis", RigidBodySpec, section["chassis"])
+    chassis = _validated(assembly.where, "chassis", RigidBodySpec, section["chassis"])
     steering = _validated(
-        assembly.path, "steering", SteeringSystemSpec, section["steering"]
+        assembly.where, "steering", SteeringSystemSpec, section["steering"]
     )
     driveline = _validated(
-        assembly.path, "driveline", DrivelineSpec, section.get("driveline", {})
+        assembly.where, "driveline", DrivelineSpec, section.get("driveline", {})
     )
     wheels = tuple(
-        _validated(assembly.path, f"wheels[{index}]", WheelSpec, row)
+        _validated(assembly.where, f"wheels[{index}]", WheelSpec, row)
         for index, row in enumerate(section["wheels"])
     )
     channels = tuple(
         _validated(
-            assembly.path, f"steering_channels[{index}]", SteeringChannelSpec, row
+            assembly.where, f"steering_channels[{index}]", SteeringChannelSpec, row
         )
         for index, row in enumerate(section.get("steering_channels", []))
     )
     try:
-        return VehicleModel(
+        return VehicleDeclaration(
             name=name or assembly.name,
             chassis=chassis,
             front_axle=axles["front"],
@@ -163,19 +168,19 @@ def vehicle_model_from(
         # part's bounds: four corners, one chassis body, wheels the driveline
         # refers to, an axle that names every body it needs.
         raise AuthoringError(
-            f"{assembly.path}: the 'vehicle' section is not a vehicle: "
+            f"{assembly.where}: the 'vehicle' section is not a vehicle: "
             f"{_first_problem(exc)}"
         ) from exc
 
 
 def _validated(
-    path: Path, kind: str, model_class: type[StrictModel], payload: Any
+    where: str, kind: str, model_class: type[StrictModel], payload: Any
 ) -> Any:
     """Validate one part of the vehicle section, naming the part on failure."""
     try:
         return model_class.model_validate(payload)
     except ValidationError as exc:
-        raise AuthoringError(f"{path}: vehicle.{kind}: {_first_problem(exc)}") from exc
+        raise AuthoringError(f"{where}: vehicle.{kind}: {_first_problem(exc)}") from exc
 
 
 def _first_problem(exc: ValidationError) -> str:

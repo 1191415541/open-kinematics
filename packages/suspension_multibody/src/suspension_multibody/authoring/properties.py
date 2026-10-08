@@ -20,11 +20,12 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence, cast
 
 from suspension_contracts import (
     ContractError,
@@ -33,6 +34,7 @@ from suspension_contracts import (
 )
 
 from ..properties.load import ENTRY_KINDS
+from ..properties.tir import parse_tire_tables_text, parse_tire_text, tire_model_spec
 from .errors import ElementPropertyError
 
 __all__ = [
@@ -51,6 +53,15 @@ ELEMENT_MODELS: dict[str, str] = {
     "linear": "parameters",
     "nonlinear": "curve",
     "piecewise": "curve",
+    "pac2002": "tire",
+    "fiala": "tire",
+    "native_brush": "tire",
+}
+
+_BRUSH_AXIS_PARAMETERS = {
+    "longitudinal_friction_coefficient", "lateral_friction_coefficient",
+    "longitudinal_brush_stiffness", "lateral_brush_stiffness",
+    "longitudinal_relaxation_length", "lateral_relaxation_length",
 }
 
 #: Which parameter name carries the scalar stiffness or damping of each element
@@ -113,7 +124,7 @@ def _check_finite(value: Any, path: str) -> None:
 class ElementPropertyDocument:
     """One loaded constitutive law for one element type."""
 
-    path: Path
+    path: Path | None
     payload: dict[str, Any]
     #: Kernel-facing parameters, already converted to the reference units.
     resolved: Mapping[str, Any]
@@ -135,7 +146,70 @@ class ElementPropertyDocument:
         the same intent.
         """
         target = Path(path).resolve()
-        payload = _read(target)
+        if target.suffix.lower() == ".tir":
+            try:
+                text = target.read_text(encoding="ascii", errors="replace")
+                return cls.from_tir_text(
+                    text, name=target.stem, path=target,
+                    expected_type=expected_type, allowed_models=allowed_models,
+                )
+            except (OSError, ValueError) as exc:
+                raise ElementPropertyError(f"{target}: {exc}") from exc
+        return cls.from_payload(
+            _read(target),
+            path=target,
+            expected_type=expected_type,
+            allowed_models=allowed_models,
+        )
+
+    @classmethod
+    def from_tir_text(
+        cls, text: str, *, name: str, path: Path | None = None,
+        expected_type: str | None = None, allowed_models: Sequence[str] | None = None,
+    ) -> "ElementPropertyDocument":
+        """Read the same TIR content from a file or from memory."""
+        import re
+
+        match = re.search(r"PROPERTY_FILE_FORMAT\s*=\s*['\"]([^'\"]+)", text)
+        format_name = match.group(1).upper() if match else ""
+        if "PAC2002" in format_name:
+            model = "pac2002"
+        elif "FIALA" in format_name:
+            model = "fiala"
+        else:
+            raise ElementPropertyError(
+                f"{path or name}: unsupported PROPERTY_FILE_FORMAT {format_name!r}"
+            )
+        payload = {
+            "document": "element_properties", "schema_version": 1,
+            "name": name, "element_type": "tire", "model": model,
+            "units": {"length": "mm", "force": "N", "time": "s", "mass": "kg"},
+            "parameters": parse_tire_text(text), "tables": parse_tire_tables_text(text),
+        }
+        return cls.from_payload(payload, path=path, expected_type=expected_type,
+                                allowed_models=allowed_models)
+
+    @classmethod
+    def from_payload(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        path: Path | None = None,
+        expected_type: str | None = None,
+        allowed_models: Sequence[str] | None = None,
+    ) -> "ElementPropertyDocument":
+        """
+        Validate and resolve one constitutive law that may never have been a file.
+
+        The same schema, the same finiteness checks and the same model-class
+        bounds run here as in ``load``; a law handed in from memory is checked
+        against the slot that names it exactly as a file is, because a preloaded
+        law that skipped its checks would be a second, weaker way in.
+        """
+        target: str = str(path) if path is not None else f"<memory:{payload.get('name', '?')}>"
+        if not isinstance(payload, Mapping):
+            raise ElementPropertyError(f"{target}: document root must be an object")
+        payload = copy.deepcopy(dict(payload))
         try:
             validate_element_properties(payload)
         except ContractError as exc:
@@ -155,6 +229,7 @@ class ElementPropertyDocument:
             )
 
         _check_finite(payload.get("parameters", {}), f"{target}: parameters")
+        _check_finite(payload.get("tables", {}), f"{target}: tables")
         curve = payload.get("curve")
         if curve is not None:
             _check_finite(curve["points"], f"{target}: curve.points")
@@ -165,6 +240,50 @@ class ElementPropertyDocument:
                 )
 
         needs = ELEMENT_MODELS[model]
+        if needs == "tire":
+            if element_type != "tire":
+                raise ElementPropertyError(f"{target}: model {model!r} requires tire")
+            coefficients = payload.get("parameters", {})
+            requested = [key.removeprefix("PAC2002_UNSUPPORTED_")
+                         for key, value in coefficients.items()
+                         if key.startswith("PAC2002_UNSUPPORTED_") and value != 0]
+            if requested:
+                raise ElementPropertyError(
+                    f"{target}: unsupported tire option(s): {', '.join(sorted(requested))}"
+                )
+            if model == "fiala" and abs(coefficients.get("USE_MODE", 2)) not in {1, 2, 11, 12}:
+                raise ElementPropertyError(f"{target}: unsupported Fiala USE_MODE")
+            from pydantic import ValidationError
+
+            axis_parameters = {key: value for key, value in coefficients.items() if key in _BRUSH_AXIS_PARAMETERS}
+            if axis_parameters and model != "native_brush":
+                raise ElementPropertyError(f"{target}: separate brush axes require native_brush")
+            if any(value <= 0 for value in axis_parameters.values()):
+                raise ElementPropertyError(f"{target}: brush axis parameters must be positive")
+            try:
+                if "unloaded_radius" in coefficients:
+                    from ..schema.dynamic import TireModelSpec
+
+                    scalar = {key: value for key, value in coefficients.items() if key in TireModelSpec.model_fields}
+                    remaining = {key: value for key, value in coefficients.items()
+                        if key not in TireModelSpec.model_fields and key not in _BRUSH_AXIS_PARAMETERS}
+                    scalar.update(kind=model, pac2002_tables=payload.get("tables", {}),
+                        parameter_source=payload.get("metadata", {}).get("parameter_source", "user"))
+                    scalar["fiala_parameters" if model == "fiala" else "pac2002_coefficients"] = remaining
+                    spec = TireModelSpec.model_validate(scalar)
+                else:
+                    spec = tire_model_spec(
+                        payload.get("parameters", {}),
+                        kind=cast(Literal["pac2002", "fiala", "native_brush"], model),
+                        tables=payload.get("tables", {}),
+                    )
+            except (ValueError, ValidationError) as exc:
+                raise ElementPropertyError(f"{target}: {exc}") from exc
+            resolved = spec.model_dump()
+            resolved.update(axis_parameters)
+            resolved.update(element_type="tire", model=model, units=dict(payload["units"]),
+                            source=target)
+            return cls(path, payload, MappingProxyType(resolved))
         if needs == "curve" and curve is None:
             raise ElementPropertyError(
                 f"{target}: model {model!r} requires a 'curve' object"
@@ -183,8 +302,39 @@ class ElementPropertyDocument:
         # Bounds are the model's own: the resolved parameters are handed to the
         # element class the solver will construct, so "a stiffness is positive"
         # has one home rather than a second copy here that could drift from it.
-        _check_with_model_class(target, element_type, resolved)
-        return cls(target, copy.deepcopy(payload), MappingProxyType(resolved))
+        if element_type == "mass":
+            if resolved.get("value", 0.0) <= 0:
+                raise ElementPropertyError(f"{target}: mass value must be positive")
+        elif element_type == "inertia":
+            import numpy as np
+
+            tensor = np.asarray(resolved.get("inertia", ()), dtype=float)
+            if tensor.shape != (3, 3) or not np.isfinite(tensor).all():
+                raise ElementPropertyError(f"{target}: inertia must be a finite 3x3 matrix")
+            scale = max(float(np.abs(tensor).max()), 1e-300)
+            normalized = tensor / scale
+            if not np.allclose(normalized, normalized.T, atol=1e-12, rtol=0) or np.linalg.eigvalsh(normalized).min() <= 0 or np.linalg.eigvalsh(np.trace(normalized)/2*np.eye(3)-normalized).min() < -1e-12:
+                raise ElementPropertyError(f"{target}: inertia must be a physical positive tensor")
+        else:
+            _check_with_model_class(target, element_type, resolved)
+        return cls(path, payload, MappingProxyType(resolved))
+
+    @property
+    def where(self) -> str:
+        """How to name this law in a message: its file, or its own name."""
+        return str(self.path) if self.path is not None else f"<memory:{self.name}>"
+
+    def to_payload(self) -> dict[str, Any]:
+        """Return a mutable copy of the declaration, safe for a caller to edit."""
+        return copy.deepcopy(self.payload)
+
+    def save(self, path: str | Path) -> Path:
+        """Write this law to a file and return the path written."""
+        target = Path(path).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        text = json.dumps(self.payload, indent=2, sort_keys=True) + "\n"
+        target.write_text(text, encoding="utf-8")
+        return target
 
     @property
     def name(self) -> str:
@@ -206,7 +356,10 @@ class ElementPropertyDocument:
     @property
     def effective_values_hash(self) -> str:
         """Hash of the resolved kernel-facing values this law produces."""
-        return _hash(dict(self.resolved))
+        values = dict(self.resolved)
+        if ELEMENT_MODELS[self.model] == "tire":
+            values.pop("source", None)
+        return _hash(values)
 
     def curve_points(self) -> tuple[tuple[float, float], ...]:
         """Return the curve samples, or an empty tuple for a linear law."""
@@ -224,7 +377,7 @@ _MODEL_CLASS_KIND: dict[str, str] = {"bushing": "bushing6x6"}
 
 
 def _check_with_model_class(
-    path: Path, element_type: str, resolved: Mapping[str, Any]
+    where: str, element_type: str, resolved: Mapping[str, Any]
 ) -> None:
     """
     Run the resolved law through the model's own element class.
@@ -241,7 +394,7 @@ def _check_with_model_class(
     model_class = ENTRY_KINDS.get(kind)
     if model_class is None:
         raise ElementPropertyError(
-            f"{path}: no model class is registered for element type {element_type!r}"
+            f"{where}: no model class is registered for element type {element_type!r}"
         )
     from pydantic import ValidationError
 
@@ -269,7 +422,7 @@ def _check_with_model_class(
         model_class.model_validate(payload)
     except ValidationError as exc:
         raise ElementPropertyError(
-            f"{path}: the {element_type} law was rejected by the "
+            f"{where}: the {element_type} law was rejected by the "
             f"{kind} model: {_first_problem(exc)}"
         ) from exc
 
@@ -292,7 +445,7 @@ def _first_problem(exc: Any) -> str:
 
 
 def _resolve(
-    path: Path,
+    where: str,
     element_type: str,
     model: str,
     payload: Mapping[str, Any],
@@ -310,13 +463,13 @@ def _resolve(
         "element_type": element_type,
         "model": model,
         "units": dict(payload["units"]),
-        "source": str(path),
+        "source": where,
     }
     parameters = dict(payload.get("parameters", {}))
     for key, value in parameters.items():
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             raise ElementPropertyError(
-                f"{path}: parameter {key!r} must be a number, found "
+                f"{where}: parameter {key!r} must be a number, found "
                 f"{type(value).__name__}"
             )
         resolved[key] = float(value)
@@ -332,7 +485,7 @@ def _resolve(
         widths = {len(row) for row in rows}
         if len(widths) != 1:
             raise ElementPropertyError(
-                f"{path}: matrix {matrix['name']!r} has rows of differing length "
+                f"{where}: matrix {matrix['name']!r} has rows of differing length "
                 f"{sorted(widths)}"
             )
         resolved[str(matrix["name"])] = rows
@@ -341,11 +494,16 @@ def _resolve(
     if points:
         resolved["force_curve"] = points
 
+    if element_type in {"mass", "inertia"}:
+        if model != "linear":
+            raise ElementPropertyError(f"{where}: {element_type} requires linear parameters")
+        return resolved
+
     scalar, must_be_positive = _SCALAR_FIELD[element_type]
     if scalar not in resolved:
         if not points:
             raise ElementPropertyError(
-                f"{path}: {element_type} law provides neither a {scalar!r} "
+                f"{where}: {element_type} law provides neither a {scalar!r} "
                 "parameter nor a curve; the solve path has no force to apply"
             )
         # A pure curve law still needs a positive stiffness for the kernel's
@@ -354,7 +512,7 @@ def _resolve(
         slope = _first_slope(points)
         if slope <= 0.0:
             raise ElementPropertyError(
-                f"{path}: {element_type} curve must have a positive initial "
+                f"{where}: {element_type} curve must have a positive initial "
                 f"slope, found {slope!r}"
             )
         resolved[scalar] = slope
@@ -367,11 +525,11 @@ def _resolve(
     value = float(resolved[scalar])
     if must_be_positive and value <= 0.0:
         raise ElementPropertyError(
-            f"{path}: {element_type} {scalar} must be positive, found {value!r}"
+            f"{where}: {element_type} {scalar} must be positive, found {value!r}"
         )
     if not must_be_positive and value < 0.0:
         raise ElementPropertyError(
-            f"{path}: {element_type} {scalar} must not be negative, found {value!r}"
+            f"{where}: {element_type} {scalar} must not be negative, found {value!r}"
         )
     return resolved
 

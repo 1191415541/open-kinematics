@@ -18,12 +18,12 @@ from suspension_multibody.axle_dynamics import (
     AxleBumpStop,
     AxleDamper,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
     AxleSpring,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
+from tests.axle_dynamics._unified_entry import solve_axle
 
 _I = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _Z = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
@@ -106,7 +106,7 @@ def _model() -> AxleDynamicsModel:
 
 
 def _run():
-    return run_axle_dynamics(
+    return solve_axle(
         _model(),
         AxleDynamicsCase(
             name="laws",

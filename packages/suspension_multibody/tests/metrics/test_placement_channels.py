@@ -33,10 +33,7 @@ from suspension_multibody.report.wheel_loads import (
     side_loads,
     summarize_wheel_loads,
 )
-from suspension_multibody.vehicle.static_loads import (
-    compute_static_wheel_loads_for_assembly,
-)
-from tests.physics.test_static_loads import _three_axle_assembly
+from tests.physics.test_static_loads import G, _solve, _three_axle_assembly
 
 #: The three placements a three-axle vehicle states, in the order its assembly
 #: declares them -- not an order this table chose.
@@ -45,7 +42,7 @@ _PLACEMENTS = ("front", "middle", "rear")
 
 def _three_axle_loads() -> dict[str, float]:
     """Return the six solved wheel loads of the three-axle assembly."""
-    return compute_static_wheel_loads_for_assembly(_three_axle_assembly()).wheel_loads
+    return _solve(_three_axle_assembly()).wheel_loads
 
 
 def test_a_three_axle_vehicle_gets_one_channel_per_placement() -> None:
@@ -86,9 +83,11 @@ def test_a_three_axle_summary_answers_the_middle_axle() -> None:
     summary = summarize_wheel_loads(_three_axle_loads())
 
     assert summary.placements == _PLACEMENTS
-    assert summary.front_axle == summary.middle_axle == summary.rear_axle
+    for placement in _PLACEMENTS:
+        assert summary.axle_loads[placement] == pytest.approx(summary.total/3, rel=1e-15)
     assert summary.total == pytest.approx(sum(summary.axle_loads.values()), rel=1e-15)
-    assert summary.front_rear_delta == 0.0
+    assert summary.front_rear_delta == summary.front_axle - summary.rear_axle
+    assert summary.front_rear_delta == pytest.approx(0, abs=2e-12)
     with pytest.raises(AttributeError, match="no 'fourth' placement"):
         summary.fourth_axle
 
@@ -219,9 +218,9 @@ def test_the_third_axle_of_a_six_wheel_run_is_a_real_placement_not_a_rounding() 
     copy of a neighbour.
     """
     assembly = _three_axle_assembly()
-    static = compute_static_wheel_loads_for_assembly(assembly)
-    accelerated = compute_static_wheel_loads_for_assembly(
-        assembly, acceleration=np.array([1_000.0, 0.0, 0.0])
+    static = _solve(assembly)
+    accelerated = _solve(
+        assembly, acceleration=np.array([1.0, 0.0, 0.0])
     )
 
     static_channels = wheel_load_metrics(static.wheel_loads)
@@ -237,5 +236,5 @@ def test_the_third_axle_of_a_six_wheel_run_is_a_real_placement_not_a_rounding() 
     )
     assert accelerated_channels["load_transfer_front_minus_rear"] < 0.0
     assert sum(accelerated.wheel_loads.values()) == pytest.approx(
-        static.total_mass * 9810.0, rel=0.0, abs=accelerated.residual_tolerance
+        static.total_mass * G, rel=0.0, abs=accelerated.residual_tolerance
     )

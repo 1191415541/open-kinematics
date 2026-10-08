@@ -231,7 +231,7 @@ def torque_element_row(
     The row's two bodies are the pairing's, so the whole path from "which port met
     which requirement" to the built element has no step that reads a body name.
     """
-    from ..subsystems.types import ResolvedElement
+    from ..modeling.instance import ResolvedElement
 
     return ResolvedElement(
         kind="rotational_torque",

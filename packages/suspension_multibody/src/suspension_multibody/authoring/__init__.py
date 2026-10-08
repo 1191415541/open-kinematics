@@ -13,8 +13,30 @@ from .documents import (
     SimulationAssembly,
     SubsystemDocument,
     TemplateDocument,
+    load_assembly,
+    load_rig,
+    load_subsystem,
+    load_template,
 )
 from .errors import AuthoringError, ElementPropertyError, TemplateAuthoringError
+from .generic import (
+    GenericMultibodyAssembly,
+    GenericSubsystemAssembler,
+    assemble_generic,
+)
+from .identity import identity_of, model_identity
+from .loader import CaseDocument, DocumentLoader, LoadedDocuments, ResourceRecord
+from .migration import (
+    MigrationError,
+    migrate_v1_axle,
+    migrate_v1_case,
+    migrate_v1_dynamic_axle,
+    migrate_v1_kc_case,
+    migrate_v1_vehicle,
+    migrate_v1_vehicle_case,
+    migrate_v1_vehicle_kc_case,
+    save_migrated_assembly,
+)
 from .project import DOCUMENT_KINDS, Project, ProjectError
 from .properties import ELEMENT_MODELS, ElementPropertyDocument
 from .security import (
@@ -26,7 +48,7 @@ from .security import (
     Revision,
     UserAuthoring,
 )
-from .vehicle import vehicle_document_from, vehicle_model_from
+from .vehicle import vehicle_declaration_from, vehicle_document_from
 
 __all__ = [
     "DOCUMENT_KINDS",
@@ -42,7 +64,12 @@ __all__ = [
     "WHEEL_ENDS",
     "AssemblyDocument",
     "AssemblyEntry",
+    "CaseDocument",
+    "DocumentLoader",
+    "LoadedDocuments",
+    "ResourceRecord",
     "AuthoringError",
+    "MigrationError",
     "AuthoringPermissionError",
     "ExpertAuthoring",
     "EffectiveSubsystem",
@@ -57,6 +84,23 @@ __all__ = [
     "TemplateAuthoringError",
     "TemplateDocument",
     "UserAuthoring",
+    "load_assembly",
+    "load_rig",
+    "load_subsystem",
+    "load_template",
+    "identity_of",
+    "model_identity",
+    "migrate_v1_axle",
+    "migrate_v1_case",
+    "migrate_v1_dynamic_axle",
+    "migrate_v1_kc_case",
+    "migrate_v1_vehicle",
+    "migrate_v1_vehicle_case",
+    "migrate_v1_vehicle_kc_case",
+    "save_migrated_assembly",
+    "vehicle_declaration_from",
     "vehicle_document_from",
-    "vehicle_model_from",
+    "GenericMultibodyAssembly",
+    "GenericSubsystemAssembler",
+    "assemble_generic",
 ]

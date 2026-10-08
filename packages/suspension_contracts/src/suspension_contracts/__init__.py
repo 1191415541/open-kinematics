@@ -37,6 +37,7 @@ from .multibody import (
     validate_subsystem,
     validate_template,
 )
+from .resolved import validate_resolved_model, validate_solve_plan
 
 __all__ = [
     "CONTRACT_MAGIC",
@@ -69,6 +70,8 @@ __all__ = [
     "validate_element_properties",
     "validate_model",
     "validate_result",
+    "validate_resolved_model",
+    "validate_solve_plan",
     "validate_rig",
     "validate_subsystem",
     "validate_template",

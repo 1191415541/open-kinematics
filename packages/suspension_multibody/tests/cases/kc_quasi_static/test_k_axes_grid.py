@@ -21,10 +21,10 @@ from __future__ import annotations
 import numpy as np
 from suspension_contracts import validate_case
 
-from suspension_multibody.cases.kc_quasi_static import case_document, model_document
-from suspension_multibody.simulation import SimulationRequest, run_request
-from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
+
+from ._documents import body_id, documents
+from ._documents import run as _run
 
 _TIMES_S = (0.0, 1e-3)
 _WHEEL_DRIVES = ("wheel_drive_L", "wheel_drive_R")
@@ -48,32 +48,14 @@ def _grid_case(axes: dict[str, tuple[float, ...]]) -> dict[str, object]:
     }
 
 
-def _run(assembly, case: dict[str, object]):
-    model = model_document(assembly, name="axes-grid", drive_wheels=True)
-    return run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
-
-
 def test_a_single_axis_grid_is_the_shorthand_that_drives_the_wheels_by_zero() -> None:
-    assembly = compose_axle(benchmark_model(), "K")
+    assembly = documents(benchmark_model(), "K")
     racks = (-5.0, 0.0, 5.0)
     axes_case = _grid_case({"rack_drive": racks})
     validate_case(axes_case)
-    shorthand = case_document(
-        assembly,
-        family="kc_quasi_static",
-        name="axes-grid",
-        wheel_values_mm=(0.0,),
-        rack_values_mm=racks,
-        times_s=_TIMES_S,
-        drive_wheels=True,
-    )
+    shorthand = _grid_case({})
+    shorthand["k"] = {"wheel_values_mm": [0.], "rack_values_mm": list(racks),
+        "axis_map": {"wheel": list(_WHEEL_DRIVES), "rack": "rack_drive"}}
     produced = _run(assembly, axes_case)
     reference = _run(assembly, shorthand)
     assert len(produced.cases) == len(racks)
@@ -83,7 +65,7 @@ def test_a_single_axis_grid_is_the_shorthand_that_drives_the_wheels_by_zero() ->
 
 
 def test_a_two_axis_grid_drives_the_two_sides_independently() -> None:
-    assembly = compose_axle(benchmark_model(), "K")
+    assembly = documents(benchmark_model(), "K")
     left_values = (-10.0, 0.0, 10.0)
     right_values = (-20.0, 5.0)
     run = _run(
@@ -96,8 +78,8 @@ def test_a_two_axis_grid_drives_the_two_sides_independently() -> None:
     assert len(entries) == len(left_values) * len(right_values)
     states = run.block("body_state")
     bodies = list(run.document["manifest"]["bodies"])
-    left_index = bodies.index("upright_L")
-    right_index = bodies.index("upright_R")
+    left_index = bodies.index(body_id(run, "upright_L"))
+    right_index = bodies.index(body_id(run, "upright_R"))
 
     def final(index: int):
         entry = entries[index]

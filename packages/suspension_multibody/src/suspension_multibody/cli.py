@@ -3,22 +3,70 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import typer
 
 from . import __version__
 from .adams.probe import DEFAULT_PROFILE
-from .api import run_case, run_dynamic_case
+from .api import validate as compile_documents
 from .io.artifacts import write_artifact
-from .schema import (
-    load_case,
-    load_dynamic_case,
-    load_model,
-    load_vehicle_dynamic_case,
-    load_vehicle_model,
-)
+from .simulation.runner import run_compiled
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
+
+
+def _validate_documents(assembly: Path, case: Path) -> None:
+    """Resolve and compile the same documents submitted by every run command."""
+    try:
+        compile_documents(assembly, case)
+    except Exception as exc:  # noqa: BLE001 - the loader's message is the report
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _declaration_and_dynamic_case(model: Path, case: Path):
+    """
+    Read an axle declaration and a dynamic case, for the Adams gates.
+
+    The Adams time-domain gates compare a *replay* to Adams, and a replay takes a
+    declaration and a dynamic case rather than a document pair.  The v1 *loaders*
+    are retired with the modelling route, so this reads the two files straight
+    into their schema types: these gates are an internal comparison whose inputs
+    are declared in tests, not a user-facing modelling door.
+    """
+    import json
+
+    import yaml
+    from pydantic import ValidationError
+
+    from .schema.dynamic import DynamicCaseSpec
+    from .schema.model import AxleDeclaration
+
+    def _read(path: Path) -> dict:
+        text = path.read_text(encoding="utf-8")
+        payload = (
+            json.loads(text) if path.suffix.lower() == ".json" else yaml.safe_load(text)
+        )
+        if not isinstance(payload, dict):
+            raise typer.BadParameter(f"{path} must contain an object")
+        return payload
+
+    try:
+        return (
+            AxleDeclaration.model_validate(_read(model)),
+            DynamicCaseSpec.model_validate(_read(case)),
+        )
+    except (ValueError, ValidationError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _simulate_documents(assembly: Path, case: Path):
+    """Submit one document pair through the unified entry."""
+    return run_compiled(compile_documents(assembly, case))
+
+
+def _write_run_artifact(run, out: Path) -> Path:
+    return write_artifact(run.result, out, model=run.compiled.request.model, case=run.compiled.request.case)
 
 
 @app.callback()
@@ -32,222 +80,122 @@ def main(
 
 @app.command("validate")
 def validate(
-    model: Path = typer.Option(
-        ..., exists=True, readable=True, help="Model YAML/JSON."
+    assembly: Path = typer.Option(
+        ..., exists=True, readable=True, help="Assembly document JSON."
     ),
-    case: Path = typer.Option(..., exists=True, readable=True, help="Case YAML/JSON."),
+    case: Path = typer.Option(
+        ..., exists=True, readable=True, help="Case contract document JSON."
+    ),
 ) -> None:
-    """Validate v1 model and case files."""
-    load_model(model)
-    load_case(case)
+    """Validate an assembly document and a case contract document."""
+    _validate_documents(assembly, case)
     typer.echo("valid")
 
 
 @app.command("run")
 def run(
-    model: Path = typer.Option(
-        ..., exists=True, readable=True, help="Model YAML/JSON."
+    assembly: Path = typer.Option(
+        ..., exists=True, readable=True, help="Assembly document JSON."
     ),
-    case: Path = typer.Option(..., exists=True, readable=True, help="Case YAML/JSON."),
+    case: Path = typer.Option(
+        ..., exists=True, readable=True, help="Case contract document JSON."
+    ),
     out: Path = typer.Option(..., help="Output directory."),
 ) -> None:
-    """Run one K/C case and write structured results."""
-    bundle = run_case(load_model(model), load_case(case), out)
-    typer.echo(f"{bundle.manifest.run_id}: {bundle.manifest.state_count} state(s)")
+    """Run one document pair and write its native channels."""
+    run_envelope = _simulate_documents(assembly, case)
+    manifest = _write_run_artifact(run_envelope, out)
+    typer.echo(f"{run_envelope.status}: {manifest}")
 
 
 @app.command("validate-dynamic")
 def validate_dynamic(
-    model: Path = typer.Option(
-        ..., exists=True, readable=True, help="Model YAML/JSON."
+    assembly: Path = typer.Option(
+        ..., exists=True, readable=True, help="Assembly document JSON."
     ),
     case: Path = typer.Option(
-        ..., exists=True, readable=True, help="Dynamic case YAML/JSON."
+        ..., exists=True, readable=True, help="Dynamic case contract document JSON."
     ),
 ) -> None:
-    """Validate a v1 model and dynamic case file."""
-    load_model(model)
-    load_dynamic_case(case)
+    """Validate a dynamic assembly document and its case contract document."""
+    _validate_documents(assembly, case)
     typer.echo("valid")
 
 
 @app.command("run-dynamic")
 def run_dynamic(
-    model: Path = typer.Option(
-        ..., exists=True, readable=True, help="Model YAML/JSON."
+    assembly: Path = typer.Option(
+        ..., exists=True, readable=True, help="Assembly document JSON."
     ),
     case: Path = typer.Option(
-        ..., exists=True, readable=True, help="Dynamic case YAML/JSON."
+        ..., exists=True, readable=True, help="Dynamic case contract document JSON."
     ),
     out: Path = typer.Option(..., help="Output directory."),
 ) -> None:
-    """Run one time-domain case and write structured results."""
-    bundle = run_dynamic_case(load_model(model), load_dynamic_case(case), out)
-    typer.echo(f"{bundle.manifest.run_id}: {bundle.manifest.sample_count} sample(s)")
+    """Run one dynamic document pair and write structured results."""
+    run_envelope = _simulate_documents(assembly, case)
+    manifest = _write_run_artifact(run_envelope, out)
+    typer.echo(f"{run_envelope.status}: {manifest}")
 
 
 @app.command("validate-vehicle-dynamics")
 def validate_vehicle_dynamics(
     model: Path = typer.Option(
-        ..., exists=True, readable=True, help="Full-vehicle model YAML/JSON."
+        ..., exists=True, readable=True, help="Full-vehicle assembly document JSON."
     ),
     case: Path = typer.Option(
-        ..., exists=True, readable=True, help="Full-vehicle dynamic case YAML/JSON."
+        ..., exists=True, readable=True, help="Vehicle dynamic case document JSON."
     ),
 ) -> None:
-    """Validate a full-vehicle native dynamics model and case."""
-    vehicle_model = load_vehicle_model(model)
-    vehicle_case = load_vehicle_dynamic_case(case)
-    if vehicle_case.vehicle.model_dump() != vehicle_model.model_dump():
-        raise typer.BadParameter("the case vehicle does not match the model file")
+    """Validate a full-vehicle assembly document and its case document."""
+    _validate_documents(model, case)
     typer.echo("valid")
 
 
 @app.command("run-vehicle-dynamics")
 def run_vehicle_dynamics_command(
     model: Path = typer.Option(
-        ..., exists=True, readable=True, help="Full-vehicle model YAML/JSON."
+        ..., exists=True, readable=True, help="Full-vehicle assembly document JSON."
     ),
     case: Path = typer.Option(
-        ..., exists=True, readable=True, help="Full-vehicle dynamic case YAML/JSON."
+        ..., exists=True, readable=True, help="Vehicle dynamic case document JSON."
     ),
     out: Path = typer.Option(..., help="Output directory."),
 ) -> None:
-    """Run native full-vehicle dynamics and retain raw result evidence."""
-    from .axle_dynamics import NativeAxleError, NativeKernelUnavailableError
-    from .results.vehicle import VehicleDynamicsResult
-    from .vehicle.service import run_vehicle_dynamics
+    """Run a full-vehicle document pair and retain raw result evidence."""
+    from .kernel import KernelContractError
 
-    vehicle_model = load_vehicle_model(model)
-    vehicle_case = load_vehicle_dynamic_case(case)
+    compiled = compile_documents(model, case)
     try:
-        result = run_vehicle_dynamics(vehicle_model, vehicle_case)
-    except (NativeAxleError, NativeKernelUnavailableError) as exc:
-        partial_result = getattr(exc, "partial_result", None)
-        partial = (
-            None
-            if partial_result is None
-            else (
-                partial_result
-                if isinstance(partial_result, VehicleDynamicsResult)
-                else VehicleDynamicsResult(axle=partial_result)
-            )
-        )
-        artifact = write_artifact(
-            partial,
-            out,
-            partial=partial,
-            model=vehicle_model,
-            case=vehicle_case,
-            status="failed",
-            failure=exc,
-        )
+        run_envelope = run_compiled(compiled)
+    except KernelContractError as exc:
+        from .results.envelope import ResultEnvelope
+        from .results.raw import RawContractResult
+
+        raw = exc.partial_raw_result
+        partial = None if raw is None else ResultEnvelope(cast(RawContractResult, raw), compiled.request.model)
+        artifact = write_artifact(None, out, partial=partial, status="failed", failure=exc)
         typer.echo(str(exc), err=True)
         typer.echo(f"artifact: {artifact}", err=True)
         raise typer.Exit(code=1) from exc
-    artifact = write_artifact(result, out, model=vehicle_model, case=vehicle_case)
-    typer.echo(f"{len(result.times_s)} sample(s): {artifact}")
-
-
-@app.command("validate-axle-dynamics")
-def validate_axle_dynamics(
-    model: Path = typer.Option(
-        ..., exists=True, readable=True, help="Axle model YAML/JSON."
-    ),
-    case: Path = typer.Option(
-        ..., exists=True, readable=True, help="Axle case YAML/JSON."
-    ),
-) -> None:
-    """Validate closed SI axle-dynamics inputs."""
-    from .axle_dynamics import (
-        load_axle_dynamics_case,
-        load_axle_dynamics_model,
-    )
-
-    load_axle_dynamics_model(model)
-    load_axle_dynamics_case(case)
-    typer.echo("valid")
+    artifact = _write_run_artifact(run_envelope, out)
+    typer.echo(f"{run_envelope.status}: {artifact}")
 
 
 @app.command("run-axle-dynamics")
 def run_axle_dynamics_command(
-    model: Path = typer.Option(
-        ..., exists=True, readable=True, help="Axle model YAML/JSON."
+    assembly: Path = typer.Option(
+        ..., exists=True, readable=True, help="Assembly document JSON."
     ),
     case: Path = typer.Option(
-        ..., exists=True, readable=True, help="Axle case YAML/JSON."
+        ..., exists=True, readable=True, help="Case contract document JSON."
     ),
     out: Path = typer.Option(..., help="Output directory."),
 ) -> None:
-    """Run the native axle solver and retain success or failure evidence."""
-    from .axle_dynamics import (
-        NativeAxleError,
-        NativeKernelUnavailableError,
-        load_axle_dynamics_case,
-        load_axle_dynamics_model,
-        run_axle_dynamics,
-    )
-
-    axle_model = load_axle_dynamics_model(model)
-    axle_case = load_axle_dynamics_case(case)
-    try:
-        result = run_axle_dynamics(axle_model, axle_case)
-    except (NativeAxleError, NativeKernelUnavailableError) as exc:
-        partial_result = getattr(exc, "partial_result", None)
-        manifest = write_artifact(
-            partial_result,
-            out,
-            partial=partial_result,
-            model=axle_model,
-            case=axle_case,
-            status="failed",
-            failure=exc,
-        )
-        typer.echo(str(exc), err=True)
-        typer.echo(f"artifact: {manifest}", err=True)
-        raise typer.Exit(code=1) from exc
-    manifest = write_artifact(result, out, model=axle_model, case=axle_case)
-    typer.echo(f"{len(result.times_s)} sample(s): {manifest}")
-
-
-@app.command("create-axle-manifest")
-def create_axle_manifest_command(
-    model: Path = typer.Option(
-        ..., exists=True, readable=True, help="Axle model YAML/JSON."
-    ),
-    case: Path = typer.Option(
-        ..., exists=True, readable=True, help="Axle case YAML/JSON."
-    ),
-    settings: Path = typer.Option(
-        ...,
-        exists=True,
-        readable=True,
-        help="Role bindings and Adams execution settings YAML/JSON.",
-    ),
-    out: Path = typer.Option(..., help="Dynamic axle manifest JSON."),
-) -> None:
-    """Freeze the sole shared input for independent native and Adams runners."""
-    from .adams import (
-        create_dynamic_axle_manifest,
-        load_dynamic_axle_manifest_settings,
-        write_dynamic_axle_manifest,
-    )
-    from .axle_dynamics import (
-        load_axle_dynamics_case,
-        load_axle_dynamics_model,
-    )
-
-    manifest_settings = load_dynamic_axle_manifest_settings(settings)
-    manifest = create_dynamic_axle_manifest(
-        load_axle_dynamics_model(model),
-        load_axle_dynamics_case(case),
-        manifest_settings.role_bindings,
-        adams_solver=manifest_settings.adams_solver,
-        execution_environment=manifest_settings.execution_environment,
-        case_metadata=manifest_settings.case_metadata,
-    )
-    path = write_dynamic_axle_manifest(manifest, out)
-    typer.echo(f"{manifest.sha256}: {path}")
+    """Run one axle document pair through the unified entry."""
+    run_envelope = _simulate_documents(assembly, case)
+    manifest = _write_run_artifact(run_envelope, out)
+    typer.echo(f"{run_envelope.status}: {manifest}")
 
 
 @app.command("run-native-axle-evidence")
@@ -346,14 +294,14 @@ def validate_adams(
         "--dynamic-model",
         exists=True,
         readable=True,
-        help="Model YAML/JSON required by --axle-time-domain or --vehicle-kc.",
+        help="Model document required by --axle-time-domain or --vehicle-kc.",
     ),
     dynamic_case: Path | None = typer.Option(
         None,
         "--dynamic-case",
         exists=True,
         readable=True,
-        help="Dynamic case YAML/JSON required by --axle-time-domain or --vehicle-kc.",
+        help="Case document required by --axle-time-domain or --vehicle-kc.",
     ),
     time_runner: str | None = typer.Option(
         None,
@@ -417,10 +365,16 @@ def validate_adams(
         assert dynamic_model is not None
         assert dynamic_case is not None
         assert time_runner is not None
+        # The gate compares a *replay* against Adams.  The replay's two inputs are
+        # the axle declaration and the dynamic case; the retired v1 loaders are not
+        # a door any more, so the two files are read into their schema types here.
+        declaration, dynamic_inputs = _declaration_and_dynamic_case(
+            dynamic_model, dynamic_case
+        )
         result = validate_axle_time_domain(
             discover_profile(profile),
-            load_model(dynamic_model),
-            load_dynamic_case(dynamic_case),
+            declaration,
+            dynamic_inputs,
             runner=command_time_domain_runner(time_runner),
             output_dir=evidence_dir,
         )
@@ -433,8 +387,7 @@ def validate_adams(
         assert dynamic_case is not None
         result = validate_vehicle_kc_time_domain(
             discover_profile(profile),
-            load_model(dynamic_model),
-            load_dynamic_case(dynamic_case),
+            *_declaration_and_dynamic_case(dynamic_model, dynamic_case),
             output_dir=evidence_dir,
         )
         _echo_time_domain_result(result.ok, result.message, result.output_path)

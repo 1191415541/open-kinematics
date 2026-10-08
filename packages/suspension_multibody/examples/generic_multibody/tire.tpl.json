@@ -1,0 +1,17 @@
+{
+  "document": "template", "schema_version": 1, "name": "single_tire",
+  "functional_role": "generic", "allowed_placement_roles": ["any"],
+  "symmetry": "asymmetric", "units": {"length": "m"},
+  "bodies": [{"name": "ground", "fixed": true}, {"name": "carrier", "mass": 1, "position": [0, 0, 0.34297030175]}],
+  "hardpoints": [{"name": "origin", "owner": "ground"}, {"name": "carrier_center", "owner": "carrier"}, {"name": "center", "owner": "wheel"}],
+  "markers": [{"name": "center", "owner": "wheel", "point": "center"}, {"name": "spin", "owner": "wheel", "point": "center"}, {"name": "contact", "owner": "carrier", "point": "carrier_center"}],
+  "joints": [
+    {"name": "vertical_guide", "type": "prismatic", "body_a": "ground", "body_b": "carrier", "point_a": "origin", "point_b": "carrier_center", "axis": [0, 0, 1]},
+    {"name": "bearing", "type": "revolute", "body_a": "carrier", "body_b": "wheel", "point_a": "carrier_center", "point_b": "center", "axis": [0, 1, 0]}
+  ],
+  "property_slots": [{"name": "mass", "element_type": "mass", "required": true}, {"name": "inertia", "element_type": "inertia", "required": true}, {"name": "tire", "element_type": "tire", "required": true, "allowed_models": ["pac2002"]}],
+  "coordinates": [{"name": "spin", "joint": "bearing", "kind": "rotation", "reference": 0}],
+  "ports": [{"name": "hub", "role": "hub", "marker": "center"}, {"name": "contact", "role": "contact", "marker": "contact"}, {"name": "road", "role": "road", "kind": "road", "resource": "plane"}, {"name": "spin", "role": "wheel_spin", "kind": "spin", "coordinate": "spin", "owner": "wheel", "units": "rad"}],
+  "tires": [{"name": "tire", "body": {"name": "wheel", "mass_slot": "mass", "inertia_slot": "inertia", "center_marker": "center"}, "model_slot": "tire", "mount_port": "hub", "spin_marker": "spin", "contact_frame": {"port": "contact"}, "road_port": "road"}],
+  "elements": []
+}

@@ -13,10 +13,11 @@ from suspension_multibody.adams.strict_c import (
     write_raw_adams_models,
 )
 from suspension_multibody.cases.kc_quasi_static.load_paths import LoadPath
-from suspension_multibody.schema import FrontAxleModel, MassSpec, Vec3
+from suspension_multibody.schema import MassSpec, Vec3
+from suspension_multibody.schema.model import AxleDeclaration
 
 
-def _model() -> FrontAxleModel:
+def _model() -> AxleDeclaration:
     points = {
         "uca_front": Vec3(x=0, y=-400, z=500),
         "uca_rear": Vec3(x=100, y=-400, z=500),
@@ -29,7 +30,7 @@ def _model() -> FrontAxleModel:
         "wheel_center": Vec3(x=50, y=-750, z=300),
         "rack_center": Vec3(x=50, y=0, z=300),
     }
-    return FrontAxleModel(
+    return AxleDeclaration(
         name="strict_c_fixture", hardpoints=points, mass=MassSpec(sprung_mass=1)
     )
 

@@ -7,13 +7,13 @@ from suspension_multibody.axle_dynamics import (
     AxleAerodynamicDrag,
     AxleBody,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
     AxleTire,
     NativeAxleError,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
+from tests.axle_dynamics._unified_entry import solve_axle
 
 _I = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _ZERO_I = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
@@ -73,7 +73,7 @@ def _drop_model(
 
 
 def test_drop_locates_contact_and_limits_penetration() -> None:
-    result = run_axle_dynamics(
+    result = solve_axle(
         _drop_model(),
         AxleDynamicsCase(
             name="drop",
@@ -99,7 +99,7 @@ def test_drop_locates_contact_and_limits_penetration() -> None:
 
 def test_initial_tire_compression_limit_is_a_hard_physical_failure() -> None:
     with pytest.raises(NativeAxleError, match="maximum compression"):
-        run_axle_dynamics(
+        solve_axle(
             _drop_model(height=0.249, vertical_velocity=0.0),
             AxleDynamicsCase(
                 name="over-compressed",
@@ -137,7 +137,7 @@ def test_vehicle_aerodynamic_drag_uses_current_body_velocity() -> None:
             ),
         ),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="aerodynamic-drag",
@@ -191,7 +191,7 @@ def test_pac2002_cambered_contact_applies_normal_force_at_ground_intersection() 
             ),
         ),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="cambered-pac-contact",
@@ -245,7 +245,7 @@ def test_brush_force_opposes_longitudinal_slip_and_respects_ellipse() -> None:
         ),
         tires=(_tire(),),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="rolling-brush",
@@ -264,7 +264,7 @@ def test_brush_force_opposes_longitudinal_slip_and_respects_ellipse() -> None:
 
 def test_fixed_step_localizes_non_grid_contact_as_an_explicit_split() -> None:
     event_time = 0.0073
-    result = run_axle_dynamics(
+    result = solve_axle(
         _drop_model(height=0.3 + event_time),
         AxleDynamicsCase(
             name="non-grid-contact",
@@ -294,7 +294,7 @@ def test_fixed_step_localizes_non_grid_contact_as_an_explicit_split() -> None:
 
 
 def test_contact_releases_when_raw_normal_force_reaches_zero() -> None:
-    result = run_axle_dynamics(
+    result = solve_axle(
         _drop_model(height=0.29, vertical_velocity=0.2),
         AxleDynamicsCase(
             name="damped-release",

@@ -109,6 +109,7 @@ void external_force_vector(
         model, state, input, force, torque, energy_rates, record_energy,
         brush_only, external_power
     );
+    assemble_function_forces(model, state, input, force, torque, energy_rates, record_energy, brush_only, internal_force_scale, external_power);
     assemble_tire_forces(
         model, state, input, force, torque, tire_forces,
         tire_state_derivatives, tire_output, tire_relaxation_rates,

@@ -40,12 +40,10 @@ import numpy as np
 import pytest
 from suspension_contracts import validate_model
 
+from suspension_multibody.api import simulate
 from suspension_multibody.kernel import KernelContractError
-from suspension_multibody.simulation import (
-    SimulationRequest,
-    compile_document_pair,
-    run_request,
-)
+
+from ._torque_documents import torque_documents
 
 #: The driven body's initial angular velocity about the element's axis, in
 #: rad/s.  Well clear of the law's ``kEps`` branch, so the couple is engaged
@@ -223,18 +221,7 @@ def _run(*, with_element: bool, reference_quaternion: bool = False) -> np.ndarra
         with_element=with_element, reference_quaternion=reference_quaternion
     )
     validate_model(document)
-    # Submitted through `simulation.run_request` on a pair compiled by
-    # `compile_document_pair`, not by reaching `kernel.run_contract` here: the
-    # architecture gate forbids a caller outside the compiled-submission path
-    # from naming the submission point, and this route goes through
-    # `simulation/backend.py`, which is the one place that submits.
-    run = run_request(
-        compile_document_pair(
-            SimulationRequest(assembly="axle", family="axle_dynamic"),
-            model_document=document,
-            case_document=_case_document(),
-        )
-    )
+    run = simulate(*torque_documents(document, _case_document()))
     assert run.status == "success", run.raw.document.get("manifest")
     state = run.raw.block("body_state")
     assert state.shape == (SAMPLES, 2, 19), state.shape
@@ -252,13 +239,7 @@ def _raw(*, with_element: bool):
     """
     document = _model_document(with_element=with_element)
     validate_model(document)
-    return run_request(
-        compile_document_pair(
-            SimulationRequest(assembly="axle", family="axle_dynamic"),
-            model_document=document,
-            case_document=_case_document(),
-        )
-    )
+    return simulate(*torque_documents(document, _case_document()))
 
 
 def _omega_y(state: np.ndarray, body: int) -> np.ndarray:
@@ -410,13 +391,7 @@ def test_the_document_route_carries_the_demand_channel() -> None:
     def submit(parameters: dict[str, Any]) -> None:
         document = _model_document(with_element=True)
         document["elements"][0]["parameters"].update(parameters)
-        run = run_request(
-            compile_document_pair(
-                SimulationRequest(assembly="axle", family="axle_dynamic"),
-                model_document=document,
-                case_document=_case_document(),
-            )
-        )
+        run = simulate(*torque_documents(document, _case_document()))
         assert run.status == "success", run.raw.document.get("manifest")
 
     # Read, not merely tolerated: the pair reaches the kernel's block slots.

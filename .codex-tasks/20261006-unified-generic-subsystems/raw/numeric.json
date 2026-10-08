@@ -1,0 +1,36 @@
+[
+  {
+    "command": [
+      "uv",
+      "run",
+      "--no-sync",
+      "python",
+      "packages/suspension_multibody/scripts/dynamic_hash_sentinel.py",
+      "--check"
+    ],
+    "returncode": 0,
+    "log": "raw\\numeric-1.log"
+  },
+  {
+    "command": [
+      "uv",
+      "run",
+      "--no-sync",
+      "python",
+      "packages/suspension_multibody/scripts/case_parity_check.py"
+    ],
+    "returncode": 0,
+    "log": "raw\\numeric-2.log"
+  },
+  {
+    "command": [
+      "uv",
+      "run",
+      "--no-sync",
+      "python",
+      "packages/suspension_multibody/scripts/kc_perf_gate.py"
+    ],
+    "returncode": 0,
+    "log": "raw\\numeric-3.log"
+  }
+]

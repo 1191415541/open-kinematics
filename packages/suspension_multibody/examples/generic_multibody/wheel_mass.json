@@ -1,0 +1,4 @@
+{
+  "document": "element_properties", "schema_version": 1, "name": "wheel_mass",
+  "element_type": "mass", "model": "linear", "units": {"mass": "kg", "length": "m", "force": "N"}, "parameters": {"value": 20}
+}

@@ -7,6 +7,7 @@ decoded result; it does not solve and does not recompute a force law.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -19,6 +20,9 @@ _TIRE_LATERAL = 6
 
 
 def _tire_column(result: Any, column: int) -> np.ndarray | None:
+    tire_ids = getattr(result, "tire_ids", ())
+    if tire_ids:
+        return np.column_stack([result.tire_state(entity)[:, column] for entity in tire_ids])
     values = getattr(result, "tire_output", None)
     if values is None:
         return None
@@ -32,18 +36,10 @@ def compute_axle_metrics(result: Any) -> dict[str, Any]:
     """Return stable aggregate metrics without changing raw axle output."""
     times = np.asarray(getattr(result, "times_s", ()), dtype=float).reshape(-1)
     performance = getattr(result, "performance", None)
-    performance_available = bool(
-        performance is not None
-        and bool(
-            getattr(
-                performance,
-                "available",
-                performance.get("available", False)
-                if isinstance(performance, dict)
-                else False,
-            )
-        )
-    )
+    if isinstance(performance, Mapping):
+        performance_available = bool(performance.get("available", False))
+    else:
+        performance_available = bool(getattr(performance, "available", False))
     if times.size == 0:
         return {
             "status": "unavailable",

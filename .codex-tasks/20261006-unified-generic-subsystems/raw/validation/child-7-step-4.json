@@ -1,0 +1,17 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_kernel/tests",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T16:00:12.700966+00:00",
+  "finished_at": "2026-10-06T16:00:46.096897+00:00",
+  "log": "raw\\validation\\child-7-step-4.log",
+  "log_sha256": "08111db0834ea25ae07ff4e4c4e2257b4a49791301f8d8b72f146229285d50a1"
+}

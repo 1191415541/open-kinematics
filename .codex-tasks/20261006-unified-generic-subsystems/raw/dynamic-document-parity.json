@@ -1,0 +1,240 @@
+{
+  "producer": "dynamic-document-parity.py",
+  "status": "PASS",
+  "variants": [
+    {
+      "case": "static_equilibrium",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "3895af91f00ec70cb4076f7574244668b43eb20779887824b107b960724cf928",
+      "document_state_sha256": "3895af91f00ec70cb4076f7574244668b43eb20779887824b107b960724cf928"
+    },
+    {
+      "case": "static_equilibrium",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "775bdb34d2c98902a3e40c097cd212ea280d7e770b599259c36ee3b0b7bf913b",
+      "document_state_sha256": "775bdb34d2c98902a3e40c097cd212ea280d7e770b599259c36ee3b0b7bf913b"
+    },
+    {
+      "case": "road_step_finite_rise",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "6c9e351b47e2458355da1bdaca0f3a69aafbc41d29096ead4704e1894da36735",
+      "document_state_sha256": "6c9e351b47e2458355da1bdaca0f3a69aafbc41d29096ead4704e1894da36735"
+    },
+    {
+      "case": "road_step_finite_rise",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "f00f84e745adae6061ef1e62eb8c5ddd189845b6a7ed99b7f35b445e10df1223",
+      "document_state_sha256": "f00f84e745adae6061ef1e62eb8c5ddd189845b6a7ed99b7f35b445e10df1223"
+    },
+    {
+      "case": "road_pulse",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "e435cb7b3b6f3e0c2ca647f8efdb799ae64017b0843989746e3116c61295f4d5",
+      "document_state_sha256": "e435cb7b3b6f3e0c2ca647f8efdb799ae64017b0843989746e3116c61295f4d5"
+    },
+    {
+      "case": "road_pulse",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "e4ab791ff941d563dc0c4ded285bf9a26d8934b3ee33966a7f08a40bd2c9cd1c",
+      "document_state_sha256": "e4ab791ff941d563dc0c4ded285bf9a26d8934b3ee33966a7f08a40bd2c9cd1c"
+    },
+    {
+      "case": "road_sine",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "d929054a3436f683a5340c75a60f39593985e1b01cc5d6794b04144fdfb50758",
+      "document_state_sha256": "d929054a3436f683a5340c75a60f39593985e1b01cc5d6794b04144fdfb50758"
+    },
+    {
+      "case": "road_sine",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "78578807257485de9834574370345e76daa12859ca3800c5be1fa9afdaaeec8a",
+      "document_state_sha256": "78578807257485de9834574370345e76daa12859ca3800c5be1fa9afdaaeec8a"
+    },
+    {
+      "case": "single_wheel_road",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "360be141bc42dceb87851efe5f12f272e41da7d3a99ff2e2f012a167cb866329",
+      "document_state_sha256": "360be141bc42dceb87851efe5f12f272e41da7d3a99ff2e2f012a167cb866329"
+    },
+    {
+      "case": "single_wheel_road",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "c14511f7853d024bc559de520c0f2a87035cae7f1f6988712efcb7f2855ae9e0",
+      "document_state_sha256": "c14511f7853d024bc559de520c0f2a87035cae7f1f6988712efcb7f2855ae9e0"
+    },
+    {
+      "case": "in_phase_road",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "0de210a4e09a0908afad8b2ae6dac75cd97e2127b2a0d7d60198155fe567cb48",
+      "document_state_sha256": "0de210a4e09a0908afad8b2ae6dac75cd97e2127b2a0d7d60198155fe567cb48"
+    },
+    {
+      "case": "in_phase_road",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "91187aa735645258f4743612d07e914b8a71eaa50c951cce00a56016f0e5c7d7",
+      "document_state_sha256": "91187aa735645258f4743612d07e914b8a71eaa50c951cce00a56016f0e5c7d7"
+    },
+    {
+      "case": "opposite_phase_road",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "e4ce30a2fe4582cade5cba799c9faa2160004279e0dfb379c23c7af3a5e9485d",
+      "document_state_sha256": "e4ce30a2fe4582cade5cba799c9faa2160004279e0dfb379c23c7af3a5e9485d"
+    },
+    {
+      "case": "opposite_phase_road",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "1457dafe592a5b30d00d793b938a1abb768180730c2076ca0ad63afab5945abb",
+      "document_state_sha256": "1457dafe592a5b30d00d793b938a1abb768180730c2076ca0ad63afab5945abb"
+    },
+    {
+      "case": "braking",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "7691d1f1f25ca1ba0f502d89ce548a9a3db60ada56f865bedfc876a8d28bef27",
+      "document_state_sha256": "7691d1f1f25ca1ba0f502d89ce548a9a3db60ada56f865bedfc876a8d28bef27"
+    },
+    {
+      "case": "braking",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "f96280c6e3577fbcf16251574e08b47ed55742f60506964d5dde0c7a540771c5",
+      "document_state_sha256": "f96280c6e3577fbcf16251574e08b47ed55742f60506964d5dde0c7a540771c5"
+    },
+    {
+      "case": "driving",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "270fcd620ad6d6efcd1cc7e4d6a1f9a4a9d8c7afd9067b21723755fc98616d9b",
+      "document_state_sha256": "270fcd620ad6d6efcd1cc7e4d6a1f9a4a9d8c7afd9067b21723755fc98616d9b"
+    },
+    {
+      "case": "driving",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "415fac8c30b58f4195d0b37ce525801b15d157d3e9c4eec426853bb150438cdf",
+      "document_state_sha256": "415fac8c30b58f4195d0b37ce525801b15d157d3e9c4eec426853bb150438cdf"
+    },
+    {
+      "case": "lateral_or_steering",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "ba40ea84c6d4d1aa09e1ca51aac39b283365570b6d32cb47b8ad4380f69f7c48",
+      "document_state_sha256": "ba40ea84c6d4d1aa09e1ca51aac39b283365570b6d32cb47b8ad4380f69f7c48"
+    },
+    {
+      "case": "lateral_or_steering",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "767952a44cf037978938ff0850cd997e7b229b2b35603c910df09674cac5c35a",
+      "document_state_sha256": "767952a44cf037978938ff0850cd997e7b229b2b35603c910df09674cac5c35a"
+    },
+    {
+      "case": "combined_load",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "e292da02518684850eb0912ad8c33ee984566829c4f9d56df2099ff348eab6f2",
+      "document_state_sha256": "e292da02518684850eb0912ad8c33ee984566829c4f9d56df2099ff348eab6f2"
+    },
+    {
+      "case": "combined_load",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "da37d073bd15b4f6bdb62a42a3869806d3662bd9fcc037c0a6f60bcc63250d15",
+      "document_state_sha256": "da37d073bd15b4f6bdb62a42a3869806d3662bd9fcc037c0a6f60bcc63250d15"
+    },
+    {
+      "case": "tire_liftoff_and_recontact",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "6343a0658ac4078e3139b5de9dac34ae59793efbc312272e9f45e2028d0d2100",
+      "document_state_sha256": "6343a0658ac4078e3139b5de9dac34ae59793efbc312272e9f45e2028d0d2100"
+    },
+    {
+      "case": "tire_liftoff_and_recontact",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "3e1fb9eec1655f2ae80957c514ecaf022e379dce86ed0f59992bc98b4e13e858",
+      "document_state_sha256": "3e1fb9eec1655f2ae80957c514ecaf022e379dce86ed0f59992bc98b4e13e858"
+    },
+    {
+      "case": "large_amplitude_high_frequency",
+      "variant": "primary",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "588b9a61f98f4f2e96c9437012812284e579c87bff2f27aaca408cc564bb7e7b",
+      "document_state_sha256": "588b9a61f98f4f2e96c9437012812284e579c87bff2f27aaca408cc564bb7e7b"
+    },
+    {
+      "case": "large_amplitude_high_frequency",
+      "variant": "refined",
+      "compiler": "ResolvedModelCompiler",
+      "model_fingerprint": "4a9ffbcb8ca90f715eacb0b1945b40aa86d3fe7e807e74533a37c4294424e2c9",
+      "errors": {},
+      "previous_state_sha256": "346bbd7264d75c2f11fc3abbcb9511ac4b831e236db89bebc79363163f3bfdbc",
+      "document_state_sha256": "346bbd7264d75c2f11fc3abbcb9511ac4b831e236db89bebc79363163f3bfdbc"
+    }
+  ]
+}

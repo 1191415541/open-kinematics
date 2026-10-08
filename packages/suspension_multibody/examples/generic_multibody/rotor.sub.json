@@ -1,0 +1,5 @@
+{
+  "document": "subsystem", "schema_version": 1, "name": "rotor",
+  "template": "rotor.tpl.json", "functional_role": "generic", "placement_role": "any",
+  "hardpoints": {"base": [0, 0, 0], "center": [0, 0, 0]}, "property_bindings": {}
+}

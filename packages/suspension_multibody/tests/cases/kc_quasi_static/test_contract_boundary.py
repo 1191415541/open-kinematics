@@ -24,42 +24,22 @@ from suspension_contracts import validate_result
 
 from suspension_multibody.adams.reference import _k_grid_states
 from suspension_multibody.adams.strict_c import _c_path_records
-from suspension_multibody.cases.kc_quasi_static import case_document, model_document
+from suspension_multibody.api import simulate, validate
+from suspension_multibody.authoring.migration import migrate_v1_kc_case
 from suspension_multibody.cases.kc_quasi_static.load_paths import LoadPath
-from suspension_multibody.cases.kc_quasi_static.workflow import (
+from suspension_multibody.cases.kc_quasi_static.settings import (
     DEFAULT_SETTINGS,
     DEFAULT_TIMES,
 )
 from suspension_multibody.kernel import contract_version
-from suspension_multibody.preparation.kc_quasi_static import (
-    KcQuasiStaticCase,
-    KcQuasiStaticPrepared,
-)
-from suspension_multibody.simulation import (
-    CompilerRegistry,
-    DocumentPairCompiler,
-    SimulationRequest,
-    compile_request,
-    default_preparation_registry,
-    prepare_request,
-    run_request,
-)
-from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 from .kc_fixtures import _c_tolerance, _compliant_model, _k_tolerance, _snapshot
 
 
-def _run(model: dict, case: dict):
-    """Run one K+C document pair through the unified simulation runner."""
-    return run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
+def _documents(**kwargs):
+    return migrate_v1_kc_case(benchmark_model(), mode="K", times_s=DEFAULT_TIMES,
+        settings=DEFAULT_SETTINGS, **kwargs)
 
 
 def _plain_document(value):
@@ -81,10 +61,9 @@ def test_contract_entry_point_reports_its_version() -> None:
 
 
 def test_k_grid_through_the_contract_boundary_matches_the_snapshot() -> None:
-    assembly = compose_axle(benchmark_model(), "K")
     expected = _snapshot("k_states.json")
     produced = _k_grid_states(
-        assembly,
+        benchmark_model(),
         wheel_values_mm=(-10.0, 0.0, 10.0),
         rack_values_mm=(-5.0, 0.0, 5.0),
     )
@@ -103,12 +82,11 @@ def test_k_grid_through_the_contract_boundary_matches_the_snapshot() -> None:
 
 
 def test_c_paths_through_the_contract_boundary_match_the_snapshot() -> None:
-    assembly = compose_axle(_compliant_model(), "C")
     expected = _snapshot("c_states.json")
     produced = [
         record
         for path in LoadPath.standard()
-        for record in _c_path_records(assembly, path)
+        for record in _c_path_records(_compliant_model(), path)
     ]
     assert {state["case_id"] for state in produced} == set(expected)
     worst = 0.0
@@ -130,19 +108,7 @@ def test_c_paths_through_the_contract_boundary_match_the_snapshot() -> None:
 
 
 def test_result_document_satisfies_the_result_schema() -> None:
-    assembly = compose_axle(benchmark_model(), "K")
-    model = model_document(assembly, name="schema-k", drive_wheels=True)
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
-        name="schema-k",
-        wheel_values_mm=(0.0,),
-        rack_values_mm=(0.0,),
-        times_s=DEFAULT_TIMES,
-        settings=DEFAULT_SETTINGS,
-        drive_wheels=True,
-    )
-    run = _run(model, case)
+    run = simulate(*_documents(name="schema-k", wheel_values_mm=(0.,), rack_values_mm=(0.,))).raw
     validate_result(_plain_document(run.document))
     identity = run.document["case_identity"]
     assert len(identity["model_sha256"]) == 64
@@ -153,55 +119,16 @@ def test_result_document_satisfies_the_result_schema() -> None:
 
 
 def test_an_unimplemented_family_fails_closed() -> None:
-    assembly = compose_axle(benchmark_model(), "K")
-    model = model_document(assembly, name="closed", drive_wheels=True)
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
-        name="closed",
-        wheel_values_mm=(0.0,),
-        rack_values_mm=(0.0,),
-        times_s=DEFAULT_TIMES,
-        settings=DEFAULT_SETTINGS,
-        drive_wheels=True,
-    )
-    # A family the contract declares but the case layer does not implement has
-    # to be refused by name, not silently run as something else.  `comparison`
-    # is the stable choice: it is a comparison gate rather than a solver family,
-    # so it is never going to be implemented here.
-    case["family"] = "comparison"
-    # The family is declared in the contract but has no compiler behind it, and
-    # the kernel is the layer that has to refuse it by name.  Carrying the pair
-    # through a document-pair compiler is what reaches that refusal; the runner
-    # itself would stop one step earlier, at "no compiler registered".
-    registry = CompilerRegistry()
-    registry.register(DocumentPairCompiler("axle", "comparison"))
-    with pytest.raises(Exception, match="not implemented"):
-        run_request(
-            SimulationRequest(
-                assembly="axle",
-                family="comparison",
-                model=model,
-                case=case,
-            ),
-            registry=registry,
-        )
+    assembly, case = _documents(name="closed", wheel_values_mm=(0.,))
+    wrong = case.to_payload()
+    wrong["protocol"] = "comparison"
+    wrong["study"] = "dynamic"
+    with pytest.raises(Exception, match="comparison"):
+        validate(assembly, wrong)
 
 
 def test_the_case_layer_expands_the_grid_and_the_load_paths() -> None:
-    assembly = compose_axle(benchmark_model(), "K")
-    model = model_document(assembly, name="expand", drive_wheels=True)
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
-        name="expand",
-        wheel_values_mm=(-10.0, 10.0),
-        rack_values_mm=(-5.0, 5.0),
-        times_s=DEFAULT_TIMES,
-        settings=DEFAULT_SETTINGS,
-        drive_wheels=True,
-    )
-    run = _run(model, case)
+    run = simulate(*_documents(name="expand", wheel_values_mm=(-10., 10.), rack_values_mm=(-5., 5.))).raw
     names = [entry["name"] for entry in run.cases]
     assert names == ["k-w-10-r-5", "k-w-10-r+5", "k-w+10-r-5", "k-w+10-r+5"]
     bodies = run.document["manifest"]["bodies"]
@@ -209,86 +136,23 @@ def test_the_case_layer_expands_the_grid_and_the_load_paths() -> None:
     assert json.dumps(_plain_document(run.document), sort_keys=True)
 
 
-def test_the_family_prepares_the_k_documents_through_the_default_registry() -> None:
-    """The domain path: an assembly and a K case, prepared and then compiled."""
-    assembly = compose_axle(benchmark_model(), "K")
-    request = SimulationRequest(
-        assembly="axle",
-        family="kc_quasi_static",
-        model=assembly,
-        case=KcQuasiStaticCase(
-            name="prepared-k",
-            wheel_values_mm=(0.0,),
-            rack_values_mm=(0.0,),
-            times_s=DEFAULT_TIMES,
-            settings=DEFAULT_SETTINGS,
-            drive_wheels=True,
-        ),
-    )
-
-    registry = default_preparation_registry()
-    assert ("axle", "kc_quasi_static") in registry.keys()
-    result = prepare_request(request)
-
-    assert isinstance(result.value, KcQuasiStaticPrepared)
-    assert result.context["prepared_simulation"].value is result.value
-    assert result.context["kc_assembly"] is assembly
-    assert result.context["model_document"] == result.value.model_document
-    assert result.context["case_document"]["family"] == "kc_quasi_static"
-    # The compiler consumes the prepared context rather than authoring anything.
-    compiled = compile_request(result.request)
-    assert compiled.model_document == result.value.model_document
-    assert compiled.case_document == result.value.case_document
-    # And the submission is one the kernel accepts: the one-point grid the case
-    # states is the one it expands.
-    run = run_request(request).raw
+def test_the_family_compiles_and_submits_the_same_declared_k_case() -> None:
+    assembly, case = _documents(name="declared-k", wheel_values_mm=(0.,), rack_values_mm=(0.,))
+    compiled = validate(assembly, case)
+    assert compiled.metadata["compiler"] == "ResolvedModelCompiler"
+    assert compiled.case_document["k"] == case.to_payload()["excitation"]["k"]
+    run = simulate(assembly, case).raw
     assert run.status == "success"
     assert [entry["name"] for entry in run.cases] == ["k-w+0-r+0"]
 
 
-def test_a_document_request_bypasses_preparation_and_still_validates_the_contract(
-    monkeypatch,
-) -> None:
-    from suspension_multibody.preparation import kc_quasi_static as kc_preparation
-
-    assembly = compose_axle(benchmark_model(), "K")
-    model = model_document(assembly, name="bypass", drive_wheels=True)
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
-        name="bypass",
-        wheel_values_mm=(0.0,),
-        rack_values_mm=(0.0,),
-        times_s=DEFAULT_TIMES,
-        settings=DEFAULT_SETTINGS,
-        drive_wheels=True,
-    )
-    calls: list[SimulationRequest] = []
-    monkeypatch.setattr(
-        kc_preparation, "prepare_request", lambda request: calls.append(request)
-    )
-    request = SimulationRequest(
-        assembly="axle", family="kc_quasi_static", model=model, case=case
-    )
-
-    bypassed = prepare_request(request)
-
-    # The request already carries its documents, so no family preparation runs
-    # and the axle is not assembled a second time.
-    assert calls == []
-    assert "prepared_simulation" not in bypassed.context
-    compiled = compile_request(bypassed.request)
-    assert compiled.case_document == case
-    # Bypassing preparation is not skipping the compiler: the documents still
-    # have to satisfy the family's contract identity.
-    wrong_family = dict(case)
-    wrong_family["family"] = "comparison"
-    with pytest.raises(ValueError, match="case family"):
-        compile_request(
-            SimulationRequest(
-                assembly="axle",
-                family="kc_quasi_static",
-                model=model,
-                case=wrong_family,
-            )
-        )
+def test_file_and_python_case_documents_have_one_compiler(tmp_path) -> None:
+    assembly, case = _documents(name="file-parity", wheel_values_mm=(0.,), rack_values_mm=(0.,))
+    path = case.save(tmp_path/"case.json")
+    memory, file = validate(assembly, case), validate(assembly, path)
+    assert memory.model_payload == file.model_payload
+    assert memory.case_payload == file.case_payload
+    wrong = case.to_payload()
+    wrong["study"] = "dynamic"
+    with pytest.raises(ValueError, match="grid protocol"):
+        validate(assembly, wrong)

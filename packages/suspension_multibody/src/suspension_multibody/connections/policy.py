@@ -210,6 +210,7 @@ class AssemblyRule:
 
 #: The rules, keyed by the category name a file states in ``assembly_kind``.
 ASSEMBLY_RULES: dict[str, AssemblyRule] = {
+    "generic_multibody": AssemblyRule(kind="generic_multibody", role_counts={}),
     "suspension_axle": AssemblyRule(
         kind="suspension_axle",
         role_counts={"suspension": 1},
@@ -276,6 +277,8 @@ def check_assembly_shape(
     rule = rule_for_assembly(kind)
     pairs = [(str(role), str(placement)) for role, placement in assignments]
     roles = [role for role, _placement in pairs]
+    if kind == "generic_multibody":
+        return
 
     for role, placement in sorted(rule.required_placements):
         if (role, placement) not in pairs:

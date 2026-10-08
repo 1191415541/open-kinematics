@@ -18,17 +18,20 @@ import numpy as np
 import pytest
 
 from suspension_multibody.schema import (
-    FrontAxleModel,
+    Bushing6x6,
     IdealJointSpec,
     MassSpec,
+    Pose,
     RigidBodySpec,
     SteeringSystemSpec,
     TireModelSpec,
     Vec3,
-    VehicleModel,
     WheelSpec,
 )
+from suspension_multibody.schema.model import AxleDeclaration
+from suspension_multibody.schema.vehicle import VehicleDeclaration
 from suspension_multibody.vehicle.roll_centers import compute_vehicle_roll_centers
+from tests.physics.test_vehicle_physics import _roll_center_run
 
 _X = Vec3(x=1.0, y=0.0, z=0.0)
 _Y = Vec3(x=0.0, y=1.0, z=0.0)
@@ -40,6 +43,11 @@ _Z = Vec3(x=0.0, y=0.0, z=1.0)
 _BEAM = Vec3(x=1180.0, y=0.0, z=250.0)
 
 _WHEELS = ("front_left", "front_right", "rear_left", "rear_right")
+
+
+def _centers(axle):
+    return compute_vehicle_roll_centers(_roll_center_run(_vehicle(axle)),
+        measurements={"front": "front", "rear": "rear"})
 
 
 def _spherical(name: str, a: str, point_a: Vec3, b: str, point_b: Vec3) -> IdealJointSpec:
@@ -78,8 +86,8 @@ def _prismatic(
     )
 
 
-def _axle(name: str, joints: tuple[IdealJointSpec, ...], bodies: tuple[str, ...]) -> FrontAxleModel:
-    return FrontAxleModel(
+def _axle(name: str, joints: tuple[IdealJointSpec, ...], bodies: tuple[str, ...]) -> AxleDeclaration:
+    return AxleDeclaration(
         name=name,
         topology="explicit",
         hardpoints={
@@ -92,8 +100,8 @@ def _axle(name: str, joints: tuple[IdealJointSpec, ...], bodies: tuple[str, ...]
     )
 
 
-def _vehicle(axle: FrontAxleModel) -> VehicleModel:
-    return VehicleModel(
+def _vehicle(axle: AxleDeclaration) -> VehicleDeclaration:
+    return VehicleDeclaration(
         chassis=RigidBodySpec(name="chassis", mass=1200.0),
         front_axle=axle,
         rear_axle=axle,
@@ -108,11 +116,11 @@ def _vehicle(axle: FrontAxleModel) -> VehicleModel:
             )
             for name in _WHEELS
         ),
-        steering=SteeringSystemSpec(ratio=16.0),
+        steering=SteeringSystemSpec(ratio=16.0, enabled=False),
     )
 
 
-def _five_link() -> FrontAxleModel:
+def _five_link() -> AxleDeclaration:
     """Five two-force rods per side, each pinned to the chassis and to the upright."""
     joints: list[IdealJointSpec] = []
     bodies = ["upright_L", "upright_R"]
@@ -120,8 +128,12 @@ def _five_link() -> FrontAxleModel:
         for link in range(1, 6):
             body = f"link{link}_{side}"
             bodies.append(body)
-            chassis_point = Vec3(x=1400.0 + link * 20.0, y=sign * 500.0, z=300.0 + link * 10.0)
-            upright_point = Vec3(x=1400.0 + link * 20.0, y=sign * 690.0, z=290.0 + link * 10.0)
+            anchors = ((-150, 500, 400, -80, 690, 350), (150, 500, 400, 80, 690, 350),
+                (-140, 500, 150, -90, 690, 180), (140, 500, 150, 90, 690, 180),
+                (0, 450, 280, 130, 680, 280))
+            xi, yi, zi, xo, yo, zo = anchors[link-1]
+            chassis_point = Vec3(x=1400+xi, y=sign*yi, z=zi)
+            upright_point = Vec3(x=1400+xo, y=sign*yo, z=zo)
             joints.append(
                 _spherical(f"{body}_chassis", "chassis", chassis_point, body, chassis_point)
             )
@@ -131,7 +143,7 @@ def _five_link() -> FrontAxleModel:
     return _axle("five_link", tuple(joints), tuple(bodies))
 
 
-def _macpherson() -> FrontAxleModel:
+def _macpherson() -> AxleDeclaration:
     """Build a lower arm plus a strut that slides in its tower and pivots on the upright."""
     joints: list[IdealJointSpec] = []
     bodies = ["upright_L", "upright_R"]
@@ -150,7 +162,7 @@ def _macpherson() -> FrontAxleModel:
     return _axle("macpherson", tuple(joints), tuple(bodies))
 
 
-def _twist_beam() -> FrontAxleModel:
+def _twist_beam() -> AxleDeclaration:
     """Two trailing arms pivoting on the chassis, joined by the beam between them."""
     joints: list[IdealJointSpec] = []
     for side, sign in (("L", -1.0), ("R", 1.0)):
@@ -158,13 +170,10 @@ def _twist_beam() -> FrontAxleModel:
         joints.append(
             _revolute(f"arm_{side}", "chassis", pivot, f"upright_{side}", pivot, _Y)
         )
-    joints.append(
-        # Both arms carry the beam's centre point: a revolute joint's two points must
-        # coincide, so the shared point sits on the vehicle centreline.  Stating the
-        # same point on each arm is what makes the two arms a joined pair.
-        _revolute("beam", "upright_L", _BEAM, "upright_R", _BEAM, _Z)
-    )
-    return _axle("twist_beam", tuple(joints), ("upright_L", "upright_R"))
+    beam = Bushing6x6(name="beam", body_a="upright_L", body_b="upright_R",
+        pose_a=Pose(translation=_BEAM), pose_b=Pose(translation=_BEAM),
+        stiffness=np.diag([0, 0, 0, 0, 10_000., 0]).tolist())
+    return _axle("twist_beam", tuple(joints), ("upright_L", "upright_R")).model_copy(update={"bushings": (beam,)})
 
 
 _TOPOLOGIES = {
@@ -184,7 +193,7 @@ def test_every_topology_gives_a_finite_symmetric_roll_centre(topology: str) -> N
     which a construction that favoured one side could not produce on a mirror-image
     axle.
     """
-    centers = compute_vehicle_roll_centers(_vehicle(_TOPOLOGIES[topology]()))
+    centers = _centers(_TOPOLOGIES[topology]())
 
     assert set(centers) == {"front", "rear"}
     for result in centers.values():
@@ -202,7 +211,7 @@ def test_every_topology_mirrors_the_two_sides(topology: str) -> None:
     Each side's read comes from a separate solve of the same mirrored mechanism, so
     an asymmetry here would be the construction's, not the geometry's.
     """
-    centers = compute_vehicle_roll_centers(_vehicle(_TOPOLOGIES[topology]()))
+    centers = _centers(_TOPOLOGIES[topology]())
     for result in centers.values():
         assert np.isclose(
             result.left_contact_patch[1], -result.right_contact_patch[1], atol=1e-9
@@ -221,7 +230,7 @@ def test_the_height_is_the_ratio_the_generalized_loads_define(topology: str) -> 
     construction that reported a geometric intersection instead could still return a
     finite symmetric point and would fail here.
     """
-    for result in compute_vehicle_roll_centers(_vehicle(_TOPOLOGIES[topology]())).values():
+    for result in _centers(_TOPOLOGIES[topology]()).values():
         assert result.lateral_force != 0.0, topology
         assert np.isclose(
             result.center[1], -result.roll_moment / result.lateral_force, rtol=1e-12
@@ -237,7 +246,7 @@ def test_the_height_matches_the_force_line_primitives_it_reports() -> None:
     four numbers alone -- and must come out the same.  A construction that reported a
     geometric intersection would have nothing to rebuild from and would fail.
     """
-    for result in compute_vehicle_roll_centers(_vehicle(_two_way_wishbone())).values():
+    for result in _centers(_two_way_wishbone()).values():
         patches = np.array([result.left_contact_patch, result.right_contact_patch])
         slopes = np.array([result.left_contact_patch_slope, result.right_contact_patch_slope])
         lateral = float(np.sum(-np.ones(2)))
@@ -258,11 +267,11 @@ def test_a_lateral_translation_carries_the_patch_the_other_way() -> None:
     is ``-2`` whenever both patches carry a unit lateral force -- asserted here so a
     change to the column is caught.
     """
-    for result in compute_vehicle_roll_centers(_vehicle(_two_way_wishbone())).values():
+    for result in _centers(_two_way_wishbone()).values():
         assert np.isclose(result.lateral_force, -2.0, rtol=1e-12), result.axle
 
 
-def _two_way_wishbone() -> FrontAxleModel:
+def _two_way_wishbone() -> AxleDeclaration:
     """State the double wishbone the explicit way, so the fixture is self-contained."""
     joints: list[IdealJointSpec] = []
     bodies = ["upright_L", "upright_R"]

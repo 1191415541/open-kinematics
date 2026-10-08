@@ -13,6 +13,7 @@
 // longer aggregate each other's declarations, so each unit includes the
 // modules whose functions it actually calls.
 #include "mb_config/element_wrench.hpp"
+#include "mb_config/constraint_output.hpp"
 #include "mb_config/controller_output.hpp"
 #include "mb_config/functions.hpp"
 #include "mb_numeric/functions.hpp"
@@ -185,11 +186,57 @@ void write_constraint_wrenches(
         0.0
     );
     const auto jacobian = constraint_jacobian(model, state);
+    ConstraintOutputSink& sink = constraint_output_sink();
+    if (sink.jacobian != nullptr) {
+        std::copy(jacobian.begin(), jacobian.end(),
+            sink.jacobian+sample*sink.row_count*sink.dof_count);
+    }
+    if (sink.multipliers != nullptr) {
+        for (std::size_t row = 0; row < sink.row_count; ++row) {
+            sink.multipliers[sample*sink.row_count+row] =
+                row < multiplier.size() ? multiplier[row] : 0.0;
+        }
+    }
     const std::size_t sample_offset =
         sample*model.constraints.size()*kConstraintOutputWidth;
     for (std::size_t constraint_index = 0;
          constraint_index < model.constraints.size(); ++constraint_index) {
         const Constraint& constraint = model.constraints[constraint_index];
+        if (sink.reactions != nullptr) {
+            const int bodies[2] = {constraint.a, constraint.b};
+            Vec3 forces[2]{}, moments[2]{};
+            for (int end = 0; end < 2; ++end) {
+                const int free = model.body_to_free[bodies[end]];
+                if (free < 0) continue;
+                for (int local = 0; local < constraint_rows(constraint.type); ++local) {
+                    const int row = constraint.row+local;
+                    const double lambda = row < static_cast<int>(multiplier.size())
+                        ? multiplier[static_cast<std::size_t>(row)] : 0.0;
+                    const double* gradient = &jacobian[row*model.ndof+6*free];
+                    forces[end] = forces[end]+Vec3{gradient[0], gradient[1], gradient[2]}*lambda;
+                    moments[end] = moments[end]+Vec3{gradient[3], gradient[4], gradient[5]}*lambda;
+                }
+            }
+            // A fixed end has no Jacobian columns. Transport the opposite wrench
+            // through the world origin to retain the fixed body's reaction.
+            for (int end = 0; end < 2; ++end) {
+                if (model.body_to_free[bodies[end]] >= 0) continue;
+                const int other = 1-end;
+                forces[end] = forces[other]*(-1.0);
+                moments[end] = (moments[other]+
+                    cross(state.r[bodies[other]]-state.r[bodies[end]], forces[other]))*(-1.0);
+            }
+            for (int end = 0; end < 2; ++end) {
+                const int body = bodies[end];
+                const Vec3 point = state_point(state, body, end == 0 ? constraint.pa : constraint.pb);
+                double* row = sink.reactions+
+                    ((sample*sink.constraint_count+constraint_index)*2+end)*kConstraintReactionWidth;
+                row[0] = forces[end].x; row[1] = forces[end].y; row[2] = forces[end].z;
+                row[3] = moments[end].x; row[4] = moments[end].y; row[5] = moments[end].z;
+                row[6] = point.x; row[7] = point.y; row[8] = point.z;
+                row[9] = dot(forces[end], state.v[body])+dot(moments[end], state.omega[body]);
+            }
+        }
         Vec3 force{};
         Vec3 moment_about_com{};
         Vec3 reference{};
@@ -237,6 +284,36 @@ void write_constraint_wrenches(
             output[offset+3] = moment_at_reference.x;
             output[offset+4] = moment_at_reference.y;
             output[offset+5] = moment_at_reference.z;
+        }
+    }
+    if (sink.coupler_reactions != nullptr) {
+        for (std::size_t index = 0; index < model.coordinate_couplers.size(); ++index) {
+            const auto& coupler = model.coordinate_couplers[index];
+            const double lambda = coupler.row < static_cast<int>(multiplier.size())
+                ? multiplier[static_cast<std::size_t>(coupler.row)] : 0.0;
+            const int joints[2] = {coupler.joint_a, coupler.joint_b};
+            const int coordinates[2] = {coupler.coordinate_a, coupler.coordinate_b};
+            const Quat rotations[2] = {coupler.reference_rotation_a, coupler.reference_rotation_b};
+            const double scales[2] = {coupler.scale_a, coupler.scale_b};
+            for (int member = 0; member < 2; ++member) {
+                const Constraint& joint = model.constraints[static_cast<std::size_t>(joints[member])];
+                Vec3 linear[2]{}, angular[2]{};
+                joint_coordinate_gradients(model, state, joints[member], coordinates[member],
+                    rotations[member], scales[member], linear, angular);
+                const int bodies[2] = {joint.a, joint.b};
+                for (int end = 0; end < 2; ++end) {
+                    const int body = bodies[end];
+                    const Vec3 force = linear[end]*lambda;
+                    const Vec3 moment = angular[end]*lambda;
+                    const Vec3 point = state_point(state, body, end == 0 ? joint.pa : joint.pb);
+                    double* row = sink.coupler_reactions+
+                        ((sample*sink.coupler_count+index)*4+member*2+end)*kConstraintReactionWidth;
+                    row[0] = force.x; row[1] = force.y; row[2] = force.z;
+                    row[3] = moment.x; row[4] = moment.y; row[5] = moment.z;
+                    row[6] = point.x; row[7] = point.y; row[8] = point.z;
+                    row[9] = dot(force, state.v[body])+dot(moment, state.omega[body]);
+                }
+            }
         }
     }
 }
@@ -402,6 +479,7 @@ void write_physics_output(
         element_wrench_counts.anti_rolls = model.anti_roll_bars.size();
         element_wrench_counts.rotational_torques =
             model.rotational_torques.size();
+        element_wrench_counts.functions = model.function_elements.size();
         element_wrench_counts.steering = model.steering_actuators.size();
         element_wrench_counts.tires = model.tires.size();
         element_wrench_counts.bodies = model.bodies.size();

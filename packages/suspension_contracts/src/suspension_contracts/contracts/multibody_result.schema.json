@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://open-kinematics.dev/contracts/multibody_result_v1.json",
-  "title": "Multibody Result Contract V1",
+  "title": "Multibody Result Contract",
   "description": "Solver output. Scalars, identities and diagnostics live in JSON; every numeric array lives in the blob section and is described by a named block entry.",
   "type": "object",
   "additionalProperties": false,
   "required": ["contract", "contract_version", "kind", "case_identity", "status"],
   "properties": {
     "contract": {"const": "multibody-result"},
-    "contract_version": {"const": 1},
+    "contract_version": {"enum": [1, 2]},
     "kind": {"const": "result"},
     "case_identity": {
       "type": "object",

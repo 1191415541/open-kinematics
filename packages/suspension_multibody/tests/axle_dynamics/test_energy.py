@@ -6,12 +6,12 @@ from suspension_multibody.axle_dynamics import (
     AxleBody,
     AxleDamper,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleSolverSettings,
     AxleSpring,
     AxleTire,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
+from tests.axle_dynamics._unified_entry import solve_axle
 
 _I = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _ZERO_I = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
@@ -51,7 +51,7 @@ def test_undamped_linear_oscillator_has_no_energy_drift() -> None:
         bump_stops=(),
     )
     times = np.linspace(0.0, 0.1, 101)
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="energy",
@@ -125,7 +125,7 @@ def test_damped_oscillator_reports_only_passive_damper_dissipation() -> None:
         bump_stops=(),
     )
     times = np.linspace(0.0, 0.1, 101)
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="damped-energy",
@@ -184,7 +184,7 @@ def test_drive_work_closes_free_wheel_rotational_energy() -> None:
         ),
     )
     times = tuple(float(value) for value in np.linspace(0.0, 0.01, 11))
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="drive-work",

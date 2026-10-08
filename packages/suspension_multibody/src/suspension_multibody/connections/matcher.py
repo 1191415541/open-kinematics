@@ -94,7 +94,7 @@ class MatchReport:
     def binding_for(self, role: str) -> Binding | None:
         """Return the binding for a requirement role, if it was resolved."""
         for binding in self.bindings:
-            if binding.requirement.role == role:
+            if binding.requirement.key == role:
                 return binding
         return None
 
@@ -121,7 +121,7 @@ def match_requirements(
     trace: list[str] = []
 
     for requirement in requirements:
-        named = chosen_explicitly.get(requirement.role)
+        named = chosen_explicitly.get(requirement.key)
         if named is not None:
             port = candidates.get(named)
             if port is None:
@@ -130,6 +130,10 @@ def match_requirements(
                     f"which does not exist; the candidates are "
                     f"{sorted(candidates) or '(none)'}"
                 )
+            if not requirement.accepts(port):
+                raise BindingError(f"requirement {requirement.role!r}: explicit port {named!r} is incompatible")
+            if requirement.count != 1:
+                raise BindingError(f"requirement {requirement.role!r} needs {requirement.count} ports; one explicit port is insufficient")
             trace.append(f"{requirement.role}: explicit -> {named}")
             bindings.append(
                 Binding(requirement=requirement, port_ids=(named,), explicit=True)
@@ -141,13 +145,13 @@ def match_requirements(
             for port_id, port in candidates.items()
             if requirement.accepts(port)
         )
-        if not matches:
+        if len(matches) < requirement.count:
             if requirement.required:
                 raise UnmetRequirementError(
-                    f"required port {requirement.role!r} has no candidate; the "
+                    f"required port {requirement.role!r} has no candidate set of {requirement.count}; the "
                     f"offered ports are {sorted(candidates) or '(none)'}"
                 )
-            disappeared.append(requirement.role)
+            disappeared.append(requirement.key)
             dropped.extend(requirement.bound_outputs)
             trace.append(
                 f"{requirement.role}: optional, no candidate -> disappears with "
@@ -166,7 +170,7 @@ def match_requirements(
         trace.append(f"{requirement.role}: inferred -> {wanted}")
         bindings.append(Binding(requirement=requirement, port_ids=tuple(wanted)))
 
-    unused = sorted(set(chosen_explicitly) - {r.role for r in requirements})
+    unused = sorted(set(chosen_explicitly) - {r.key for r in requirements})
     if unused:
         raise BindingError(
             f"explicit mapping names requirement(s) {unused}, which this instance "

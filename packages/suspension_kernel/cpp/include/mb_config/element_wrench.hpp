@@ -49,6 +49,7 @@ enum ElementWrenchType {
   // The rotational actuator.  Appended for the same reason as the pair above:
   // no existing code moved, and every code above keeps its value.
   kElementWrenchRotationalTorque = 10,
+  kElementWrenchFunction = 11,
 };
 
 /// One past the highest frozen code: how many type codes the channel defines,
@@ -57,7 +58,7 @@ enum ElementWrenchType {
 /// exactly that to the sink's `group_`, which is why this is a name rather than
 /// a literal.
 inline constexpr int kElementWrenchCodeCount =
-    kElementWrenchRotationalTorque + 1;
+    kElementWrenchFunction + 1;
 
 /// The element counts a sample's rows are laid out from.  They are the counts
 /// of the model the solver runs, so the ABI (which sizes the block) and the
@@ -74,6 +75,7 @@ struct ElementWrenchCounts {
   std::size_t bodies = 0;
   std::size_t drags = 0;
   std::size_t rotational_torques = 0;
+  std::size_t functions = 0;
 };
 
 /// Records per sample: two per spring, damper, bump stop, bushing, anti-roll

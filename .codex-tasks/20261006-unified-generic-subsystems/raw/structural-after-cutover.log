@@ -1,0 +1,13 @@
+uv run --no-sync ruff check .
+All checks passed!
+uv run --no-sync ty check .
+All checks passed!
+WARN ty is pre-release software and not ready for production use. Expect to encounter bugs, missing features, and fatal errors.
+uv run --no-sync python packages/suspension_multibody/tests/architecture/legacy_surface_gate.py --check
+mode      : migration
+findings  : 2
+  retired_subsystem_import: 2
+
+FAIL
+  - tests/architecture/test_retired_entries_gate.py:246 [test/retired_subsystem_import/suspension_multibody.axle_dynamics.contract_run]
+  - tests/architecture/test_retired_entries_gate.py:249 [test/retired_subsystem_import/suspension_multibody.vehicle.service]

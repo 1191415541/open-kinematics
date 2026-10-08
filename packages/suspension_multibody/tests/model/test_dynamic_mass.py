@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from suspension_multibody.schema import FrontAxleModel, MassSpec, RigidBodySpec, Vec3
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.authoring import assemble_generic, migrate_v1_axle
+from suspension_multibody.schema import MassSpec, RigidBodySpec, Vec3
+from suspension_multibody.schema.model import AxleDeclaration
 
 
 def _hardpoints() -> dict[str, Vec3]:
@@ -30,7 +31,7 @@ def _hardpoints() -> dict[str, Vec3]:
 
 
 def test_body_spec_maps_to_front_axle_runtime_body() -> None:
-    model = FrontAxleModel(
+    model = AxleDeclaration(
         hardpoints=_hardpoints(),
         mass=MassSpec(sprung_mass=1000.0),
         bodies=(
@@ -43,7 +44,9 @@ def test_body_spec_maps_to_front_axle_runtime_body() -> None:
         ),
     )
 
-    assembly = compose_axle(model, "K")
+    assembly = assemble_generic(migrate_v1_axle(model, mode="K"))
 
-    assert assembly.bodies["upright_L"].mass == pytest.approx(38.0)
-    assert assembly.bodies["upright_L"].center_of_mass.tolist() == [1.0, 2.0, 3.0]
+    body = assembly.bodies["model.sub.json.upright_L"]
+    assert body.mass == pytest.approx(38.0)
+    assert body.pose.transform_point(body.center_of_mass).tolist() == [.001, .002, .003]
+    assert body.inertia.diagonal().tolist() == pytest.approx([10e-6, 11e-6, 12e-6])

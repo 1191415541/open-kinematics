@@ -1,0 +1,43 @@
+uv run --no-sync python packages/suspension_multibody/scripts/dynamic_hash_sentinel.py --check
+solver self-convergence: FAILED
+adams accuracy: BLOCKED
+BLOCKED: no real Adams evidence supplied: the 5 percent channel gates and the wall-time ratio gate cannot be evaluated
+BLOCKED: the frozen median-of-N timing protocol was not run: pass --performance to collect it
+  static_equilibrium: PASSED
+  road_step_finite_rise: FAILED
+  road_pulse: FAILED
+  road_sine: FAILED
+  single_wheel_road: FAILED
+  in_phase_road: FAILED
+  opposite_phase_road: FAILED
+  braking: PASSED
+  driving: PASSED
+  lateral_or_steering: PASSED
+  combined_load: FAILED
+  tire_liftoff_and_recontact: FAILED
+  large_amplitude_high_frequency: FAILED
+E:\杂件\open-kinematics\artifacts\axle-dynamics-acceptance\acceptance_report.json
+artifacts hashed : 26
+combined sha256  : fdfd5a6ba50970571ac31eb278cf5c713964a43ba77cd74fc1011ec8651eebc9
+acceptance exit  : 1
+failed cases     : ['combined_load', 'in_phase_road', 'large_amplitude_high_frequency', 'opposite_phase_road', 'road_pulse', 'road_sine', 'road_step_finite_rise', 'single_wheel_road', 'tire_liftoff_and_recontact']
+
+OK: dynamic output matches the frozen baseline byte-for-byte
+uv run --no-sync python packages/suspension_multibody/scripts/case_parity_check.py
+  kc_quasi_static    PASS      worst error / tolerance 0.000185928 over the frozen K/C snapshot
+  axle_dynamic       PASS      13 cases, bit-identical to the frozen snapshot
+  vehicle_kc         PASS      grid matches an independent expansion; 10 mm reaches every wheel drive
+  vehicle_dynamic    PASS      5 STRICT (original hashes); 3 PHYSICAL_DIFFERENCE (original mismatches retained); complete evidence in artifacts/vehicle-physical-evidence/report.json
+  handling           PASS      4 open-loop shapes match an independent expansion (0.0e+00); closed-loop refused
+  ride_four_post     PASS      expansion matches an independently sampled excitation (0.0e+00)
+  ride_random_road   PASS      expansion matches an independently expanded profile (0.0e+00)
+  comparison         N/A       a per-target gate, not a solve: the kernel never reads a reference
+OK: 8 families accepted
+uv run --no-sync python packages/suspension_multibody/scripts/kc_perf_gate.py
+  k-100: median 1.0184 s, best 1.0134 s over 5 runs (100 states)
+  c-66: median 1.3985 s, best 1.3796 s over 5 runs (66 states)
+  k-100: 1.0134 s vs baseline 1.0230 s (x0.991)
+  c-66: 1.3796 s vs baseline 1.4904 s (x0.926)
+
+OK: benchmarks are within the recorded budget
+PASS: numeric; 3 declared checks

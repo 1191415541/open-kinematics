@@ -788,6 +788,7 @@ DirectionalElementForces assemble_directional_elements(
         external_force_steering_directional(
             model, state, input, direction, force, torque, smooth
         );
+        assemble_function_directional(model, state, input, direction, force, torque, internal_force_scale, smooth);
     }
     return out;
 }

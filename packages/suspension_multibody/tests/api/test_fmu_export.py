@@ -38,8 +38,15 @@ from typing import Any
 
 import numpy as np
 import pytest
-from suspension_contracts import pack_container, unpack_container
+from suspension_contracts import unpack_container
 
+from suspension_multibody.api import validate
+from suspension_multibody.authoring import (
+    AssemblyDocument,
+    SubsystemDocument,
+    TemplateDocument,
+)
+from suspension_multibody.authoring.migration import migrate_v1_dynamic_axle
 from suspension_multibody.axle_dynamics.schema import (
     AxleBody,
     AxleDynamicsCase,
@@ -48,7 +55,6 @@ from suspension_multibody.axle_dynamics.schema import (
     AxleSolverSettings,
     AxleTire,
 )
-from suspension_multibody.cases.axle_dynamic import case_document, model_document
 from suspension_multibody.fmi import (
     FMI_MODEL_IDENTIFIER,
     FMI_VERSION,
@@ -59,11 +65,7 @@ from suspension_multibody.fmi import (
     read_description,
     variable_declarations,
 )
-from suspension_multibody.simulation import (
-    SimulationRequest,
-    compile_document_pair,
-    run_request,
-)
+from suspension_multibody.simulation import run_compiled
 
 #: The rig's wheel: unloaded radius, the axle height that puts it in contact, and
 #: the belt speed that makes the tire slip.
@@ -166,45 +168,46 @@ def _append_table(
     return document, payload + data.tobytes()
 
 
-def _rig_documents() -> tuple[dict[str, Any], bytes, dict[str, Any], bytes]:
-    """Return the rig's ``(model, model blob, case, case blob)``."""
+def _authored_documents():
+    """Declare the wheel, brake subsystem and sampled rig inputs."""
     model = _rig_model()
     case = _rig_case()
-    model_pair = model_document(model)
-    case_pair = case_document(model, case)
-
-    model_doc = dict(model_pair[0])
-    model_doc["elements"] = [
-        *model_doc["elements"],
-        {
-            "name": "brake",
-            "type": "rotational_torque",
-            "body_a": "ground",
-            "body_b": "wheel",
-            "parameters": {
-                "axis_a": [0.0, 1.0, 0.0],
-                "stiffness": BRAKE_STIFFNESS,
-                "damping": 0.0,
-                "max_torque": BRAKE_MAX_TORQUE,
-                # The brake-demand channel and the tire whose state it acts on.
-                "demand_source": 2,
-                "demand_tire": 0,
-            },
-        },
-    ]
+    assembly, declared = migrate_v1_dynamic_axle(model, case)
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+        "name": "brake", "functional_role": "brake", "allowed_placement_roles": ["any"],
+        "symmetry": "asymmetric", "units": {"length": "m"}, "bodies": [], "hardpoints": [],
+        "joints": [], "ports": [], "needs": [
+            {"name": "reaction", "role": "body:ground", "count": 1, "required": True},
+            {"name": "action", "role": "body:wheel", "count": 1, "required": True}],
+        "property_slots": [{"name": "parameters", "element_type": "generic", "required": False, "default": 0}],
+        "elements": [{"name": "brake", "type": "rotational_torque",
+            "body_a": "@reaction", "body_b": "@action", "point_a": "@reaction", "point_b": "@action",
+            "property_slot": "parameters", "parameters": {"axis_a": [0, 1, 0],
+                "stiffness": BRAKE_STIFFNESS, "damping": 0, "max_torque": BRAKE_MAX_TORQUE,
+                "demand_source": 2, "demand_tire": 0}}]})
+    brake = SubsystemDocument.from_payload({"document": "subsystem", "schema_version": 1,
+        "name": "brake", "template": "brake", "functional_role": "brake", "placement_role": "any",
+        "hardpoints": {}, "property_bindings": {}}, template=template)
+    docs = {entry.ref: entry.subsystem for entry in assembly.entries}
+    docs["brake"] = brake
+    payload = assembly.to_payload()
+    payload["subsystems"].append({"ref": "brake", "functional_role": "brake", "placement_role": "any"})
+    assembly = AssemblyDocument.from_payload(payload, subsystems=docs)
     times = np.asarray(case.times_s, dtype=float)
-    case_doc, case_blob = case_pair
-    case_doc, case_blob = _append_table(
-        case_doc, case_blob, "road_velocity", np.full(times.size, BELT_M_PER_S), "tire"
-    )
-    case_doc, case_blob = _append_table(
-        case_doc,
-        case_blob,
-        "brake_pressure",
-        0.6 * np.clip((times - 0.02) / 0.05, 0.0, 1.0),
-        "tire",
-    )
-    return model_doc, model_pair[1], case_doc, case_blob
+    run = declared.to_payload()
+    run["inputs"].extend([
+        {"name": "belt", "role": "road_velocity", "tire": "wheel.tire",
+            "values": np.full(times.size, BELT_M_PER_S).tolist()},
+        {"name": "brake", "role": "brake_pressure", "tire": "wheel.tire",
+            "values": (0.6 * np.clip((times - .02) / .05, 0, 1)).tolist()}])
+    return assembly, run
+
+
+def _rig_documents() -> tuple[dict[str, Any], bytes, dict[str, Any], bytes]:
+    compiled = validate(*_authored_documents())
+    model_doc, model_blob = unpack_container(compiled.model_payload)
+    case_doc, case_blob = unpack_container(compiled.case_payload)
+    return model_doc, model_blob, case_doc, case_blob
 
 
 @pytest.fixture(scope="module")
@@ -232,8 +235,8 @@ def exported(wrapper_binary: Path, tmp_path_factory: pytest.TempPathFactory):
     model_doc, model_blob, case_doc, case_blob = _rig_documents()
     result = export_fmu(
         destination,
-        assembly_document=(model_doc, model_blob),
-        case_document=(case_doc, case_blob),
+        assembly_document=_authored_documents()[0],
+        case_document=_authored_documents()[1],
     )
     return result, model_doc, model_blob, case_doc, case_blob
 
@@ -326,15 +329,7 @@ def test_an_input_is_written_to_every_sample_of_its_slot(exported):
 def test_every_output_names_a_block_the_run_actually_emits(exported):
     """A declaration bound to nothing would be a promise the wrapper cannot keep."""
     result, model_doc, model_blob, case_doc, case_blob = exported
-    run = run_request(
-        compile_document_pair(
-            SimulationRequest(assembly="axle", family="axle_dynamic"),
-            model_document=model_doc,
-            case_document=case_doc,
-            model_payload=pack_container(model_doc, model_blob),
-            case_payload=pack_container(case_doc, case_blob),
-        )
-    ).raw
+    run = run_compiled(validate(*_authored_documents())).raw
     blocks = run.named_blocks
     assert result.outputs, "the export declares no output"
     for variable in result.outputs:
@@ -391,40 +386,41 @@ def test_the_bindings_resource_agrees_with_the_declarations(exported):
 # --- refusals ---------------------------------------------------------------
 
 
-def test_a_case_document_without_its_blob_is_refused(exported, tmp_path: Path):
+def test_a_case_document_without_its_sampled_values_is_refused(exported, tmp_path: Path):
     """A document that indexes bytes nobody handed over would export a broken FMU."""
-    _, model_doc, model_blob, case_doc, _ = exported
-    with pytest.raises(FmiExportError, match="no payload was handed in"):
+    assembly, case = _authored_documents()
+    case["inputs"][0].pop("values")
+    with pytest.raises(ValueError, match="values"):
         export_fmu(
             tmp_path / "broken.fmu",
-            assembly_document=(model_doc, model_blob),
-            case_document=case_doc,
+            assembly_document=assembly,
+            case_document=case,
         )
 
 
 def test_a_non_uniform_time_grid_is_refused(exported, tmp_path: Path):
     """The binding addresses samples by index, so a grid has to be uniform."""
-    _, model_doc, model_blob, case_doc, case_blob = exported
-    uneven = dict(case_doc)
-    uneven["time"] = {"samples": "sample_times"}
+    assembly, uneven = _authored_documents()
+    uneven["samples"] = [0, .001, .003]
+    for row in uneven["inputs"]:
+        row["values"] = row["values"][:3]
     with pytest.raises(FmiExportError, match="explicit sample-time table"):
         export_fmu(
             tmp_path / "uneven.fmu",
-            assembly_document=(model_doc, model_blob),
-            case_document=(uneven, case_blob),
+            assembly_document=assembly,
+            case_document=uneven,
         )
 
 
-def test_a_case_that_names_no_family_is_refused(exported, tmp_path: Path):
+def test_a_case_that_names_no_study_is_refused(exported, tmp_path: Path):
     """The export writes a container whose layout the family determines."""
-    _, model_doc, model_blob, case_doc, case_blob = exported
-    unnamed = dict(case_doc)
-    unnamed.pop("family", None)
-    with pytest.raises(FmiExportError, match="must name its 'family'"):
+    assembly, unnamed = _authored_documents()
+    unnamed.pop("study")
+    with pytest.raises(ValueError, match="study"):
         export_fmu(
             tmp_path / "unnamed.fmu",
-            assembly_document=(model_doc, model_blob),
-            case_document=(unnamed, case_blob),
+            assembly_document=assembly,
+            case_document=unnamed,
         )
 
 
@@ -454,8 +450,8 @@ def test_exporting_the_same_pair_twice_produces_the_same_bytes(exported, tmp_pat
     result, model_doc, model_blob, case_doc, case_blob = exported
     again = export_fmu(
         tmp_path / "again.fmu",
-        assembly_document=(model_doc, model_blob),
-        case_document=(case_doc, case_blob),
+        assembly_document=_authored_documents()[0],
+        case_document=_authored_documents()[1],
     )
     assert again.guid == result.guid
     assert again.path.read_bytes() == result.path.read_bytes()
@@ -480,19 +476,13 @@ def test_the_exported_containers_are_the_ones_a_run_would_be_submitted(exported)
 def test_exporting_does_not_change_a_run(exported):
     """The export is a side channel: the same documents still solve the same way."""
     _, model_doc, model_blob, case_doc, case_blob = exported
-    compiled = compile_document_pair(
-        SimulationRequest(assembly="axle", family="axle_dynamic"),
-        model_document=model_doc,
-        case_document=case_doc,
-        model_payload=pack_container(model_doc, model_blob),
-        case_payload=pack_container(case_doc, case_blob),
-    )
-    first = run_request(compiled).raw
+    compiled = validate(*_authored_documents())
+    first = run_compiled(compiled).raw
     slip = np.asarray(first.named_blocks["tire_output"])[:, 0, 7]
     # The exported run is a real one: the wheel rolls and the brake moves the
     # slip, so the archive describes a solved history rather than a still frame.
     assert np.ptp(slip) > 1.0
-    second = run_request(compiled).raw
+    second = run_compiled(compiled).raw
     np.testing.assert_array_equal(
         np.asarray(second.named_blocks["tire_output"]),
         np.asarray(first.named_blocks["tire_output"]),

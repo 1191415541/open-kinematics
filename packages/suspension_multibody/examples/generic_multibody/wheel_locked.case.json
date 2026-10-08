@@ -1,0 +1,7 @@
+{
+  "schema_version": 1, "name": "wheel_locked", "study": "dynamic",
+  "samples": [0, 0.001, 0.002],
+  "solver": {"initialization_mode": "provided_consistent_state", "internal_step_s": 0.00025},
+  "boundaries": [{"name": "spin_lock", "coordinate": "tire.sub.json.spin", "mode": "locked", "units": "rad", "value": 0}],
+  "inputs": [], "outputs": []
+}

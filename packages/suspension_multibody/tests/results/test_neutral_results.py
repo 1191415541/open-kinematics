@@ -1,103 +1,54 @@
-from __future__ import annotations
-
+"""Neutral native channels remain immutable and independent of protocol."""
 import numpy as np
 import pytest
 
-from suspension_multibody.cases.kc_quasi_static import case_document, model_document
-from suspension_multibody.cases.kc_quasi_static.workflow import (
-    DEFAULT_SETTINGS,
-    DEFAULT_TIMES,
-)
+from suspension_multibody.api import simulate
 from suspension_multibody.kernel import ContractRun, KernelContractError
-from suspension_multibody.results import (
-    ChannelRegistry,
-    CommonResult,
-    decode_result,
-)
-from suspension_multibody.simulation import SimulationRequest, run_request
-from suspension_multibody.subsystems.entry import compose_axle
-from tests.benchmark_fixture import benchmark_model
+from suspension_multibody.results import ChannelRegistry, ResultEnvelope
+from suspension_multibody.results.raw import _decode_contract_run
+
+from ..simulation._documents import documents
 
 
-def _run():
-    assembly = compose_axle(benchmark_model(), "K")
-    model = model_document(assembly, name="result-test", drive_wheels=True)
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
-        name="result-test",
-        wheel_values_mm=(0.0,),
-        rack_values_mm=(0.0,),
-        times_s=DEFAULT_TIMES,
-        settings=DEFAULT_SETTINGS,
-        drive_wheels=True,
-    )
-    return run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
-
-
-def test_neutral_result_decodes_common_contract_surface() -> None:
-    result = decode_result(_run(), assembly="axle", family="kc_quasi_static")
-
-    assert isinstance(result, CommonResult)
+def test_neutral_result_decodes_common_contract_surface():
+    result = simulate(*documents()).result
+    assert isinstance(result, ResultEnvelope)
     assert result.status == "success"
-    assert result.times_s.shape == (len(DEFAULT_TIMES),)
-    assert result.body_names
-    assert result.states.shape[0] == len(DEFAULT_TIMES)
-    assert result.diagnostics is not None
-    assert result.diagnostics.shape[0] == len(DEFAULT_TIMES)
-    assert result.performance["available"] is False
+    assert result.times_s.shape == (3,)
+    assert result.body_ids
+    assert result.named_blocks["body_state"].shape[0] == 3
+    assert result.diagnostics.shape[0] == 3
     assert "residual_calls" in result.performance
     with pytest.raises(KernelContractError, match="no block"):
-        result.block("missing")
+        result.raw.block("missing")
 
 
-def test_neutral_result_preserves_model_metadata_and_read_only_arrays() -> None:
-    result = decode_result(_run(), assembly="axle", family="kc_quasi_static")
-
-    assert result.tire_names == ()
+def test_neutral_result_preserves_model_metadata_and_read_only_arrays():
+    result = simulate(*documents()).result
+    assert result.tire_ids == ("wheel.tire",)
+    assert result.raw.model_document["tires"][0]["name"] == result.tire_ids[0]
     with pytest.raises(ValueError):
-        result.states[0, 0, 0] = 0.0
+        result.named_blocks["body_state"][0, 0, 0] = 0
     with pytest.raises(TypeError):
-        result.document["status"] = "failed"
+        result.raw.document["status"] = "failed"
 
 
-def test_channel_registry_uses_frozen_contract_order() -> None:
+def test_channel_registry_uses_frozen_contract_order():
     registry = ChannelRegistry.load()
-
     assert registry.schema_version == 1
     assert registry.rotation_sign == "right_hand_rule"
-    assert registry.channel_names
     assert registry.channel_names[0] == "sprung_body.heave"
     assert registry.channel("left.wheel_center_z")["unit"] == "m"
     with pytest.raises(TypeError):
         registry.contract["schema_version"] = 2
 
 
-def test_neutral_result_tire_metadata_and_block_access() -> None:
-    run = ContractRun(
-        document={
-            "status": "success",
-            "manifest": {
-                "bodies": ["body"],
-                "cases": [{"sample_offset": 0, "sample_count": 2}],
-            },
-        },
-        blocks={
-            "body_state": np.zeros((2, 1, 19)),
-            "diagnostics": np.full((4, 16), np.nan),
-            "tire_output": np.ones((2, 1, 41)),
-        },
-        model_document={"tires": [{"name": "tire_L"}]},
-        times_s=np.array([0.0, 0.1]),
-    )
-    result = decode_result(run, assembly="axle", family="kc_quasi_static")
-
-    assert result.tire_names == ("tire_L",)
-    assert result.tire_state("tire_L").shape == (2, 41)
+def test_neutral_result_tire_metadata_and_block_access():
+    run = ContractRun(document={"status": "success", "manifest": {
+        "bodies": ["body"], "cases": [{"sample_offset": 0, "sample_count": 2}]}},
+        blocks={"body_state": np.zeros((2, 1, 19)), "diagnostics": np.full((4, 16), np.nan),
+                "tire_output": np.ones((2, 1, 41))},
+        model_document={"tires": [{"name": "tire_L"}]}, times_s=np.array([0, .1]))
+    raw = _decode_contract_run(run)
+    assert raw.tire_names == ("tire_L",)
+    assert raw.tire_state("tire_L").shape == (2, 41)

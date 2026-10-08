@@ -13,7 +13,7 @@ from typing import cast
 
 import numpy as np
 
-from ..results import TimeSeriesResult
+from ..results.timeseries import TimeSeriesResult
 from ..schema import DynamicResultBundle, TimeSignal
 
 

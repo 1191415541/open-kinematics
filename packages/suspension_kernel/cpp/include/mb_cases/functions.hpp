@@ -22,15 +22,11 @@
 #include "mb_numeric/vector.hpp"
 #include "mb_contract/types.hpp"
 #include "mb_input/types.hpp"
+#include "mb_model/types.hpp"
 
 namespace axle_kernel {
 
-// The assembled model, named but not included: `install_tire_mass` below takes a
-// reference to it, and the definition includes `mb_model/types.hpp`.  Forward
-// declaring keeps the header edge list unchanged -- `mb_cases` already depends on
-// `mb_model` in the translation units, and a reference parameter needs no
-// complete type.
-struct Model;
+// The owned function-program vectors require complete model-layer types.
 
 
 /// A named body-local point of the model, in metres.  Markers are how a case
@@ -292,9 +288,13 @@ class ContractModel {
   const std::vector<ElementBlock>& rotational_torques() const {
     return rotational_torques_;
   }
+  const std::vector<FunctionProgram>& function_programs() const { return function_programs_; }
+  const std::vector<FunctionElement>& function_elements() const { return function_elements_; }
 
 
  private:
+  std::vector<FunctionProgram> function_programs_;
+  std::vector<FunctionElement> function_elements_;
   std::string name_;
   double length_scale_ = 1e-3;
 

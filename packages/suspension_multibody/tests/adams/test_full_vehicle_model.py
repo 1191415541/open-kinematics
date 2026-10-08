@@ -16,7 +16,6 @@ from suspension_multibody.adams import (
     build_adams_vehicle_model,
     build_native_rack_steering_model,
     direct_wheel_torque_signals_from_adams_result,
-    full_vehicle_model,
     load_adams_full_vehicle_input,
     parse_adams_result_history,
     steering_signal_from_manifest,
@@ -48,7 +47,7 @@ from suspension_multibody.kernel.capabilities import (
     pac2002_unsupported_native_reasons,
 )
 from suspension_multibody.schema import TimeSignal, TireModelSpec
-from suspension_multibody.vehicle.service import run_vehicle_dynamics
+from tests.vehicle._unified_entry import solve_vehicle as vehicle_dynamics_run
 
 _CASE = Path("artifacts/adams/correlation-reference-real-si/handling-pac2002-v1/step_steer")
 _SOURCE_CASE = Path("artifacts/adams-full-source/step_steer")
@@ -372,9 +371,9 @@ def test_every_parser_unsupported_flag_is_fail_closed() -> None:
     This guard closes that whole class: every ``PAC2002_UNSUPPORTED_*`` key the
     importer can emit must be recognised by ``pac2002_scope``.
     """
-    source = Path(
-        full_vehicle_model.__file__
-    ).read_text(encoding="utf-8")
+    from suspension_multibody.properties import tir
+
+    source = Path(tir.__file__).read_text(encoding="utf-8")
     emitted = set(re.findall(r"[\"'](PAC2002_UNSUPPORTED_[A-Z_]+)[\"']", source))
     assert emitted, "expected the importer to emit unsupported-feature flags"
 
@@ -649,7 +648,7 @@ def test_native_source_case_uses_explicit_rack_displacement_input() -> None:
     )
     assert case.vehicle.steering.actuator_mode == "prescribed_translation"
     assert rack_displacement.value_at(2.0) == pytest.approx(8.973816419494435)
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
     assert bool(np.all(result.diagnostics.accepted))
     steering = result.steering_state("front_rack")
     np.testing.assert_allclose(steering[:, 0], steering[:, 2], atol=1.0e-8)
@@ -732,7 +731,7 @@ def test_native_brush_source_case_converges_through_two_seconds() -> None:
         source_drive_brake_result_path=result_path,
     )
     assert case.solver.projection_max_iterations == 80
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
     assert len(result.times_s) == 201
     assert bool(np.all(result.diagnostics.accepted))
 
@@ -1127,7 +1126,7 @@ def test_source_result_maps_direct_drive_and_brake_channels() -> None:
     assert drive["rear_right"].values[0] * initial_wheel_speeds["rear_right"] > 0.0
     assert "source_drive_brake_input_equivalence" in verified
     assert "source_drive_brake_input_equivalence" not in missing
-    result = run_vehicle_dynamics(model, replay_case)
+    result = vehicle_dynamics_run(model, replay_case)
     assert bool(np.all(result.diagnostics.accepted))
 
 
@@ -1213,7 +1212,7 @@ def test_source_drive_torque_matches_adams_output_acceleration() -> None:
             ),
         }
     )
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
     adams = parse_adams_result_history(
         result_path,
         {
@@ -1278,7 +1277,7 @@ def test_source_pac2002_initial_longitudinal_slip_matches_adams() -> None:
             ),
         }
     )
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
     adams_tire = parse_adams_result_history(
         result_path,
         {
@@ -1420,7 +1419,7 @@ def test_source_prescribed_steering_reports_rate_in_actuator_coordinates() -> No
         step_size=0.01,
     )
 
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
     assert len(case.initial_states) == 53
     assert bool(np.all(result.diagnostics.accepted))
     assert float(np.max(result.diagnostics.velocity_residual)) <= 1.0e-4

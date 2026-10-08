@@ -9,8 +9,8 @@
     "schema_version": {"const": 1},
     "name": {"type": "string", "minLength": 1},
     "description": {"type": "string"},
-    "element_type": {"enum": ["spring", "damper", "bump_stop", "bushing", "tire"]},
-    "model": {"enum": ["linear", "nonlinear", "piecewise"]},
+    "element_type": {"enum": ["spring", "damper", "bump_stop", "bushing", "tire", "mass", "inertia"]},
+    "model": {"enum": ["linear", "nonlinear", "piecewise", "pac2002", "fiala", "native_brush"]},
     "units": {
       "type": "object", "additionalProperties": false, "required": ["force", "length"],
       "properties": {
@@ -23,6 +23,14 @@
     "parameters": {
       "type": "object",
       "additionalProperties": {"type": "number", "finite": true}
+    },
+    "tables": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array", "minItems": 2,
+        "items": {"type": "array", "minItems": 2, "maxItems": 2,
+                  "items": {"type": "number", "finite": true}}
+      }
     },
     "matrix": {
       "type": "object", "additionalProperties": false, "required": ["name", "rows"],

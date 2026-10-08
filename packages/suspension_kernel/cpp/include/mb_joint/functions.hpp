@@ -29,6 +29,9 @@ namespace axle_kernel {
 
 int constraint_rows(int type);
 double joint_coordinate_value( const Model& model, const State& state, int joint_index, int coordinate, double reference_translation, const Quat& reference_rotation );
+void joint_coordinate_gradients(const Model& model, const State& state,
+    int joint_index, int coordinate, const Quat& reference_rotation,
+    double scale, Vec3 (&linear)[2], Vec3 (&angular)[2]);
 
 Vec3 steering_axis_reference(const SteeringActuator& actuator);
 

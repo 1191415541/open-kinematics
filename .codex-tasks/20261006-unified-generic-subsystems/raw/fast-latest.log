@@ -1,0 +1,826 @@
+...F.................................................................... [  4%]
+........................................................................ [  9%]
+.............................................FF...............F......... [ 13%]
+..F..F.................................................................. [ 18%]
+..................F...................F......F.......................... [ 23%]
+........................................................................ [ 27%]
+........................................................................ [ 32%]
+........................................................................ [ 37%]
+........................................................................ [ 41%]
+........................................................................ [ 46%]
+........................................................................ [ 50%]
+..........................................................FFFFFFF....... [ 55%]
+........................................................................ [ 60%]
+........................................................................ [ 64%]
+...FFF......F........................................................... [ 69%]
+..FFFF.................................................................. [ 74%]
+...............................................FF....................F.F [ 78%]
+........................................................................ [ 83%]
+.......................................................F................ [ 88%]
+........................................................................ [ 92%]
+......................................................F........x........ [ 97%]
+..........................................                               [100%]
+================================== FAILURES ===================================
+_____________ test_a_contract_derived_model_assembles_and_solves ______________
+
+    def test_a_contract_derived_model_assembles_and_solves() -> None:
+        """
+        A contract-derived model builds an assembly and converges, not just resolves.
+    
+        Resolving the hardpoints is necessary but not sufficient: the model also has
+        to build a front-axle assembly and reach a converged native solve.  That is
+        what the four missing aliases broke, and it is what this test would catch
+        again.
+        """
+>       from suspension_multibody.api import kc_case_run
+E       ImportError: cannot import name 'kc_case_run' from 'suspension_multibody.api' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\api.py)
+
+packages\suspension_multibody\tests\adapters\test_geometry_contract.py:124: ImportError
+______ test_kc_migration_declares_rig_and_preserves_quasistatic_poses[K] ______
+
+mode = 'K'
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_kc_migration_declares_rig0')
+
+    @pytest.mark.parametrize("mode", ["K", "C"])
+    def test_kc_migration_declares_rig_and_preserves_quasistatic_poses(mode, tmp_path):
+        import runpy
+    
+        from suspension_multibody.api import validate
+        from suspension_multibody.cases.kc_quasi_static import case_document, model_document
+        from suspension_multibody.schema.model import AxleDeclaration
+>       from suspension_multibody.simulation import SimulationRequest, run_request
+E       ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:43: ImportError
+______ test_kc_migration_declares_rig_and_preserves_quasistatic_poses[C] ______
+
+mode = 'C'
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_kc_migration_declares_rig1')
+
+    @pytest.mark.parametrize("mode", ["K", "C"])
+    def test_kc_migration_declares_rig_and_preserves_quasistatic_poses(mode, tmp_path):
+        import runpy
+    
+        from suspension_multibody.api import validate
+        from suspension_multibody.cases.kc_quasi_static import case_document, model_document
+        from suspension_multibody.schema.model import AxleDeclaration
+>       from suspension_multibody.simulation import SimulationRequest, run_request
+E       ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:43: ImportError
+_____________ test_vehicle_entity_data_matches_existing_producer ______________
+
+full_vehicle_model = VehicleDeclaration(schema_version=1, name='full_vehicle', units=<UnitSystem.ENGINEERING: 'mm-N-N*mm-kg-deg'>, coordina...fective_piston_radius=145.0, max_brake_value=0.1, torque_demand='none'), coordinate_couplers=(), aerodynamic_drag=None)
+
+    def test_vehicle_entity_data_matches_existing_producer(full_vehicle_model):
+        from suspension_multibody.cases.vehicle_dynamic import model_document
+        from suspension_multibody.compilation.resolved import native_model_document
+>       from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.vehicle_dynamic'
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:308: ModuleNotFoundError
+__ test_vehicle_case_migration_matches_declared_excitation_and_initial_state __
+
+    def test_vehicle_case_migration_matches_declared_excitation_and_initial_state():
+        from suspension_multibody.authoring.migration import migrate_v1_vehicle_case
+        from suspension_multibody.cases.vehicle_dynamic import case_document
+>       from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.vehicle_dynamic'
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:444: ModuleNotFoundError
+_ test_dynamic_si_axle_document_run_has_bit_identical_states_to_frozen_producer _
+
+    def test_dynamic_si_axle_document_run_has_bit_identical_states_to_frozen_producer():
+        import runpy
+    
+        from suspension_multibody import api
+        from suspension_multibody.authoring.migration import migrate_v1_dynamic_axle
+>       from suspension_multibody.axle_dynamics.contract_run import run_axle
+E       ModuleNotFoundError: No module named 'suspension_multibody.axle_dynamics.contract_run'
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:552: ModuleNotFoundError
+________ test_the_vehicle_document_decides_the_composed_vehicle_roles _________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_the_vehicle_document_deci0')
+full_vehicle_model = VehicleDeclaration(schema_version=1, name='full_vehicle', units=<UnitSystem.ENGINEERING: 'mm-N-N*mm-kg-deg'>, coordina...fective_piston_radius=145.0, max_brake_value=0.1, torque_demand='none'), coordinate_couplers=(), aerodynamic_drag=None)
+
+    def test_the_vehicle_document_decides_the_composed_vehicle_roles(
+        tmp_path: Path, full_vehicle_model
+    ) -> None:
+        """
+        Phase 5: the document's role set is what the vehicle composition carries, and
+        its subsystems are what it builds.
+    
+        The role set comes from the file rather than from a constant, which is what
+        makes the file route a route into the composition rather than a second
+        composition.  The rows are the *document's* as well: a steering subsystem the
+        document places supplies the topology of the axle it steers, so the composed
+        constraint names are the file template's rather than the built-in's.
+        """
+        paths = write_vehicle_project(tmp_path)
+        document = AssemblyDocument.load(paths["vehicle_assembly"])
+        assert frozenset(entry.functional_role for entry in document.entries) == frozenset(
+            {"suspension", "chassis", "steering", "wheel", "brake", "drive"}
+        )
+        from_file = assemble_generic(migrate_v1_vehicle(vehicle_declaration_from(document)))
+        default = assemble_generic(migrate_v1_vehicle(full_vehicle_model))
+        from_file_names = {row["name"].rsplit(".", 1)[-1] for row in from_file.joints}
+        default_names = {row["name"].rsplit(".", 1)[-1] for row in default.joints}
+        # The document's own subsystems are the ones the composition reads, by name.
+        assert next(entry for entry in document.entries if entry.functional_role == "steering").subsystem.template.name == "file_steering"
+        assert next(entry for entry in document.entries if entry.functional_role == "chassis").subsystem.template.name == "file_chassis"
+        # And the steering topology is the one that is built: the file declares a
+        # `support` body for its rack to slide in, and that body is what the composed
+        # vehicle carries.  The tie rod names are the *suspension* template's now
+        # (requirement 1 -- the suspension owns the tie rods), so they appear on both
+        # axles whichever steering template is read.
+        assert "rack_guide" in from_file_names
+        assert "rack_tie_joint_L" in from_file_names
+        assert "rack_tie_joint_L" in default_names
+        # The file's steering subsystem declares a support body, and it is built.
+>       assert any(name.startswith("front_") and name.endswith(".support") for name in from_file.bodies)
+E       assert False
+E        +  where False = any(<generator object test_the_vehicle_document_decides_the_composed_vehicle_roles.<locals>.<genexpr> at 0x000002BC292ABE00>)
+
+packages\suspension_multibody\tests\authoring\test_vehicle_assembly_documents.py:123: AssertionError
+_______ test_missing_adams_evidence_blocks_the_accuracy_and_speed_claim _______
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_missing_adams_evidence_bl0')
+
+    def test_missing_adams_evidence_blocks_the_accuracy_and_speed_claim(
+        tmp_path: Path,
+    ) -> None:
+        """Without real Adams evidence both Adams gates must report BLOCKED."""
+        module = _script()
+>       status = module.main(
+            [
+                "--output",
+                str(tmp_path),
+                "--case",
+                "static_equilibrium",
+            ]
+        )
+
+packages\suspension_multibody\tests\axle_dynamics\test_acceptance_runner.py:80: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\scripts\run_axle_dynamics_acceptance.py:639: in main
+    _run_case(
+packages\suspension_multibody\scripts\run_axle_dynamics_acceptance.py:562: in _run_case
+    evidence_path = run_native_axle_manifest(
+packages\suspension_multibody\src\suspension_multibody\adams\axle_equivalence.py:458: in run_native_axle_manifest
+    primary_manifest = write_artifact(
+packages\suspension_multibody\src\suspension_multibody\io\artifacts.py:44: in write_artifact
+    artifact_type = _artifact_type(storage_result, partial)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+result = <suspension_multibody.adams.axle_evidence_view.FrozenAxleEvidence object at 0x000002BC291ABF50>
+partial = None
+
+    def _artifact_type(result: Any, partial: Any | None) -> str:
+        value = result if result is not None else partial
+        if value is None:
+            return "unknown_result"
+        from ..results.envelope import ResultEnvelope
+    
+        if isinstance(value, ResultEnvelope):
+            return "multibody_result"
+>       raise TypeError("artifact writer requires ResultEnvelope")
+E       TypeError: artifact writer requires ResultEnvelope
+
+packages\suspension_multibody\src\suspension_multibody\io\artifacts.py:164: TypeError
+_______ test_axle_schema_loader_and_result_artifact_are_self_describing _______
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_axle_schema_loader_and_re0')
+
+    def test_axle_schema_loader_and_result_artifact_are_self_describing(
+        tmp_path: Path,
+    ) -> None:
+        model = _vertical_slider_model()
+        case = AxleDynamicsCase(
+            name="artifact",
+            times_s=(0.0, 0.001),
+            solver=AxleSolverSettings(internal_step_s=0.00025),
+        )
+        model_path = tmp_path / "model.json"
+        case_path = tmp_path / "case.yaml"
+        model_path.write_text(
+            json.dumps(model.model_dump(mode="json")),
+            encoding="utf-8",
+        )
+        import yaml
+    
+        case_path.write_text(
+            yaml.safe_dump(case.model_dump(mode="json")),
+            encoding="utf-8",
+        )
+        # The SI model loader is retired with the modelling route (G7), so the file
+        # round trip goes through the schema itself; the case loader stays public.
+        loaded_model = AxleDynamicsModel.model_validate(
+            json.loads(model_path.read_text(encoding="utf-8"))
+        )
+        loaded_case = load_axle_dynamics_case(case_path)
+        result = solve_axle(loaded_model, loaded_case)
+>       manifest_path = write_artifact(
+            result,
+            tmp_path / "artifact",
+            model=loaded_model,
+            case=loaded_case,
+        )
+
+packages\suspension_multibody\tests\axle_dynamics\test_api.py:412: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\io\artifacts.py:44: in write_artifact
+    artifact_type = _artifact_type(storage_result, partial)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+result = _TestRun(compiled=CompiledSimulation(request=SimulationRequest(assembly='generic', rig='', family='axle_dynamic', stud...ory","version":1}],"schema_version":1,"signals":[],"tires":[],"units":"SI"}', resource_payload=b''), schema_version=1))
+partial = None
+
+    def _artifact_type(result: Any, partial: Any | None) -> str:
+        value = result if result is not None else partial
+        if value is None:
+            return "unknown_result"
+        from ..results.envelope import ResultEnvelope
+    
+        if isinstance(value, ResultEnvelope):
+            return "multibody_result"
+>       raise TypeError("artifact writer requires ResultEnvelope")
+E       TypeError: artifact writer requires ResultEnvelope
+
+packages\suspension_multibody\src\suspension_multibody\io\artifacts.py:164: TypeError
+____________ test_the_preparation_builds_one_actuator_per_channel _____________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_the_preparation_builds_on0')
+
+    def test_the_preparation_builds_one_actuator_per_channel(tmp_path: Path) -> None:
+        """
+        Two channels, stacked: names, and every per-channel array two rows deep.
+    
+        The stacking order is the declaration order, and the two sample-major tables
+        are laid out channel-minor -- `sample_index * count + channel_index`, the
+        layout the kernel's own index expression reads.  A channel-major table would
+        parse, and would drive each channel with the other's samples, so the layout is
+        asserted rather than assumed.
+        """
+>       from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.vehicle_dynamic'
+
+packages\suspension_multibody\tests\preparation\test_steering_channels.py:116: ModuleNotFoundError
+________________ test_direct_two_channel_run_drives_both_racks ________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_direct_two_channel_run_dr0')
+
+    def test_direct_two_channel_run_drives_both_racks(tmp_path: Path) -> None:
+        """
+        The whole way through: both channels are driven, and both report a travel.
+    
+        The vehicles are run through the unified runner on the default preparation,
+        which is the path the recorded full-vehicle results take.
+        """
+>       from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.vehicle_dynamic'
+
+packages\suspension_multibody\tests\preparation\test_steering_channels.py:149: ModuleNotFoundError
+__ test_four_wheel_steer_reaches_the_channels_it_drives[low_speed_opposite] ___
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_four_wheel_steer_reaches_0')
+speed = 2.0, expected_gain = -0.25
+
+    @pytest.mark.parametrize(
+        "speed,expected_gain",
+        [(2.0, FOUR_WHEEL_STEER_LOW_SPEED_GAIN), (20.0, FOUR_WHEEL_STEER_HIGH_SPEED_GAIN)],
+        ids=["low_speed_opposite", "high_speed_same_direction"],
+    )
+    def test_four_wheel_steer_reaches_the_channels_it_drives(
+        tmp_path: Path, speed: float, expected_gain: float
+    ) -> None:
+        """
+        The same driver input produces opposite rear angles at the two speeds.
+    
+        This is the pair the roadmap asks for: 4WS with the rear wheels turning
+        *against* the front at low speed and *with* them at high speed, under one
+        steering input.  The check is on the per-channel target tables the contract
+        carries -- the numbers the kernel actually integrates -- and on the recorded
+        allocation, so a schedule that was computed and then discarded cannot pass.
+        The speed is the case's declared forward speed, which is the only speed the
+        preparation layer has.
+        """
+>       from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.vehicle_dynamic'
+
+packages\suspension_multibody\tests\preparation\test_steering_channels.py:198: ModuleNotFoundError
+_ test_four_wheel_steer_reaches_the_channels_it_drives[high_speed_same_direction] _
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_four_wheel_steer_reaches_1')
+speed = 20.0, expected_gain = 0.15
+
+    @pytest.mark.parametrize(
+        "speed,expected_gain",
+        [(2.0, FOUR_WHEEL_STEER_LOW_SPEED_GAIN), (20.0, FOUR_WHEEL_STEER_HIGH_SPEED_GAIN)],
+        ids=["low_speed_opposite", "high_speed_same_direction"],
+    )
+    def test_four_wheel_steer_reaches_the_channels_it_drives(
+        tmp_path: Path, speed: float, expected_gain: float
+    ) -> None:
+        """
+        The same driver input produces opposite rear angles at the two speeds.
+    
+        This is the pair the roadmap asks for: 4WS with the rear wheels turning
+        *against* the front at low speed and *with* them at high speed, under one
+        steering input.  The check is on the per-channel target tables the contract
+        carries -- the numbers the kernel actually integrates -- and on the recorded
+        allocation, so a schedule that was computed and then discarded cannot pass.
+        The speed is the case's declared forward speed, which is the only speed the
+        preparation layer has.
+        """
+>       from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.vehicle_dynamic'
+
+packages\suspension_multibody\tests\preparation\test_steering_channels.py:198: ModuleNotFoundError
+___________ test_the_direct_law_is_what_a_one_channel_vehicle_gets ____________
+
+full_vehicle_model = VehicleDeclaration(schema_version=1, name='full_vehicle', units=<UnitSystem.ENGINEERING: 'mm-N-N*mm-kg-deg'>, coordina...fective_piston_radius=145.0, max_brake_value=0.1, torque_demand='none'), coordinate_couplers=(), aerodynamic_drag=None)
+
+    def test_the_direct_law_is_what_a_one_channel_vehicle_gets(
+        full_vehicle_model,
+    ) -> None:
+        """
+        Without a law, nothing about the model's channels changes the driven targets.
+    
+        The compatibility hard gate: one channel, `direct` law, and the target table is
+        the case's own steering signal through the channel's ratio -- no allocator
+        arithmetic anywhere on the path.
+        """
+>       from suspension_multibody.preparation.vehicle_dynamic import (
+            _steering_channel_specs,
+            prepare_vehicle_run,
+        )
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.vehicle_dynamic'
+
+packages\suspension_multibody\tests\preparation\test_steering_channels.py:232: ModuleNotFoundError
+______ test_the_two_channel_model_document_names_both_steering_elements _______
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_the_two_channel_model_doc0')
+
+    def test_the_two_channel_model_document_names_both_steering_elements(tmp_path: Path) -> None:
+        """Both channels reach the model contract, each as its own element."""
+        from suspension_multibody.cases.vehicle_dynamic import model_document
+>       from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.vehicle_dynamic'
+
+packages\suspension_multibody\tests\preparation\test_steering_channels.py:271: ModuleNotFoundError
+_______ test_the_kc_family_asks_for_a_vehicle_without_steering_elements _______
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3320/test_the_kc_family_asks_for_a_0')
+
+    def test_the_kc_family_asks_for_a_vehicle_without_steering_elements(tmp_path: Path) -> None:
+        """
+        A K/C sweep drives the rack itself, so it is not handed an actuator for it.
+    
+        The document is asked for a vehicle without steering elements rather than
+        having them deleted afterwards: the deletion was the old form, and it would
+        have to be repeated once per channel now that there are several.
+        """
+        from suspension_multibody.cases.vehicle_kc import (
+            model_document,
+            vehicle_model_document,
+        )
+>       from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.vehicle_dynamic'
+
+packages\suspension_multibody\tests\preparation\test_steering_channels.py:301: ModuleNotFoundError
+___ test_a_family_document_without_its_section_is_refused[four_post-_four] ____
+
+section = 'four_post', factory = <function _four at 0x000002BC27C78FE0>
+
+    @pytest.mark.parametrize("section,factory", [("four_post", _four), ("ride_random_road", _road)])
+    def test_a_family_document_without_its_section_is_refused(section, factory):
+        payload = factory()
+        payload.pop(section)
+>       with pytest.raises(AuthoringError, match=section):
+E       Failed: DID NOT RAISE <class 'suspension_multibody.authoring.errors.AuthoringError'>
+
+packages\suspension_multibody\tests\schema\test_vehicle_case_documents.py:47: Failed
+_ test_a_family_document_without_its_section_is_refused[ride_random_road-_road] _
+
+section = 'ride_random_road', factory = <function _road at 0x000002BC27C78D60>
+
+    @pytest.mark.parametrize("section,factory", [("four_post", _four), ("ride_random_road", _road)])
+    def test_a_family_document_without_its_section_is_refused(section, factory):
+        payload = factory()
+        payload.pop(section)
+>       with pytest.raises(AuthoringError, match=section):
+E       Failed: DID NOT RAISE <class 'suspension_multibody.authoring.errors.AuthoringError'>
+
+packages\suspension_multibody\tests\schema\test_vehicle_case_documents.py:47: Failed
+____________ test_a_four_post_document_without_corners_is_refused _____________
+
+    def test_a_four_post_document_without_corners_is_refused():
+        payload = _four()
+        payload["four_post"]["corners"] = []
+>       with pytest.raises(AuthoringError):
+E       Failed: DID NOT RAISE <class 'suspension_multibody.authoring.errors.AuthoringError'>
+
+packages\suspension_multibody\tests\schema\test_vehicle_case_documents.py:54: Failed
+____________ test_each_family_states_its_inputs_in_its_own_section ____________
+
+    def test_each_family_states_its_inputs_in_its_own_section():
+        payload = _four()
+        payload["family"] = "ride_random_road"
+>       with pytest.raises(AuthoringError, match="ride_random_road"):
+E       Failed: DID NOT RAISE <class 'suspension_multibody.authoring.errors.AuthoringError'>
+
+packages\suspension_multibody\tests\schema\test_vehicle_case_documents.py:99: Failed
+___________ test_no_run_entry_reaches_the_kc_to_dynamic_conversion ____________
+
+    def test_no_run_entry_reaches_the_kc_to_dynamic_conversion() -> None:
+        """
+        Removing the production bridge dependency, as a property of the tree.
+    
+        Every module a run goes through is checked, so the guarantee does not depend
+        on which entry a future caller happens to use.  The conversion stays reachable
+        from the input adapter -- that is an input route -- but no *run* module names
+        it.
+        """
+        offenders: list[str] = []
+        for relative in _ENTRY_MODULES:
+            path = SOURCE / relative
+>           assert path.is_file(), f"the entry module list is stale: {relative} is gone"
+E           AssertionError: the entry module list is stale: axle_dynamics/contract_run.py is gone
+E           assert False
+E            +  where False = is_file()
+E            +    where is_file = WindowsPath('E:/�Ӽ�/open-kinematics/packages/suspension_multibody/src/suspension_multibody/axle_dynamics/contract_run.py').is_file
+
+packages\suspension_multibody\tests\simulation\test_no_production_bridge.py:66: AssertionError
+____________ test_the_conversion_survives_only_as_an_input_adapter ____________
+
+    def test_the_conversion_survives_only_as_an_input_adapter() -> None:
+        """
+        The other half, and it is the reason the check above can be strict.
+    
+        Deleting the conversion would make "an assembled axle, advanced in time"
+        inexpressible, which is the study merge's whole point.  So the check is not
+        "nothing mentions it" but "only the input adapter does", and this pins which
+        module that is.
+        """
+        callers: set[str] = set()
+        for path in SOURCE.rglob("*.py"):
+            relative = path.relative_to(SOURCE).as_posix()
+            if _called_names(path) & _BRIDGE_NAMES:
+                callers.add(relative)
+>       assert callers == {"preparation/axle_dynamic.py"}, sorted(callers)
+E       AssertionError: []
+E       assert set() == {'preparation...e_dynamic.py'}
+E         
+E         Extra items in the right set:
+E         'preparation/axle_dynamic.py'
+E         Use -v to get more diff
+
+packages\suspension_multibody\tests\simulation\test_no_production_bridge.py:92: AssertionError
+___________ test_the_input_adapter_still_converts_an_assembled_axle ___________
+
+    def test_the_input_adapter_still_converts_an_assembled_axle() -> None:
+        """
+        The route the previous test protects, exercised rather than described.
+    
+        A massed K/C assembly handed to the dynamic family must produce an SI model
+        with the same bodies -- that is the study merge as a caller can reach it.
+        """
+        import json
+    
+>       from suspension_multibody.preparation.axle_dynamic import _dynamic_model
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.axle_dynamic'
+
+packages\suspension_multibody\tests\simulation\test_no_production_bridge.py:104: ModuleNotFoundError
+______ test_an_axle_declaring_no_inertia_is_refused_rather_than_advanced ______
+
+    def test_an_axle_declaring_no_inertia_is_refused_rather_than_advanced() -> None:
+        """
+        The adapter's other duty: refusing what it cannot read.
+    
+        The benchmark fixture declares no inertia, and the bridge's whole point is
+        that it says so instead of inventing a mass -- a model that solves and means
+        nothing is worse than a refusal.
+        """
+        import json
+    
+        import pytest
+    
+>       from suspension_multibody.preparation.axle_dynamic import _dynamic_model
+E       ModuleNotFoundError: No module named 'suspension_multibody.preparation.axle_dynamic'
+
+packages\suspension_multibody\tests\simulation\test_no_production_bridge.py:159: ModuleNotFoundError
+_____________ test_an_ambiguous_port_requires_an_explicit_pairing _____________
+
+    def test_an_ambiguous_port_requires_an_explicit_pairing():
+        document, _ = migrate_v1_kc_case(benchmark_model(), mode="K", wheel_values_mm=(0.,), rack_values_mm=(0.,))
+        payload = document.to_payload()
+        wheel = next(entry for entry in document.entries if entry.functional_role == "wheel")
+        duplicate = {**next(row for row in payload["subsystems"] if row["ref"] == wheel.ref), "ref": "another_wheel"}
+        payload["subsystems"].append(duplicate)
+        rig = next(row for row in payload["subsystems"] if row["ref"].startswith("kc_rig"))
+        rig["pairings"] = [row for row in rig["pairings"] if row["requirement_role"] != "wheel_L"]
+        documents = {entry.ref: entry.subsystem for entry in document.entries}
+        documents["another_wheel"] = wheel.subsystem
+        with pytest.raises(AuthoringError, match="ambiguous|matches|count|candidate"):
+>           assemble_generic(AssemblyDocument.from_payload(payload, subsystems=documents))
+
+packages\suspension_multibody\tests\simulation\test_wheel_centre_selection.py:32: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1142: in assemble_generic
+    report = match_requirements(needs, candidates, explicit=entry.pairings)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+requirements = (PortRequirement(role='body_chassis', requires_capabilities=frozenset(), match_labels=frozenset(), count=1, required=T...ch_labels=frozenset(), count=1, required=True, bound_outputs=(), note='', kind=None, units='', family='', name='rack'))
+candidates = {'another_wheel.body_wheel_hub_L': GeometryPort(id=EntityId(path=('another_wheel',), local='body_wheel_hub_L'), owner=...nset(), labels=frozenset({'R'}), cardinality='many', coordinate='another_wheel.spin_R', units='rad', kind='spin'), ...}
+
+    def match_requirements(
+        requirements: Iterable[PortRequirement],
+        candidates: Mapping[str, PortSpec],
+        *,
+        explicit: Mapping[str, str] | None = None,
+    ) -> MatchReport:
+        """
+        Bind each requirement to a port from ``candidates``.
+    
+        ``candidates`` is keyed by port id (the rendered :class:`EntityId`), and
+        ``explicit`` maps a requirement's role to the port id the caller chose.
+        A caller-supplied port id that does not exist is an error rather than a
+        silent fallback to inference: the mapping was wrong, and quietly matching
+        something else would hide it.
+        """
+        chosen_explicitly = dict(explicit or {})
+        bindings: list[Binding] = []
+        disappeared: list[str] = []
+        dropped: list[str] = []
+        trace: list[str] = []
+    
+        for requirement in requirements:
+            named = chosen_explicitly.get(requirement.key)
+            if named is not None:
+                port = candidates.get(named)
+                if port is None:
+                    raise BindingError(
+                        f"requirement {requirement.role!r} was mapped to port {named!r}, "
+                        f"which does not exist; the candidates are "
+                        f"{sorted(candidates) or '(none)'}"
+                    )
+                if not requirement.accepts(port):
+                    raise BindingError(f"requirement {requirement.role!r}: explicit port {named!r} is incompatible")
+                if requirement.count != 1:
+                    raise BindingError(f"requirement {requirement.role!r} needs {requirement.count} ports; one explicit port is insufficient")
+                trace.append(f"{requirement.role}: explicit -> {named}")
+                bindings.append(
+                    Binding(requirement=requirement, port_ids=(named,), explicit=True)
+                )
+                continue
+    
+            matches = sorted(
+                port_id
+                for port_id, port in candidates.items()
+                if requirement.accepts(port)
+            )
+            if len(matches) < requirement.count:
+                if requirement.required:
+                    raise UnmetRequirementError(
+                        f"required port {requirement.role!r} has no candidate set of {requirement.count}; the "
+                        f"offered ports are {sorted(candidates) or '(none)'}"
+                    )
+                disappeared.append(requirement.key)
+                dropped.extend(requirement.bound_outputs)
+                trace.append(
+                    f"{requirement.role}: optional, no candidate -> disappears with "
+                    f"{list(requirement.bound_outputs)}"
+                )
+                continue
+    
+            if len(matches) > 1 and requirement.count == 1:
+>               raise AmbiguousBindingError(
+                    f"port {requirement.role!r} matches {len(matches)} candidates "
+                    f"{matches}; add an explicit mapping to say which one is meant",
+                    tuple(matches),
+                )
+E               suspension_multibody.connections.matcher.AmbiguousBindingError: port 'wheel_hub' matches 4 candidates ['another_wheel.wheel_center_L', 'another_wheel.wheel_center_R', 'wheel.sub.json.wheel_center_L', 'wheel.sub.json.wheel_center_R']; add an explicit mapping to say which one is meant
+
+packages\suspension_multibody\src\suspension_multibody\connections\matcher.py:163: AmbiguousBindingError
+___________________ test_a_missing_explicit_port_is_refused ___________________
+
+    def test_a_missing_explicit_port_is_refused():
+        document, _ = migrate_v1_kc_case(benchmark_model(), mode="K", wheel_values_mm=(0.,), rack_values_mm=(0.,))
+        payload = document.to_payload()
+        rig = next(row for row in payload["subsystems"] if row["ref"].startswith("kc_rig"))
+        rig["pairings"][0]["port"] = "missing.center"
+        with pytest.raises(AuthoringError, match="missing.center"):
+>           assemble_generic(AssemblyDocument.from_payload(payload, subsystems={entry.ref: entry.subsystem for entry in document.entries}))
+
+packages\suspension_multibody\tests\simulation\test_wheel_centre_selection.py:41: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1142: in assemble_generic
+    report = match_requirements(needs, candidates, explicit=entry.pairings)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+requirements = (PortRequirement(role='body_chassis', requires_capabilities=frozenset(), match_labels=frozenset(), count=1, required=T...ch_labels=frozenset(), count=1, required=True, bound_outputs=(), note='', kind=None, units='', family='', name='rack'))
+candidates = {'model.sub.json.body_chassis': GeometryPort(id=EntityId(path=('model.sub.json',), local='body_chassis'), owner=Entity...many', pose=SE3(translation=array([0., 0., 0.]), quaternion=array([1., 0., 0., 0.])), family='', kind='geometry'), ...}
+
+    def match_requirements(
+        requirements: Iterable[PortRequirement],
+        candidates: Mapping[str, PortSpec],
+        *,
+        explicit: Mapping[str, str] | None = None,
+    ) -> MatchReport:
+        """
+        Bind each requirement to a port from ``candidates``.
+    
+        ``candidates`` is keyed by port id (the rendered :class:`EntityId`), and
+        ``explicit`` maps a requirement's role to the port id the caller chose.
+        A caller-supplied port id that does not exist is an error rather than a
+        silent fallback to inference: the mapping was wrong, and quietly matching
+        something else would hide it.
+        """
+        chosen_explicitly = dict(explicit or {})
+        bindings: list[Binding] = []
+        disappeared: list[str] = []
+        dropped: list[str] = []
+        trace: list[str] = []
+    
+        for requirement in requirements:
+            named = chosen_explicitly.get(requirement.key)
+            if named is not None:
+                port = candidates.get(named)
+                if port is None:
+>                   raise BindingError(
+                        f"requirement {requirement.role!r} was mapped to port {named!r}, "
+                        f"which does not exist; the candidates are "
+                        f"{sorted(candidates) or '(none)'}"
+                    )
+E                   suspension_multibody.connections.matcher.BindingError: requirement 'body_chassis' was mapped to port 'missing.center', which does not exist; the candidates are ['model.sub.json.body_chassis', 'model.sub.json.body_lower_arm_L', 'model.sub.json.body_lower_arm_R', 'model.sub.json.body_rack', 'model.sub.json.body_rack_housing', 'model.sub.json.body_tie_rod_L', 'model.sub.json.body_tie_rod_R', 'model.sub.json.body_upper_arm_L', 'model.sub.json.body_upper_arm_R', 'model.sub.json.body_upright_L', 'model.sub.json.body_upright_R', 'wheel.sub.json.body_wheel_hub_L', 'wheel.sub.json.body_wheel_hub_R', 'wheel.sub.json.spin_L', 'wheel.sub.json.spin_R', 'wheel.sub.json.wheel_center_L', 'wheel.sub.json.wheel_center_R']
+
+packages\suspension_multibody\src\suspension_multibody\connections\matcher.py:128: BindingError
+________ test_the_ports_are_template_declarations_not_runtime_strings _________
+
+    def test_the_ports_are_template_declarations_not_runtime_strings() -> None:
+        """
+        The port set comes off the template, not off a list inside the module.
+    
+        `arb.port_owners()` is a *read* of the template; changing the template changes
+        the answer.  Asserted against the template's own tuple so the two cannot
+        drift.
+        """
+        from suspension_multibody.authoring.documents import TemplateDocument
+>       from suspension_multibody.authoring.solver import template_document_from
+E       ModuleNotFoundError: No module named 'suspension_multibody.authoring.solver'
+
+packages\suspension_multibody\tests\subsystems\test_anti_roll_bar_subsystem.py:77: ModuleNotFoundError
+_______ test_the_bar_uses_the_elastic_link_law_not_the_driven_actuator ________
+
+    def test_the_bar_uses_the_elastic_link_law_not_the_driven_actuator() -> None:
+        """
+        The bar is carried by the elastic family, and the module says so.
+    
+        The two families are different physics: `AntiRollBarElement` is elastic
+        (`k * rise difference`, stores energy) while `RotationalTorqueElement` is a
+        driven actuator (`min(stiffness * demand, max_torque)`, stores nothing).  A
+        torsion bar is the former.  Pinned here because swapping them would be a
+        silent change of the modelled physics.
+        """
+        spec = AntiRollBar(
+            name="bar",
+            left_body_mount=Vec3(x=0.0, y=-300.0, z=200.0),
+            right_body_mount=Vec3(x=0.0, y=300.0, z=200.0),
+            left_arm_end=Vec3(x=0.0, y=-700.0, z=200.0),
+            right_arm_end=Vec3(x=0.0, y=700.0, z=200.0),
+            left_link_point=Vec3(x=0.0, y=-700.0, z=100.0),
+            right_link_point=Vec3(x=0.0, y=700.0, z=100.0),
+            torsional_stiffness=120.0,
+        )
+        import numpy as np
+    
+        from suspension_multibody.modeling.primitives import AntiRollBarElement
+>       from suspension_multibody.subsystems.element_build import build_element
+E       ModuleNotFoundError: No module named 'suspension_multibody.subsystems.element_build'
+
+packages\suspension_multibody\tests\subsystems\test_anti_roll_bar_subsystem.py:116: ModuleNotFoundError
+____________ test_the_construction_path_reports_no_body_name_rule _____________
+
+    def test_the_construction_path_reports_no_body_name_rule() -> None:
+        """
+        The construction path names no body: the two ends come from the port pairing.
+    
+        The check is on the sources of this row, because the failure being guarded
+        against is a rule that reads a name and infers a role -- and such a rule is
+        found by a reader, not by a call.  The two names it looks for are the two a
+        suspension model's ends are usually called.
+        """
+        source_root = Path(__file__).parents[2] / "src" / "suspension_multibody"
+        for relative in (
+            "compilation/element_blocks.py",
+            "subsystems/element_build.py",
+            "modeling/primitives/elements.py",
+        ):
+>           text = (source_root / relative).read_text(encoding="utf-8").lower()
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:628: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\zzy11\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\pathlib.py:1027: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/�Ӽ�/open-kinematics/packages/suspension_multibody/src/suspension_multibody/subsystems/element_build.py')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\�Ӽ�\\open-kinematics\\packages\\suspension_multibody\\src\\suspension_multibody\\subsystems\\element_build.py'
+
+C:\Users\zzy11\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\pathlib.py:1013: FileNotFoundError
+______ test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi _______
+
+    def test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi() -> None:
+        base = _positioned_vehicle(_vehicle())
+        front = base.front_axle
+        spring = LinearSpring(
+            name="curve_spring",
+            body_a="chassis",
+            body_b="lower_arm",
+            point_a=front.hardpoints["LOWER_INBOARD_FRONT"],
+            point_b=front.hardpoints["LOWER_OUTBOARD"],
+            stiffness=100.0,
+            free_length=450.0,
+            force_curve=((0.0, 0.0), (100.0, 100.0), (200.0, 350.0)),
+        )
+        stop = BumpStop(
+            name="curve_stop",
+            body_a="chassis",
+            body_b="lower_arm",
+            point_a=front.hardpoints["LOWER_INBOARD_FRONT"],
+            point_b=front.hardpoints["LOWER_OUTBOARD"],
+            clearance=25.0,
+            stiffness=1_000.0,
+            direction="bump",
+            force_curve=((0.0, 0.0), (10.0, 100.0), (20.0, 500.0)),
+        )
+        model = base.model_copy(
+            update={
+                "front_axle": front.model_copy(
+                    update={"springs": (spring,), "stops": (stop,)}
+                )
+            }
+        )
+        elements = compile_vehicle(model, _case(model)).model_document["elements"]
+        mapped_spring = next(
+            item for item in elements if item["name"].endswith(".curve_spring_L")
+        )
+        mapped_stop = next(item["parameters"] for item in elements if item["name"].endswith(".curve_stop_L"))
+        mapped_spring = mapped_spring["parameters"]
+    
+        np.testing.assert_allclose(
+            np.asarray(mapped_spring["elastic_curve"])[:, 0],
+            (-0.2, -0.1, 0.0),
+        )
+        np.testing.assert_allclose(np.asarray(mapped_spring["elastic_curve"])[:, 1], (-350.0, -100.0, 0.0))
+        np.testing.assert_allclose(
+>           np.asarray(mapped_stop["force_curve"])[:, 0],
+            (0.0, 0.01, 0.02),
+        )
+E       KeyError: 'force_curve'
+
+packages\suspension_multibody\tests\vehicle\test_native_vehicle.py:1035: KeyError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\adapters\test_geometry_contract.py::test_a_contract_derived_model_assembles_and_solves
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_kc_migration_declares_rig_and_preserves_quasistatic_poses[K]
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_kc_migration_declares_rig_and_preserves_quasistatic_poses[C]
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_vehicle_entity_data_matches_existing_producer
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_vehicle_case_migration_matches_declared_excitation_and_initial_state
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_dynamic_si_axle_document_run_has_bit_identical_states_to_frozen_producer
+FAILED packages\suspension_multibody\tests\authoring\test_vehicle_assembly_documents.py::test_the_vehicle_document_decides_the_composed_vehicle_roles
+FAILED packages\suspension_multibody\tests\axle_dynamics\test_acceptance_runner.py::test_missing_adams_evidence_blocks_the_accuracy_and_speed_claim
+FAILED packages\suspension_multibody\tests\axle_dynamics\test_api.py::test_axle_schema_loader_and_result_artifact_are_self_describing
+FAILED packages\suspension_multibody\tests\preparation\test_steering_channels.py::test_the_preparation_builds_one_actuator_per_channel
+FAILED packages\suspension_multibody\tests\preparation\test_steering_channels.py::test_direct_two_channel_run_drives_both_racks
+FAILED packages\suspension_multibody\tests\preparation\test_steering_channels.py::test_four_wheel_steer_reaches_the_channels_it_drives[low_speed_opposite]
+FAILED packages\suspension_multibody\tests\preparation\test_steering_channels.py::test_four_wheel_steer_reaches_the_channels_it_drives[high_speed_same_direction]
+FAILED packages\suspension_multibody\tests\preparation\test_steering_channels.py::test_the_direct_law_is_what_a_one_channel_vehicle_gets
+FAILED packages\suspension_multibody\tests\preparation\test_steering_channels.py::test_the_two_channel_model_document_names_both_steering_elements
+FAILED packages\suspension_multibody\tests\preparation\test_steering_channels.py::test_the_kc_family_asks_for_a_vehicle_without_steering_elements
+FAILED packages\suspension_multibody\tests\schema\test_vehicle_case_documents.py::test_a_family_document_without_its_section_is_refused[four_post-_four]
+FAILED packages\suspension_multibody\tests\schema\test_vehicle_case_documents.py::test_a_family_document_without_its_section_is_refused[ride_random_road-_road]
+FAILED packages\suspension_multibody\tests\schema\test_vehicle_case_documents.py::test_a_four_post_document_without_corners_is_refused
+FAILED packages\suspension_multibody\tests\schema\test_vehicle_case_documents.py::test_each_family_states_its_inputs_in_its_own_section
+FAILED packages\suspension_multibody\tests\simulation\test_no_production_bridge.py::test_no_run_entry_reaches_the_kc_to_dynamic_conversion
+FAILED packages\suspension_multibody\tests\simulation\test_no_production_bridge.py::test_the_conversion_survives_only_as_an_input_adapter
+FAILED packages\suspension_multibody\tests\simulation\test_no_production_bridge.py::test_the_input_adapter_still_converts_an_assembled_axle
+FAILED packages\suspension_multibody\tests\simulation\test_no_production_bridge.py::test_an_axle_declaring_no_inertia_is_refused_rather_than_advanced
+FAILED packages\suspension_multibody\tests\simulation\test_wheel_centre_selection.py::test_an_ambiguous_port_requires_an_explicit_pairing
+FAILED packages\suspension_multibody\tests\simulation\test_wheel_centre_selection.py::test_a_missing_explicit_port_is_refused
+FAILED packages\suspension_multibody\tests\subsystems\test_anti_roll_bar_subsystem.py::test_the_ports_are_template_declarations_not_runtime_strings
+FAILED packages\suspension_multibody\tests\subsystems\test_anti_roll_bar_subsystem.py::test_the_bar_uses_the_elastic_link_law_not_the_driven_actuator
+FAILED packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py::test_the_construction_path_reports_no_body_name_rule
+FAILED packages\suspension_multibody\tests\vehicle\test_native_vehicle.py::test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi
+30 failed, 1523 passed, 1 xfailed in 120.72s (0:02:00)

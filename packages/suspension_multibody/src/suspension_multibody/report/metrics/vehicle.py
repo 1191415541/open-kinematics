@@ -30,40 +30,34 @@ def wheel_load_metrics(loads: Mapping[str, float]) -> dict[str, float]:
     return wheel_load_channels(loads)
 
 
-def _embedded_wheel_loads(result: Any) -> Mapping[str, float] | None:
-    """Read explicit wheel-load evidence without inventing missing values."""
-    for attribute in ("wheel_loads", "static_wheel_loads"):
-        value = getattr(result, attribute, None)
-        if value is None:
-            continue
-        if hasattr(value, "wheel_loads"):
-            value = value.wheel_loads
-        if isinstance(value, Mapping):
-            return value
-    return None
-
-
 def compute_vehicle_metrics(
     result: Any,
     *,
     wheel_loads: Mapping[str, float] | None = None,
+    steering_ids: tuple[str, ...] = (),
+    native_kernel_wall_time_s: float | None = None,
 ) -> dict[str, Any]:
     """Combine axle, steering, performance, and explicit wheel-load metrics."""
     axle = getattr(result, "axle", result)
     metrics = {f"axle_{key}": value for key, value in compute_axle_metrics(axle).items()}
-    steering = getattr(result, "steering_output", None)
-    if steering is not None:
-        values = np.asarray(steering, dtype=float)
+    if steering_ids:
+        values = np.stack([result.element_state(entity) for entity in steering_ids], axis=1)
+    else:
+        values = getattr(result, "steering_output", None)
+    if values is not None:
+        values = np.asarray(values, dtype=float)
         finite_values = values[np.isfinite(values)]
         if finite_values.size:
             metrics["maximum_steering_output"] = peak(finite_values)
             metrics["rms_steering_output"] = rms(finite_values)
-    explicit_loads = wheel_loads if wheel_loads is not None else _embedded_wheel_loads(result)
-    if explicit_loads is not None:
-        metrics.update(wheel_load_metrics(explicit_loads))
-    wall_time = getattr(result, "native_kernel_wall_time_s", None)
-    if wall_time is not None:
-        metrics["native_kernel_wall_time_s"] = float(wall_time)
+    if wheel_loads is not None:
+        metrics.update(wheel_load_metrics(wheel_loads))
+    elif hasattr(result, "wheel_loads"):
+        metrics.update(wheel_load_metrics(result.wheel_loads))
+    if native_kernel_wall_time_s is not None:
+        metrics["native_kernel_wall_time_s"] = float(native_kernel_wall_time_s)
+    elif hasattr(result, "native_kernel_wall_time_s"):
+        metrics["native_kernel_wall_time_s"] = float(result.native_kernel_wall_time_s)
     return metrics
 
 

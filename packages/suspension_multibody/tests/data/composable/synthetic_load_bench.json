@@ -40,7 +40,7 @@
       "kind": "spring",
       "body_a": "bench_frame",
       "body_b": "load_carriage",
-      "point_a_m": [0.0, 0.0, 0.4],
+      "point_a_m": [0.0, 0.0, 0.0],
       "point_b_m": [0.0, 0.0, 0.0],
       "stiffness_n_per_m": 25000.0,
       "free_length_m": 0.4
@@ -50,7 +50,7 @@
       "kind": "damper",
       "body_a": "bench_frame",
       "body_b": "load_carriage",
-      "point_a_m": [0.0, 0.0, 0.4],
+      "point_a_m": [0.0, 0.0, 0.0],
       "point_b_m": [0.0, 0.0, 0.0],
       "viscous_damping_n_s_per_m": 1200.0
     }

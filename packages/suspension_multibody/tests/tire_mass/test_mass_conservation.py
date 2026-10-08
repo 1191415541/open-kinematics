@@ -26,16 +26,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from suspension_contracts import pack_container
 
-from suspension_multibody.cases import axle_dynamic_model_document
-from suspension_multibody.cases.axle_dynamic import case_document
-from suspension_multibody.simulation import (
-    CompilerRegistry,
-    DocumentPairCompiler,
-    SimulationRequest,
-    run_request,
-)
+from suspension_multibody.api import simulate
+from suspension_multibody.authoring.migration import migrate_v1_dynamic_axle
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
 
 #: The acceptance script owns the axle model the kernel cases are checked against.
 _ACCEPTANCE = Path(__file__).resolve().parents[2] / "scripts/run_axle_dynamics_acceptance.py"
@@ -68,22 +62,11 @@ def axle() -> dict:
     acceptance = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(acceptance)
     model = acceptance.build_axle_model()
-    document, _ = axle_dynamic_model_document(model)
-    case, case_blob = case_document(model, acceptance.build_case(_CASE))
-    registry = CompilerRegistry()
-    registry.register(DocumentPairCompiler("axle", "axle_dynamic"))
+    document = model.model_dump(mode="json")
+    case = acceptance.build_case(_CASE)
 
     def run(variant: dict) -> object:
-        return run_request(
-            SimulationRequest(
-                assembly="axle",
-                family="axle_dynamic",
-                model=variant,
-                case=case,
-                context={"case_payload": pack_container(case, case_blob)},
-            ),
-            registry=registry,
-        ).raw
+        return simulate(*migrate_v1_dynamic_axle(AxleDynamicsModel.model_validate(variant), case)).raw
 
     return {"document": document, "run": run}
 
@@ -91,7 +74,7 @@ def axle() -> dict:
 def _with_wheel_mass(document: dict, mass: float, inertia: tuple[float, float, float]) -> dict:
     """Return the document with both wheel bodies carrying `mass`/`inertia`."""
     bodies = [
-        {**body, "mass": mass, "inertia": _diagonal(inertia)}
+        {**body, "mass_kg": mass, "inertia_kg_m2": _diagonal(inertia)}
         if body["name"].startswith("wheel_")
         else body
         for body in document["bodies"]
@@ -102,7 +85,7 @@ def _with_wheel_mass(document: dict, mass: float, inertia: tuple[float, float, f
 def _with_tire_mass(document: dict, mass: float, inertia: tuple[float, float, float]) -> dict:
     """Return the document with every tire declaring its own `mass`/`inertia`."""
     tires = [
-        {**tire, "mass": mass, "inertia": _diagonal(inertia)} for tire in document["tires"]
+        {**tire, "mass_kg": mass, "inertia_kg_m2": _diagonal(inertia)} for tire in document["tires"]
     ]
     return {**document, "tires": tires}
 

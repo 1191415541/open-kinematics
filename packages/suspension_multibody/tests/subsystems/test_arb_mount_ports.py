@@ -12,13 +12,19 @@ from __future__ import annotations
 
 import pytest
 
+from suspension_multibody.authoring import TemplateDocument, assemble_generic
+from suspension_multibody.authoring.errors import AuthoringError
 from suspension_multibody.connections.matcher import match_requirements
 from suspension_multibody.modeling.identity import EntityId
 from suspension_multibody.modeling.ports import GeometryPort, PortRequirement
-from suspension_multibody.schema import FrontAxleModel, MassSpec, Vec3
-from suspension_multibody.subsystems.si_assembly import contributions_for_axle
-from suspension_multibody.subsystems.types import AssemblyRequest
+from suspension_multibody.presets import generic_template
+from suspension_multibody.schema import Vec3
 from suspension_multibody.templates import DOUBLE_WISHBONE
+from tests.authoring.test_unified_subsystem_templates import (
+    assembly,
+    carrier_subsystem,
+    subsystem,
+)
 
 _HARDPOINTS = {
     "UPPER_INBOARD_FRONT": Vec3(x=1400.0, y=-500.0, z=500.0),
@@ -36,15 +42,11 @@ _HARDPOINTS = {
 
 def _suspension_ports() -> dict[str, GeometryPort]:
     """Return the ports the axle's suspension contribution actually offers."""
-    model = FrontAxleModel(
-        hardpoints=dict(_HARDPOINTS), mass=MassSpec(sprung_mass=600.0)
-    )
-    for contribution in contributions_for_axle(
-        model, request=AssemblyRequest(mode="K")
-    ):
-        if contribution.role == "suspension":
-            return dict(contribution.ports)
-    raise AssertionError("the axle carries no suspension contribution")
+    template = generic_template("suspension")
+    points = {name: [0, 0, .334] for name in template.hardpoint_names}
+    points.update(upper_rear=[1, 0, .334], lower_rear=[1, 0, .334])
+    built = assemble_generic(assembly({"support": carrier_subsystem(), "unit": subsystem(template, points)}))
+    return {name.removeprefix("unit."): port for name, port in built.ports.items() if name.startswith("unit.")}
 
 
 def test_the_template_declares_an_arb_mount_per_side() -> None:
@@ -126,16 +128,10 @@ def test_a_mount_naming_an_absent_body_is_not_offered() -> None:
     Offering it would be a false claim: a neighbour binding to it would be told
     it may attach to something that is not there.
     """
-    from suspension_multibody.subsystems.si_assembly import _declared_ports
-    from suspension_multibody.templates.ports import PortDeclaration
-
-    declarations = (
-        PortDeclaration(name="ghost", role="arb_mount", owner="not_a_body"),
-        PortDeclaration(name="real", role="arb_mount", owner="a_body"),
-    )
-    offered = _declared_ports(("axle",), declarations, {"a_body": object()})
-    assert set(offered) == {"real"}
-    assert str(offered["real"].owner).endswith("a_body")
+    payload = generic_template("suspension").to_payload()
+    payload["ports"][0]["owner"] = "not_a_body"
+    with pytest.raises(AuthoringError, match="not_a_body"):
+        TemplateDocument.from_payload(payload)
 
 
 def test_the_bars_mount_requirement_is_met_by_the_declared_port() -> None:

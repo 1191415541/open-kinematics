@@ -113,7 +113,7 @@ bool expand_vehicle_dynamic(const Json& document, const std::string& blob,
       }
       const std::string* role = descriptor.find_string("role");
       if (role == nullptr) return fail(error, "a blob descriptor has no role");
-      if (*role == "sample_times") {
+      if (*role == "sample_times" || *role == "motion_target" || *role == "motion_rate") {
         // An irregular history puts its sample instants in this same payload;
         // `read_time` has already consumed them by name.
         continue;

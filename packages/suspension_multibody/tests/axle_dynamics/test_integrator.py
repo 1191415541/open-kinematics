@@ -10,12 +10,12 @@ from suspension_multibody.axle_dynamics import (
     AxleBumpStop,
     AxleDamper,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleSolverSettings,
     AxleSpring,
     NativeAxleError,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
+from tests.axle_dynamics._unified_entry import solve_axle
 
 _I = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _ZERO_I = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
@@ -84,7 +84,7 @@ def test_fixed_and_adaptive_integrators_match_damped_oscillator() -> None:
     times = np.linspace(0.0, 0.1, 101)
     errors: list[float] = []
     for adaptive, step in ((False, 0.0005), (True, 0.004)):
-        result = run_axle_dynamics(
+        result = solve_axle(
             _oscillator(),
             AxleDynamicsCase(
                 name="damped-oscillator",
@@ -116,7 +116,7 @@ def test_fixed_and_adaptive_integrators_match_damped_oscillator() -> None:
 
 
 def test_provided_initial_state_is_not_replaced_by_static_trim() -> None:
-    result = run_axle_dynamics(
+    result = solve_axle(
         _oscillator(),
         AxleDynamicsCase(
             name="provided-state",
@@ -189,7 +189,7 @@ def test_stop_output_separates_conservative_and_dissipative_force() -> None:
             ),
         ),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="compression-stop-decomposition",
@@ -250,7 +250,7 @@ def test_failed_step_preserves_partial_result_and_failure_diagnostics() -> None:
     spring = model.springs[0].model_copy(update={"point_b_m": (0.10, 0.0, 0.0)})
     model = model.model_copy(update={"springs": (spring,)})
     with pytest.raises(NativeAxleError) as captured:
-        run_axle_dynamics(
+        solve_axle(
             model,
             AxleDynamicsCase(
                 name="forced-newton-failure",

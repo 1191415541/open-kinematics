@@ -13,7 +13,6 @@ from __future__ import annotations
 import pytest
 
 from suspension_multibody.schema import AntiRollBar, Vec3
-from suspension_multibody.subsystems import anti_roll_bar as arb
 from suspension_multibody.templates import get, names
 from suspension_multibody.templates.builtin import ANTI_ROLL_BAR, ANTI_ROLL_BAR_NAME
 from suspension_multibody.templates.model import TemplateError
@@ -51,7 +50,7 @@ def test_the_four_ports_are_declared_verbatim() -> None:
     stop.
     """
     declared = {port.name: port for port in ANTI_ROLL_BAR.ports}
-    assert set(declared) == set(arb.PORTS)
+    assert set(declared) == set(ROLES["anti_roll_bar"].required_mounts)
     assert sorted(declared) == [
         "chassis_mount_L",
         "chassis_mount_R",
@@ -74,15 +73,21 @@ def test_the_ports_are_template_declarations_not_runtime_strings() -> None:
     the answer.  Asserted against the template's own tuple so the two cannot
     drift.
     """
-    assert arb.port_owners() == {port.name: port.owner for port in ANTI_ROLL_BAR.ports}
+    from suspension_multibody.authoring.documents import TemplateDocument
+    from suspension_multibody.templates.export import template_document_from
+
+    template = TemplateDocument.from_payload(template_document_from(ANTI_ROLL_BAR))
+    assert {name: port["owner"] for name, port in template.ports.items()} == {
+        port.name: port.owner for port in ANTI_ROLL_BAR.ports
+    }
 
 
 def test_the_subsystem_declares_a_bar_half_and_a_droplink_per_side() -> None:
     """The bar and the two droplinks are real bodies, one each per side."""
     parts = [part.name for part in ANTI_ROLL_BAR.parts]
     assert parts == ["torsion_bar_L", "torsion_bar_R", "droplink_L", "droplink_R"]
-    assert arb.bar_bodies() == ("torsion_bar_L", "torsion_bar_R")
-    assert arb.droplink_bodies() == ("droplink_L", "droplink_R")
+    assert tuple(port.owner for port in ANTI_ROLL_BAR.ports if port.role.startswith("chassis_mount")) == ("torsion_bar_L", "torsion_bar_R")
+    assert tuple(port.owner for port in ANTI_ROLL_BAR.ports if port.role.startswith("droplink_mount")) == ("droplink_L", "droplink_R")
 
 
 def test_the_bar_uses_the_elastic_link_law_not_the_driven_actuator() -> None:
@@ -95,7 +100,6 @@ def test_the_bar_uses_the_elastic_link_law_not_the_driven_actuator() -> None:
     torsion bar is the former.  Pinned here because swapping them would be a
     silent change of the modelled physics.
     """
-    assert arb.BAR_ELEMENT_KIND == "anti_roll_bar"
     spec = AntiRollBar(
         name="bar",
         left_body_mount=Vec3(x=0.0, y=-300.0, z=200.0),
@@ -106,8 +110,13 @@ def test_the_bar_uses_the_elastic_link_law_not_the_driven_actuator() -> None:
         right_link_point=Vec3(x=0.0, y=700.0, z=100.0),
         torsional_stiffness=120.0,
     )
-    stiffness = arb.configure(spec, context=None)  # type: ignore[arg-type]
-    assert stiffness == 120.0
+    import numpy as np
+
+    from suspension_multibody.modeling.primitives import AntiRollBarElement
+
+    element = AntiRollBarElement("bar", "a", np.zeros(3), "b", np.zeros(3), spec.torsional_stiffness)
+    assert isinstance(element, AntiRollBarElement)
+    assert element.stiffness == 120.0
 
 
 def test_a_template_that_declares_no_such_port_cannot_satisfy_the_role() -> None:

@@ -1,0 +1,15 @@
+........................F............................................... [ 71%]
+.............................                                            [100%]
+================================== FAILURES ===================================
+_______________ test_the_concrete_missing_interface_is_reported _______________
+
+    def test_the_concrete_missing_interface_is_reported():
+        graph = rig_graph(offered=("wheel_drive_L", "wheel_drive_R"))
+        report = graph.bindings["rig"]
+>       assert any("rack_drive" in str(row) for row in report.unmet)
+E       AttributeError: 'MatchReport' object has no attribute 'unmet'
+
+packages\suspension_multibody\tests\cases\kc_quasi_static\test_drives_come_from_the_rig.py:55: AttributeError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\cases\kc_quasi_static\test_drives_come_from_the_rig.py::test_the_concrete_missing_interface_is_reported
+1 failed, 100 passed in 367.95s (0:06:07)

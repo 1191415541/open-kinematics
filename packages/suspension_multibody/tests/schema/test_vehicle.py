@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from suspension_multibody.schema import (
     DrivelineSpec,
     DynamicSolverSettings,
-    FrontAxleModel,
     MassSpec,
     RigidBodySpec,
     RoadSurfaceSpec,
@@ -17,13 +16,14 @@ from suspension_multibody.schema import (
     TireModelSpec,
     Vec3,
     VehicleDynamicCase,
-    VehicleModel,
     WheelSpec,
 )
+from suspension_multibody.schema.model import AxleDeclaration
+from suspension_multibody.schema.vehicle import VehicleDeclaration
 
 
-def _axle(name: str) -> FrontAxleModel:
-    return FrontAxleModel(
+def _axle(name: str) -> AxleDeclaration:
+    return AxleDeclaration(
         name=name,
         hardpoints={"LOWER_FRONT_LEFT": Vec3(x=100, y=-700, z=200)},
         mass=MassSpec(sprung_mass=600),
@@ -37,8 +37,8 @@ def _axle(name: str) -> FrontAxleModel:
     )
 
 
-def _vehicle() -> VehicleModel:
-    return VehicleModel(
+def _vehicle() -> VehicleDeclaration:
+    return VehicleDeclaration(
         chassis=RigidBodySpec(name="chassis", mass=1200),
         front_axle=_axle("front"),
         rear_axle=_axle("rear"),
@@ -74,7 +74,7 @@ def test_vehicle_schema_rejects_duplicate_body_names() -> None:
     wheels = list(_vehicle().wheels)
     wheels[1] = wheels[1].model_copy(update={"body": wheels[0].body})
     with pytest.raises(ValidationError, match="body names"):
-        VehicleModel(**{**_vehicle().model_dump(), "wheels": tuple(wheels)})
+        VehicleDeclaration(**{**_vehicle().model_dump(), "wheels": tuple(wheels)})
 
 
 def test_road_surface_rejects_amplitude_for_plane() -> None:
@@ -148,7 +148,7 @@ def test_the_brake_parameter_subset_is_invisible_to_the_model_hash() -> None:
     """
     The D10 brake parameters must not move a single existing `model_hash`.
 
-    `api.py` hashes `VehicleModel.model_dump(mode="json")` into
+    `api.py` hashes `VehicleDeclaration.model_dump(mode="json")` into
     `Provenance.model_hash`, and `io/artifacts.py` hashes that again into the
     artifact manifest.  A dump-visible field would therefore change every
     recorded full-vehicle result, which is exactly what "no baseline may be

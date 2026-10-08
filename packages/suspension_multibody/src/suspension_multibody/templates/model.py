@@ -164,6 +164,15 @@ class ConnectionDefinition:
     #: point to the rear one.  Naming that role here is what lets a template-driven
     #: build reproduce the axis without hard-coding which point feeds which.
     axis_reference_role: str = ""
+    #: Explicit world-frame axis, when no second hardpoint defines it.
+    axis: tuple[float, float, float] | None = None
+    #: Ordered alternatives for an unavailable external attachment.
+    far_fallbacks: tuple[str, ...] = ()
+    #: Ideal topology used for the compliance reference configuration.
+    ideal_joint: str | None = None
+    record_connection: bool = True
+    record_owner_point: bool = True
+    record_far_point: bool = True
 
     def columns(self) -> tuple[Column, ...]:
         """Return which columns this connection declares, in a stable order."""
@@ -322,6 +331,9 @@ class Template:
     #: lossy and would let a template carry executable behaviour into the model
     #: contract.  The registry resolves the name at instantiation.
     builder: str = ""
+    #: How a template expands over sides.  Legacy templates remain asymmetric unless
+    #: they opt into the standard XZ mirror rule.
+    symmetry: Literal["mirrored_xz", "asymmetric"] = "asymmetric"
 
     @property
     def functional_role(self) -> str:
@@ -365,6 +377,10 @@ class Template:
                 f"missing property slot(s) {missing_slots}"
             )
         self._check_uniqueness()
+        if self.symmetry not in ("mirrored_xz", "asymmetric"):
+            raise TemplateError(
+                f"template {self.name!r} has unknown symmetry {self.symmetry!r}"
+            )
 
     def check_filled(self, supplied: dict[str, object]) -> None:
         """
@@ -456,6 +472,12 @@ def _connections_to_json(template: Template) -> list[dict[str, Any]]:
             "far_label": connection.far_label,
             "first_body": connection.first_body,
             "axis_reference_role": connection.axis_reference_role,
+            "axis": None if connection.axis is None else list(connection.axis),
+            "far_fallbacks": list(connection.far_fallbacks),
+            "ideal_joint": connection.ideal_joint,
+            "record_connection": connection.record_connection,
+            "record_owner_point": connection.record_owner_point,
+            "record_far_point": connection.record_far_point,
         }
         for connection in template.connections
     ]
@@ -521,6 +543,7 @@ def template_to_json(template: Template) -> dict[str, Any]:
         "suspension_kind": template.suspension_kind,
         "description": template.description,
         "builder": template.builder,
+        "symmetry": template.symmetry,
     }
 
 
@@ -568,6 +591,12 @@ def template_from_json(payload: dict[str, Any]) -> Template:
                 far_label=str(connection.get("far_label", "")),
                 first_body=str(connection.get("first_body", "owner")),  # type: ignore[arg-type]
                 axis_reference_role=str(connection.get("axis_reference_role", "")),
+                axis=None if connection.get("axis") is None else tuple(float(v) for v in connection["axis"]),  # type: ignore[arg-type]
+                far_fallbacks=tuple(str(v) for v in connection.get("far_fallbacks", ())),
+                ideal_joint=connection.get("ideal_joint"),
+                record_connection=bool(connection.get("record_connection", True)),
+                record_owner_point=bool(connection.get("record_owner_point", True)),
+                record_far_point=bool(connection.get("record_far_point", True)),
             )
             for connection in payload.get("connections", ())
         ),
@@ -623,6 +652,7 @@ def template_from_json(payload: dict[str, Any]) -> Template:
         suspension_kind=str(payload.get("suspension_kind", "")),
         description=str(payload.get("description", "")),
         builder=str(payload.get("builder", "")),
+        symmetry=str(payload.get("symmetry", "asymmetric")),  # type: ignore[arg-type]
     )
 
 

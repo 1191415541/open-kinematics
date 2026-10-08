@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 import re
-from dataclasses import asdict
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -27,7 +26,27 @@ from suspension_multibody.adams import (  # noqa: E402
 from suspension_multibody.adams.full_vehicle_model import (  # noqa: E402
     build_adams_source_vehicle_model,
 )
-from suspension_multibody.vehicle.service import run_vehicle_dynamics  # noqa: E402
+from suspension_multibody.api import validate  # noqa: E402
+from suspension_multibody.authoring.migration import (
+    migrate_v1_vehicle_case,  # noqa: E402
+)
+from suspension_multibody.simulation import (  # noqa: E402
+    NativeContractBackend,
+    run_compiled,
+)
+
+
+class _TimedNativeBackend(NativeContractBackend):
+    """Measure only the shared native contract submission and unpacking."""
+
+    elapsed_s = 0.0
+
+    def run(self, compiled):
+        started = perf_counter()
+        try:
+            return super().run(compiled)
+        finally:
+            self.elapsed_s = perf_counter()-started
 
 
 def _default_fiala_tire_property() -> Path:
@@ -106,9 +125,12 @@ def measure(
         previous = _with_profile_flag(enabled)
         try:
             started = perf_counter()
-            result = run_vehicle_dynamics(model, case)
+            assembly, declared_case = migrate_v1_vehicle_case(case)
+            compiled = validate(assembly, declared_case)
+            backend = _TimedNativeBackend()
+            result = run_compiled(compiled, backend=backend).result
             wrapper_wall_s = perf_counter() - started
-            return wrapper_wall_s, float(result.native_kernel_wall_time_s), result
+            return wrapper_wall_s, backend.elapsed_s, result
         finally:
             _restore_profile_flag(previous)
 
@@ -128,7 +150,7 @@ def measure(
     profile_performance = None
     if profile_run:
         profile_wrapper_elapsed, profile_kernel_elapsed, profiled = run_once(True)
-        profile_performance = asdict(profiled.axle.performance)
+        profile_performance = dict(profiled.performance)
 
     if last_result is None:
         raise RuntimeError("native measured run was not executed")
@@ -137,7 +159,7 @@ def measure(
         "case": "full_native_fiala_step_steer",
         "timing_contract": {
             "adams": "solver elapsed from Adams .msg, excluding Python wrapper and file copy",
-            "native": "kernel wall time around the C++ contract entry call; Python assembly/wrapper time is reported separately",
+            "native": "shared native contract submission and unpacking, excluding document resolution and result decoding; complete Python wrapper time is reported separately",
         },
         "solver_settings": {
             "end_time_s": end_time,

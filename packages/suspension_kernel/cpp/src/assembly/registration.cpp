@@ -228,11 +228,7 @@ bool add_driven_coordinates(
         }
         driven.axis_a = normalized(driven.axis_a);
         driven.reference = qnormalize(reference_quaternion);
-        // No principal-branch rejection here: a rotational target is folded into
-        // (-pi, pi] by ``driven_target_value`` because the coordinate it is compared
-        // against is itself a principal rotation vector, while the rate row uses the
-        // unwrapped derivative.  That is what lets a wheel be driven through many
-        // revolutions without losing the prescribed speed.
+        // Targets retain their phase; only the angular position residual wraps.
         driven.signal = static_cast<int>(i);
         driven.row = model.rows;
         model.rows += 1;
@@ -323,8 +319,9 @@ bool add_vehicle_road_profile(
         !std::isfinite(input.road_phase) ||
         !std::isfinite(input.road_bump_start) ||
         !std::isfinite(input.road_bump_length) ||
-        input.road_amplitude < 0.0 || input.road_wavelength <= 0.0 ||
-        input.road_bump_length <= 0.0) {
+        input.road_amplitude < 0.0 ||
+        ((input.road_kind == 2 || input.road_kind == 4) && input.road_wavelength <= 0.0) ||
+        ((input.road_kind == 3 || input.road_kind == 5) && input.road_bump_length <= 0.0)) {
         error = "vehicle road profile parameters are invalid";
         return false;
     }

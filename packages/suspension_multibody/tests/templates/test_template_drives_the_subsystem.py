@@ -1,653 +1,82 @@
-"""
-Choosing a different suspension template must change the subsystem.
+"""Template selection changes topology and native input, with no business builder."""
 
-This is the assertion the whole template layer exists for, and it is the one that
-was missing: the template used to describe the build without driving it, so
-"pick a template" changed a number and nothing else.
+import copy
 
-Two facts shape what a second template can look like, and both are stated here
-rather than worked around:
-
-* the ``suspension`` **role contract** requires seven named mounts, so a
-  different topology within that role still declares those mount names; what it
-  changes is which connections exist and which columns they activate.  A layout
-* the steering rows come from the *steering* subsystem and its own template rather
-  than from the suspension one, so a suspension template cannot add or remove
-  them.  The test therefore compares the rows the template does control.  Which
-  template a role reads is asserted at the end of this file, one role at a time.
-
-The second template below is a single-arm layout: only the lower arm pivots, and
-the upper mount names locate geometry without constraining it.  That is a real
-structural difference -- fewer constraints, different classes -- and not a renamed
-copy of the built-in template, which a name comparison alone would accept.
-"""
-
-from __future__ import annotations
-
-from dataclasses import replace
-
+import numpy as np
 import pytest
 
-from suspension_multibody.schema import FrontAxleModel, MassSpec, Vec3, VerticalTire
-from suspension_multibody.subsystems.entry import compose_axle
-from suspension_multibody.subsystems.types import AssemblyRequest
-from suspension_multibody.templates import DOUBLE_WISHBONE, instantiate
-from suspension_multibody.templates.model import (
-    ConnectionDefinition,
-    PartDefinition,
-    PropertySlot,
-    Template,
-)
-from suspension_multibody.templates.registry import register
-
-#: The mount names the suspension role requires, in the role's own order.
-_REQUIRED = (
-    "upper_front",
-    "upper_rear",
-    "upper_outer",
-    "lower_front",
-    "lower_rear",
-    "lower_outer",
-    "tie_inner",
-    "tie_outer",
+from suspension_multibody.api import validate
+from suspension_multibody.authoring import TemplateDocument, assemble_generic
+from suspension_multibody.authoring.errors import AuthoringError
+from suspension_multibody.presets import generic_template
+from tests.authoring.test_generic_multibody import _case
+from tests.authoring.test_unified_subsystem_templates import (
+    assembly,
+    carrier_subsystem,
+    subsystem,
 )
 
 
-def _single_arm() -> Template:
-    """
-    One arm per side: the upper mount names locate geometry but carry no row.
-
-    Every required mount name is still declared, because the role demands it.  The
-    difference is structural: only the two lower front points pivot.
-    """
-    connections: list[ConnectionDefinition] = [
-        ConnectionDefinition(
-            "lca_mount_L_inner_front",
-            "lower_front",
-            joint="revolute",
-            bushing="lca_bushing_L_inner_front",
-            owner="lower_arm_L",
-            label="inner_front",
-            axis_reference_role="lower_rear",
-            far_owner="chassis",
-            far_label="lca_L_inner_front",
-        ),
-        ConnectionDefinition(
-            "lca_mount_L_inner_rear",
-            "lower_rear",
-            owner="lower_arm_L",
-            label="inner_rear",
-            far_owner="chassis",
-            far_label="lca_L_inner_rear",
-        ),
-        ConnectionDefinition(
-            "lower_arm_L_outer_joint",
-            "lower_outer",
-            joint="spherical",
-            owner="lower_arm_L",
-            label="outer",
-            far_owner="upright_L",
-            far_label="lower_arm_L_outer",
-        ),
-        # The upper mounts are declared, and locate geometry, but are inert.
-        ConnectionDefinition(
-            "uca_mount_L_inner_front", "upper_front", owner="upper_arm_L", label="inner_front"
-        ),
-        ConnectionDefinition(
-            "uca_mount_L_inner_rear", "upper_rear", owner="upper_arm_L", label="inner_rear"
-        ),
-        ConnectionDefinition(
-            "upper_arm_L_outer_joint", "upper_outer", owner="upper_arm_L", label="outer"
-        ),
-        ConnectionDefinition(
-            "rack_tie_joint_L",
-            "tie_inner",
-            "spherical",
-            owner="tie_rod_L",
-            label="inner",
-            far_owner="rack",
-            far_label="tie_L",
-        ),
-        ConnectionDefinition(
-            "tie_upright_joint_L",
-            "tie_outer",
-            "spherical",
-            owner="tie_rod_L",
-            label="outer",
-            far_owner="upright_L",
-            far_label="tie_outer",
-        ),
-        ConnectionDefinition(
-            "wheel_center_L", "wheel_center", owner="wheel_hub_L", label="wheel_center"
-        ),
-    ]
-    # The right side mirrors the left.
-    mirrored: list[ConnectionDefinition] = []
-    for connection in connections:
-        mirrored.append(
-            ConnectionDefinition(
-                name=connection.name.replace("_L", "_R"),
-                role=connection.role,
-                joint=connection.joint,
-                bushing=(
-                    None
-                    if connection.bushing is None
-                    else connection.bushing.replace("_L", "_R")
-                ),
-                owner=connection.owner.replace("_L", "_R"),
-                label=connection.label,
-                joint_modes=connection.joint_modes,
-                bushing_modes=connection.bushing_modes,
-                joint_kind_by_mode=connection.joint_kind_by_mode,
-                far_owner=connection.far_owner.replace("_L", "_R"),
-                far_label=connection.far_label.replace("_L", "_R"),
-                axis_reference_role=connection.axis_reference_role,
-            )
-        )
-    return Template(
-        name="single_lower_arm_probe",
-        role="suspension",
-        parts=(
-            PartDefinition("chassis", fixed=True),
-            PartDefinition("upper_arm_L"),
-            PartDefinition("lower_arm_L"),
-            PartDefinition("upright_L"),
-            PartDefinition("wheel_hub_L"),
-            PartDefinition("tie_rod_L"),
-            PartDefinition("upper_arm_R"),
-            PartDefinition("lower_arm_R"),
-            PartDefinition("upright_R"),
-            PartDefinition("wheel_hub_R"),
-            PartDefinition("tie_rod_R"),
-        ),
-        connections=tuple(connections) + tuple(mirrored),
-        property_slots=(
-            PropertySlot("spring", "N/m"),
-            PropertySlot("damper", "N*s/m"),
-            PropertySlot(
-                "bushing",
-                "N/m",
-                default=0.0,
-                connections=("lca_mount_L_inner_front", "lca_mount_R_inner_front"),
-            ),
-        ),
-        suspension_kind="single_lower_arm",
-    )
-
-
-def _model() -> FrontAxleModel:
-    return FrontAxleModel(
-        hardpoints={
-            "uca_front": Vec3(x=-100, y=-500, z=400),
-            "uca_rear": Vec3(x=100, y=-500, z=400),
-            "uca_outer": Vec3(x=0, y=-700, z=450),
-            "lca_front": Vec3(x=-120, y=-500, z=150),
-            "lca_rear": Vec3(x=120, y=-500, z=150),
-            "lca_outer": Vec3(x=0, y=-700, z=150),
-            "tierod_inner": Vec3(x=100, y=-400, z=250),
-            "tierod_outer": Vec3(x=50, y=-700, z=250),
-            "wheel_center": Vec3(x=0, y=-700, z=300),
-            "rack_center": Vec3(x=0, y=0, z=250),
-        },
-        mass=MassSpec(sprung_mass=1000),
-    )
-
-
-def _build_with(template: Template):
-    """Build the axle with one template selected through the request."""
-    instance = instantiate(template, mode="K", properties={"spring": 0.0, "damper": 0.0})
-    return compose_axle(
-        _model(), request=AssemblyRequest(mode="K", suspension_template=instance)
-    )
-
-
-def test_the_builtin_template_is_what_an_empty_request_selects() -> None:
-    """The default must stay the default: no request means the built-in layout."""
-    bare = compose_axle(_model())
-    explicit = _build_with(DOUBLE_WISHBONE)
-    assert [c.name for c in bare.constraints] == [c.name for c in explicit.constraints]
-
-
-def test_a_different_template_produces_a_different_topology() -> None:
-    """
-    The entities change, and they change in *kind*, not only in name.
-
-    Compared by constraint name and class, not by body name alone: a template that
-    renamed the built-in parts would satisfy a name comparison while leaving the
-    model identical, which is the failure a weaker test would let through.
-    """
-    builtin = _build_with(DOUBLE_WISHBONE)
-    single = _build_with(_single_arm())
-
-    builtin_names = [c.name for c in builtin.ideal_constraints]
-    single_names = [c.name for c in single.ideal_constraints]
-    assert builtin_names != single_names
-
-    # The upper arm mounts are the difference: the built-in pivots them, this one
-    # declares them inert.
-    assert {"uca_mount_L_inner_front", "uca_mount_R_inner_front"} <= set(builtin_names)
-    assert not {
-        "uca_mount_L_inner_front",
-        "uca_mount_R_inner_front",
-    } & set(single_names)
-    assert len(single.ideal_constraints) < len(builtin.ideal_constraints)
-
-
-def test_the_solved_model_changes_with_the_template() -> None:
-    """
-    A structural difference that never reaches the document would be decorative.
-
-    The comparison is on the *emitted model document*, which is exactly what the
-    kernel solves: same bodies, a different joint list.  Comparing the assembly
-    objects would be weaker, because the document is where a difference has to
-    survive to change a result -- and a difference that stops at the assembly is
-    the silent failure this asserts against.
-    """
-    from suspension_multibody.cases.kc_quasi_static.contract import model_document
-
-    builtin_doc = model_document(_build_with(DOUBLE_WISHBONE), name="probe")
-    single_doc = model_document(_build_with(_single_arm()), name="probe")
-
-    def solved_joints(document) -> list[tuple[str, str, str, str]]:
-        return [
-            (row["name"], row["type"], row["body_a"], row["body_b"])
-            for row in document["joints"]
-            # The driven coordinates are added by the case layer, not the template.
-            if not row["name"].endswith(("_drive_L", "_drive_R", "_drive"))
-        ]
-
-    assert solved_joints(builtin_doc) != solved_joints(single_doc)
-    # The difference is structural: the single-arm model has no upper-arm pivot.
-    single_names = {name for name, *_ in solved_joints(single_doc)}
-    assert "uca_mount_L_inner_front" not in single_names
-    assert "uca_mount_L_inner_front" in {name for name, *_ in solved_joints(builtin_doc)}
-    # Both templates *declare* an upper arm -- this one as an inert locator -- so both
-    # build one.  What the template decides here is whether it is constrained, not
-    # whether it exists.  That a template can also remove a body outright is the
-    # separate property `test_a_template_that_omits_a_part_builds_no_body` asserts.
-    builtin_bodies = {b["name"] for b in builtin_doc["bodies"]}
-    single_bodies = {b["name"] for b in single_doc["bodies"]}
-    assert builtin_bodies == single_bodies
-    assert (
-        {"chassis", "lower_arm_L", "upright_L"} <= builtin_bodies
-        or {"ground", "lower_arm_L", "upright_L"} <= builtin_bodies
-    )
-
-
-def test_a_template_that_omits_a_part_builds_no_body() -> None:
-    """
-    The template's parts decide the body set, not a list in the builder.
-
-    `side_bodies` used to name three stems unconditionally (`upper_arm`, `lower_arm`,
-    `upright`), so a template declaring no upper arm still got one: the template drove
-    the *connections* while the bodies were decided for it, and "choose a template"
-    could not change the model's entities -- the first thing the flow promises.
-
-    This asserts the property directly, with a template that declares no upper arm.
-    The inert-locator template in the test above cannot show it, because that one
-    *does* declare an upper arm (it merely leaves it unconstrained).
-    """
-    from suspension_multibody.templates.model import (
-        ConnectionDefinition,
-        PartDefinition,
-        PropertySlot,
-        Template,
-    )
-
-    connections = []
-    for side in ("L", "R"):
-        connections.extend(
-            [
-                ConnectionDefinition(
-                    f"lca_mount_{side}_inner_front",
-                    "lower_front",
-                    joint="revolute",
-                    bushing=f"lca_bushing_{side}_inner_front",
-                    owner=f"lower_arm_{side}",
-                    label="inner_front",
-                    axis_reference_role="lower_rear",
-                    far_owner="chassis",
-                    far_label=f"lca_{side}_inner_front",
-                ),
-                ConnectionDefinition(
-                    f"lca_mount_{side}_inner_rear",
-                    "lower_rear",
-                    owner=f"lower_arm_{side}",
-                    label="inner_rear",
-                    far_owner="chassis",
-                    far_label=f"lca_{side}_inner_rear",
-                ),
-                ConnectionDefinition(
-                    f"lower_arm_{side}_outer_joint",
-                    "lower_outer",
-                    joint="spherical",
-                    owner=f"lower_arm_{side}",
-                    label="outer",
-                    far_owner=f"upright_{side}",
-                    far_label=f"lower_arm_{side}_outer",
-                ),
-                ConnectionDefinition(
-                    f"wheel_center_{side}",
-                    "wheel_center",
-                    owner=f"upright_{side}",
-                    label="wheel_center",
-                ),
-            ]
-        )
-    template = Template(
-        name="no_upper_arm_probe",
-        role="suspension",
-        parts=(
-            PartDefinition("chassis", fixed=True),
-            # No `upper_arm_*`: the arms are simply not part of this layout.  The
-            # mount names the role contract requires are still declared, and they
-            # locate geometry without owning a body.
-            PartDefinition("lower_arm_L"),
-            PartDefinition("upright_L"),
-            PartDefinition("lower_arm_R"),
-            PartDefinition("upright_R"),
-        ),
-        connections=tuple(connections),
-        property_slots=(
-            PropertySlot("spring", "N/m"),
-            PropertySlot("damper", "N*s/m"),
-            PropertySlot(
-                "bushing",
-                "N/m",
-                default=0.0,
-                connections=("lca_mount_L_inner_front", "lca_mount_R_inner_front"),
-            ),
-        ),
-    )
-    # The role contract requires every mount name; declare the upper ones against a
-    # body that exists, so this test is about the *body set* and not about the role.
-    template = replace(
-        template,
-        connections=template.connections
-        + tuple(
-            ConnectionDefinition(
-                f"locator_{side}_{role}",
-                role,
-                owner=f"lower_arm_{side}",
-                label=label,
-            )
-            for side in ("L", "R")
-            for role, label in (
-                ("upper_front", "upper_inner_front"),
-                ("upper_rear", "upper_inner_rear"),
-                ("upper_outer", "upper_outer"),
-                ("tie_inner", "tie_inner"),
-                ("tie_outer", "tie_outer"),
-            )
-        ),
-    )
-    register(template, replace=True)
-    try:
-        built = compose_axle(
-            _model(),
-            request=AssemblyRequest(
-                mode="K", suspension_template="no_upper_arm_probe"
-            ),
-        )
-        bodies = set(built.bodies)
-        assert "lower_arm_L" in bodies, "the declared arm must be built"
-        assert "upright_L" in bodies, "the declared upright must be built"
-        assert "upper_arm_L" not in bodies, (
-            "the template declares no upper arm, so none may be built: the body set "
-            "has to follow the template"
-        )
-        assert "upper_arm_R" not in bodies
-    finally:
-        from suspension_multibody.templates import DOUBLE_WISHBONE
-        from suspension_multibody.templates.registry import clear
-
-        clear()
-        register(DOUBLE_WISHBONE, replace=True)
-
-
-def test_a_template_can_be_selected_by_name() -> None:
-    """
-    "Choose a template" means naming it, for a caller who did not write it.
-
-    An expert registers a template; a user refers to it by name.  Accepting only an
-    already-built instance would make the selection an API for the author rather
-    than for the user, so both forms are accepted and both reach the same build.
-    """
-    from suspension_multibody.templates.registry import get, register
-
-    register(_single_arm(), replace=True)
-    try:
-        by_name = compose_axle(
-            _model(),
-            request=AssemblyRequest(
-                mode="K", suspension_template="single_lower_arm_probe"
-            ),
-        )
-        by_instance = _build_with(get("single_lower_arm_probe"))
-        assert [c.name for c in by_name.ideal_constraints] == [
-            c.name for c in by_instance.ideal_constraints
-        ]
-        assert "upper_arm_L" in by_name.bodies
-    finally:
-        from suspension_multibody.templates import DOUBLE_WISHBONE
-        from suspension_multibody.templates.registry import clear
-        from suspension_multibody.templates.registry import register as _register
-
-        clear()
-        _register(DOUBLE_WISHBONE, replace=True)
-
-
-def test_a_mismatched_mode_is_refused() -> None:
-    """
-    An instance carries its mode, so resolving it for another one is an error.
-
-    Silently re-instantiating would discard the properties the caller resolved,
-    and the resulting model would differ from the one they asked for.
-    """
-    instance = instantiate(DOUBLE_WISHBONE, mode="C", properties={"spring": 0.0, "damper": 0.0})
-    with pytest.raises(ValueError, match="mode"):
-        _ = AssemblyRequest(mode="K", suspension_template=instance).instantiated_suspension
-
-
-def test_an_unknown_template_name_is_named() -> None:
-    """A typo must say which names exist, not fail somewhere downstream."""
-    from suspension_multibody.templates.model import TemplateError
-
-    with pytest.raises(TemplateError, match="not registered"):
-        _ = AssemblyRequest(
-            mode="K", suspension_template="no_such_template"
-        ).instantiated_suspension
-
-
-def test_a_bare_template_is_refused() -> None:
-    """
-    A ``Template`` is not a selection: it has unresolved property slots.
-
-    Accepting one would skip the resolution that decides which columns carry
-    stiffness, which is a silent difference in the model rather than an error.
-    """
-    with pytest.raises(TypeError, match="SubsystemInstance"):
-        _ = AssemblyRequest(
-            mode="K", suspension_template=DOUBLE_WISHBONE
-        ).instantiated_suspension
-
-
-def test_an_unknown_joint_kind_is_refused() -> None:
-    """
-    A type the builder cannot construct fails loudly instead of defaulting.
-
-    Substituting a plausible joint for a declared one produces a model that solves
-    and answers a different question, which is worse than refusing.
-    """
-    connections = [
-        ConnectionDefinition(
-            "lca_mount_L_inner_front",
-            "lower_front",
-            joint="no_such_joint",
-            owner="lower_arm_L",
-            label="inner_front",
-            far_owner="chassis",
-            far_label="lca_L_inner_front",
-        ),
-    ]
-    for role in _REQUIRED:
-        if role == "lower_front":
-            continue
-        connections.append(
-            ConnectionDefinition(f"locator_{role}", role, owner="lower_arm_L", label=role)
-        )
-    connections.append(
-        ConnectionDefinition(
-            "wheel_center_L", "wheel_center", owner="upright_L", label="wheel_center"
-        )
-    )
-    template = Template(
-        name="bad_kind_probe",
-        role="suspension",
-        parts=(
-            PartDefinition("chassis", fixed=True),
-            PartDefinition("lower_arm_L"),
-            PartDefinition("upright_L"),
-        ),
-        connections=tuple(connections),
-        property_slots=(
-            PropertySlot("spring", "N/m"),
-            PropertySlot("damper", "N*s/m"),
-            PropertySlot("bushing", "N/m", default=0.0),
-        ),
-    )
-    with pytest.raises(ValueError, match="unsupported ideal joint kind"):
-        _build_with(template)
-
-
-# --- the three single-role templates ------------------------------------------
-#
-# Steering, wheel and chassis used to carry their declarations as literals inside
-# the functions that emitted them, so a *file* could describe none of those roles.
-# Each test below changes the declaration and requires the composed assembly to
-# change with it, which is the difference between a template that drives a
-# subsystem and one that documents it.
-
-
-def _named(runtime, name: str):
-    """Return one composed constraint by name, naming the unknown one."""
-    for constraint in runtime.constraints:
-        if constraint.name == name:
-            return constraint
-    raise AssertionError(
-        f"no constraint {name!r}; the assembly has "
-        f"{sorted(c.name for c in runtime.constraints)}"
-    )
-
-
-def test_the_steering_template_decides_the_rack_guide(monkeypatch) -> None:
-    """
-    The rack guide's *name* is the steering template's, not a literal.
-
-    Renaming it in the template renames the joint in the model, which is what
-    "the template drives the subsystem" means for this role.
-    """
-    from suspension_multibody.subsystems import steering as steering_subsystem
-    from suspension_multibody.templates.builtin import STEERING_GUIDED
-
-    assert "rack_guide" in {c.name for c in compose_axle(_model(), "K").constraints}
-
-    renamed = replace(
-        STEERING_GUIDED,
-        connections=tuple(
-            replace(connection, name="rack_guide_alt")
-            if connection.name == "rack_guide"
-            else connection
-            for connection in STEERING_GUIDED.connections
-        ),
-    )
-    monkeypatch.setattr(steering_subsystem, "STEERING_GUIDED", renamed)
-    names = {c.name for c in compose_axle(_model(), "K").constraints}
-    assert "rack_guide_alt" in names
-    assert "rack_guide" not in names
-
-
-def test_the_steering_can_be_omitted_and_suspension_grounds_tie_rods() -> None:
-    """
-    When steering is absent, tie rods connect directly to chassis/ground as toe links.
-    """
-    with_steering = compose_axle(_model(), "K")
-    without_steering = compose_axle(
-        _model(),
-        "K",
-        request=AssemblyRequest(
-            mode="K", subsystems=frozenset({"suspension", "wheel", "chassis"})
-        ),
-    )
-    assert "rack" in with_steering.bodies
-    assert "rack" not in without_steering.bodies
-    assert "tie_rod_L" in without_steering.bodies
-    assert "tie_rod_R" in without_steering.bodies
-
-
-def test_the_chassis_template_decides_the_chassis_bodies(monkeypatch) -> None:
-    """
-    The chassis role's bodies are the chassis template's.
-
-    A template that declares a second body produces a second body here.
-    """
-    from suspension_multibody.subsystems import chassis as chassis_subsystem
-    from suspension_multibody.subsystems.types import DEFAULT_AXLE_SUBSYSTEMS
-    from suspension_multibody.templates.builtin import CHASSIS
-
-    request = AssemblyRequest(mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS | {"chassis"})
-    assert "chassis" in compose_axle(_model(), "K", request).bodies
-
-    # The template's *declaration* decides both the set and the fixedness, so the
-    # second part is declared free while the built-in's own is a fixed support, and
-    # each arrives as declared.
-    two_bodies = replace(
-        CHASSIS,
-        parts=(
-            CHASSIS.parts[0],
-            replace(CHASSIS.parts[0], name="frame", fixed=False),
-        ),
-    )
-    monkeypatch.setattr(chassis_subsystem, "CHASSIS", two_bodies)
-    bodies = compose_axle(_model(), "K", request).bodies
-    assert "frame" in bodies
-    assert bodies["chassis"].fixed is True
-    assert bodies["frame"].fixed is False
-
-
-def test_the_wheel_template_decides_where_the_tire_hangs(monkeypatch) -> None:
-    """
-    The tire's attachment is the wheel template's declaration.
-
-    The template names the body that carries the wheel centre and the hardpoint
-    role that locates it, while the *law* stays the model's own.  Pointing the
-    template's wheel centre at another declared body therefore moves the tire
-    without touching its stiffness -- which is what makes the attachment a
-    declaration rather than a convention.
-    """
-    from suspension_multibody.subsystems import wheel as wheel_subsystem
-    from suspension_multibody.templates.builtin import WHEEL
-
-    tire = VerticalTire(
-        stiffness=200.0,
-        unloaded_radius=300.0,
-        contact_point=Vec3(x=0.0, y=-700.0, z=0.0),
-    )
-    model = _model().model_copy(update={"tires": (tire,)})
-
-    def wheel_bodies(runtime) -> set[str]:
-        return {element.wheel_body for element in runtime.elements}
-
-    assert wheel_bodies(compose_axle(model, "K")) == {"wheel_hub_L", "wheel_hub_R"}
-
-    moved = replace(
-        WHEEL,
-        connections=tuple(
-            replace(connection, owner="lower_arm_L")
-            if connection.owner == "wheel_hub_L"
-            else connection
-            for connection in WHEEL.connections
-        ),
-    )
-    monkeypatch.setattr(wheel_subsystem, "WHEEL", moved)
-    assert "lower_arm_L" in wheel_bodies(compose_axle(model, "K"))
+def declared_suspension(payload=None, mode="K"):
+    template = TemplateDocument.from_payload(payload) if payload is not None else generic_template("suspension")
+    points = {name: [0, 0, .334] for name in template.hardpoint_names}
+    points.update({name: [1, 0, .334] for name in ("upper_rear", "lower_rear") if name in points})
+    return assembly({"support": carrier_subsystem(), "unit": subsystem(template, points)}, mode=mode)
+
+
+def test_an_alternate_topology_changes_exactly_the_declared_joints():
+    original = generic_template("suspension").to_payload()
+    changed = copy.deepcopy(original)
+    removed = [row for row in changed["joints"] if row["body_b"] == "upper_arm"]
+    changed["joints"] = [row for row in changed["joints"] if row not in removed]
+    before, after = [validate(declared_suspension(payload), _case()).model_document for payload in (original, changed)]
+    assert before["bodies"] == after["bodies"]
+    removed_ids = {"unit." + row["name"] + "_" + side for row in removed for side in ("L", "R")}
+    assert {row["name"] for row in before["joints"]} - {row["name"] for row in after["joints"]} == removed_ids
+    assert before["elements"] == after["elements"]
+
+
+def test_a_template_omitting_a_part_creates_no_hidden_body():
+    payload = generic_template("suspension").to_payload()
+    payload["bodies"] = [row for row in payload["bodies"] if row["name"] != "upper_arm"]
+    payload["hardpoints"] = [row for row in payload["hardpoints"] if row["owner"] != "upper_arm"]
+    payload["joints"] = [row for row in payload["joints"] if "upper_arm" not in (row["body_a"], row["body_b"])]
+    payload["elements"] = [row for row in payload["elements"] if "upper_arm" not in (row["body_a"], row["body_b"])]
+    payload["ports"] = [row for row in payload["ports"] if row.get("owner") != "upper_arm"]
+    built = assemble_generic(declared_suspension(payload))
+    assert "unit.lower_arm_L" in built.bodies and "unit.upright_R" in built.bodies
+    assert not any("upper_arm" in name for name in built.bodies)
+
+
+def test_file_template_selection_is_the_same_interpreter(tmp_path):
+    template = generic_template("steering")
+    loaded = TemplateDocument.load(template.save(tmp_path / "selected.json"))
+    def build(value):
+        return assemble_generic(assembly({"support": carrier_subsystem(), "steering": subsystem(value, {"center": [0, 0, .334], "housing_center": [0, 0, .334]})})).model_document()
+    assert build(template) == build(loaded)
+
+
+def test_renaming_the_steering_guide_changes_the_native_row():
+    payload = generic_template("steering").to_payload()
+    for row in payload["joints"]:
+        if row["type"] == "prismatic":
+            row["name"] = "alternate_guide"
+    built = assemble_generic(assembly({"support": carrier_subsystem(), "steering": subsystem(TemplateDocument.from_payload(payload), {"center": [0, 0, .334], "housing_center": [0, 0, .334]})}))
+    assert "steering.alternate_guide" in {row["name"] for row in built.joints}
+
+
+def test_body_template_controls_mass_and_fixedness():
+    payload = generic_template("body").to_payload()
+    payload["bodies"] = [{"name": "support", "fixed": True}, {"name": "frame", "fixed": False, "mass": 5, "inertia": np.eye(3).tolist()}]
+    payload["hardpoints"] = []
+    payload["ports"] = []
+    built = assemble_generic(assembly({"unit": subsystem(TemplateDocument.from_payload(payload))}))
+    assert built.bodies["unit.support"].fixed
+    assert not built.bodies["unit.frame"].fixed and built.bodies["unit.frame"].mass == 5
+
+
+def test_unknown_joint_type_is_rejected_by_name():
+    payload = generic_template("suspension").to_payload()
+    payload["joints"][0]["type"] = "no_such_joint"
+    with pytest.raises(AuthoringError, match="no_such_joint"):
+        TemplateDocument.from_payload(payload)

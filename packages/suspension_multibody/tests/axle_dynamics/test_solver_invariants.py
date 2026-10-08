@@ -35,13 +35,13 @@ from suspension_multibody.axle_dynamics import (
     AxleBody,
     AxleDamper,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
     AxleSpring,
     NativeAxleError,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
+from tests.axle_dynamics._unified_entry import solve_axle
 
 _I3 = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _GRAVITY = 9.80665
@@ -146,7 +146,7 @@ def test_a_rank_deficient_joint_set_is_refused_by_the_native_model_build() -> No
     )
 
     with pytest.raises(NativeAxleError, match="rank deficient"):
-        run_axle_dynamics(doubled, _case("rank-deficient"))
+        solve_axle(doubled, _case("rank-deficient"))
 
 
 def test_an_unconstrained_body_is_refused_as_an_equilibrium_and_left_free() -> None:
@@ -170,9 +170,9 @@ def test_an_unconstrained_body_is_refused_as_an_equilibrium_and_left_free() -> N
     )
 
     with pytest.raises(NativeAxleError, match="static equilibrium"):
-        run_axle_dynamics(model, _case("unconstrained"))
+        solve_axle(model, _case("unconstrained"))
 
-    result = run_axle_dynamics(model, _case("unconstrained", consistent_state=True))
+    result = solve_axle(model, _case("unconstrained", consistent_state=True))
     state = result.body_state("free")
     np.testing.assert_allclose(
         state[0, 13:16], (0.0, 0.0, -_GRAVITY), rtol=0.0, atol=1e-12
@@ -216,7 +216,7 @@ def test_a_revolute_reaction_recovers_the_gravity_load() -> None:
         ),
     )
 
-    result = run_axle_dynamics(model, _case("hang"))
+    result = solve_axle(model, _case("hang"))
     wrench = result.joint_wrench_on_body_b("hinge")
     np.testing.assert_allclose(wrench[:, 2], mass * _GRAVITY, rtol=0.0, atol=1e-9)
     np.testing.assert_allclose(wrench[:, [0, 1]], 0.0, atol=1e-9)
@@ -250,7 +250,7 @@ def test_the_native_mass_matrix_uses_the_body_inertia_tensor() -> None:
             AxleBody(
                 name="arm",
                 mass_kg=10.0,
-                inertia_kg_m2=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, inertia_zz)),
+                inertia_kg_m2=((1.5, 0.0, 0.0), (0.0, 1.5, 0.0), (0.0, 0.0, inertia_zz)),
                 quaternion_body_to_world=(
                     math.cos(0.5 * angle),
                     0.0,
@@ -274,7 +274,7 @@ def test_the_native_mass_matrix_uses_the_body_inertia_tensor() -> None:
         ),
     )
 
-    result = run_axle_dynamics(model, _case("anti-roll", consistent_state=True))
+    result = solve_axle(model, _case("anti-roll", consistent_state=True))
     torque = result.anti_roll_bar_state("bar")[0, 2]
     alpha_z = result.body_state("arm")[0, 18]
 
@@ -305,7 +305,7 @@ def test_a_body_spinning_about_a_non_principal_axis_shows_the_bias_term() -> Non
         joints=(),
     )
 
-    result = run_axle_dynamics(model, _case("spin", consistent_state=True))
+    result = solve_axle(model, _case("spin", consistent_state=True))
     state = result.body_state("body")
     momentum = inertia @ state[0, 10:13]
     expected_alpha = -np.linalg.solve(inertia, np.cross(state[0, 10:13], momentum))

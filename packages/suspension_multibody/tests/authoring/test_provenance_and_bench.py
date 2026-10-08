@@ -17,13 +17,11 @@ import pytest
 from suspension_multibody import api
 from suspension_multibody.authoring import (
     AuthoringError,
-    Project,
     RigDocument,
     SimulationAssembly,
-    SubsystemDocument,
 )
-from suspension_multibody.authoring.solver import front_axle_model_for
-from suspension_multibody.schema import CaseSpec
+from suspension_multibody.authoring.migration import save_migrated_assembly
+from suspension_multibody.io import read_artifact, write_artifact
 from suspension_multibody.templates import (
     DOUBLE_WISHBONE,
     template_from_json,
@@ -31,13 +29,7 @@ from suspension_multibody.templates import (
 )
 
 from .fixtures import write_axle_project
-
-
-def _case() -> CaseSpec:
-    return CaseSpec(
-        mode="K",
-        subsystems=frozenset({"suspension", "chassis", "steering", "wheel"}),
-    )
+from .test_generic_multibody import _assembly, _case
 
 
 def test_a_file_driven_run_records_the_hashes_of_its_inputs(tmp_path: Path) -> None:
@@ -48,29 +40,28 @@ def test_a_file_driven_run_records_the_hashes_of_its_inputs(tmp_path: Path) -> N
     exactly the artifact it always wrote -- which is what keeps every recorded
     baseline byte-for-byte unchanged.
     """
-    paths = write_axle_project(tmp_path)
-    project = Project.load(tmp_path)
-    model = front_axle_model_for(SubsystemDocument.load(paths["subsystem"]))
+    source = save_migrated_assembly(_assembly(), tmp_path)
+    run = api.simulate(source, _case())
     out = tmp_path / "run"
 
-    api.run_case(model, _case(), out, inputs=project.provenance("front_axle"))
-
-    recorded = json.loads((out / "inputs.json").read_text(encoding="utf-8"))
-    assert recorded["files"]["front.sub.json"] == project.hashes()["front.sub.json"]
-    assert recorded["model"]["subsystems"]["front.sub.json"]["topology"]
-    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["inputs_file"] == "inputs.json"
+    write_artifact(run.result, out)
+    records = read_artifact(out)["manifest"]["model"]["resource_manifest"]
+    import hashlib
+    for row in records:
+        assert row["content_sha256"]
+        assert row["file_sha256"] == hashlib.sha256(Path(row["source"]).read_bytes()).hexdigest()
+    assert {row["kind"] for row in records} == {"assembly", "template", "subsystem", "property"}
 
 
 def test_a_python_authored_run_writes_no_inputs_record(tmp_path: Path) -> None:
     """No documents were read, so nothing claims otherwise."""
-    paths = write_axle_project(tmp_path)
-    model = front_axle_model_for(SubsystemDocument.load(paths["subsystem"]))
+    run = api.simulate(_assembly(), _case())
     out = tmp_path / "run"
-    api.run_case(model, _case(), out)
+    write_artifact(run.result, out)
     assert not (out / "inputs.json").exists()
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert "inputs_file" not in manifest
+    assert all(not row["file_sha256"] for row in manifest["model"]["resource_manifest"])
 
 
 def test_a_rig_file_may_name_a_registered_bench(tmp_path: Path) -> None:

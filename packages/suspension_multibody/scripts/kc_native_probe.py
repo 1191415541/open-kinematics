@@ -13,19 +13,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from suspension_multibody.cases.kc_quasi_static import (
-    NativeKcError,
-    case_document,
-    model_document,
-)
-from suspension_multibody.cases.kc_quasi_static.workflow import (
+from suspension_multibody.api import validate
+from suspension_multibody.authoring import migrate_v1_kc_case
+from suspension_multibody.cases.kc_quasi_static.settings import (
     DEFAULT_SETTINGS,
     DEFAULT_TIMES,
-    _side_fields,
 )
-from suspension_multibody.schema import FrontAxleModel
-from suspension_multibody.simulation import SimulationRequest, run_request
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.report.kc_evidence import k_records
+from suspension_multibody.results.envelope import ResultEnvelope
+from suspension_multibody.schema.model import AxleDeclaration
+from suspension_multibody.simulation import run_compiled
 
 BASELINE = Path("packages/suspension_multibody/tests/data/kc_baseline")
 OUT = Path("artifacts/kc-native-probe")
@@ -40,10 +37,10 @@ WHEEL_VALUES_MM = (-10.0, 0.0, 10.0)
 RACK_VALUES_MM = (-5.0, 0.0, 5.0)
 
 
-def benchmark_model() -> FrontAxleModel:
+def benchmark_model() -> AxleDeclaration:
     """Build the shared benchmark axle from the declarative fixture."""
     payload = json.loads(BENCHMARK_FIXTURE.read_text(encoding="utf-8"))
-    return FrontAxleModel.model_validate(payload["model"])
+    return AxleDeclaration.model_validate(payload["model"])
 
 
 def tolerance(field: str, reference: float) -> float:
@@ -55,60 +52,26 @@ def tolerance(field: str, reference: float) -> float:
     )
 
 
-def k_grid_states(assembly) -> list[dict[str, object]]:
+def k_grid_states(model: AxleDeclaration) -> list[dict[str, object]]:
     """Solve the K grid through the unified simulation service."""
-    model = model_document(assembly, name="native-k", drive_wheels=True)
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
+    assembly, case = migrate_v1_kc_case(
+        model, mode="K",
         name="kc-k",
         wheel_values_mm=WHEEL_VALUES_MM,
         rack_values_mm=RACK_VALUES_MM,
         times_s=DEFAULT_TIMES,
         settings=DEFAULT_SETTINGS,
-        drive_wheels=True,
     )
-    run = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
-    left_states = run.body_state("upright_L")
-    right_states = run.body_state("upright_R")
-    records: list[dict[str, object]] = []
-    for index, entry in enumerate(run.cases):
-        wheel = WHEEL_VALUES_MM[index // len(RACK_VALUES_MM)]
-        rack = RACK_VALUES_MM[index % len(RACK_VALUES_MM)]
-        case_id = f"k-w{wheel:+.0f}-r{rack:+.0f}"
-        # The case layer expands the grid in document order; checking the name
-        # it reported turns a silent reordering into a failure.
-        if str(entry["name"]) != case_id:
-            raise NativeKcError(
-                f"the kernel expanded {entry['name']!r} where {case_id!r} was expected"
-            )
-        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
-        record: dict[str, object] = {
-            "case_id": case_id,
-            "wheel_travel_mm": float(wheel),
-            "rack_displacement_mm": float(rack),
-        }
-        record.update(
-            _side_fields(assembly, "L", left_states[last, :3], left_states[last, 3:7])
-        )
-        record.update(
-            _side_fields(assembly, "R", right_states[last, :3], right_states[last, 3:7])
-        )
-        records.append(record)
-    return records
+    result = run_compiled(validate(assembly, case)).result
+    if not isinstance(result, ResultEnvelope):
+        raise TypeError("K/C documents must produce ResultEnvelope")
+    return k_records(result, frames={side: "wheel.sub.json.wheel_center_"+side for side in ("L", "R")},
+        wheel_values=WHEEL_VALUES_MM, rack_values=RACK_VALUES_MM)
 
 
 def main() -> int:
     """Run the K grid natively and score it against the frozen snapshot."""
-    assembly = compose_axle(benchmark_model(), "K")
-    produced = k_grid_states(assembly)
+    produced = k_grid_states(benchmark_model())
     frozen = json.loads((BASELINE / "k_states.json").read_text(encoding="utf-8"))
     expected = {state["case_id"]: state for state in frozen}
     worst, worst_field = 0.0, None

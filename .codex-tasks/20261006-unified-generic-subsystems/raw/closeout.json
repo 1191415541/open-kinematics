@@ -1,0 +1,72 @@
+[
+  {
+    "command": [
+      "uv",
+      "run",
+      "--no-sync",
+      "ruff",
+      "check",
+      "."
+    ],
+    "returncode": 0,
+    "log": "raw\\closeout-1.log"
+  },
+  {
+    "command": [
+      "uv",
+      "run",
+      "--no-sync",
+      "ty",
+      "check",
+      "."
+    ],
+    "returncode": 0,
+    "log": "raw\\closeout-2.log"
+  },
+  {
+    "command": [
+      "uv",
+      "run",
+      "--no-sync",
+      "python",
+      "packages/suspension_multibody/tests/architecture/legacy_surface_gate.py",
+      "--check"
+    ],
+    "returncode": 0,
+    "log": "raw\\closeout-3.log"
+  },
+  {
+    "command": [
+      "uv",
+      "run",
+      "--no-sync",
+      "python",
+      "packages/suspension_kernel/scripts/check_module_layering.py",
+      "--strict",
+      "--final"
+    ],
+    "returncode": 0,
+    "log": "raw\\closeout-4.log"
+  },
+  {
+    "command": [
+      "uv",
+      "run",
+      "--no-sync",
+      "python",
+      "packages/suspension_multibody/scripts/check_composable_release.py",
+      "--skip-isolation"
+    ],
+    "returncode": 0,
+    "log": "raw\\closeout-5.log"
+  },
+  {
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "returncode": 0,
+    "log": "raw\\closeout-6.log"
+  }
+]

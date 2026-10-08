@@ -28,7 +28,7 @@ FULL_VEHICLE_HANDLING_CASES = (
 )
 
 # These are deliberately explicit. A 14/15-DOF parameter bundle is not enough
-# to reconstruct the bodies, joints, contacts, and actuator state of a VehicleModel.
+# to reconstruct the bodies, joints, contacts, and actuator state of a vehicle declaration.
 FULL_VEHICLE_PAIRING_FIELDS = (
     "adams_assembly_hash",
     "chassis_mass_com_inertia_hash",
@@ -347,12 +347,13 @@ def compare_full_vehicle_mbd_case(
         full_vehicle_time_history(
             run,
             "handling_stability",
+            chassis_body_id="body.chassis",
             steering_ratio_m_per_rad=steering_ratio * length_scale,
             # Declared, not sniffed: a prescribed rotation reports a steering
             # *angle* under the same channel name a rack translation reports a
             # displacement under, so only the declaration can say which
             # conversion applies.
-            steering_channel=steering.channel_name,
+            steering_channel="steering_"+steering.channel_name+".actuator",
             steering_actuator_mode=steering.actuator_mode,
             chassis_center_of_mass_m=tuple(
                 value * length_scale

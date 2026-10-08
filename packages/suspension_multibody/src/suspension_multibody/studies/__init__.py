@@ -18,13 +18,6 @@ layers.  This package only states what a study *is* and builds the one model bot
 readings start from.
 """
 
-from .assembly import (
-    StudyAssembly,
-    build_study_assembly,
-    study_case_document,
-    study_model_document,
-)
-from .bridge import BridgeError, axle_dynamics_model
 from .study import (
     DYNAMIC,
     QUASI_STATIC,
@@ -46,17 +39,11 @@ __all__ = [
     "STUDIES",
     "STUDY_NAMES",
     "TIRE_MODELS",
-    "BridgeError",
-    "StudyAssembly",
     "StudyError",
     "StudySpec",
     "TireActivation",
     "TimeSemantics",
-    "axle_dynamics_model",
-    "build_study_assembly",
     "get_study",
     "resolve_tire_activation",
-    "study_case_document",
-    "study_model_document",
     "study_names",
 ]

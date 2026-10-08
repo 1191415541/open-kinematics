@@ -255,8 +255,8 @@ def write_builtin_axle_project(root: Path) -> dict[str, Path]:
     whatever the export loses shows up as a difference in the assembled model, which
     is what the round-trip test asserts.
     """
-    from suspension_multibody.authoring.solver import template_document_from
     from suspension_multibody.templates import DOUBLE_WISHBONE
+    from suspension_multibody.templates.export import template_document_from
 
     template = template_document_from(DOUBLE_WISHBONE)
     spring = {

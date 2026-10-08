@@ -56,6 +56,7 @@ gate-architecture:
     uv run --package suspension-multibody python packages/suspension_multibody/tests/architecture/legacy_surface_gate.py --check
     uv run python packages/suspension_kernel/scripts/check_module_layering.py --strict --final
     uv run python packages/suspension_multibody/scripts/check_composable_release.py --skip-isolation
+    uv run --package suspension-multibody pytest packages/suspension_multibody/tests/architecture/test_no_legacy_vehicle_models.py -q -p no:cacheprovider
 
 # Every test directory except the three slow ones, about 25 s against roughly
 # 33 minutes for the whole package.  `--ignore` rather than a directory list, so

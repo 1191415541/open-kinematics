@@ -1,0 +1,20 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/rigs/test_rig_composition.py",
+    "packages/suspension_multibody/tests/rigs/test_k_grid_shrinks.py",
+    "packages/suspension_multibody/tests/cases/kc_quasi_static/test_drives_come_from_the_rig.py",
+    "packages/suspension_multibody/tests/simulation/test_simulate_covers_every_bench.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T14:28:46.596419+00:00",
+  "finished_at": "2026-10-06T14:28:50.853272+00:00",
+  "log": "raw\\validation\\child-4-step-3.log",
+  "log_sha256": "807e71d224f7226dfc98bdff22299609354a95d64a35410842b95fe029d194c5"
+}

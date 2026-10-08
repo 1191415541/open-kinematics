@@ -3,29 +3,29 @@
 import pytest
 
 from suspension_multibody.schema import (
-    FrontAxleModel,
     MassSpec,
     RigidBodySpec,
     SteeringSystemSpec,
     TireModelSpec,
     Vec3,
-    VehicleModel,
     WheelSpec,
 )
+from suspension_multibody.schema.model import AxleDeclaration
+from suspension_multibody.schema.vehicle import VehicleDeclaration
 
 
 @pytest.fixture
-def minimal_model() -> FrontAxleModel:
-    return FrontAxleModel(
+def minimal_model() -> AxleDeclaration:
+    return AxleDeclaration(
         hardpoints={"LOWER_FRONT_LEFT": Vec3(x=100, y=-700, z=200)},
         mass=MassSpec(sprung_mass=1200),
     )
 
 
 @pytest.fixture
-def full_vehicle_model() -> VehicleModel:
-    def axle(name: str, x: float) -> FrontAxleModel:
-        return FrontAxleModel(
+def full_vehicle_model() -> VehicleDeclaration:
+    def axle(name: str, x: float) -> AxleDeclaration:
+        return AxleDeclaration(
             name=name,
             hardpoints={
                 "UPPER_INBOARD_FRONT": Vec3(x=x, y=-500.0, z=500.0),
@@ -49,7 +49,7 @@ def full_vehicle_model() -> VehicleModel:
             ),
         )
 
-    return VehicleModel(
+    return VehicleDeclaration(
         chassis=RigidBodySpec(name="chassis", mass=1200.0),
         front_axle=axle("front", 1_400.0),
         rear_axle=axle("rear", -1_400.0),

@@ -1,0 +1,662 @@
+[
+  {
+    "mode": "K",
+    "variant": "ordinary",
+    "errors": {
+      "upper_arm_L": {
+        "position_m": 1.942890293094024e-16,
+        "quaternion": 1.9081958235744878e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "lower_arm_L": {
+        "position_m": 2.498001805406602e-16,
+        "quaternion": 2.255140518769849e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "upright_L": {
+        "position_m": 1.6254358969902682e-15,
+        "quaternion": 1.1726730697603216e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "tie_rod_L": {
+        "position_m": 9.917061746453348e-17,
+        "quaternion": 1.214306433183765e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "wheel_hub_L": {
+        "position_m": 1.6554815907612398e-09,
+        "quaternion": 1.1587952819525071e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "upper_arm_R": {
+        "position_m": 2.636779683484747e-16,
+        "quaternion": 1.5612511283791264e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "lower_arm_R": {
+        "position_m": 1.942890293094024e-16,
+        "quaternion": 1.734723475976807e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "upright_R": {
+        "position_m": 2.5951463200613034e-15,
+        "quaternion": 1.85268467234323e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "tie_rod_R": {
+        "position_m": 9.71445146547012e-17,
+        "quaternion": 1.5872719805187785e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "wheel_hub_R": {
+        "position_m": 1.6554815759555152e-09,
+        "quaternion": 1.85268467234323e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "ground": {
+        "position_m": 0.0,
+        "quaternion": 0.0,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "rack": {
+        "position_m": 1.4998101377121576e-17,
+        "quaternion": 2.964615315390051e-21,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "rack_housing": {
+        "position_m": 1.8931654511144902e-22,
+        "quaternion": 4.226834906211534e-22,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      }
+    }
+  },
+  {
+    "mode": "K",
+    "variant": "fixed_oracle",
+    "errors": {
+      "upper_arm_L": {
+        "position_m": 1.3530843112619095e-16,
+        "quaternion": 1.1102230246251565e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "lower_arm_L": {
+        "position_m": 2.0122792321330962e-16,
+        "quaternion": 1.8041124150158794e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "upright_L": {
+        "position_m": 2.275957200481571e-15,
+        "quaternion": 1.6167622796103842e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "tie_rod_L": {
+        "position_m": 1.338379819297575e-16,
+        "quaternion": 1.2836953722228372e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "wheel_hub_L": {
+        "position_m": 1.6554815863391873e-09,
+        "quaternion": 1.6167622796103842e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "upper_arm_R": {
+        "position_m": 1.3877787807814457e-16,
+        "quaternion": 1.6653345369377348e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "lower_arm_R": {
+        "position_m": 1.5113743910692445e-16,
+        "quaternion": 1.5265566588595902e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "upright_R": {
+        "position_m": 2.465042059363043e-15,
+        "quaternion": 1.7616116898544476e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "tie_rod_R": {
+        "position_m": 1.5959455978986625e-16,
+        "quaternion": 2.0816681711721685e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "wheel_hub_R": {
+        "position_m": 1.6554815722348556e-09,
+        "quaternion": 1.7616116898544476e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "ground": {
+        "position_m": 0.0,
+        "quaternion": 0.0,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "rack": {
+        "position_m": 2.337263671728604e-17,
+        "quaternion": 3.169325560874154e-21,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "rack_housing": {
+        "position_m": 1.8931654511144902e-22,
+        "quaternion": 3.962137110194565e-22,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      }
+    }
+  },
+  {
+    "mode": "K",
+    "variant": "old_inertia",
+    "errors": {
+      "upper_arm_L": {
+        "position_m": 1.942890293094024e-16,
+        "quaternion": 1.9081958235744878e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "lower_arm_L": {
+        "position_m": 2.498001805406602e-16,
+        "quaternion": 2.255140518769849e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "upright_L": {
+        "position_m": 1.6254358969902682e-15,
+        "quaternion": 1.1726730697603216e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "tie_rod_L": {
+        "position_m": 9.917061746453348e-17,
+        "quaternion": 1.214306433183765e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "wheel_hub_L": {
+        "position_m": 1.6554815907612398e-09,
+        "quaternion": 1.1587952819525071e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "upper_arm_R": {
+        "position_m": 2.636779683484747e-16,
+        "quaternion": 1.5612511283791264e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "lower_arm_R": {
+        "position_m": 1.942890293094024e-16,
+        "quaternion": 1.734723475976807e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "upright_R": {
+        "position_m": 2.5951463200613034e-15,
+        "quaternion": 1.85268467234323e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "tie_rod_R": {
+        "position_m": 9.71445146547012e-17,
+        "quaternion": 1.5872719805187785e-16,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "wheel_hub_R": {
+        "position_m": 1.6554815759555152e-09,
+        "quaternion": 1.85268467234323e-15,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "ground": {
+        "position_m": 0.0,
+        "quaternion": 0.0,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "rack": {
+        "position_m": 1.4998101377121576e-17,
+        "quaternion": 2.964615315390051e-21,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "rack_housing": {
+        "position_m": 1.8931654511144902e-22,
+        "quaternion": 4.226834906211534e-22,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      }
+    }
+  },
+  {
+    "mode": "C",
+    "variant": "ordinary",
+    "errors": {
+      "upper_arm_L": {
+        "position_m": 3.697614863933465e-16,
+        "quaternion": 2.6722847635348053e-15,
+        "velocity_m_s": 1.921628603233935e-13,
+        "omega_rad_s": 3.6993382669110615e-10,
+        "acceleration_m_s2": 3.1848127899570872e-09,
+        "alpha_rad_s2": 4.334675530085648e-05
+      },
+      "lower_arm_L": {
+        "position_m": 1.679564598427764e-16,
+        "quaternion": 3.998645493173387e-15,
+        "velocity_m_s": 2.6163168825571717e-13,
+        "omega_rad_s": 4.72968345171421e-10,
+        "acceleration_m_s2": 4.21947403059344e-09,
+        "alpha_rad_s2": 4.104040388958753e-05
+      },
+      "upright_L": {
+        "position_m": 1.4592899608698636e-15,
+        "quaternion": 4.038159532821304e-15,
+        "velocity_m_s": 6.469064674360945e-13,
+        "omega_rad_s": 2.6163282269486567e-10,
+        "acceleration_m_s2": 4.263949351384751e-09,
+        "alpha_rad_s2": 4.808537700788533e-06
+      },
+      "tie_rod_L": {
+        "position_m": 2.0331653499070387e-16,
+        "quaternion": 2.103796648267852e-15,
+        "velocity_m_s": 5.405532586165073e-13,
+        "omega_rad_s": 1.723270647629163e-10,
+        "acceleration_m_s2": 1.0407680550774793e-08,
+        "alpha_rad_s2": 1.692905153063431e-05
+      },
+      "wheel_hub_L": {
+        "position_m": 8.326672684688674e-16,
+        "quaternion": 4.038159532821556e-15,
+        "velocity_m_s": 1.8373282981727096e-12,
+        "omega_rad_s": 2.6163282269486567e-10,
+        "acceleration_m_s2": 2.5707815984759444e-08,
+        "alpha_rad_s2": 4.808537700788533e-06
+      },
+      "upper_arm_R": {
+        "position_m": 2.4069406666762203e-17,
+        "quaternion": 1.5611587889988856e-16,
+        "velocity_m_s": 1.9267143859857534e-14,
+        "omega_rad_s": 8.041848073349589e-12,
+        "acceleration_m_s2": 2.4395815251865726e-10,
+        "alpha_rad_s2": 1.195143318527874e-07
+      },
+      "lower_arm_R": {
+        "position_m": 1.1660427015524256e-17,
+        "quaternion": 1.5163545931517911e-16,
+        "velocity_m_s": 1.890409941269754e-14,
+        "omega_rad_s": 1.7731254186665626e-11,
+        "acceleration_m_s2": 2.0017016313069864e-10,
+        "alpha_rad_s2": 3.0249906534788295e-07
+      },
+      "upright_R": {
+        "position_m": 4.9451840169899164e-17,
+        "quaternion": 1.1062057741391664e-16,
+        "velocity_m_s": 1.2231138047709773e-14,
+        "omega_rad_s": 1.5520405876135054e-11,
+        "acceleration_m_s2": 8.422334749769414e-11,
+        "alpha_rad_s2": 2.622779260969748e-07
+      },
+      "tie_rod_R": {
+        "position_m": 9.589391637733762e-18,
+        "quaternion": 6.924676285584423e-17,
+        "velocity_m_s": 3.3629879552539503e-14,
+        "omega_rad_s": 9.013937322458746e-12,
+        "acceleration_m_s2": 2.3115125563330988e-10,
+        "alpha_rad_s2": 1.524254684108327e-07
+      },
+      "wheel_hub_R": {
+        "position_m": 5.551115123125783e-17,
+        "quaternion": 1.1062057741391664e-16,
+        "velocity_m_s": 1.223113804772689e-14,
+        "omega_rad_s": 1.5520405876135054e-11,
+        "acceleration_m_s2": 8.422333758984237e-11,
+        "alpha_rad_s2": 2.622779260969748e-07
+      },
+      "ground": {
+        "position_m": 0.0,
+        "quaternion": 0.0,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "rack": {
+        "position_m": 2.392568703211628e-18,
+        "quaternion": 5.605193857299268e-45,
+        "velocity_m_s": 5.594216628805945e-25,
+        "omega_rad_s": 1.7775665730990434e-24,
+        "acceleration_m_s2": 1.401302352480172e-16,
+        "alpha_rad_s2": 2.93834909976722e-20
+      },
+      "rack_housing": {
+        "position_m": 1.0778702611605963e-24,
+        "quaternion": 5.605193857299268e-45,
+        "velocity_m_s": 6.999727371916916e-25,
+        "omega_rad_s": 1.7775665730990434e-24,
+        "acceleration_m_s2": 9.75781955236954e-19,
+        "alpha_rad_s2": 2.9383490997672206e-20
+      }
+    }
+  },
+  {
+    "mode": "C",
+    "variant": "fixed_oracle",
+    "errors": {
+      "upper_arm_L": {
+        "position_m": 3.697614863933465e-16,
+        "quaternion": 2.67228478338714e-15,
+        "velocity_m_s": 1.9216286036982683e-13,
+        "omega_rad_s": 3.699338283465203e-10,
+        "acceleration_m_s2": 3.1848127478935655e-09,
+        "alpha_rad_s2": 4.3346755301038925e-05
+      },
+      "lower_arm_L": {
+        "position_m": 1.6795645942918608e-16,
+        "quaternion": 3.998645442774635e-15,
+        "velocity_m_s": 2.6163168825571717e-13,
+        "omega_rad_s": 4.729683416506117e-10,
+        "acceleration_m_s2": 4.219473970927921e-09,
+        "alpha_rad_s2": 4.104040388967145e-05
+      },
+      "upright_L": {
+        "position_m": 1.4592899608698636e-15,
+        "quaternion": 4.038159532821051e-15,
+        "velocity_m_s": 6.469064656936938e-13,
+        "omega_rad_s": 2.616328226948646e-10,
+        "acceleration_m_s2": 4.263949287902265e-09,
+        "alpha_rad_s2": 4.8085377007885315e-06
+      },
+      "tie_rod_L": {
+        "position_m": 2.033165356321575e-16,
+        "quaternion": 2.103796648267827e-15,
+        "velocity_m_s": 5.405532587729551e-13,
+        "omega_rad_s": 1.723270647629162e-10,
+        "acceleration_m_s2": 1.040768039149547e-08,
+        "alpha_rad_s2": 1.692905153063431e-05
+      },
+      "wheel_hub_L": {
+        "position_m": 8.326672684688674e-16,
+        "quaternion": 4.038159532821051e-15,
+        "velocity_m_s": 1.8373282984994815e-12,
+        "omega_rad_s": 2.616328226948646e-10,
+        "acceleration_m_s2": 2.570781567778543e-08,
+        "alpha_rad_s2": 4.8085377007885315e-06
+      },
+      "upper_arm_R": {
+        "position_m": 2.4069406626348948e-17,
+        "quaternion": 1.5611587890737394e-16,
+        "velocity_m_s": 1.9267143859857503e-14,
+        "omega_rad_s": 8.041847852526099e-12,
+        "acceleration_m_s2": 2.439581534555258e-10,
+        "alpha_rad_s2": 1.1951432896200718e-07
+      },
+      "lower_arm_R": {
+        "position_m": 1.1660427015524256e-17,
+        "quaternion": 1.5163545934259952e-16,
+        "velocity_m_s": 1.890409934487375e-14,
+        "omega_rad_s": 1.773125304433124e-11,
+        "acceleration_m_s2": 2.0017016313655598e-10,
+        "alpha_rad_s2": 3.0249905039368737e-07
+      },
+      "upright_R": {
+        "position_m": 4.945184017883033e-17,
+        "quaternion": 1.1062057741391712e-16,
+        "velocity_m_s": 1.2231138047709732e-14,
+        "omega_rad_s": 1.5520405876135058e-11,
+        "acceleration_m_s2": 8.422334915075192e-11,
+        "alpha_rad_s2": 2.622779260969748e-07
+      },
+      "tie_rod_R": {
+        "position_m": 9.589391637733018e-18,
+        "quaternion": 6.924676285584433e-17,
+        "velocity_m_s": 3.3629879552539516e-14,
+        "omega_rad_s": 9.013937322454759e-12,
+        "acceleration_m_s2": 2.3115125979514516e-10,
+        "alpha_rad_s2": 1.5242546841078053e-07
+      },
+      "wheel_hub_R": {
+        "position_m": 5.551115123125783e-17,
+        "quaternion": 1.1062057741391712e-16,
+        "velocity_m_s": 1.2231138047726816e-14,
+        "omega_rad_s": 1.5520405876135058e-11,
+        "acceleration_m_s2": 8.422334243560008e-11,
+        "alpha_rad_s2": 2.622779260969748e-07
+      },
+      "ground": {
+        "position_m": 0.0,
+        "quaternion": 0.0,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "rack": {
+        "position_m": 2.3925687032099308e-18,
+        "quaternion": 2.8244922171547094e-45,
+        "velocity_m_s": 4.944721181218865e-25,
+        "omega_rad_s": 8.435552613173866e-25,
+        "acceleration_m_s2": 1.2209846867159574e-16,
+        "alpha_rad_s2": 2.7565771167107864e-20
+      },
+      "rack_housing": {
+        "position_m": 1.0778702611605963e-24,
+        "quaternion": 1.1911036946760945e-44,
+        "velocity_m_s": 5.63475146055632e-25,
+        "omega_rad_s": 8.435552613173866e-25,
+        "acceleration_m_s2": 4.336808689942018e-19,
+        "alpha_rad_s2": 2.7565771167107864e-20
+      }
+    }
+  },
+  {
+    "mode": "C",
+    "variant": "old_inertia",
+    "errors": {
+      "upper_arm_L": {
+        "position_m": 3.697614863933465e-16,
+        "quaternion": 3.4498377024733137e-15,
+        "velocity_m_s": 1.938939024517418e-13,
+        "omega_rad_s": 4.683102320639967e-10,
+        "acceleration_m_s2": 6.505486916020002e-10,
+        "alpha_rad_s2": 4.0074448213581684e-05
+      },
+      "lower_arm_L": {
+        "position_m": 1.604529534424485e-16,
+        "quaternion": 2.0586672419720356e-15,
+        "velocity_m_s": 3.258309559071462e-13,
+        "omega_rad_s": 2.724772023357085e-10,
+        "acceleration_m_s2": 8.099880256551874e-10,
+        "alpha_rad_s2": 4.041200418705149e-05
+      },
+      "upright_L": {
+        "position_m": 1.4592899608698636e-15,
+        "quaternion": 2.4564720638045853e-15,
+        "velocity_m_s": 2.3086902644497406e-13,
+        "omega_rad_s": 2.553060723593528e-10,
+        "acceleration_m_s2": 4.528492792293906e-10,
+        "alpha_rad_s2": 4.80221095045302e-06
+      },
+      "tie_rod_L": {
+        "position_m": 1.7542751139818045e-16,
+        "quaternion": 1.6409466566797505e-15,
+        "velocity_m_s": 1.8431265652118985e-13,
+        "omega_rad_s": 1.7047566298312458e-10,
+        "acceleration_m_s2": 1.0818567824455152e-09,
+        "alpha_rad_s2": 1.6931861330061397e-05
+      },
+      "wheel_hub_L": {
+        "position_m": 5.551115123125783e-16,
+        "quaternion": 2.4564720647681316e-15,
+        "velocity_m_s": 2.2767328304891523e-13,
+        "omega_rad_s": 2.55306072363206e-10,
+        "acceleration_m_s2": 4.53123842997086e-10,
+        "alpha_rad_s2": 4.802210950456873e-06
+      },
+      "upper_arm_R": {
+        "position_m": 2.4069406028360575e-17,
+        "quaternion": 1.561158789913539e-16,
+        "velocity_m_s": 1.9267146161863004e-14,
+        "omega_rad_s": 8.041848036488432e-12,
+        "acceleration_m_s2": 2.4395815530469545e-10,
+        "alpha_rad_s2": 1.1951433138010456e-07
+      },
+      "lower_arm_R": {
+        "position_m": 1.166042646387521e-17,
+        "quaternion": 1.5163545962342119e-16,
+        "velocity_m_s": 1.8904100659947364e-14,
+        "omega_rad_s": 1.7731254297860885e-11,
+        "acceleration_m_s2": 2.0017016026456034e-10,
+        "alpha_rad_s2": 3.024990667997815e-07
+      },
+      "upright_R": {
+        "position_m": 4.9451819881439555e-17,
+        "quaternion": 1.1062057742024367e-16,
+        "velocity_m_s": 1.2231164830901815e-14,
+        "omega_rad_s": 1.5520405876160364e-11,
+        "acceleration_m_s2": 8.422335521702664e-11,
+        "alpha_rad_s2": 2.622779260970001e-07
+      },
+      "tie_rod_R": {
+        "position_m": 9.589404451144049e-18,
+        "quaternion": 6.92467630042762e-17,
+        "velocity_m_s": 3.36298772775116e-14,
+        "omega_rad_s": 9.013937322960566e-12,
+        "acceleration_m_s2": 2.311512737293314e-10,
+        "alpha_rad_s2": 1.5242546840767367e-07
+      },
+      "wheel_hub_R": {
+        "position_m": 5.551115123125783e-17,
+        "quaternion": 1.1062057741423377e-16,
+        "velocity_m_s": 1.2231164905513147e-14,
+        "omega_rad_s": 1.5520405876136324e-11,
+        "acceleration_m_s2": 8.422335522451844e-11,
+        "alpha_rad_s2": 2.6227792609697605e-07
+      },
+      "ground": {
+        "position_m": 0.0,
+        "quaternion": 0.0,
+        "velocity_m_s": 0.0,
+        "omega_rad_s": 0.0,
+        "acceleration_m_s2": 0.0,
+        "alpha_rad_s2": 0.0
+      },
+      "rack": {
+        "position_m": 2.392568703211628e-18,
+        "quaternion": 8.085894889063724e-24,
+        "velocity_m_s": 1.199549225615608e-19,
+        "omega_rad_s": 3.2343580138747856e-20,
+        "acceleration_m_s2": 1.1995530631170346e-16,
+        "alpha_rad_s2": 3.234357955625489e-17
+      },
+      "rack_housing": {
+        "position_m": 1.0778702611605963e-24,
+        "quaternion": 2.1962599636041263e-24,
+        "velocity_m_s": 1.5507361222594413e-22,
+        "omega_rad_s": 8.785096718235252e-21,
+        "acceleration_m_s2": 3.2526065174565133e-19,
+        "alpha_rad_s2": 8.785039854416505e-18
+      }
+    }
+  }
+]

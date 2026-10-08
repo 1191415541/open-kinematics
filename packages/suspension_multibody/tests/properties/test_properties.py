@@ -19,13 +19,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from suspension_multibody.authoring import (
+    AssemblyDocument,
+    SubsystemDocument,
+    TemplateDocument,
+    assemble_generic,
+    migrate_v1_axle,
+)
 from suspension_multibody.properties import (
     ENTRY_KINDS,
     PropertiesError,
     load_properties,
 )
-from suspension_multibody.subsystems import DEFAULT_AXLE_SUBSYSTEMS, AssemblyRequest
-from suspension_multibody.subsystems.entry import compose_axle
 from suspension_multibody.templates import (
     DOUBLE_WISHBONE,
     TemplateError,
@@ -62,10 +67,23 @@ def _minimal(**properties: object) -> dict:
 
 def _stiffness_norms(assembly) -> set[float]:
     return {
-        float(np.linalg.norm(element.stiffness))
+        float(np.linalg.norm(element["parameters"]["stiffness"])) / 1000
         for element in assembly.elements
-        if element.name.endswith(("inner_front", "inner_rear"))
+        if element["name"].endswith(("inner_front", "inner_rear"))
     }
+
+
+def _assembly_with_properties(model, loaded):
+    source = migrate_v1_axle(model, mode="C")
+    documents = {}
+    for entry in source.entries:
+        data = entry.subsystem.template.to_payload()
+        for row in data["elements"]:
+            if row["type"] == "bushing" and row["name"].endswith(("inner_front", "inner_rear")):
+                row["parameters"]["stiffness"] = loaded["bushing"]["stiffness"]
+        documents[entry.ref] = SubsystemDocument.from_payload(entry.subsystem.to_payload(),
+            template=TemplateDocument.from_payload(data), properties=entry.subsystem.properties)
+    return assemble_generic(AssemblyDocument.from_payload(source.to_payload(), subsystems=documents))
 
 
 def test_the_shipped_files_load() -> None:
@@ -116,28 +134,12 @@ def test_same_file_twice_is_reproducible() -> None:
     first = load_properties(BASELINE)
     second = load_properties(BASELINE)
     assert first.as_values() == second.as_values()
-    request = AssemblyRequest(
-        mode="C",
-        subsystems=DEFAULT_AXLE_SUBSYSTEMS,
-        suspension_template=instantiate(
-            DOUBLE_WISHBONE, mode="C", properties=resolve_properties(DOUBLE_WISHBONE, first)
-        ),
-    )
-    other = AssemblyRequest(
-        mode="C",
-        subsystems=DEFAULT_AXLE_SUBSYSTEMS,
-        suspension_template=instantiate(
-            DOUBLE_WISHBONE, mode="C", properties=resolve_properties(DOUBLE_WISHBONE, second)
-        ),
-    )
-    a = compose_axle(model, "C", request)
-    b = compose_axle(model, "C", other)
+    a = _assembly_with_properties(model, first)
+    b = _assembly_with_properties(model, second)
     assert list(a.bodies) == list(b.bodies)
-    assert {f"{x}::{y}" for x, y in a.points} == {f"{x}::{y}" for x, y in b.points}
-    for key, point in a.points.items():
-        assert np.array_equal(np.asarray(point), np.asarray(b.points[key])), key
-    assert [c.name for c in a.constraints] == [c.name for c in b.constraints]
-    assert [e.name for e in a.elements] == [e.name for e in b.elements]
+    assert a.resolved_model().to_document()["frames"] == b.resolved_model().to_document()["frames"]
+    assert a.joints == b.joints
+    assert a.elements == b.elements
 
 
 def test_a_different_file_changes_stiffness_and_nothing_else() -> None:
@@ -149,29 +151,13 @@ def test_a_different_file_changes_stiffness_and_nothing_else() -> None:
     assemblies = {}
     for label, path in (("baseline", BASELINE), ("stiffer", STIFFER)):
         loaded = load_properties(path)
-        assemblies[label] = compose_axle(
-            model,
-            "C",
-            AssemblyRequest(
-                mode="C",
-                subsystems=DEFAULT_AXLE_SUBSYSTEMS,
-                suspension_template=instantiate(
-                    DOUBLE_WISHBONE,
-                    mode="C",
-                    properties=resolve_properties(DOUBLE_WISHBONE, loaded),
-                ),
-            ),
-        )
+        assemblies[label] = _assembly_with_properties(model, loaded)
     soft, hard = assemblies["baseline"], assemblies["stiffer"]
 
     # Geometry is untouched: bodies, points, connections, hardpoints, constraints.
     assert list(soft.bodies) == list(hard.bodies)
-    assert set(soft.points) == set(hard.points)
-    for key, point in soft.points.items():
-        assert np.array_equal(np.asarray(point), np.asarray(hard.points[key])), key
-    assert [c for c in soft.connections] == [c for c in hard.connections]
-    assert sorted(soft.hardpoints) == sorted(hard.hardpoints)
-    assert [c.name for c in soft.constraints] == [c.name for c in hard.constraints]
+    assert soft.joints == hard.joints
+    assert soft.resolved_model().to_document()["frames"] == hard.resolved_model().to_document()["frames"]
 
     # Only the numbers move.
     soft_norms = _stiffness_norms(soft)

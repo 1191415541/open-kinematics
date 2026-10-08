@@ -14,7 +14,7 @@ from suspension_contracts import (
     TopologyProfile,
 )
 
-from suspension_multibody.adapters import front_axle_model_from_contract
+from suspension_multibody.adapters import axle_declaration_from_contract
 from suspension_multibody.schema import MassSpec
 
 _ROLE_POSITIONS = {
@@ -52,7 +52,7 @@ def _contract(*, frame: CoordinateFrame = CoordinateFrame()) -> GeometryContract
 
 
 def test_front_axle_model_uses_contract_hardpoint_roles() -> None:
-    model = front_axle_model_from_contract(
+    model = axle_declaration_from_contract(
         _contract(),
         mass=MassSpec(sprung_mass=1200.0),
     )
@@ -73,7 +73,7 @@ def test_front_axle_model_rejects_a_non_vehicle_frame() -> None:
     contract = _contract(frame=CoordinateFrame(x_positive="forward"))
 
     with pytest.raises(ValueError, match="coordinate frame"):
-        front_axle_model_from_contract(
+        axle_declaration_from_contract(
             contract,
             mass=MassSpec(sprung_mass=1200.0),
         )
@@ -90,12 +90,12 @@ def test_the_alias_table_resolves_every_role_the_assembly_asks_for() -> None:
     check resolves each role through the same function the assembly uses rather
     than comparing the tables by hand.
     """
-    from suspension_multibody.subsystems.geometry import (
+    from suspension_multibody.authoring.geometry import (
         HARDPOINT_ALIASES,
         lookup_hardpoint,
     )
 
-    model = front_axle_model_from_contract(
+    model = axle_declaration_from_contract(
         _contract(),
         mass=MassSpec(sprung_mass=1200.0),
     )
@@ -121,12 +121,13 @@ def test_a_contract_derived_model_assembles_and_solves() -> None:
     what the four missing aliases broke, and it is what this test would catch
     again.
     """
-    from suspension_multibody.api import run_case
-    from suspension_multibody.schema.case import CaseSpec
+    from suspension_multibody.api import simulate
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
 
-    model = front_axle_model_from_contract(
+    model = axle_declaration_from_contract(
         _contract(),
         mass=MassSpec(sprung_mass=1200.0),
     )
-    bundle = run_case(model, CaseSpec(name="contract-axle", mode="K"))
-    assert bundle.states, "the contract-derived model produced no solved state"
+    assembly, case = migrate_v1_kc_case(model, mode="K", wheel_values_mm=(0.,), rack_values_mm=(0.,))
+    result = simulate(assembly, case)
+    assert result.result.times_s.size, "the contract-derived model produced no solved state"

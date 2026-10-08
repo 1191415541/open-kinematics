@@ -425,6 +425,7 @@ std::size_t element_wrench_rows_per_element(int type) {
     case kElementWrenchBumpStop:
 
     case kElementWrenchRotationalTorque:
+    case kElementWrenchFunction:
         return 2;
 
     case kElementWrenchDriveBrake:
@@ -461,6 +462,7 @@ std::size_t element_wrench_element_count(
     case kElementWrenchAntiRoll: return counts.anti_rolls;
 
     case kElementWrenchRotationalTorque: return counts.rotational_torques;
+    case kElementWrenchFunction: return counts.functions;
 
     case kElementWrenchSteering: return counts.steering;
 
@@ -614,9 +616,6 @@ void ElementWrenchSink::open(
 
 
 ElementWrenchSink* element_wrench_sink() {
-
-    if (!element_wrench_output_enabled()) return nullptr;
-
     return &element_wrench_sink_storage();
 
 }

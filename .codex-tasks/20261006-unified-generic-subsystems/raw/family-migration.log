@@ -1,0 +1,1344 @@
+FFFFF.FFF.FFF.FF                                                         [100%]
+================================== FAILURES ===================================
+____ test_the_family_matches_an_independently_expanded_manoeuvre[constant] ____
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...rance_m":1e-10,"rho_inf":0.80000000000000004,"velocity_tolerance_m_per_s":1.0000000000000001e-09},"study":"dynamic"}'))
+shape = 'constant'
+
+    @pytest.mark.parametrize("shape", ["constant", "ramp", "step", "sine"])
+    def test_the_family_matches_an_independently_expanded_manoeuvre(prepared, shape):
+        assembly, base = prepared
+        case, shapes = _case(base, shape)
+        target, rate = handling_steering_signals(shapes, tuple(case.to_payload()["samples"]))
+>       produced = simulate(assembly, case).raw
+
+packages\suspension_multibody\tests\cases\test_handling.py:33: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"handling":{"steering":[{"actuator":"steering_front_rack....o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'handling' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+______ test_the_family_matches_an_independently_expanded_manoeuvre[ramp] ______
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...rance_m":1e-10,"rho_inf":0.80000000000000004,"velocity_tolerance_m_per_s":1.0000000000000001e-09},"study":"dynamic"}'))
+shape = 'ramp'
+
+    @pytest.mark.parametrize("shape", ["constant", "ramp", "step", "sine"])
+    def test_the_family_matches_an_independently_expanded_manoeuvre(prepared, shape):
+        assembly, base = prepared
+        case, shapes = _case(base, shape)
+        target, rate = handling_steering_signals(shapes, tuple(case.to_payload()["samples"]))
+>       produced = simulate(assembly, case).raw
+
+packages\suspension_multibody\tests\cases\test_handling.py:33: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"handling":{"steering":[{"actuator":"steering_front_rack....o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'handling' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+______ test_the_family_matches_an_independently_expanded_manoeuvre[step] ______
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...rance_m":1e-10,"rho_inf":0.80000000000000004,"velocity_tolerance_m_per_s":1.0000000000000001e-09},"study":"dynamic"}'))
+shape = 'step'
+
+    @pytest.mark.parametrize("shape", ["constant", "ramp", "step", "sine"])
+    def test_the_family_matches_an_independently_expanded_manoeuvre(prepared, shape):
+        assembly, base = prepared
+        case, shapes = _case(base, shape)
+        target, rate = handling_steering_signals(shapes, tuple(case.to_payload()["samples"]))
+>       produced = simulate(assembly, case).raw
+
+packages\suspension_multibody\tests\cases\test_handling.py:33: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"handling":{"steering":[{"actuator":"steering_front_rack....o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'handling' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+______ test_the_family_matches_an_independently_expanded_manoeuvre[sine] ______
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...rance_m":1e-10,"rho_inf":0.80000000000000004,"velocity_tolerance_m_per_s":1.0000000000000001e-09},"study":"dynamic"}'))
+shape = 'sine'
+
+    @pytest.mark.parametrize("shape", ["constant", "ramp", "step", "sine"])
+    def test_the_family_matches_an_independently_expanded_manoeuvre(prepared, shape):
+        assembly, base = prepared
+        case, shapes = _case(base, shape)
+        target, rate = handling_steering_signals(shapes, tuple(case.to_payload()["samples"]))
+>       produced = simulate(assembly, case).raw
+
+packages\suspension_multibody\tests\cases\test_handling.py:33: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"handling":{"steering":[{"actuator":"steering_front_rack....o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'handling' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+______ test_the_family_compiles_identical_documents_from_file_and_memory ______
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...rance_m":1e-10,"rho_inf":0.80000000000000004,"velocity_tolerance_m_per_s":1.0000000000000001e-09},"study":"dynamic"}'))
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3332/test_the_family_compiles_ident0')
+
+    def test_the_family_compiles_identical_documents_from_file_and_memory(prepared, tmp_path):
+        assembly, base = prepared
+        case, _ = _case(base, "ramp")
+>       compiled = assert_document_parity(assembly, case, tmp_path)
+
+packages\suspension_multibody\tests\cases\test_handling.py:43: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\_family_documents.py:54: in assert_document_parity
+    memory, file = validate(assembly, case), validate(assembly, path)
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"handling":{"steering":[{"actuator":"steering_front_rack....o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'handling' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+_______________ test_a_closed_loop_manoeuvre_is_refused_by_name _______________
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...rance_m":1e-10,"rho_inf":0.80000000000000004,"velocity_tolerance_m_per_s":1.0000000000000001e-09},"study":"dynamic"}'))
+
+    def test_a_closed_loop_manoeuvre_is_refused_by_name(prepared):
+        assembly, base = prepared
+        case, _ = _case(base, "ramp")
+        wrong = case.to_payload()
+        wrong["excitation"]["handling"]["steering"][0]["shape"] = "iso_lane_change"
+        with pytest.raises(Exception, match="not open-loop|iso_lane_change|constant.*ramp"):
+>           simulate(assembly, wrong)
+
+packages\suspension_multibody\tests\cases\test_handling.py:62: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"handling":{"steering":[{"actuator":"steering_front_rack....o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'handling' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+
+During handling of the above exception, another exception occurred:
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...rance_m":1e-10,"rho_inf":0.80000000000000004,"velocity_tolerance_m_per_s":1.0000000000000001e-09},"study":"dynamic"}'))
+
+    def test_a_closed_loop_manoeuvre_is_refused_by_name(prepared):
+        assembly, base = prepared
+        case, _ = _case(base, "ramp")
+        wrong = case.to_payload()
+        wrong["excitation"]["handling"]["steering"][0]["shape"] = "iso_lane_change"
+>       with pytest.raises(Exception, match="not open-loop|iso_lane_change|constant.*ramp"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'not open-loop|iso_lane_change|constant.*ramp'
+E        Input: "protocol 'handling' does not support sampled input tables"
+
+packages\suspension_multibody\tests\cases\test_handling.py:61: AssertionError
+_________ test_the_family_matches_an_independently_sampled_excitation _________
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...ourPostCorner(tire='wheel_rear_right.rear_right', offset_m=0.0, amplitude_m=0.0015, frequency_hz=6.0, phase_rad=-0.3)))
+
+    def test_the_family_matches_an_independently_sampled_excitation(prepared):
+        assembly, case, corners = prepared
+        height, velocity = ride_four_post_corner_signals(corners, tuple(case.to_payload()["samples"]))
+>       produced = simulate(assembly, case).raw
+
+packages\suspension_multibody\tests\cases\test_ride_four_post.py:29: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"four_post":{"corners":[{"amplitude_m":0.002,"frequency_h...o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'ride_four_post' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+______ test_the_family_compiles_identical_documents_from_file_and_memory ______
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...ourPostCorner(tire='wheel_rear_right.rear_right', offset_m=0.0, amplitude_m=0.0015, frequency_hz=6.0, phase_rad=-0.3)))
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3332/test_the_family_compiles_ident1')
+
+    def test_the_family_compiles_identical_documents_from_file_and_memory(prepared, tmp_path):
+        assembly, case, _ = prepared
+>       compiled = assert_document_parity(assembly, case, tmp_path)
+
+packages\suspension_multibody\tests\cases\test_ride_four_post.py:37: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\_family_documents.py:54: in assert_document_parity
+    memory, file = validate(assembly, case), validate(assembly, path)
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"four_post":{"corners":[{"amplitude_m":0.002,"frequency_h...o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'ride_four_post' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+_______________ test_a_corner_without_a_known_tire_is_rejected ________________
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...ourPostCorner(tire='wheel_rear_right.rear_right', offset_m=0.0, amplitude_m=0.0015, frequency_hz=6.0, phase_rad=-0.3)))
+
+    def test_a_corner_without_a_known_tire_is_rejected(prepared):
+        assembly, case, _ = prepared
+        wrong = case.to_payload()
+        wrong["excitation"]["four_post"]["corners"][0]["tire"] = "not_a_wheel"
+        with pytest.raises(ValueError, match="tire"):
+>           validate(assembly, wrong)
+
+packages\suspension_multibody\tests\cases\test_ride_four_post.py:54: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"four_post":{"corners":[{"amplitude_m":0.002,"frequency_h...o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'ride_four_post' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+
+During handling of the above exception, another exception occurred:
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k...ourPostCorner(tire='wheel_rear_right.rear_right', offset_m=0.0, amplitude_m=0.0015, frequency_hz=6.0, phase_rad=-0.3)))
+
+    def test_a_corner_without_a_known_tire_is_rejected(prepared):
+        assembly, case, _ = prepared
+        wrong = case.to_payload()
+        wrong["excitation"]["four_post"]["corners"][0]["tire"] = "not_a_wheel"
+>       with pytest.raises(ValueError, match="tire"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'tire'
+E        Input: "protocol 'ride_four_post' does not support sampled input tables"
+
+packages\suspension_multibody\tests\cases\test_ride_four_post.py:53: AssertionError
+___________ test_the_family_matches_an_independently_expanded_road ____________
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k..., phase_rad=-1.184955592153876), RoadComponent(amplitude_m=0.0008, wavelength_m=2.5, phase_rad=-3.9318578948924023)))))
+
+    def test_the_family_matches_an_independently_expanded_road(prepared):
+        assembly, case, wheels = prepared
+        height, velocity = ride_random_road_signals(wheels, _SPEED_MPS, tuple(case.to_payload()["samples"]))
+>       produced = simulate(assembly, case).raw
+
+packages\suspension_multibody\tests\cases\test_ride_random_road.py:33: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"inputs":{"initial_state_angle_tolerance":9.9999999999999...o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'ride_random_road' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+______ test_the_family_compiles_identical_documents_from_file_and_memory ______
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k..., phase_rad=-1.184955592153876), RoadComponent(amplitude_m=0.0008, wavelength_m=2.5, phase_rad=-3.9318578948924023)))))
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3332/test_the_family_compiles_ident2')
+
+    def test_the_family_compiles_identical_documents_from_file_and_memory(prepared, tmp_path):
+        assembly, case, _ = prepared
+>       compiled = assert_document_parity(assembly, case, tmp_path)
+
+packages\suspension_multibody\tests\cases\test_ride_random_road.py:41: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\_family_documents.py:54: in assert_document_parity
+    memory, file = validate(assembly, case), validate(assembly, path)
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"inputs":{"initial_state_angle_tolerance":9.9999999999999...o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'ride_random_road' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+______________ test_a_component_without_a_wavelength_is_refused _______________
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k..., phase_rad=-1.184955592153876), RoadComponent(amplitude_m=0.0008, wavelength_m=2.5, phase_rad=-3.9318578948924023)))))
+
+    def test_a_component_without_a_wavelength_is_refused(prepared):
+        assembly, case, _ = prepared
+        wrong = case.to_payload()
+        wrong["excitation"]["ride_random_road"]["wheels"][0]["components"][0]["wavelength_m"] = 0.
+        with pytest.raises(Exception, match="wavelength"):
+>           simulate(assembly, wrong)
+
+packages\suspension_multibody\tests\cases\test_ride_random_road.py:59: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"inputs":{"initial_state_angle_tolerance":9.9999999999999...o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'ride_random_road' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+
+During handling of the above exception, another exception occurred:
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k..., phase_rad=-1.184955592153876), RoadComponent(amplitude_m=0.0008, wavelength_m=2.5, phase_rad=-3.9318578948924023)))))
+
+    def test_a_component_without_a_wavelength_is_refused(prepared):
+        assembly, case, _ = prepared
+        wrong = case.to_payload()
+        wrong["excitation"]["ride_random_road"]["wheels"][0]["components"][0]["wavelength_m"] = 0.
+>       with pytest.raises(Exception, match="wavelength"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'wavelength'
+E        Input: "protocol 'ride_random_road' does not support sampled input tables"
+
+packages\suspension_multibody\tests\cases\test_ride_random_road.py:58: AssertionError
+______________________ test_an_unknown_wheel_is_refused _______________________
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k..., phase_rad=-1.184955592153876), RoadComponent(amplitude_m=0.0008, wavelength_m=2.5, phase_rad=-3.9318578948924023)))))
+
+    def test_an_unknown_wheel_is_refused(prepared):
+        assembly, case, _ = prepared
+        wrong = case.to_payload()
+        wrong["excitation"]["ride_random_road"]["wheels"][0]["tire"] = "middle_left"
+        with pytest.raises(ValueError, match="tire"):
+>           validate(assembly, wrong)
+
+packages\suspension_multibody\tests\cases\test_ride_random_road.py:67: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":false,"inertia":[[1.0,0.0,0.0],[0.0,1.2,0.0],[0.0,0.0,1.5]],"mass":1200....s":0.29999999999999999,"vertical_damping":5000.0,"vertical_stiffness":200000.0}}],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[],"excitation":{"inputs":{"initial_state_angle_tolerance":9.9999999999999...o_inf":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"dynamic"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+            raise ValueError("time-history protocol requires a dynamic study")
+        motion = resolve_motion_boundaries(model, plan)
+        document = native_model_document(motion.model)
+        elements = {row["name"] for key in ("elements", "tires") for row in document.get(key, ())}
+        activation = {}
+        for row in run.get("element_activation", ()):
+            entity = row["entity"]
+            if entity not in elements:
+                raise ValueError(f"activation names an unknown force element {entity!r}")
+            if entity in activation:
+                raise ValueError(f"duplicate activation for force element {entity!r}")
+            activation[entity] = row["active"]
+        for key in ("elements", "tires"):
+            if key in document:
+                document[key] = [row for row in document[key] if activation.get(row["name"], True)]
+        for row in document.get("blobs", ()):
+            if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
+                raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+        case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
+            "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
+            **run.get("excitation", {})}
+        case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+        if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
+            case["outputs"]["constraint_jacobian"] = True
+        payload = bytearray(plan.input_payload)
+        descriptors = case.setdefault("blobs", [])
+        occupied = {row["name"] for row in descriptors if "name" in row}
+    
+        def append(name: str, role: str, values: Any, **target: str) -> None:
+            if name in occupied:
+                raise ValueError(f"duplicate input ID {name!r}")
+            array = np.asarray(values, dtype="<f8")
+            if not np.isfinite(array).all():
+                raise ValueError(f"input {name!r} contains nonfinite values")
+            descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+                "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
+            occupied.add(name)
+            payload.extend(array.tobytes())
+    
+        samples = np.asarray(run["samples"], dtype=float)
+        if len(samples) < 2:
+            raise ValueError("native run requires at least two output samples")
+        differences = np.diff(samples)
+        if np.allclose(differences, differences[0], atol=1e-14, rtol=1e-12):
+            case["time"] = {"start_s": float(samples[0]), "end_s": float(samples[-1]), "step_s": float(differences[0])}
+        else:
+            append("solve-plan-samples", "sample_times", samples)
+            case["time"] = {"samples": "solve-plan-samples"}
+        if motion.targets:
+            inputs = case.setdefault("inputs", {})
+            if "motion" in inputs:
+                raise ValueError("case excitation and boundaries both declare motion")
+            inputs["motion"] = []
+            for name, values in motion.targets.items():
+                value_id, rate_id = f"{name}:motion_target", f"{name}:motion_rate"
+                append(value_id, "motion_target", values, coordinate=name)
+                append(rate_id, "motion_rate", motion.rates[name], coordinate=name)
+                inputs["motion"].append({"coordinate": name, "blob": value_id, "rate_blob": rate_id})
+        programs = {row.get("program") for row in run["boundaries"]}
+        for row in run["inputs"]:
+            if row["name"] in programs:
+                continue
+            if family not in _TABLE_PROTOCOLS:
+>               raise ValueError(f"protocol {family!r} does not support sampled input tables")
+E               ValueError: protocol 'ride_random_road' does not support sampled input tables
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:186: ValueError
+
+During handling of the above exception, another exception occurred:
+
+prepared = (AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'full_vehicle', 'assembly_k..., phase_rad=-1.184955592153876), RoadComponent(amplitude_m=0.0008, wavelength_m=2.5, phase_rad=-3.9318578948924023)))))
+
+    def test_an_unknown_wheel_is_refused(prepared):
+        assembly, case, _ = prepared
+        wrong = case.to_payload()
+        wrong["excitation"]["ride_random_road"]["wheels"][0]["tire"] = "middle_left"
+>       with pytest.raises(ValueError, match="tire"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'tire'
+E        Input: "protocol 'ride_random_road' does not support sampled input tables"
+
+packages\suspension_multibody\tests\cases\test_ride_random_road.py:66: AssertionError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\cases\test_handling.py::test_the_family_matches_an_independently_expanded_manoeuvre[constant]
+FAILED packages\suspension_multibody\tests\cases\test_handling.py::test_the_family_matches_an_independently_expanded_manoeuvre[ramp]
+FAILED packages\suspension_multibody\tests\cases\test_handling.py::test_the_family_matches_an_independently_expanded_manoeuvre[step]
+FAILED packages\suspension_multibody\tests\cases\test_handling.py::test_the_family_matches_an_independently_expanded_manoeuvre[sine]
+FAILED packages\suspension_multibody\tests\cases\test_handling.py::test_the_family_compiles_identical_documents_from_file_and_memory
+FAILED packages\suspension_multibody\tests\cases\test_handling.py::test_a_closed_loop_manoeuvre_is_refused_by_name
+FAILED packages\suspension_multibody\tests\cases\test_ride_four_post.py::test_the_family_matches_an_independently_sampled_excitation
+FAILED packages\suspension_multibody\tests\cases\test_ride_four_post.py::test_the_family_compiles_identical_documents_from_file_and_memory
+FAILED packages\suspension_multibody\tests\cases\test_ride_four_post.py::test_a_corner_without_a_known_tire_is_rejected
+FAILED packages\suspension_multibody\tests\cases\test_ride_random_road.py::test_the_family_matches_an_independently_expanded_road
+FAILED packages\suspension_multibody\tests\cases\test_ride_random_road.py::test_the_family_compiles_identical_documents_from_file_and_memory
+FAILED packages\suspension_multibody\tests\cases\test_ride_random_road.py::test_a_component_without_a_wavelength_is_refused
+FAILED packages\suspension_multibody\tests\cases\test_ride_random_road.py::test_an_unknown_wheel_is_refused
+13 failed, 3 passed in 3.82s

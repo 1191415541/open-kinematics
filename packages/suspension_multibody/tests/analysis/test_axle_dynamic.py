@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
-from suspension_multibody.api import run_dynamic_case
-from suspension_multibody.results import TimeSeriesResult
+from suspension_multibody.api import simulate
+from suspension_multibody.authoring import (
+    AssemblyDocument,
+    SubsystemDocument,
+    TemplateDocument,
+)
+from suspension_multibody.results import ResultEnvelope
 from suspension_multibody.schema import (
     DynamicCaseSpec,
     DynamicSolverSettings,
-    FrontAxleModel,
     MassSpec,
     PrescribedMotion,
     TimeSignal,
@@ -17,10 +22,11 @@ from suspension_multibody.schema import (
     WrenchInput,
     WrenchSignal,
 )
+from suspension_multibody.schema.model import AxleDeclaration
 
 
-def _model() -> FrontAxleModel:
-    return FrontAxleModel(
+def _model() -> AxleDeclaration:
+    return AxleDeclaration(
         hardpoints={
             "UPPER_INBOARD_FRONT": Vec3(x=0, y=-300, z=300),
             "UPPER_INBOARD_REAR": Vec3(x=300, y=-300, z=300),
@@ -59,21 +65,37 @@ def test_axle_quasi_static_runs_time_series_with_motion_and_loads() -> None:
         ),
     )
 
-    bundle = run_dynamic_case(_model(), case)
-    assert isinstance(bundle, TimeSeriesResult)
-    axle_samples = [sample for sample in bundle.samples if sample.body == "axle"]
-
-    assert len(axle_samples) == 3
-    assert axle_samples[-1].metrics["wheel_travel_left"] == 5.0
-    assert axle_samples[-1].loads["right"].fz == 25.0
-    assert set(bundle.metrics) >= {"common", "axle", "case_specific"}
-    assert bundle.metrics["common"]["sample_count"] == 3
-    assert bundle.metrics["axle"]["sample_count"] == 3
-    assert bundle.metrics["case_specific"]["status"] == "success"
-    assert (
-        bundle.metrics["case_specific"]["metrics"]["wheel_travel_left"]["final"]
-        == 5.0
-    )
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+        "name": "motion_load_fixture", "functional_role": "generic", "allowed_placement_roles": ["any"],
+        "symmetry": "asymmetric", "units": {"length": "m"}, "property_slots": [], "elements": [],
+        "bodies": [{"name": "fixture", "fixed": True}, *[{"name": side, "mass": 1, "inertia": np.eye(3).tolist()} for side in ("left", "right")]],
+        "hardpoints": [{"name": body, "owner": body, "space": "body"} for body in ("fixture", "left", "right")],
+        "joints": [{"name": side+"_slide", "type": "prismatic", "body_a": "fixture", "body_b": side,
+            "point_a": "fixture", "point_b": side, "axis": [0, 0, 1]} for side in ("left", "right")],
+        "coordinates": [{"name": "travel", "joint": "left_slide", "kind": "translation"}]})
+    sub = SubsystemDocument.from_payload({"document": "subsystem", "schema_version": 1, "name": template.name,
+        "functional_role": "generic", "placement_role": "any", "template": "fixture.tpl.json",
+        "hardpoints": {body: [0, 0, 0] for body in ("fixture", "left", "right")}, "property_bindings": {}}, template=template)
+    assembly = AssemblyDocument.from_payload({"document": "assembly", "schema_version": 1,
+        "name": "motion-load", "assembly_kind": "generic_multibody", "mode": "K", "gravity": [0, 0, 0],
+        "subsystems": [{"ref": "unit", "functional_role": "generic", "placement_role": "any"}]}, subsystems={"unit": sub})
+    times = [0, .01, .02]
+    signal = case.prescribed_motions[0].displacement
+    plan = {"schema_version": 1, "name": case.name, "study": "dynamic", "protocol": "axle_dynamic",
+        "samples": times, "solver": {"initialization_mode": "provided_consistent_state"},
+        "initial_state": {"unit.left": {"velocity": [0, 0, .25]}},
+        "boundaries": [{"name": "wheel_travel_left", "coordinate": "unit.travel", "mode": "prescribed_displacement", "units": "m", "program": "travel"}],
+        "inputs": [{"name": "travel", "values": [signal.value_at(time)*.001 for time in times], "rates": [.25]*3},
+            {"name": "right_load", "role": "body_wrench", "body": "unit.right", "values": [[0, 0, 25, 0, 0, 0]]*3}], "outputs": []}
+    run = simulate(assembly, plan)
+    assert isinstance(run.result, ResultEnvelope)
+    assert len(run.result.times_s) == 3
+    assert run.raw.status == "success"
+    assert run.result.model.fingerprint
+    assert run.result.body_state("unit.left")[-1, 2] == pytest.approx(.005, abs=1e-9)
+    loads = run.raw.block("element_wrench")
+    assert np.any(np.isclose(loads[:, :, 2], 25, atol=1e-12))
+    assert run.result.body_state("unit.right")[-1, 2] > 0
 
 
 def test_legacy_axle_integrator_is_rejected() -> None:
@@ -86,5 +108,5 @@ def test_legacy_axle_integrator_is_rejected() -> None:
         ),
     )
 
-    with pytest.raises(ValueError, match="legacy axle dynamics integrator was removed"):
-        run_dynamic_case(_model(), case)
+    with pytest.raises(ValueError, match="assembly input"):
+        simulate(_model(), case.model_dump(mode="json"))

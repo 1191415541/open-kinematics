@@ -168,10 +168,11 @@ def test_real_scan_covers_cpp_files_and_source_edges() -> None:
     # The ABI translation units include module headers the header-only scan
     # never saw, which is exactly why the gate had to be extended.
     assert ("abi", "mb_cases") in source_only
-    # Subtask 03 moved `constraint_rows` out of the model accessor into
-    # `mb_joint`, so `mb_model -> mb_joint` is gone; `mb_cases` reading the
-    # model is the surviving source-only edge the assertion pins instead.
-    assert ("mb_cases", "mb_model") in source_only
+    # The function-program contract now owns complete model-layer types in the
+    # public case header, so this edge is present in both header and source
+    # evidence.  The assertion pins the surviving case-to-model dependency;
+    # it must not require it to be source-only after a header contract grows.
+    assert ("mb_cases", "mb_model") in {tuple(edge) for edge in state["source_edges"]}
     evidence = {
         (record["module"], record["target"]): record["kinds"]
         for record in state["source_edge_evidence"]

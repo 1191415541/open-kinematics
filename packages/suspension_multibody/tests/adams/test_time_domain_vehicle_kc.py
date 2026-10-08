@@ -8,23 +8,22 @@ from pathlib import Path
 import pytest
 
 from suspension_multibody.adams import AdamsProfile
-from suspension_multibody.adams.time_domain import history_from_dynamic_bundle
+from suspension_multibody.adams.time_domain import TimeHistory
 from suspension_multibody.adams.vehicle_kc_time_domain import (
     _adams_piecewise_linear,
     _supported_roll_signal,
     validate_vehicle_kc_time_domain,
 )
-from suspension_multibody.api import run_dynamic_case
 from suspension_multibody.schema import (
     DynamicCaseSpec,
     DynamicSolverSettings,
-    FrontAxleModel,
     MassSpec,
     PrescribedMotion,
     TimeSignal,
     Vec3,
     VehicleBodyModel,
 )
+from suspension_multibody.schema.model import AxleDeclaration
 
 
 def _profile(tmp_path: Path) -> AdamsProfile:
@@ -45,8 +44,8 @@ def _profile(tmp_path: Path) -> AdamsProfile:
     )
 
 
-def _model() -> FrontAxleModel:
-    return FrontAxleModel(
+def _model() -> AxleDeclaration:
+    return AxleDeclaration(
         hardpoints={
             "UPPER_INBOARD_FRONT": Vec3(x=0, y=-300, z=300),
             "UPPER_INBOARD_REAR": Vec3(x=300, y=-300, z=300),
@@ -87,16 +86,13 @@ def _case() -> DynamicCaseSpec:
     )
 
 
-def test_vehicle_kc_gate_uses_external_history_without_reference(tmp_path: Path) -> None:
+@pytest.mark.parametrize("initial", [0, .2])
+def test_vehicle_kc_gate_uses_external_history_without_reference(tmp_path: Path, initial: float) -> None:
     model = _model()
-    case = _case()
+    case = _case().model_copy(update={"prescribed_motions": (PrescribedMotion(target="body_roll",
+        displacement=TimeSignal(times=(0, .02), values=(initial, initial+.1))),)})
     assert case.vehicle is not None
-    reference = history_from_dynamic_bundle(
-        run_dynamic_case(model, case),
-        body=case.vehicle.name,
-        channels=("body_roll",),
-        units={"body_roll": "rad"},
-    )
+    reference = TimeHistory(time=(0, .01, .02), channels={"body_roll": (initial, initial+.05, initial+.1)}, units={"body_roll": "rad"})
 
     def runner(_profile: AdamsProfile, request_path: Path, output_dir: Path) -> None:
         request = json.loads(request_path.read_text(encoding="utf-8"))

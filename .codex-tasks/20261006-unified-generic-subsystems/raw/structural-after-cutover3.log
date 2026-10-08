@@ -1,0 +1,37 @@
+uv run --no-sync ruff check .
+All checks passed!
+uv run --no-sync ty check .
+All checks passed!
+WARN ty is pre-release software and not ready for production use. Expect to encounter bugs, missing features, and fatal errors.
+uv run --no-sync python packages/suspension_multibody/tests/architecture/legacy_surface_gate.py --check
+mode      : migration
+findings  : 0
+
+OK: no unregistered Python boundary violation
+uv run --no-sync python packages/suspension_kernel/scripts/check_module_layering.py --strict --final
+kernel root                : E:\�Ӽ�\open-kinematics\packages\suspension_kernel
+mode                       : final
+headers                    : 58
+cpp translation units      : 76
+modules present            : 23
+header edges               : 119
+source edges               : 107
+source edge evidence       : 234 records (tu_include 217, symbol_reference 180, both 163; kind mentions 397)
+target modules missing     : 0
+legacy modules present     : 0
+legacy modules unregistered: 0 []
+mutual (reverse) edges     : 0
+self-including headers     : 0
+cross-aggregate includes   : 0
+module cycles (SCC size>1) : 0
+
+OK: layering matches the recorded baseline
+uv run --no-sync python packages/suspension_multibody/scripts/check_composable_release.py --skip-isolation
+release probe: E:\�Ӽ�\open-kinematics
+scratch      : C:\Users\zzy11\AppData\Local\Temp\suspension-release-u9wabrfe
+
+[FAIL] migration list: retired package(s) still present: ['preparation', 'subsystems']
+[FAIL] documentation roots: documented as retired but present: ['preparation', 'subsystems']
+[PASS] documentation examples: 4 example(s) executed: E-1, E-2, E-3, E-4
+
+FAIL: 2 of 3 release checks failed

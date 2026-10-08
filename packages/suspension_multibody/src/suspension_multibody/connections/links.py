@@ -33,7 +33,7 @@ from typing import Any, Literal
 import numpy as np
 
 from ..modeling.identity import EntityId
-from ..modeling.instance import ModelFragment
+from ..modeling.instance import Connection, ModelFragment
 from ..modeling.ports import GeometryPort, PortSpec
 from ..modeling.primitives.elements import BushingElement
 from ..modeling.primitives.joints import RevoluteJoint, WeldJoint
@@ -310,8 +310,6 @@ def _connection(
     name: str, kind: str, body_a: str, body_b: str, point_a: str, point_b: str
 ):
     """Build the stable connection row that stands beside the joint or bushing."""
-    from ..subsystems.types import Connection
-
     return Connection(
         name,
         "ideal" if kind in _IDEAL_KINDS else "bushing",

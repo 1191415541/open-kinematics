@@ -1,127 +1,54 @@
 # suspension-multibody
 
-Independent quasi-static suspension K&C and load solver for a symmetric front
-double-wishbone suspension with rack steering.  The package has no dependency
-on `suspension_kinematics`; shared geometry enters through
-`suspension_contracts`.
+声明式通用多体建模与 native 求解。悬架、整车和非汽车机构使用相同的
+模板、子系统、端口、编译器和结果模型；包不依赖 `suspension_kinematics`。
 
 ## Run
 
 ```powershell
 uv run --project packages/suspension_multibody suspension-multibody validate `
-  --model model.yaml --case case.yaml
+  --assembly assembly.json --case case.json
 uv run --project packages/suspension_multibody suspension-multibody run `
-  --model model.yaml --case case.yaml --out results
+  --assembly assembly.json --case case.json --out results
 ```
 
-Each case selects exactly one mode: `K` for ideal suspension joints or `C`
-for linear 6x6 compliant mounts.  K supports wheel-center drives; a contact-point drive is refused rather than answered
-with a wheel-center result, because the two are different questions and the
-difference is a force-application offset. C supports explicit six-component loads
-and symmetric/opposite/single-side load modes.  Results contain a manifest plus independent states,
-component-load, bushing and diagnostic Parquet/CSV tables.
+Assembly 通过配置激活表选择理想关节或柔性连接。Study/Case 指定采样、求解器、
+输入和运动边界。悬架 K/C 台架锁定 wheel 的相对 spin；整车动态释放同一
+spin 坐标，wheel/suspension 定义不变。轮胎接触 frame 绑定非自转承载体。
 
-The solve is native: K and C states come from the C++ kernel through the contract
-boundary (`suspension_multibody.kernel`), and what remains in Python is the
-authoring model, the result schema and the reporting. The fixed local performance
-gate is `scripts/kc_perf_gate.py`, which measures the native `k-100` and `c-66`
-workloads against a recorded budget; the retired Python benchmarks covered 100 K
-states and 6600 C states, and that 6600-state C workload was a deliberately
-nonphysical proxy with no native analogue.
+Python 负责声明、解析、契约编译和结果查询，C++ 内核负责物理求解和力元状态。
+输出包含 manifest、原生通道和 NPZ 数据；通过 ResultEnvelope 按实体 ID 读取。
+`scripts/kc_perf_gate.py` 核验 native `k-100` 与 `c-66` 的冻结性能预算。
 
-## Python 模块结构（组合架构之后）
+## Python 模块结构
 
-模块按依赖方向分层，每层的边界由门禁检查而不是由约定维持：
+所有业务都走同一条声明式路径：
 
 ```text
-src/suspension_multibody/
-  modeling/        低层：稳定实体标识、端口值对象、ModelFragment、
-                   Assembly/SimulationAssembly、单位边界。
-                   modeling/primitives/ 是空间代数与关节/刚体声明的唯一实现。
-  templates/       模板：声明构件、连接、属性槽与输出，或命名一个 builder；
-                   两条作者路径都产出同一个 ModelFragment。
-  connections/     连接：端口匹配、歧义拒绝、自适应安装几何、全局 D3 规则。
-  rigs/            试验台：rig.py 声明驱动/研究/输出，bench.py 产出实体，
-                   compose.py 做“接口收缩到总成能力”。
-  subsystems/      六类子系统模板与 SI 总成（si_assembly.py、composition.py）。
-  compilation/     编译：plan.py 说这次运行是什么，model_view.py 说模型是什么，
-                   compile.py 说两者蕴含的文档；family 名只作为选 emitter 的注册键。
-  studies/         研究方式与输入适配（准静态网格 vs 时间历史）。
-  schema/ results/ outputs/ report/ io/
-                   契约、结果解码、衍生输出、报告与检查点。
-  simulation/      runner、request 与原生后端；api.py 只做薄编排。
-  cases/           各族契约文档的作者层。
-  preparation/     域输入适配（assembly/、axle_dynamic.py、vehicle_dynamic.py 等）。
-  vehicle/         整车级服务与派生量（service.py、static_loads.py、roll_centers.py）。
-```
+Template -> Subsystem -> Assembly -> Study/Case
+        -> DocumentLoader -> ResolvedModel -> Compiler
+        -> Native Backend -> ResultEnvelope
 ```
 
-`modeling/` 不得反向依赖 `templates`、`subsystems`、`rigs`、`connections`、
-`preparation`、`simulation`、`kernel` 或 `report`；这条边界由
-`tests/architecture/test_import_boundaries.py` 在独立子进程里逐入口检查。
+`authoring/` 保存模板、子系统、总成、端口绑定和 v1 离线迁移；`modeling/` 提供刚体、运动副、力元和空间代数；`rigs/` 只声明台架实体、边界和测量，不创建第二个 wheel 或 tire。Wheel 子系统拥有 wheel body 和 tire element，Brake、Drive 与 Suspension、Steering 是同级子系统。`studies/` 和 `cases/` 只声明研究边界与输入，`compilation/` 始终把同一个解析后模型提交给 `simulation/`，结果统一从 `results/ResultEnvelope` 按稳定实体 ID 查询。
 
-已删除：`model/`（其内容先迁至作者层的 `assembly` 子包，该子包随组合层落地整体退役，见下）、
-`metrics/`（迁至 `report/metrics/`）、
-`core/`（spatial 代数与关节/刚体数据迁至 `modeling/primitives/`；`rank.py` 与
-`reactions.py` 无生产调用者，其物理断言转为
-`tests/axle_dynamics/test_solver_invariants.py` 的 native 契约断言）、顶层
-`pac2002_scope.py`（迁至 `schema/pac2002_scope.py` 与 `kernel/capabilities.py`），
-以及 `analysis/`（报告类模块迁至 `report/`、`preparation/signals.py`、
-`simulation/replay.py`；`compute_static_wheel_loads` 迁至
-`vehicle/static_loads.py`，`compute_vehicle_roll_centers` 迁至
-`vehicle/roll_centers.py`）。02 留在 `preparation/geometry.py` 与
-`preparation` 下两个转发壳（`geometry.py` 与旧 `assembly/types.py`）也已删除，调用方直接导入
-`modeling/primitives/`。
+文件输入与 Python 对象输入使用相同的 `api.validate()` / `api.simulate()`；旧 v1 文件只能由 `authoring.migration` 离线转换，已退役的 preparation、subsystems、旧 solver、结果分派和 vehicle service 不属于生产运行路径。
 
-作者层的 `assembly` 子包整体退役：轴与整车一律经组合层构建，
-入口是 `subsystems/entry.py`（`compose_axle` / `compose_vehicle`），
-机制代码留在同层的 `subsystems/vehicle_parts.py`，
-元素构造在 `subsystems/element_build.py`，硬点与镜像在 `subsystems/geometry.py`。
+`modeling/` 的依赖边界由架构门检查。运行快速门：
 
-### elements/ 已退役
+```powershell
+just check-fast
+```
 
-原 A1 保留项，只剩一个 `evaluate_generalized_forces`，被 `api.py` 用来重算组件载荷
-——而同一批力元 native 已经算过。它现在已删除，`api.py` 的组件载荷改由
-`results/element_wrench.py::decode_element_wrench` 解码内核自己的 `element_wrench`
-事实通道，`results/kc_state.py::element_wrenches_from_run` 把记录还原成
-`(元素名, 受力体, 全局力旋量, 体局部力旋量)`。
+### 力元与扩展示例
 
-退役时逐条结清的三件事：
+力元声明位于 `modeling/primitives/` 和 Template 数据中；Python 不重复计算 native 力律。`ResultEnvelope` 统一暴露 element state、wrench、诊断和能量通道，固定支座反力由内核记录。车辆静力轮荷和侧倾中心属于 `vehicle/` 中的派生量。
 
-1. **契约发不出力元。** 现在是 `contract.py::_element_entries` 发射
-   spring/damper/bump_stop/anti_roll/bushing，通道因此有事实可记。
-2. **固定体端留在 NaN。** `cpp/src/element/assembly_primitives.cpp` 现在把固定端也写进
-   sink：底盘与台架支座上的反力是求解器手里真实握有的事实，报告此前把它丢了。
-3. **力矩参考点口径。** native 的力矩绕**受力体原点**，报告模型的 `global_load` 绕
-   **世界原点**；换算 `world_moment = body_moment + r × F` 写在
-   `results/kc_state.py::element_wrenches_from_run` 里，两个口径因此不再互相冒充。
-
-通道默认仍是关闭的（`SUSPENSION_KERNEL_ELEMENT_WRENCH_OUTPUT`），KC 生产路径在
-`api.py::_compile_plan_run` 里围绕一次提交局部开启，所以不经这条路径的求解不付这个代价，
-原生结果文档在其默认配置下仍是 `contract_version` 1。
-
-同时删掉的还有 `tests/elements/`：它测的是 `modeling/primitives` 的元件类，已迁至
-`tests/modeling/test_elements.py`。
-
-力元件的**声明**此前就已不在那里：`LinearSpringElement` 等八个类连同
-`ForceEvaluation`、`ElementError` 迁至 `modeling/primitives/elements.py`，与关节和
-刚体声明并列。
-
-原 `analysis/`（A2）已不再是保留项。它的两个构造都是整车级派生量而不是内核求解：
-静力轮荷是四个未知量对三个平衡方程的最小范数解，native 静力求解器只分解方阵，
-装不下这个欠定问题；侧倾中心是前视几何作图。两者都只读装配结果，因此迁入
-`vehicle/`（唯一允许依赖 `preparation/` 的整车层），算法逐字未改，也不需要原先
-登记的「扩 ABI 导出面」。
-
-### 扩展示例
-
-`docs/composable_extension_examples.md` 给出「新增子系统模板 / 新增试验台 /
-硬点更新」三个示例，每个都可执行：`scripts/check_composable_release.py` 会抽出文
-档里的 `python runnable` 代码块，在独立解释器里逐块运行，跑不过即发布检查失败。
+`docs/composable_extension_examples.md` 提供普通机构、普通 Rig、属性变化、纯内存建模及同一车轮锁止/滚动五个可执行示例。`scripts/check_composable_release.py` 在独立解释器中逐块运行它们。
 
 ## Native 整车动力学
 
-`run_vehicle_dynamics` 使用与整轴相同的 native DAE 内核，求解车身、前悬架、后悬架和四个轮端的刚体状态。模型支持悬架理想关节、弹簧、阻尼器、限位块、轮胎接触、路面高度、转向输入，以及直接施加到轮端的驱动力矩和制动力矩；动力系统和制动系统在通用整车模型中按外部输入信号简化。使用 Adams 源显式模型时，源动力总成刚体、驱动轴、三脚架和差速器输出体均保留，传动轴通过非完整 `CONVEL` 速度约束连接；驱动/制动仍按项目规格作为轮端外部力矩输入，不伪装成 Adams 内部传动或液压系统。
+`simulate` 的整车动力学路径使用与整轴相同的 native DAE 内核，求解车身、前悬架、后悬架和四个轮端的刚体状态。模型支持悬架理想关节、弹簧、阻尼器、限位块、轮胎接触、路面高度、转向输入，以及直接施加到轮端的驱动力矩和制动力矩；动力系统和制动系统在通用整车模型中按外部输入信号简化。使用 Adams 源显式模型时，源动力总成刚体、驱动轴、三脚架和差速器输出体均保留，传动轴通过非完整 `CONVEL` 速度约束连接；驱动/制动仍按项目规格作为轮端外部力矩输入，不伪装成 Adams 内部传动或液压系统。
 
 Adams/Car 数据可通过 `load_adams_full_vehicle_input` 导入，并由 `build_adams_native_vehicle_model` 构造 native 模型。导入层记录源文件哈希和单位声明，并把几何、质量、惯量、轮胎垂向参数及力曲线统一到 `mm/kg/N/s`；弹簧、压缩限位、回弹限位和六轴衬套曲线均可通过版本化整车 ABI 传入求解器，存在源衬套时整车路径选择带衬套的 C 装配模式。当前 PAC2002 路径实现纯滑移、标准 RBX/RBY/RVY 联合滑移、dfz/dpi/外倾/压力/载荷缩放、QV2/QFC/VXLOW 垂向修正、QBZ/QCZ/QDZ/QEZ/QHZ/SSZ 回正力矩、Mx/My/陀螺力矩、USE_MODE 0 与 1-4/11-14/23-25 语义、模式 25 的转滑松弛集与 Q* 驻车因子、deflection/bottoming 曲线、输入有效性区间钳位和负 USE_MODE/TYRESIDE 镜像，并保留 Adams 源 `PHX/PHY/PVX/PVY` 零滑移偏置；PAC-MC、带动力学、非点接触模型、纯轴 advanced-transient 模式 21/22、二阶转滑尾系数与 Maxwell 非滚动垂向单元仍按 fail-closed 处理。这份范围不是手写的：内核通过 `suspension_kernel_capabilities` 声明它能算什么、必须拒绝什么，`schema/pac2002_scope` 读它来拒绝越界轮胎。源模型中的驱动/制动 SFORCE 会写入配对清单；当前 native 可选择逐轮回放已求得的驱动/制动转矩，但仍未实现 Adams 内部控制与液压状态，因此真实 Adams 整车数值对标继续由门禁报告为 `BLOCKED`，直到源力律、力元映射和完整 PAC2002 轮胎完成等价实现。
 

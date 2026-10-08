@@ -22,8 +22,8 @@ from suspension_multibody.adams.probe import resolve_adams_home
 from suspension_multibody.axle_dynamics import (
     AxleDynamicsCase,
     AxleSolverSettings,
-    run_axle_dynamics,
 )
+from tests.axle_dynamics._unified_entry import solve_axle as run_axle
 
 # The example vehicle ships inside whichever Adams/Car release is installed.
 _ADAMS_HOME = resolve_adams_home()
@@ -79,7 +79,7 @@ def _run(duration_s: float = 0.05):
     model, road_height_m = _model_and_road()
     count = int(round(duration_s / 0.001)) + 1
     times = tuple(index * 0.001 for index in range(count))
-    result = run_axle_dynamics(
+    result = run_axle(
         model,
         AxleDynamicsCase(
             name="static_equilibrium",

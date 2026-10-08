@@ -94,9 +94,8 @@ TEMPLATE_FROZEN = {
     },
 }
 
-#: Done-When 3: the bench's own bodies, and the welds that attach them.
-RIG_BODIES = ("wheel_carrier_L", "wheel_carrier_R")
-RIG_WELDS = ("wheel_carrier_L_weld", "wheel_carrier_R_weld")
+#: The rig constrains the existing wheel, rather than declaring another one.
+RIG_DRIVES = ("wheel_drive_L", "wheel_drive_R", "rack_drive")
 
 #: Done-When 7: the explicit-topology branches and the joints each must produce.
 EXPLICIT_BRANCHES = ("free_rack", "rack_fixed")
@@ -213,35 +212,20 @@ def check_retired_path() -> Result:
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from acceptance_probe_model import (  # type: ignore[unresolved-import]  # noqa: E402
-    probe_model,  # type: ignore[unresolved-import]
-    trailing_arm,  # type: ignore[unresolved-import]
-)
+    probe_documents,  # type: ignore[unresolved-import]
+    )
 
 
 def _template_entities(mode: str, template_name: str | None) -> dict[str, set[str]]:
-    """Compose the probe axle with (or without) a named template."""
-    from suspension_multibody.cases.kc_quasi_static.contract import model_document
-    from suspension_multibody.subsystems.entry import compose_axle
-    from suspension_multibody.subsystems.types import AssemblyRequest
-    from suspension_multibody.templates import DOUBLE_WISHBONE, instantiate
+    """Resolve the two ordinary acceptance templates through one compiler."""
+    from suspension_multibody.api import validate
 
-    template = DOUBLE_WISHBONE if template_name is None else trailing_arm()
-    instance = instantiate(
-        template, mode=mode, properties={"spring": 0.0, "damper": 0.0}
-    )
-    runtime = compose_axle(
-        probe_model(), request=AssemblyRequest(mode=mode, suspension_template=instance)
-    )
-    document = model_document(runtime, name="acceptance", drive_wheels=(mode == "K"))
-    # `model_document` returns a plain document mapping, so each table needs its shape
-    # stated before its rows can be read; the alternative is a cast at every use site.
-    bodies = cast("list[dict[str, object]]", document["bodies"])
-    joints = cast("list[dict[str, object]]", document["joints"])
-    elements = cast("list[dict[str, object]]", document["elements"])
+    assembly, case = probe_documents(mode=mode, template_name=template_name)
+    document = validate(assembly, case).model_document
     return {
-        "bodies": {str(row["name"]) for row in bodies},
-        "constraints": {str(row["name"]) for row in joints},
-        "elements": {str(row["name"]) for row in elements},
+        face: {str(row["name"]).split(".", 3)[-1] if str(row["name"]).startswith(("model.sub.json.", "wheel.sub.json."))
+            else str(row["name"]) for row in document[section]}
+        for face, section in (("bodies", "bodies"), ("constraints", "joints"), ("elements", "elements"))
     }
 
 
@@ -260,28 +244,15 @@ def _template_entity_modes() -> dict[str, set[str]]:
     check fail once the default changed: K is a *reading* (rigid connection set), not a
     force mode.
     """
-    from suspension_multibody.cases.kc_quasi_static.contract import model_document
-    from suspension_multibody.subsystems.entry import compose_axle
-    from suspension_multibody.subsystems.types import AssemblyRequest
-    from suspension_multibody.templates import DOUBLE_WISHBONE, instantiate
+    from suspension_multibody.api import validate
 
     result: dict[str, set[str]] = {}
     for label, mode, reading in (
         ("K_kinematics", "K", "kinematics"),
         ("C_force_balance", "C", "force_balance"),
     ):
-        instance = instantiate(
-            DOUBLE_WISHBONE, mode=mode, properties={"spring": 0.0, "damper": 0.0}
-        )
-        runtime = compose_axle(
-            probe_model(), request=AssemblyRequest(mode=mode, suspension_template=instance)
-        )
-        document = model_document(
-            runtime,
-            name="reading-check",
-            drive_wheels=(mode == "K"),
-            drive_mode=reading,
-        )
+        assembly, case = probe_documents(mode=mode, reading=reading)
+        document = validate(assembly, case).model_document
         result[label] = {
             str(row["name"])
             for row in cast("list[dict[str, object]]", document["elements"])
@@ -372,52 +343,18 @@ def _solved_states_differ() -> bool:
     """Return whether the two templates produce different K states."""
     import numpy as np
 
-    from suspension_multibody.cases.kc_quasi_static.contract import model_document
-    from suspension_multibody.simulation import SimulationRequest, run_request
-    from suspension_multibody.subsystems.entry import compose_axle
-    from suspension_multibody.subsystems.types import AssemblyRequest
-    from suspension_multibody.templates import DOUBLE_WISHBONE, instantiate
+    from suspension_multibody.api import validate
+    from suspension_multibody.results.envelope import ResultEnvelope
+    from suspension_multibody.simulation import run_compiled
 
-    case = {
-        "contract": "multibody-case",
-        "contract_version": 1,
-        "kind": "case",
-        "family": "kc_quasi_static",
-        "name": "acceptance",
-        "time": {"start_s": 0.0, "end_s": 2e-3, "step_s": 1e-3},
-        "k": {
-            "wheel_values_mm": [-20.0, 0.0, 20.0],
-            "rack_values_mm": [0.0],
-            "axis_map": {
-                "wheel": ["wheel_drive_L", "wheel_drive_R"],
-                "rack": "rack_drive",
-            },
-            "left_right_mode": "symmetric",
-        },
-    }
+    def states(template_name) -> "np.ndarray":
+        assembly, case = probe_documents(template_name=template_name, reading="kinematics")
+        run = run_compiled(validate(assembly, case))
+        assert isinstance(run.result, ResultEnvelope)
+        return np.asarray(run.result.case_body_state(), dtype=float)
 
-    def states(template) -> "np.ndarray":
-        instance = instantiate(
-            template, mode="K", properties={"spring": 0.0, "damper": 0.0}
-        )
-        runtime = compose_axle(
-            probe_model(),
-            request=AssemblyRequest(mode="K", suspension_template=instance),
-        )
-        document = model_document(runtime, name="acceptance", drive_wheels=True)
-        run = run_request(
-            SimulationRequest(
-                assembly="axle",
-                rig="kc_quasi_static",
-                family="kc_quasi_static",
-                model=document,
-                case=case,
-            )
-        ).raw
-        return np.asarray(run.states, dtype=float)
-
-    default_states = states(DOUBLE_WISHBONE)
-    trailing_states = states(trailing_arm())
+    default_states = states(None)
+    trailing_states = states("trailing_arm")
     if default_states.shape != trailing_states.shape:
         return True
     return not np.allclose(default_states, trailing_states, equal_nan=True)
@@ -427,112 +364,33 @@ def _solved_states_differ() -> bool:
 
 
 def check_rig_entities() -> Result:
-    """Done-When 3: carriers reach the document and are welded; the switch reverts."""
-    sys.path.insert(0, str(PACKAGE))
-    notes: list[str] = []
-    failures: list[str] = []
+    """Done-When 3: ordinary rig joints bind existing wheels without duplication."""
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring import AssemblyDocument, CaseDocument, DocumentLoader
 
-    from acceptance_probe_model import probe_model  # type: ignore[unresolved-import]
-    from suspension_multibody.cases.kc_quasi_static.contract import model_document
-    from suspension_multibody.preparation.kc_quasi_static import assembly_for
-
-    on = assembly_for(probe_model(), mode="K", rig="kc_quasi_static")
-    on_document = model_document(on, name="acceptance", drive_wheels=True)
-    document_bodies = {
-        str(row["name"])
-        for row in cast("list[dict[str, object]]", on_document["bodies"])
-    }
-
-    for name in RIG_BODIES:
-        if name not in on.bodies:
-            failures.append(f"{name} is not in the runtime the document is read from")
-        if name not in document_bodies:
-            failures.append(f"{name} is not in the document's body list")
-    else:
-        notes.append(f"carriers present in runtime and document: {list(RIG_BODIES)}")
-
-    constraint_names = {constraint.name for constraint in on.constraints}
-    for name in RIG_WELDS:
-        if name not in constraint_names:
-            failures.append(f"{name} constraint is missing: the carrier is not attached")
-    else:
-        notes.append(f"carriers attached by real constraint rows: {list(RIG_WELDS)}")
-
-    # A weld is six rows; the historical model had two unconstrained directions and
-    # none redundant, so the counts must stay consistent rather than over-constrained.
-    free = [body for body in on.bodies.values() if not body.fixed]
-    rows = sum(_constraint_rows(constraint) for constraint in on.constraints)
-    columns = 6 * len(free)
-    if rows > columns:
-        failures.append(f"{rows} constraint rows over {columns} columns: redundant")
-    else:
-        notes.append(f"{rows} constraint rows over {columns} columns, no redundancy")
-
-    # The switch must revert to the pre-D1 model, which is what makes the change
-    # measurable rather than merely asserted.
-    env = dict(os.environ)
-    env["SUSPENSION_MULTIBODY_RIG_ENTITIES"] = "0"
-    try:
-        off = _assembly_for_with_env(env)
-    except Exception as error:  # noqa: BLE001
-        failures.append(f"the switch-off build failed: {type(error).__name__}: {error}")
-    else:
-        off_bodies = set(off.bodies)
-        unexpected = off_bodies & set(RIG_BODIES)
-        if unexpected:
-            failures.append(
-                f"the switch is off but the bench's bodies are still present: "
-                f"{sorted(unexpected)}"
-            )
-        else:
-            notes.append("switch off: the bench's bodies are absent, as before D1")
-
-    return Result(
-        "3 rig-entities",
-        not failures,
-        "the bench's wheels are in the solved model and welded to the assembly",
-        failures + notes,
-    )
-
-
-def _assembly_for_with_env(env: dict[str, str]):
-    """Build the K/C assembly in a subprocess with a specific environment."""
-    script = (
-        "import json, sys;"
-        "sys.path.insert(0, r'%s');"
-        "from acceptance_probe_model import probe_model;"
-        "from suspension_multibody.preparation.kc_quasi_static import assembly_for;"
-        "a = assembly_for(probe_model(), mode='K', rig='kc_quasi_static');"
-        "print(json.dumps(sorted(a.bodies)))"
-    ) % str(REPO / "scripts")
-    completed = _run(_uv("python", "-c", script), env=env)
-    if completed.returncode != 0:
-        raise RuntimeError(_tail(completed.stderr))
-    bodies = json.loads(completed.stdout.strip().splitlines()[-1])
-
-    class _Bodies:
-        def __init__(self, names: list[str]) -> None:
-            self.bodies = {name: None for name in names}
-
-    return _Bodies(bodies)
-
-
-def _constraint_rows(constraint: object) -> int:
-    """Return the constraint rows a joint contributes to the document."""
-    table = {
-        "spherical": 3,
-        "revolute": 5,
-        "prismatic": 5,
-        "cylindrical": 4,
-        "universal": 4,
-        "fixed": 6,
-        "weld": 6,
-        "in_plane": 1,
-        "constant_velocity": 4,
-        "driven_translation": 1,
-        "driven_rotation": 1,
-    }
-    return table.get(type(constraint).__name__.replace("Joint", "").lower(), 0)
+    assembly, case = probe_documents()
+    compiled = validate(assembly, case)
+    fixture = assembly.entries[-1]
+    if fixture.subsystem.template.payload["bodies"] or fixture.subsystem.template.payload.get("tires"):
+        return Result("3 rig-entities", False, "rig duplicates wheel bodies or tires")
+    names = {row["name"] for row in compiled.model_document["joints"]}
+    expected = {fixture.ref + "." + name for name in RIG_DRIVES}
+    if not expected <= names:
+        return Result("3 rig-entities", False, f"missing actuator joints: {sorted(expected - names)}")
+    if sum(row["type"] == "driven_rotation" for row in compiled.model_document["joints"]) != 2:
+        return Result("3 rig-entities", False, "rig does not lock both declared spin coordinates")
+    payload = assembly.to_payload()
+    payload["subsystems"] = payload["subsystems"][:-1]
+    off = AssemblyDocument.from_payload(payload, subsystems={entry.ref: entry.subsystem for entry in assembly.entries[:-1]})
+    neutral = CaseDocument({"schema_version": 1, "name": "without-rig", "study": "dynamic",
+        "samples": [0, .001], "solver": {}, "boundaries": [], "inputs": [], "outputs": []})
+    graph = DocumentLoader().load(off, neutral).resolve().to_document()
+    if {row["name"] for row in graph["bodies"]} != {row["name"] for row in compiled.model_document["bodies"]}:
+        return Result("3 rig-entities", False, "removing the rig changed physical wheel ownership")
+    if expected & {row["name"] for row in graph["joints"]}:
+        return Result("3 rig-entities", False, "removed rig actuator survives in the resolved graph")
+    return Result("3 rig-entities", True, "rig joints bind existing wheel ports and explicit spin boundaries",
+        ["three actuator joints present; both spin coordinates locked; removing rig removes its joints only"])
 
 
 # -- Done-When 4 and 5: the fast and numeric gates ---------------------------
@@ -706,52 +564,20 @@ def check_rig_drives() -> Result:
     failures: list[str] = []
 
 
-    from suspension_multibody.cases.kc_quasi_static import case_document
-    from suspension_multibody.rigs import compose, get_rig
-    from suspension_multibody.rigs.rig import DriveSpec, RigSpec
-    from suspension_multibody.subsystems.entry import compose_axle
+    from suspension_multibody.api import validate
 
-    runtime = compose_axle(probe_model(), "K")
-    # `capabilities` is optional on the runtime, and `compose` needs a real report;
-    # asking for it once here keeps every call below on the narrowed value.
-    capabilities = runtime.capabilities
-    if capabilities is None:
-        return Result(
-            "6 rig-drives",
-            False,
-            "the composed axle reports no capabilities, so no bench can be resolved",
-        )
-    full = compose(get_rig("kc_quasi_static"), capabilities)
-    full_document = case_document(
-        runtime,
-        family="kc_quasi_static",
-        name="acceptance",
-        wheel_values_mm=(-10.0, 0.0, 10.0),
-        drives=tuple(drive.coordinate for drive in full.drives),
-    )
+    full, full_case = probe_documents(wheel_values=(-10., 0., 10.))
+    full_document = validate(full, full_case).case_document
     full_k = cast("dict[str, object]", full_document["k"])
     axis_map = cast("dict[str, object]", full_k["axis_map"])
-    if axis_map.get("rack") != "rack_drive":
-        failures.append(f"the rack axis is {axis_map.get('rack')!r}, expected 'rack_drive'")
+    if axis_map.get("rack") != "kc_rig.sub.json.rack_drive":
+        failures.append(f"the rack axis is {axis_map.get('rack')!r}, expected declared rig target")
     else:
         notes.append("the built-in bench declares the rack drive and the case carries it")
 
-    # One edit to the declaration, one change in the document.
-    bench = RigSpec(
-        name="probe_bench",
-        drives=(DriveSpec("wheel_drive_L"), DriveSpec("wheel_drive_R")),
-        outputs=(),
-    )
-    reduced = tuple(
-        drive.coordinate for drive in compose(bench, capabilities).drives
-    )
-    reduced_document = case_document(
-        runtime,
-        family="kc_quasi_static",
-        name="acceptance",
-        wheel_values_mm=(-10.0, 0.0, 10.0),
-        drives=reduced,
-    )
+    reduced, reduced_case = probe_documents(wheel_values=(-10., 0., 10.), rack=False)
+    compiled = validate(reduced, reduced_case)
+    reduced_document = compiled.case_document
     reduced_k = cast("dict[str, object]", reduced_document["k"])
     reduced_axis_map = cast("dict[str, object]", reduced_k["axis_map"])
     if "rack" in reduced_axis_map:
@@ -768,12 +594,10 @@ def check_rig_drives() -> Result:
             "expected an empty list"
         )
 
-    # And the shrink is reported, so the omission is nameable.
-    composition = compose(get_rig("kc_quasi_static"), capabilities)
-    if composition.dropped:
-        notes.append(f"shrink reported: dropped={composition.dropped}")
+    if any(row.get("target") == "rack_drive" for row in compiled.model_document["joints"]):
+        failures.append("removed rack actuator survives in the compiled model")
     else:
-        notes.append("the built-in bench drops nothing on a complete axle")
+        notes.append("removed rack actuator and its input are absent from the compiled submission")
 
     return Result(
         "6 rig-drives",
@@ -787,7 +611,7 @@ def check_rig_drives() -> Result:
 
 
 def check_explicit_topology() -> Result:
-    """Done-When 7: both explicit branches compose without the retired package."""
+    """Done-When 7: both explicit declarations resolve without legacy builders."""
     sys.path.insert(0, str(PACKAGE))
     notes: list[str] = []
     failures: list[str] = []
@@ -795,21 +619,24 @@ def check_explicit_topology() -> Result:
     # A subprocess that blocks the retired package outright: inside this process a
     # module list is already populated and the answer would be contaminated.
     script = (
-        "import json, sys\n"
+        "import importlib.abc, json, sys\n"
         "sys.path.insert(0, %r)\n"
-        "class Blocker:\n"
-        "    def find_module(self, name, path=None):\n"
-        "        if name.endswith('preparation') or '.preparation.' in name:\n"
-        "            raise ImportError('blocked: ' + name)\n"
+        "class Blocker(importlib.abc.MetaPathFinder):\n"
+        "    def find_spec(self, fullname, path=None, target=None):\n"
+        "        blocked = ('suspension_multibody.preparation', 'suspension_multibody.subsystems.entry', 'suspension_multibody.presets.legacy')\n"
+        "        if any(fullname == prefix or fullname.startswith(prefix + '.') for prefix in blocked):\n"
+        "            raise ImportError('blocked: ' + fullname)\n"
         "        return None\n"
         "sys.meta_path.insert(0, Blocker())\n"
         "from acceptance_probe_model import explicit_model\n"
-        "from suspension_multibody.subsystems.entry import compose_axle\n"
+        "from suspension_multibody.authoring import CaseDocument, DocumentLoader, migrate_v1_axle\n"
+        "case = CaseDocument({'schema_version': 1, 'name': 'explicit-topology', 'study': 'dynamic', 'samples': [0, .001], 'solver': {}, 'boundaries': [], 'inputs': [], 'outputs': []})\n"
         "out = {}\n"
         "for label, fixed in (('free_rack', False), ('rack_fixed', True)):\n"
-        "    runtime = compose_axle(explicit_model(rack_fixed=fixed), 'K')\n"
+        "    document = migrate_v1_axle(explicit_model(rack_fixed=fixed), mode='K')\n"
+        "    model = DocumentLoader().load(document, case).resolve().to_document()\n"
         "    joints = sorted(\n"
-        "        (c.name, type(c).__name__) for c in runtime.constraints\n"
+        "        (row['name'], row['type']) for row in model['joints']\n"
         "    )\n"
         "    out[label] = joints\n"
         "print(json.dumps(out))\n"
@@ -819,7 +646,7 @@ def check_explicit_topology() -> Result:
         return Result(
             "7 explicit-topology",
             False,
-            "the explicit build failed without the retired package",
+            "the explicit document failed with legacy builders blocked",
             [_tail(completed.stderr)],
         )
 
@@ -832,7 +659,7 @@ def check_explicit_topology() -> Result:
         kinds = {kind for _name, kind in joints}
         # A free rack is guided by a prismatic joint; a rack fixed to the chassis is
         # welded.  Those are the two branches the criterion names.
-        required = "PrismaticJoint" if branch == "free_rack" else "WeldJoint"
+        required = "prismatic" if branch == "free_rack" else "fixed"
         if required not in kinds:
             failures.append(f"{branch}: no {required} among {sorted(kinds)}")
         else:
@@ -841,7 +668,7 @@ def check_explicit_topology() -> Result:
     return Result(
         "7 explicit-topology",
         not failures,
-        "both explicit branches compose with the author layer unavailable",
+        "both explicit declarations resolve with legacy builders blocked",
         failures + notes,
     )
 

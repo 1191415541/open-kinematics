@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
-from suspension_multibody.api import run_dynamic_case
-from suspension_multibody.results import TimeSeriesResult
+from suspension_multibody.results import ResultEnvelope
 from suspension_multibody.schema import (
     DynamicCaseSpec,
     DynamicSolverSettings,
-    FrontAxleModel,
     MassSpec,
     PrescribedMotion,
     TimeSignal,
     Vec3,
     VehicleBodyModel,
 )
+from suspension_multibody.schema.model import AxleDeclaration
+from tests.simulation._replay_documents import replay
 
 
-def _model() -> FrontAxleModel:
-    return FrontAxleModel(
+def _model() -> AxleDeclaration:
+    return AxleDeclaration(
         hardpoints={
             "UPPER_INBOARD_FRONT": Vec3(x=0, y=-300, z=300),
             "UPPER_INBOARD_REAR": Vec3(x=300, y=-300, z=300),
@@ -63,10 +64,10 @@ def test_vehicle_kc_dynamic_replays_body_roll() -> None:
             ),
         ),
     )
-    bundle = run_dynamic_case(_model(), case)
-    assert isinstance(bundle, TimeSeriesResult)
-    assert bundle.samples[-1].metrics["roll_angle"] == 0.1
-    assert bundle.metrics["case_specific"]["status"] == "not_applicable"
+    result = replay(case)
+    assert isinstance(result, ResultEnvelope)
+    assert result.raw.status == "success"
+    assert result.body_state("body.body")[-1, 3] == pytest.approx(np.cos(.05), abs=1e-7)
 
 
 def test_legacy_vehicle_integrator_is_rejected() -> None:
@@ -76,5 +77,5 @@ def test_legacy_vehicle_integrator_is_rejected() -> None:
         vehicle=_vehicle(),
     )
 
-    with pytest.raises(ValueError, match="legacy vehicle dynamics integrator"):
-        run_dynamic_case(_model(), case)
+    with pytest.raises(ValueError, match="vehicle_kc_dynamic"):
+        replay(case)

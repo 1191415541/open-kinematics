@@ -1,0 +1,14 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    ".codex-tasks/20261006-unified-generic-subsystems/planning/verify_cutover_evidence.py"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-08T12:00:51.400867+00:00",
+  "finished_at": "2026-10-08T12:00:51.589884+00:00",
+  "log": "raw\\validation\\child-9-step-2.log",
+  "log_sha256": "b36a086c2f58dfbd1c0ca6bbedb6d9218ef0ab34683e258d55e173f0e15737b0"
+}

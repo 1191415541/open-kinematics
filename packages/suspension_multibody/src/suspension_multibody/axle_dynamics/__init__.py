@@ -1,9 +1,12 @@
 """Physical SI axle dynamics implemented by the native C++ kernel."""
 
 from ..kernel.native import NativeKernelUnavailableError, native_build_metadata
-from .contract_run import run_axle_dynamics
+
+#: The shared integration settings live in the neutral schema layer; re-exported
+#: here so an import that names this package keeps working.
+from ..schema.solver import AxleSolverSettings  # noqa: E402
 from .errors import NativeAxleError
-from .io import load_axle_dynamics_case, load_axle_dynamics_model
+from .io import load_axle_dynamics_case
 from .result import (
     ANTI_ROLL_OUTPUT_COLUMNS,
     BODY_STATE_COLUMNS,
@@ -31,10 +34,8 @@ from .schema import (
     AxleDamper,
     AxleDrivenCoordinate,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleHarmonicRoad,
     AxleJoint,
-    AxleSolverSettings,
     AxleSpring,
     AxleTire,
 )
@@ -50,7 +51,6 @@ __all__ = [
     "AxleAntiRollBar",
     "AxleDynamicsCase",
     "AxleContactEventRecord",
-    "AxleDynamicsModel",
     "AxleHarmonicRoad",
     "AxleDynamicsResult",
     "AxleJoint",
@@ -73,7 +73,5 @@ __all__ = [
     "SPRING_OUTPUT_COLUMNS",
     "TIRE_OUTPUT_COLUMNS",
     "load_axle_dynamics_case",
-    "load_axle_dynamics_model",
     "native_build_metadata",
-    "run_axle_dynamics",
 ]

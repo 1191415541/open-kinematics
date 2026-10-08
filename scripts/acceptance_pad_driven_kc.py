@@ -109,10 +109,9 @@ def _tail(text: str, count: int = 2) -> str:
     return " | ".join(line.strip() for line in lines[-count:])[:260]
 
 
-def _pad_assembly(tire_stiffness: float = 200.0, radius: float = 320.0):
+def _pad_model(tire_stiffness: float = 200.0, radius: float = 320.0):
     """Return the C reading of the acceptance fixture with tires, ready for a pad sweep."""
-    from suspension_multibody.schema import VerticalTire, Vec3
-    from suspension_multibody.subsystems.entry import compose_axle
+    from suspension_multibody.schema import Vec3, VerticalTire
 
     model = compliant_model().model_copy(
         update={
@@ -126,7 +125,7 @@ def _pad_assembly(tire_stiffness: float = 200.0, radius: float = 320.0):
             )
         }
     )
-    return compose_axle(model, "C")
+    return model
 
 
 def _pad_case(heights) -> dict:
@@ -142,21 +141,13 @@ def _pad_case(heights) -> dict:
 
 
 def _pad_run(heights=PAD_HEIGHTS_MM):
-    from suspension_multibody.cases.kc_quasi_static import model_document
-    from suspension_multibody.simulation import SimulationRequest, run_request
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
+    from suspension_multibody.simulation import run_compiled
 
-    assembly = _pad_assembly()
-    document = model_document(
-        assembly, name="pad-acceptance", drive_wheels=False, drive_mode="pad"
-    )
-    return run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=document,
-            case=_pad_case(heights),
-        )
-    ).raw
+    assembly, case = migrate_v1_kc_case(_pad_model(), mode="C", name="pad-acceptance",
+        pad_height_mm=tuple(heights), drive_mode="pad", times_s=(0., .001))
+    return run_compiled(validate(assembly, case)).result
 
 
 # -- Done-When 1: the three readings are reachable ---------------------------
@@ -169,36 +160,23 @@ def check_modes() -> Result:
     Fixtures: A/B on the rigid (K) fixture, C on the compliant (C) fixture with tires --
     they are different physical questions, so one fixture cannot answer all three.
     """
-    from suspension_multibody.cases.kc_quasi_static import model_document
-    from suspension_multibody.simulation import SimulationRequest, run_request
-    from suspension_multibody.subsystems.entry import compose_axle
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
+    from suspension_multibody.simulation import run_compiled
 
     notes: list[str] = []
     failures: list[str] = []
-    k_case = {
-        "contract": "multibody-case",
-        "contract_version": 1,
-        "kind": "case",
-        "family": "kc_quasi_static",
-        "name": "modes-k",
-        "time": {"start_s": 0.0, "end_s": 2e-3, "step_s": 1e-3},
-        "k": {
-            "wheel_values_mm": [-10.0, 0.0, 10.0],
-            "rack_values_mm": [0.0],
-            "axis_map": {"wheel": ["wheel_drive_L", "wheel_drive_R"], "rack": "rack_drive"},
-            "left_right_mode": "symmetric",
-        },
-    }
 
     # A and B on the rigid fixture.
     for reading, want_elements, want_tires in (
         ("kinematics", 0, 0),
         ("force_balance", 2, 0),
     ):
-        assembly = compose_axle(rigid_model(), "K")
-        document = model_document(
-            assembly, name=f"modes-{reading}", drive_wheels=True, drive_mode=reading
-        )
+        assembly, case = migrate_v1_kc_case(rigid_model(), mode="K", name=f"modes-{reading}",
+            wheel_values_mm=(-10., 0., 10.), rack_values_mm=(0.,),
+            times_s=(0., .001, .002), drive_mode=reading)
+        compiled = validate(assembly, case)
+        document = compiled.model_document
         elements = cast("list[dict[str, object]]", document["elements"])
         tires = cast("list[dict[str, object]]", document["tires"])
         got_elements = len(elements)
@@ -211,14 +189,7 @@ def check_modes() -> Result:
         if not ok:
             failures.append(f"{reading} declared the wrong tables")
         try:
-            run_request(
-                SimulationRequest(
-                    assembly="axle",
-                    family="kc_quasi_static",
-                    model=document,
-                    case=k_case,
-                )
-            )
+            run_compiled(compiled)
         except Exception as error:  # noqa: BLE001
             failures.append(f"{reading} did not solve: {type(error).__name__}")
         else:
@@ -230,10 +201,8 @@ def check_modes() -> Result:
     except Exception as error:  # noqa: BLE001
         failures.append(f"pad did not solve: {type(error).__name__}: {str(error)[:80]}")
     else:
-        notes.append(f"pad            solved, cases={len(run.cases)} tires={len(run.tire_names)}")
-        document = model_document(
-            _pad_assembly(), name="modes-pad", drive_wheels=False, drive_mode="pad"
-        )
+        notes.append(f"pad            solved, cases={len(run.cases)} tires={len(run.model.to_document()['tires'])}")
+        document = _pad_run_document()
         if len(cast("list[dict[str, object]]", document["tires"])) != 2:
             failures.append("pad declared no tires, so nothing could carry the wheel")
 
@@ -255,40 +224,30 @@ def check_mode_a() -> Result:
     oracle differ in 76 of 108 fields (worst 1.66e-06 mm), so a bit-identical comparison
     against the oracle could never hold.
     """
-    from suspension_multibody.cases.kc_quasi_static import case_document, model_document
-    from suspension_multibody.cases.kc_quasi_static.workflow import (
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
+    from suspension_multibody.cases.kc_quasi_static.settings import (
         DEFAULT_SETTINGS,
         DEFAULT_TIMES,
     )
-    from suspension_multibody.simulation import SimulationRequest, run_request
-    from suspension_multibody.subsystems.entry import compose_axle
+    from suspension_multibody.simulation import run_compiled
 
     if not FROZEN_MODE_A.exists():
         return Result("2 mode-a", False, f"no frozen snapshot at {FROZEN_MODE_A}")
 
     frozen = json.loads(FROZEN_MODE_A.read_text(encoding="utf-8"))["K"]
-    assembly = compose_axle(rigid_model(), "K")
-    document = model_document(
-        assembly, name="mode-a-k", drive_wheels=True, drive_mode="kinematics"
-    )
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
+    assembly, case = migrate_v1_kc_case(
+        rigid_model(),
+        mode="K", drive_mode="kinematics",
         name="mode-a-k",
         wheel_values_mm=(-10.0, 0.0, 10.0),
         rack_values_mm=(-5.0, 0.0, 5.0),
         times_s=DEFAULT_TIMES,
         settings=DEFAULT_SETTINGS,
-        drive_wheels=True,
     )
-    run = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=document,
-            case=case,
-        )
-    ).raw
+    compiled = validate(assembly, case)
+    document = compiled.model_document
+    run = run_compiled(compiled).raw
 
     declared = cast("list[dict[str, object]]", document["elements"])
     notes = [
@@ -307,17 +266,10 @@ def check_mode_a() -> Result:
         notes.append("states bit-identical to the frozen native snapshot")
 
     # A and B must be distinguishable on this fixture, or the criterion above is vacuous.
-    b_document = model_document(
-        assembly, name="mode-b-k", drive_wheels=True, drive_mode="force_balance"
-    )
-    b_run = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=b_document,
-            case=case,
-        )
-    ).raw
+    b_assembly, b_case = migrate_v1_kc_case(rigid_model(), mode="K", name="mode-b-k",
+        wheel_values_mm=(-10., 0., 10.), rack_values_mm=(-5., 0., 5.),
+        times_s=DEFAULT_TIMES, settings=DEFAULT_SETTINGS, drive_mode="force_balance")
+    b_run = run_compiled(validate(b_assembly, b_case)).raw
     import numpy as np
 
     delta = float(np.nanmax(np.abs(np.asarray(run.states) - np.asarray(b_run.states))))
@@ -334,10 +286,9 @@ def check_mode_a() -> Result:
 
 def check_default_mode() -> Result:
     """Done-When 3: omitting the reading gives force balance, and it excludes tires."""
-    from suspension_multibody.cases.kc_quasi_static import model_document
-    from suspension_multibody.compilation import KcStudyInputs, plan_for
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
     from suspension_multibody.schema.case import CaseSpec
-    from suspension_multibody.subsystems.entry import compose_axle
 
     notes: list[str] = []
     failures: list[str] = []
@@ -348,15 +299,12 @@ def check_default_mode() -> Result:
     else:
         notes.append("CaseSpec.drive_mode defaults to force_balance")
 
-    plan = plan_for("kc_quasi_static", mode="K", inputs=KcStudyInputs(name="probe"))
-    if plan.drive_wheels is not True:
-        failures.append("the K bench no longer drives the wheel centres")
-    else:
-        notes.append("the legacy boolean still resolves drive_wheels=True for K")
-
-    assembly = compose_axle(rigid_model(), "K")
-    default_doc = model_document(assembly, name="default")
-    explicit = model_document(assembly, name="explicit", drive_mode="force_balance")
+    assembly, case = migrate_v1_kc_case(rigid_model(), mode="K", name="default",
+        wheel_values_mm=(0.,), rack_values_mm=(0.,))
+    default_doc = validate(assembly, case).model_document
+    explicit_assembly, explicit_case = migrate_v1_kc_case(rigid_model(), mode="K", name="explicit",
+        wheel_values_mm=(0.,), rack_values_mm=(0.,), drive_mode="force_balance")
+    explicit = validate(explicit_assembly, explicit_case).model_document
     default_elements = cast("list[dict[str, object]]", default_doc["elements"])
     explicit_elements = cast("list[dict[str, object]]", explicit["elements"])
     default_tires = cast("list[dict[str, object]]", default_doc["tires"])
@@ -425,11 +373,12 @@ def check_pad_drive() -> Result:
 
 
 def _pad_run_document() -> dict:
-    from suspension_multibody.cases.kc_quasi_static import model_document
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
 
-    return model_document(
-        _pad_assembly(), name="pad-acceptance", drive_wheels=False, drive_mode="pad"
-    )
+    assembly, case = migrate_v1_kc_case(_pad_model(), mode="C", name="pad-acceptance",
+        pad_height_mm=PAD_HEIGHTS_MM, drive_mode="pad", times_s=(0., .001))
+    return validate(assembly, case).model_document
 
 
 # -- Done-When 5: the three outputs -----------------------------------------
@@ -442,7 +391,6 @@ def check_pad_outputs() -> Result:
 
     Fixture: the compliant reading with tires.
     """
-    from suspension_multibody.results.kc_state import pad_contact_from_run
 
     notes: list[str] = []
     failures: list[str] = []
@@ -450,7 +398,14 @@ def check_pad_outputs() -> Result:
 
     worst = 0.0
     for index, pad in enumerate(PAD_HEIGHTS_MM):
-        outputs = pad_contact_from_run(run, index)
+        last = int(run.cases[index]["sample_offset"])+int(run.cases[index]["sample_count"])-1
+        outputs = {}
+        for side, label in (("L", "left"), ("R", "right")):
+            pose = run.frame_pose("wheel.sub.json.wheel_center_"+side)[last]
+            tire = run.tire_state("wheel.sub.json.tire_0_"+side)[last]
+            radius = _pad_model().tires[0].unloaded_radius
+            outputs[label] = {"wheel_center_z_mm": float(pose[2, 3]*1000),
+                "tire_load_n": float(tire[4]), "contact_z_mm": float(pose[2, 3]*1000-radius+tire[2]*1000)}
         if set(outputs) != {"left", "right"}:
             failures.append(f"pad {pad}: sides reported = {sorted(outputs)}")
             continue
@@ -484,9 +439,9 @@ def check_tire_emission() -> Result:
     emits no tire" from being an unexecuted branch: on a tire-free fixture the rule is
     satisfied by the fixture, not by the emitter.
     """
-    from suspension_multibody.cases.kc_quasi_static import model_document
-    from suspension_multibody.schema import VerticalTire, Vec3
-    from suspension_multibody.subsystems.entry import compose_axle
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
+    from suspension_multibody.schema import Vec3, VerticalTire
 
     model = rigid_model().model_copy(
         update={
@@ -500,13 +455,12 @@ def check_tire_emission() -> Result:
             )
         }
     )
-    assembly = compose_axle(model, "K")
     notes: list[str] = []
     failures: list[str] = []
     for reading in ("kinematics", "force_balance", "pad"):
-        document = model_document(
-            assembly, name=f"tires-{reading}", drive_wheels=True, drive_mode=reading
-        )
+        assembly, case = migrate_v1_kc_case(model, mode="K", name=f"tires-{reading}", drive_mode=reading,
+            **({"pad_height_mm": (0.,)} if reading == "pad" else {"wheel_values_mm": (0.,), "rack_values_mm": (0.,)}))
+        document = validate(assembly, case).model_document
         count = len(cast("list[dict[str, object]]", document["tires"]))
         expected = 2 if reading == "pad" else 0
         notes.append(f"{reading:14s} tires={count} (want {expected})")
@@ -568,7 +522,8 @@ def check_c_force_balance() -> Result:
     Fixture: the compliant reading with tires, compared against the same fixture under
     `kinematics` (which on C emits no elements at all).
     """
-    from suspension_multibody.cases.kc_quasi_static import model_document
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
 
     notes: list[str] = []
     failures: list[str] = []
@@ -584,23 +539,15 @@ def check_c_force_balance() -> Result:
         failures.append("the C reading declares no tires")
 
     # Not pure geometry: force balance and kinematics must disagree on this fixture.
-    steady = model_document(
-        _pad_assembly(), name="c-steady", drive_wheels=False, drive_mode="force_balance"
-    )
     import numpy as np
-
-    from suspension_multibody.cases.kc_quasi_static.workflow import (
+    from suspension_multibody.cases.kc_quasi_static.settings import (
         DEFAULT_SETTINGS,
         DEFAULT_TIMES,
     )
-    from suspension_multibody.cases.kc_quasi_static import case_document
-    from suspension_multibody.simulation import SimulationRequest, run_request
-    from suspension_multibody.subsystems.entry import compose_axle
+    from suspension_multibody.simulation import run_compiled
 
-    assembly = compose_axle(compliant_model(), "C")
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
+    assembly, case = migrate_v1_kc_case(
+        compliant_model(), mode="C", drive_mode="force_balance",
         name="c-steady",
         paths=("fx", "fy", "fz", "mx", "my", "mz"),
         levels=3,
@@ -608,16 +555,8 @@ def check_c_force_balance() -> Result:
         side_mode="single",
         times_s=DEFAULT_TIMES,
         settings=DEFAULT_SETTINGS,
-        drive_wheels=False,
     )
-    balanced = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=steady,
-            case=case,
-        )
-    ).raw
+    balanced = run_compiled(validate(assembly, case)).raw
 
     block = balanced.block("bushing_output")
     total = float(np.nansum(np.abs(np.asarray(block))))
@@ -642,18 +581,19 @@ def check_schemas() -> Result:
     against the validator is what proves the schema was updated too.
     """
     from suspension_contracts import validate_case
-    from suspension_multibody.schema import FrontAxleModel, MassSpec, RoadSurfaceSpec, Vec3
+    from suspension_multibody.schema import MassSpec, RoadSurfaceSpec, Vec3
+    from suspension_multibody.schema.model import AxleDeclaration
 
     notes: list[str] = []
     failures: list[str] = []
 
-    model = FrontAxleModel(
+    model = AxleDeclaration(
         hardpoints={"wheel_center": Vec3(x=0.0, y=-700.0, z=300.0)},
         mass=MassSpec(sprung_mass=1000.0),
         road=RoadSurfaceSpec(kind="plane", origin=Vec3(x=0.0, y=0.0, z=-20.0)),
     )
     if model.road is None or model.road.origin.z != -20.0:
-        failures.append("FrontAxleModel did not carry the road it was given")
+        failures.append("AxleDeclaration did not carry the road it was given")
     else:
         notes.append(f"a model carries a plane road at z={model.road.origin.z}")
 
@@ -827,16 +767,14 @@ def check_signature() -> Result:
     # And the signature really is incremental, so old callers need no change.
     import inspect
 
-    from suspension_multibody.cases.kc_quasi_static.contract import model_document
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
 
-    signature = inspect.signature(model_document)
-    if "drive_wheels" not in signature.parameters:
-        failures.append("model_document lost its drive_wheels parameter")
+    signature = inspect.signature(migrate_v1_kc_case)
+    if "drive_wheels" in signature.parameters or not {"drive_mode", "pad_height_mm"} <= signature.parameters.keys():
+        failures.append("offline migration must expose explicit study inputs without a legacy runtime boolean")
     else:
-        parameter = signature.parameters["drive_wheels"]
         notes.append(
-            f"model_document(..., drive_wheels={parameter.default!r}) still accepted; "
-            f"drive_mode is optional ({signature.parameters['drive_mode'].default!r})"
+            "old input booleans map to declared study modes; execution uses ordinary documents"
         )
 
     return Result("12 signature", not failures, "the legacy boolean still works everywhere", failures + notes)

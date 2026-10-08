@@ -1,0 +1,7 @@
+{
+  "document": "assembly", "schema_version": 1, "name": "generic_slider",
+  "assembly_kind": "generic_multibody", "mode": "K",
+  "subsystems": [
+    {"ref": "slider.sub.json", "functional_role": "generic", "placement_role": "any"}
+  ]
+}

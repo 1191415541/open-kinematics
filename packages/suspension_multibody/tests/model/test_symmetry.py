@@ -1,7 +1,7 @@
 """Front axle symmetry tests."""
 
+from suspension_multibody.authoring.geometry import mirror_hardpoints, side_hardpoints
 from suspension_multibody.schema import Vec3
-from suspension_multibody.subsystems.geometry import mirror_hardpoints, side_hardpoints
 
 
 def test_mirror_preserves_xz_and_flips_y() -> None:

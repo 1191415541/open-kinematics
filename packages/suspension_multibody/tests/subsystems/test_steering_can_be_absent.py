@@ -1,174 +1,46 @@
-"""
-Requirement 15: a single-axle assembly may have no steering at all.
-
-The point of this test is not that the assembly *builds* without steering -- it is
-that it builds the *exact subset*: the rack, the tie rods and their joints are
-gone, and everything else is untouched, bit for bit.  A "degenerate rack body that
-carries no constraint" would pass a weaker test and would be wrong.
-"""
-
-from __future__ import annotations
+"""An omitted steering declaration leaves no hidden body or inferred guide."""
 
 import numpy as np
+import pytest
 
-from suspension_multibody.schema import FrontAxleModel, RigidBodySpec
-from suspension_multibody.subsystems import DEFAULT_AXLE_SUBSYSTEMS, AssemblyRequest
-from suspension_multibody.subsystems.entry import compose_axle
-from tests.benchmark_fixture import benchmark_model
-
-#: Everything the steering subsystem owns, and nothing else.  The benchmark
-#: fixture has `rack_fixed_to_chassis` false, so its guide row is `rack_guide`;
-#: `rack_fixed_to_chassis` is the other branch of the same constraint.
-#: Everything the steering subsystem owns, and nothing else.
-ABSENT_BODIES = {"rack", "rack_housing"}
-ABSENT_CONSTRAINTS = {
-    "rack_guide",
-    "housing_mount",
-}
-ABSENT_CONNECTIONS: set[str] = set()
-ABSENT_POINTS = {
-    "rack::center",
-    "rack::tie_L",
-    "rack::tie_R",
-    "ground::rack_center",
-}
-#: `RACK_CENTER` is the assembly's own synthesised copy; `rack_center` and its
-#: per-side mirrors come from the model, and they are gone too because this test
-#: removes the hardpoint -- steering was its only consumer.
-ABSENT_HARDPOINTS = {
-    "RACK_CENTER",
-    "rack_center",
-    "rack_center__L",
-    "rack_center__R",
-}
+from suspension_multibody.authoring import assemble_generic
+from suspension_multibody.presets import generic_template
+from tests.authoring.test_unified_subsystem_templates import (
+    assembly,
+    carrier_subsystem,
+    subsystem,
+)
 
 
-def _without_steering() -> FrontAxleModel:
-    # `rack_center` is only required because steering needs it; dropping the
-    # subsystem has to drop that requirement too, not leave a hardpoint nobody
-    # resolves.
-    model = benchmark_model()
-    hardpoints = {
-        name: point
-        for name, point in model.hardpoints.items()
-        if name != "rack_center"
-    }
-    return model.model_copy(update={"hardpoints": hardpoints})
+def steering_pair(mode="K"):
+    points = {name: [0, 0, .334] for name in generic_template("suspension").hardpoint_names}
+    points.update(upper_rear=[1, 0, .334], lower_rear=[1, 0, .334])
+    common = {"support": carrier_subsystem(), "suspension": subsystem(generic_template("suspension"), points)}
+    steering = subsystem(generic_template("steering"), {"center": [0, 0, .334], "housing_center": [0, 0, .334]})
+    return tuple(assemble_generic(assembly(rows, mode=mode, pairings={"suspension": {"rack": "steering.rack" if "steering" in rows else "support.rack"}}))
+                 for rows in ({**common, "steering": steering}, common))
 
 
-def _request(mode: str) -> AssemblyRequest:
-    return AssemblyRequest(mode=mode, subsystems=DEFAULT_AXLE_SUBSYSTEMS - {"steering"})
-
-
-def _both(mode: str):
-    return compose_axle(benchmark_model(), mode), compose_axle(
-        _without_steering(), mode, _request(mode)
-    )
-
-
-def test_the_exact_steering_content_disappears() -> None:
-    full, reduced = _both("K")
-
-    assert set(full.bodies) - set(reduced.bodies) == ABSENT_BODIES
-    assert set(reduced.bodies) - set(full.bodies) == set()
-    assert {c.name for c in full.constraints} - {
-        c.name for c in reduced.constraints
-    } == ABSENT_CONSTRAINTS
-    assert {c.name for c in reduced.constraints} - {
-        c.name for c in full.constraints
-    } == set()
-    assert {c.name for c in full.ideal_constraints} - {
-        c.name for c in reduced.ideal_constraints
-    } == ABSENT_CONSTRAINTS
-    assert {c.name for c in full.connections} - {
-        c.name for c in reduced.connections
-    } == ABSENT_CONNECTIONS
-    reduced_points = {f"{body}::{label}" for body, label in reduced.points}
-    full_points = {f"{body}::{label}" for body, label in full.points}
-    assert full_points - reduced_points == ABSENT_POINTS
-    # Tie rods ground when rack is absent
-    assert reduced_points - full_points == {"ground::tie_L", "ground::tie_R"}
-    assert set(full.hardpoints) - set(reduced.hardpoints) == ABSENT_HARDPOINTS
-    assert set(reduced.hardpoints) - set(full.hardpoints) == set()
-    # Steering owns no elements, so the element lists must be identical.
-    assert list(reduced.element_ids) == list(full.element_ids)
-    assert [b.name for b in reduced.bushings] == [b.name for b in full.bushings]
-
-
-def test_every_remaining_point_is_bit_identical() -> None:
-    full, reduced = _both("K")
-    for key, point in reduced.points.items():
-        if key in full.points:
-            assert np.array_equal(np.asarray(point), np.asarray(full.points[key])), key
-
-
-def test_the_remaining_rows_keep_their_order_and_identity() -> None:
-    """
-    A subset must be the same rows, not merely the same names.
-
-    Slice the full constraint list down to the names the reduced assembly kept
-    and require the result to match the reduced list exactly: same order, same
-    types.
-    """
-    full, reduced = _both("K")
-    kept = {c.name for c in reduced.constraints}
-    assert [
-        (c.name, type(c).__name__) for c in full.constraints if c.name in kept
-    ] == [(c.name, type(c).__name__) for c in reduced.constraints]
-
-
-def test_no_degenerate_rack_body_is_left_behind() -> None:
-    _, reduced = _both("K")
-    assert "rack" not in reduced.bodies
-
-
-def test_a_declared_steering_body_spec_is_tolerated_not_rejected() -> None:
-    """
-    Dropping the subsystem must not make the *model* invalid.
-
-    A model that still declares a rack or tie rod body spec is describing bodies
-    this assembly chose not to carry; that is not an error, and it must not blow
-    up while the mass table is applied.
-    """
-    model = _without_steering()
-    with_specs = model.model_copy(
-        update={
-            "bodies": (
-                *model.bodies,
-                RigidBodySpec(name="rack", mass=1.0),
-                RigidBodySpec(name="tie_rod_L", mass=1.0),
-                RigidBodySpec(name="tie_rod_R", mass=1.0),
-            )
-        }
-    )
-    reduced = compose_axle(with_specs, "K", _request("K"))
-    assert "rack" not in reduced.bodies
-    assert set(reduced.bodies) == set(_both("K")[1].bodies)
-
-
-def test_c_mode_also_works_without_steering() -> None:
-    full, reduced = _both("C")
-    assert "rack" not in reduced.bodies
-    # The eight inboard placeholders are the suspension's, not steering's, so they
-    # stay, in the same order: 2 arms x 2 inboard points x 2 sides.
-    assert list(reduced.element_ids) == list(full.element_ids)
-    assert len(reduced.elements) == 8
-
-
-def test_an_axle_cannot_claim_brake_or_drive() -> None:
-    """
-    Requirement 17 / D8: a single-axle assembly has no brake and no drive.
-
-    The assembly cannot build them, so accepting the role and then reporting it in
-    `capabilities` would be a lie a rig would plan against.  It refuses instead.
-    """
-    for role in ("brake", "drive"):
-        request = AssemblyRequest(
-            mode="K", subsystems=DEFAULT_AXLE_SUBSYSTEMS | {role}
-        )
-        try:
-            compose_axle(benchmark_model(), "K", request)
-        except ValueError as error:
-            assert role in str(error)
-        else:  # pragma: no cover - the call must raise
-            raise AssertionError(f"an axle assembly must refuse the {role} role")
+@pytest.mark.parametrize("mode", ["K", "C"])
+def test_the_steering_subset_preserves_all_other_physics(mode):
+    full, reduced = steering_pair(mode)
+    assert set(full.bodies) - set(reduced.bodies) == {"steering.rack", "steering.housing"}
+    assert not set(reduced.bodies) - set(full.bodies)
+    unchanged = tuple(row for row in full.joints if not row["name"].startswith("steering.") and "tie_inner" not in row["name"])
+    assert unchanged == tuple(row for row in reduced.joints if "tie_inner" not in row["name"])
+    for original, changed in zip((row for row in full.joints if "tie_inner" in row["name"]),
+                                 (row for row in reduced.joints if "tie_inner" in row["name"])):
+        assert original["body_a"] == "steering.rack" and changed["body_a"] == "support.carrier"
+        assert original["body_b"] == changed["body_b"]
+        for end in ("a", "b"):
+            np.testing.assert_array_equal(full.bodies[original["body_"+end]].pose.transform_point(np.asarray(original["point_"+end])),
+                reduced.bodies[changed["body_"+end]].pose.transform_point(np.asarray(changed["point_"+end])))
+    assert full.elements == reduced.elements and full.tires == reduced.tires
+    for key in reduced.bodies:
+        a, b = full.bodies[key], reduced.bodies[key]
+        assert a.mass == b.mass and a.fixed == b.fixed
+        np.testing.assert_array_equal(a.pose.quaternion, b.pose.quaternion)
+        np.testing.assert_array_equal(a.pose.translation, b.pose.translation)
+        np.testing.assert_array_equal(a.inertia, b.inertia)
+    assert len(reduced.elements) == (4 if mode == "K" else 12)
+    assert not any("rack" in name for name in reduced.bodies)

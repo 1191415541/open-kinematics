@@ -262,7 +262,7 @@ def _load_payload(comparison_root: Path) -> dict[str, Any]:
             "handling_source": "三条曲线使用同一完整 step_steer 整车时间网格；native 两条由完整整车多体模型生成",
             "handling_case": "step_steer",
             "handling_duration_s": reference_time[-1],
-            "handling_matrix_note": "native_brush 和 native PAC2002 均由 run_vehicle_dynamics 完整整车多体模型生成；Adams PAC2002 来自同一工况的原始 .res。页面同时给出三组曲线的两两误差；native_brush 与 Adams PAC2002 的误差不等同于同轮胎模型精度。",
+            "handling_matrix_note": "native_brush 和 native PAC2002 均由 vehicle_dynamics_run 完整整车多体模型生成；Adams PAC2002 来自同一工况的原始 .res。页面同时给出三组曲线的两两误差；native_brush 与 Adams PAC2002 的误差不等同于同轮胎模型精度。",
             "comparison_root": str(comparison_root),
         },
     }

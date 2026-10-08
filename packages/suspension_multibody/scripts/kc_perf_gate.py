@@ -60,15 +60,15 @@ def _native_workloads() -> dict[str, Callable[[], int]]:
     """Return one callable per workload, each returning its state count."""
     import importlib.util
 
-    from suspension_multibody.cases.kc_quasi_static import case_document, model_document
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring import migrate_v1_kc_case
     from suspension_multibody.cases.kc_quasi_static.load_paths import LoadPath
-    from suspension_multibody.cases.kc_quasi_static.workflow import (
+    from suspension_multibody.cases.kc_quasi_static.settings import (
         DEFAULT_SETTINGS,
         DEFAULT_TIMES,
     )
-    from suspension_multibody.schema import FrontAxleModel
-    from suspension_multibody.simulation import SimulationRequest, run_request
-    from suspension_multibody.subsystems.entry import compose_axle
+    from suspension_multibody.schema.model import AxleDeclaration
+    from suspension_multibody.simulation import run_compiled
     fixture = PACKAGE_ROOT / "tests/cases/kc_quasi_static/kc_fixtures.py"
     spec = importlib.util.spec_from_file_location("kc_perf_fixture", fixture)
     assert spec is not None and spec.loader is not None
@@ -80,57 +80,22 @@ def _native_workloads() -> dict[str, Callable[[], int]]:
     payload = _benchmark_payload()
     # A physical C sweep needs a compliance to answer with, so it uses the
     # compliant fixture every other native C gate uses.
-    k_assembly = compose_axle(FrontAxleModel.model_validate(payload["model"]), "K")
+    k_source = AxleDeclaration.model_validate(payload["model"])
     compliant = getattr(module, "_compliant_model")()  # test fixture, not a public API
-    c_assembly = compose_axle(compliant, "C")
     wheel_values = tuple(float(value) for value in payload["grid"]["wheel_values_mm"])
     rack_values = tuple(float(value) for value in payload["grid"]["rack_values_mm"])
     axes = tuple(path.name for path in LoadPath.standard())
+    k_documents = migrate_v1_kc_case(k_source, mode="K", name="kc-k", wheel_values_mm=wheel_values,
+        rack_values_mm=rack_values, times_s=DEFAULT_TIMES, settings=DEFAULT_SETTINGS)
+    c_documents = migrate_v1_kc_case(compliant, mode="C", name="kc-c", paths=axes, levels=11,
+        maximum=1., side_mode="single", times_s=DEFAULT_TIMES, settings=DEFAULT_SETTINGS)
 
     def k_100() -> int:
-        model = model_document(k_assembly, name="native-k", drive_wheels=True)
-        case = case_document(
-            k_assembly,
-            family="kc_quasi_static",
-            name="kc-k",
-            wheel_values_mm=wheel_values,
-            rack_values_mm=rack_values,
-            times_s=DEFAULT_TIMES,
-            settings=DEFAULT_SETTINGS,
-            drive_wheels=True,
-        )
-        run = run_request(
-            SimulationRequest(
-                assembly="axle",
-                family="kc_quasi_static",
-                model=model,
-                case=case,
-            )
-        ).raw
+        run = run_compiled(validate(*k_documents)).raw
         return len(run.cases)
 
     def c_66() -> int:
-        model = model_document(c_assembly, name="native-c", drive_wheels=False)
-        case = case_document(
-            c_assembly,
-            family="kc_quasi_static",
-            name="kc-c",
-            paths=axes,
-            levels=11,
-            maximum=1.0,
-            side_mode="single",
-            times_s=DEFAULT_TIMES,
-            settings=DEFAULT_SETTINGS,
-            drive_wheels=False,
-        )
-        run = run_request(
-            SimulationRequest(
-                assembly="axle",
-                family="kc_quasi_static",
-                model=model,
-                case=case,
-            )
-        ).raw
+        run = run_compiled(validate(*c_documents)).raw
         return len(run.cases)
 
     return {"k-100": k_100, "c-66": c_66}

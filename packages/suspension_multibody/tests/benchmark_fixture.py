@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from suspension_multibody.schema import FrontAxleModel
+from suspension_multibody.schema.model import AxleDeclaration
 
 #: The one declarative fixture every K/C gate, probe and test measures against.
 FIXTURE = Path(__file__).with_name("data") / "benchmark_axle.json"
@@ -24,9 +24,9 @@ def _payload() -> dict[str, Any]:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
 
-def benchmark_model() -> FrontAxleModel:
+def benchmark_model() -> AxleDeclaration:
     """Return the fixed non-proprietary axle the K/C gates share."""
-    return FrontAxleModel.model_validate(_payload()["model"])
+    return AxleDeclaration.model_validate(_payload()["model"])
 
 
 def benchmark_grid() -> tuple[tuple[float, ...], tuple[float, ...]]:

@@ -27,6 +27,7 @@ from suspension_multibody.adams import (
     create_dynamic_axle_manifest,
     write_axle_adams_dataset,
 )
+from suspension_multibody.adams.axle_equivalence import _run_document_evidence
 from suspension_multibody.adams.car_import import read_adams_suspension
 from suspension_multibody.adams.car_sla_model import (
     build_sla_axle_model,
@@ -37,7 +38,6 @@ from suspension_multibody.axle_dynamics import (
     AxleDynamicsCase,
     AxleHarmonicRoad,
     AxleSolverSettings,
-    run_axle_dynamics,
 )
 
 # The example vehicle ships inside whichever Adams/Car release is installed.
@@ -227,7 +227,7 @@ def main() -> int:
     print(f"dataset written: {paths['model'].name}, {paths['command'].name}")
 
     native_started = time.perf_counter()
-    run_axle_dynamics(model, case)
+    _run_document_evidence(model, case)
     native_elapsed = time.perf_counter() - native_started
     print(
         f"native: {native_elapsed:.3f} s for {DURATION_S} s "

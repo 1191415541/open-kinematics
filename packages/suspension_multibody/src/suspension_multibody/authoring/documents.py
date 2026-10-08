@@ -26,10 +26,10 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 from suspension_contracts import (
     ContractError,
@@ -57,7 +57,7 @@ MODES: tuple[str, ...] = ("K", "C")
 #: one point, and the file states one point for it.
 TWIN_ENDED_ELEMENTS = frozenset({"spring", "damper", "bump_stop", "anti_roll_bar"})
 FUNCTIONAL_ROLES = frozenset(
-    {"suspension", "steering", "wheel", "chassis", "brake", "drive", "anti_roll_bar"}
+    {"suspension", "steering", "wheel", "chassis", "brake", "drive", "anti_roll_bar", "generic"}
 )
 #: Where a subsystem may sit.  The *shape* is what is fixed -- a placement must be a
 #: name, not an arbitrary string -- while which axes exist is the file's own
@@ -75,8 +75,7 @@ PLACEMENT_ROLES = frozenset(
 #: build.  The arm mounts' far end is the chassis -- the chassis role's body, or the
 #: ground when the assembly carries neither -- and a tie rod's inner end is the rack,
 #: which belongs to the steering role.  Nothing in the document format makes a
-#: template declare its neighbour's bodies, and the ownership itself is stated once
-#: (`subsystems.suspension._FOREIGN_STEMS` states the same set from the other side).
+#: template declare its neighbour's bodies; their ownership is resolved at assembly.
 #: Every other body name is still checked, because a typo in an arm's name is a
 #: model that validates and means something else.
 _ASSEMBLY_SUPPLIED_BODIES = frozenset({"chassis", "ground", "rack", "rack_housing"})
@@ -84,7 +83,7 @@ _ASSEMBLY_SUPPLIED_BODIES = frozenset({"chassis", "ground", "rack", "rack_housin
 #: override that names any of them is rejected by name rather than by omission:
 #: "you cannot add a body here" is the message the boundary exists to produce.
 TOPOLOGY_KEYS = frozenset(
-    {"bodies", "hardpoints", "joints", "elements", "property_slots", "ports", "outputs"}
+    {"bodies", "hardpoints", "markers", "joints", "elements", "property_slots", "ports", "outputs", "tires", "coordinates", "couplers", "gauges"}
 )
 SUBSYSTEM_VALUE_KEYS = frozenset({"hardpoints", "property_bindings", "parameters"})
 #: Values an assembly override may restate.  Assembly overrides are narrower than
@@ -98,19 +97,19 @@ WHEEL_ENDS = ("front_left", "front_right", "rear_left", "rear_right")
 def _hash(value: Any) -> str:
     return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
 
-def _check_modes(path: Path, what: str, modes: Any) -> None:
+def _check_modes(where: str, what: str, modes: Any) -> None:
     """Refuse a mode list that repeats an entry or names no mode at all."""
     if modes is None:
         return
     listed = [str(mode) for mode in modes]
     if not listed:
-        raise AuthoringError(f"{path}: {what} declares an empty 'modes' list")
+        raise AuthoringError(f"{where}: {what} declares an empty 'modes' list")
     if len(listed) != len(set(listed)):
-        raise AuthoringError(f"{path}: {what} repeats a mode in 'modes'")
+        raise AuthoringError(f"{where}: {what} repeats a mode in 'modes'")
     unknown = sorted(set(listed) - set(MODES))
     if unknown:
         raise AuthoringError(
-            f"{path}: {what} activates in unknown mode(s) {unknown}; modes are "
+            f"{where}: {what} activates in unknown mode(s) {unknown}; modes are "
             f"{sorted(MODES)}"
         )
 
@@ -131,19 +130,38 @@ def _read(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _check_contract(payload: Mapping[str, Any], path: Path, validator: Any) -> None:
-    """Run a bundled schema, naming the file and the failing field path."""
+def _where(source: Path | None, name: str) -> str:
+    """
+    Name a document in a message.
+
+    A document that came from a file is named by its path, because that is what
+    the reader can open.  One built in memory has no path, and naming it
+    ``None`` would hide which document a failure belongs to, so it is named by
+    its own name and marked as in-memory.
+    """
+    return str(source) if source is not None else f"<memory:{name}>"
+
+
+def _document_payload(payload: Mapping[str, Any], where: str) -> dict[str, Any]:
+    """Return a deep, mutable copy of a payload that came from anywhere."""
+    if not isinstance(payload, Mapping):
+        raise AuthoringError(f"{where}: document root must be an object")
+    return copy.deepcopy(dict(payload))
+
+
+def _check_contract(payload: Mapping[str, Any], where: str, validator: Any) -> None:
+    """Run a bundled schema, naming the document and the failing field path."""
     try:
         validator(payload)
     except ContractError as exc:
-        raise AuthoringError(f"{path}: {exc}") from exc
+        raise AuthoringError(f"{where}: {exc}") from exc
 
 
-def _check_role(functional_role: str, placement_role: str, path: Path) -> None:
+def _check_role(functional_role: str, placement_role: str, where: str) -> None:
     if functional_role not in FUNCTIONAL_ROLES:
-        raise AuthoringError(f"{path}: unknown functional_role {functional_role!r}")
+        raise AuthoringError(f"{where}: unknown functional_role {functional_role!r}")
     if placement_role not in PLACEMENT_ROLES:
-        raise AuthoringError(f"{path}: unknown placement_role {placement_role!r}")
+        raise AuthoringError(f"{where}: unknown placement_role {placement_role!r}")
 
 
 def _frozen_numbers(values: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -157,25 +175,119 @@ def _frozen_numbers(values: Mapping[str, Any]) -> Mapping[str, Any]:
     return MappingProxyType(frozen)
 
 
+def load_template(source: str | Path | Mapping[str, Any]) -> TemplateDocument:
+    """
+    Read a template from a file or from a declaration already in memory.
+
+    One entry point for both spellings, so a caller does not have to know which
+    route produced the document it is about to use -- which is the whole point of
+    the object and the file being the same thing.
+    """
+    if isinstance(source, (str, Path)):
+        return TemplateDocument.load(source)
+    return TemplateDocument.from_payload(source)
+
+
+def load_subsystem(
+    source: str | Path | Mapping[str, Any],
+    *,
+    template: TemplateDocument | None = None,
+    resolve: "Callable[[str], TemplateDocument] | None" = None,
+) -> SubsystemDocument:
+    """Read a subsystem from a file, or build one from a declaration in memory."""
+    if isinstance(source, (str, Path)):
+        return SubsystemDocument.load(source)
+    return SubsystemDocument.from_payload(source, template=template, resolve=resolve)
+
+
+def load_assembly(
+    source: str | Path | Mapping[str, Any],
+    *,
+    subsystems: "Mapping[str, SubsystemDocument] | None" = None,
+    resolve_subsystem: "Callable[[str], SubsystemDocument] | None" = None,
+    properties: "Mapping[str, Mapping[str, ElementPropertyDocument]] | None" = None,
+    rig: "RigDocument | None" = None,
+) -> AssemblyDocument:
+    """Read an assembly from a file, or build one from a declaration in memory."""
+    if isinstance(source, (str, Path)):
+        return AssemblyDocument.load(source)
+    return AssemblyDocument.from_payload(
+        source,
+        subsystems=subsystems,
+        resolve_subsystem=resolve_subsystem,
+        properties=properties,
+        rig=rig,
+    )
+
+
+def load_rig(source: str | Path | Mapping[str, Any]) -> RigDocument:
+    """Read a rig from a file, or build one from a declaration in memory."""
+    if isinstance(source, (str, Path)):
+        return RigDocument.load(source)
+    return RigDocument.from_payload(source)
+
+
 @dataclass(frozen=True)
 class TemplateDocument:
     """One template: the topology an expert owns."""
 
-    path: Path
+    path: Path | None
     payload: dict[str, Any]
 
     @classmethod
     def load(cls, path: str | Path) -> "TemplateDocument":
         target = Path(path).resolve()
-        payload = _read(target)
-        _check_contract(payload, target, validate_template)
-        _check_role(str(payload["functional_role"]), "any", target)
-        cls._check_topology(target, payload)
-        cls._check_sides(target, payload)
-        return cls(target, copy.deepcopy(payload))
+        return cls.from_payload(_read(target), path=target)
+
+    @classmethod
+    def from_payload(
+        cls, payload: Mapping[str, Any], *, path: Path | None = None
+    ) -> "TemplateDocument":
+        """
+        Build a template from a declaration that may never have been a file.
+
+        The same schema and the same semantic checks run here as in ``load``, so
+        an in-memory template cannot be a document the file route would refuse:
+        the validation the contract owns is not repeated, it is *shared*.
+        ``path`` is recorded when there is one -- a document that came from a
+        file keeps naming it and can be saved back -- and a document built in
+        memory is named by its own name instead, so a failure still says which
+        template it came from.
+        """
+        where = _where(path, str(payload.get("name", "?")))
+        declared = _document_payload(payload, where)
+        _check_contract(declared, where, validate_template)
+        _check_role(str(declared["functional_role"]), "any", where)
+        cls._check_topology(where, declared)
+        cls._check_sides(where, declared)
+        return cls(path, declared)
+
+    @property
+    def where(self) -> str:
+        """How to name this document in a message: its file, or its own name."""
+        return _where(self.path, str(self.payload.get("name", "?")))
+
+    def to_payload(self) -> dict[str, Any]:
+        """Return a mutable copy of the declaration, safe for a caller to edit."""
+        return copy.deepcopy(self.payload)
+
+    def save(self, path: str | Path) -> Path:
+        """
+        Write this declaration to a file and return the path written.
+
+        Saving does not change this document's identity: the object keeps the
+        path it was built with, so ``from_payload``/``to_payload`` round trips
+        compare equal whether or not either side was ever stored.
+        """
+        target = Path(path).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(self.payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return target
 
     @staticmethod
-    def _check_sides(path: Path, payload: Mapping[str, Any]) -> None:
+    def _check_sides(where: str, payload: Mapping[str, Any]) -> None:
         """
         Refuse a symmetry declaration that describes half a topology.
 
@@ -185,16 +297,21 @@ class TemplateDocument:
         together -- "I write one side and I mirror nothing" describes an axle with
         one corner, which is a legal *assembly* but never a legal template.
         """
+        symmetry = payload.get("symmetry")
+        if symmetry is not None:
+            expected = symmetry == "mirrored_xz"
+            if "mirror" in payload and bool(payload["mirror"]) != expected:
+                raise AuthoringError(f"{where}: symmetry and mirror disagree")
         declared = payload.get("sides", ("left",))
         if not isinstance(declared, (list, tuple)) or not declared:
-            raise AuthoringError(f"{path}: sides must be a non-empty list of sides")
+            raise AuthoringError(f"{where}: sides must be a non-empty list of sides")
         unknown = sorted({str(side) for side in declared} - {"left", "right"})
         if unknown:
-            raise AuthoringError(f"{path}: unknown side(s) {unknown}; sides are left, right")
+            raise AuthoringError(f"{where}: unknown side(s) {unknown}; sides are left, right")
         if len(set(declared)) != len(declared):
-            raise AuthoringError(f"{path}: duplicate side(s) {sorted(declared)}")
+            raise AuthoringError(f"{where}: duplicate side(s) {sorted(declared)}")
         both = set(map(str, declared)) == {"left", "right"}
-        mirrors = bool(payload.get("mirror", True))
+        mirrors = bool(payload.get("mirror", symmetry != "asymmetric"))
         # The two answers are checked against each other, because only two of the
         # four combinations describe something the conversion can build:
         #
@@ -208,14 +325,14 @@ class TemplateDocument:
         #   of either would name a body twice.
         if mirrors and not both and set(map(str, declared)) != {"left"}:
             raise AuthoringError(
-                f"{path}: sides is {sorted(map(str, declared))} with mirror true; the "
+                f"{where}: sides is {sorted(map(str, declared))} with mirror true; the "
                 "mirror writes the right side from the left one, so a mirrored file "
                 "declares sides: [left].  A file that writes the right side has to "
                 "write the left one too, and state mirror: false"
             )
         if mirrors and both:
             raise AuthoringError(
-                f"{path}: sides is both sides with mirror true; a file that writes "
+                f"{where}: sides is both sides with mirror true; a file that writes "
                 "both sides mirrors nothing -- set mirror: false"
             )
 
@@ -235,10 +352,12 @@ class TemplateDocument:
         because mirroring a side that is already declared would produce two
         descriptions of one body.
         """
-        return bool(self.payload.get("mirror", True))
+        return bool(
+            self.payload.get("mirror", self.payload.get("symmetry") != "asymmetric")
+        )
 
     @staticmethod
-    def _check_topology(path: Path, payload: Mapping[str, Any]) -> None:
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
         """
         Refuse a template whose own references do not resolve.
 
@@ -250,21 +369,40 @@ class TemplateDocument:
         bodies = [str(row["name"]) for row in payload["bodies"]]
         if len(bodies) != len(set(bodies)):
             duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
-            raise AuthoringError(f"{path}: duplicate body name(s) {duplicates}")
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
         hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
         if len(hardpoints) != len(set(hardpoints)):
             duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
-            raise AuthoringError(f"{path}: duplicate hardpoint name(s) {duplicates}")
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
         slots = [str(row["name"]) for row in payload["property_slots"]]
         if len(slots) != len(set(slots)):
             duplicates = sorted({n for n in slots if slots.count(n) > 1})
-            raise AuthoringError(f"{path}: duplicate property slot name(s) {duplicates}")
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
 
-        body_names = set(bodies)
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
         hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
         owners = {
             str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
         }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
         for name, owner in owners.items():
             # An ownerless point is legal and is not a gap: a role that owns no
             # bodies -- the simplified brake and drive, which contribute a torque
@@ -272,42 +410,81 @@ class TemplateDocument:
             # carries, exactly as the built-in template declares the steering,
             # wheel and chassis mounts alongside its own.  Requiring an owner would
             # make those two roles impossible to write as files.
-            if owner and owner not in body_names:
+            if owner and owner not in body_names | external_owners:
                 raise AuthoringError(
-                    f"{path}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
                     "one of this template's bodies"
                 )
         slot_types = {
             str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
         }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
 
         joint_names: list[str] = []
         for joint in payload["joints"]:
             joint_names.append(str(joint["name"]))
             for key in ("body_a", "body_b"):
-                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES:
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
                     raise AuthoringError(
-                        f"{path}: joint {joint['name']!r} references unknown body "
+                        f"{where}: joint {joint['name']!r} references unknown body "
                         f"{joint[key]!r} in {key}"
                     )
             for key in ("point_a", "point_b"):
                 point = joint.get(key)
-                if point is not None and str(point) not in hardpoint_names:
+                if point is not None and str(point) not in hardpoint_names | external:
                     raise AuthoringError(
-                        f"{path}: joint {joint['name']!r} references unknown {key} "
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
                         f"{point!r}"
                     )
         if len(joint_names) != len(set(joint_names)):
             duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
-            raise AuthoringError(f"{path}: duplicate joint name(s) {duplicates}")
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
 
         element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
         for element in payload["elements"]:
             element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
             for key in ("body_a", "body_b"):
-                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES:
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
                     raise AuthoringError(
-                        f"{path}: element {element['name']!r} references unknown body "
+                        f"{where}: element {element['name']!r} references unknown body "
                         f"{element[key]!r} in {key}"
                     )
             # A two-point element (a spring, a damper, a bump stop) must say where
@@ -320,43 +497,49 @@ class TemplateDocument:
                 value = element.get(key)
                 if value is None:
                     raise AuthoringError(
-                        f"{path}: element {element['name']!r} of type "
+                        f"{where}: element {element['name']!r} of type "
                         f"{element['type']!r} needs a {key!r}, since its two ends are "
                         "placed on two different points"
                     )
-                if str(value) not in hardpoint_names:
+                if str(value) not in hardpoint_names | external:
                     raise AuthoringError(
-                        f"{path}: element {element['name']!r} references unknown {key} "
+                        f"{where}: element {element['name']!r} references unknown {key} "
                         f"{value!r}"
                     )
             slot = str(element["property_slot"])
             if slot not in slot_types:
                 raise AuthoringError(
-                    f"{path}: element {element['name']!r} references unknown property "
+                    f"{where}: element {element['name']!r} references unknown property "
                     f"slot {slot!r}"
                 )
             slot_type = slot_types[slot]
             if slot_type not in {str(element["type"]), "generic"}:
                 raise AuthoringError(
-                    f"{path}: property slot {slot!r} declares element_type "
+                    f"{where}: property slot {slot!r} declares element_type "
                     f"{slot_type!r}, which does not match element "
                     f"{element['name']!r} of type {element['type']!r}"
                 )
+        for element in payload["elements"]:
+            for expression in element.get("parameter_expressions", {}).values():
+                if not expression.get("function") or not isinstance(expression.get("slots"), Mapping):
+                    raise AuthoringError(f"{where}: element {element['name']!r} has an invalid parameter expression")
+                if set(expression["slots"].values()) - set(slot_types):
+                    raise AuthoringError(f"{where}: element {element['name']!r} expression references an unknown property slot")
         if len(element_names) != len(set(element_names)):
             duplicates = sorted({n for n in element_names if element_names.count(n) > 1})
-            raise AuthoringError(f"{path}: duplicate element name(s) {duplicates}")
+            raise AuthoringError(f"{where}: duplicate element name(s) {duplicates}")
 
         # A declaration that says which modes it activates in must say something
         # real: an empty or repeated list is a declaration whose author meant to
         # restrict it and typed something that restricts nothing.
         for element in payload["elements"]:
-            _check_modes(path, f"element {element['name']!r}", element.get("modes"))
+            _check_modes(where, f"element {element['name']!r}", element.get("modes"))
         for joint in payload["joints"]:
-            _check_modes(path, f"joint {joint['name']!r}", joint.get("modes"))
+            _check_modes(where, f"joint {joint['name']!r}", joint.get("modes"))
             reference = joint.get("axis_reference")
             if reference is not None and str(reference) not in hardpoint_names:
                 raise AuthoringError(
-                    f"{path}: joint {joint['name']!r} takes its axis from "
+                    f"{where}: joint {joint['name']!r} takes its axis from "
                     f"{reference!r}, which is not a hardpoint this template declares"
                 )
             overrides = joint.get("kind_by_mode", ())
@@ -364,25 +547,77 @@ class TemplateDocument:
             for pair in overrides:
                 if str(pair["mode"]) not in declared_modes:
                     raise AuthoringError(
-                        f"{path}: joint {joint['name']!r} gives {pair['mode']!r} a type "
+                        f"{where}: joint {joint['name']!r} gives {pair['mode']!r} a type "
                         f"of its own but does not activate in {pair['mode']!r}"
                     )
 
         placements = [str(role) for role in payload["allowed_placement_roles"]]
         if len(placements) != len(set(placements)):
-            raise AuthoringError(f"{path}: allowed_placement_roles repeats an entry")
+            raise AuthoringError(f"{where}: allowed_placement_roles repeats an entry")
 
         port_names = [str(port["name"]) for port in payload.get("ports", ())]
+        coordinates = {str(row["name"]): row for row in payload.get("coordinates", ())}
+        if len(coordinates) != len(payload.get("coordinates", ())):
+            raise AuthoringError(f"{where}: duplicate coordinate name")
+        joint_rows = {str(row["name"]): row for row in payload["joints"]}
+        for name, coordinate in coordinates.items():
+            joint = joint_rows.get(str(coordinate["joint"]))
+            expected = "revolute" if coordinate["kind"] == "rotation" else "prismatic"
+            if joint is None or joint["type"] != expected:
+                raise AuthoringError(f"{where}: coordinate {name!r} needs an explicit {expected} joint")
         if len(port_names) != len(set(port_names)):
             duplicates = sorted({n for n in port_names if port_names.count(n) > 1})
-            raise AuthoringError(f"{path}: duplicate port name(s) {duplicates}")
+            raise AuthoringError(f"{where}: duplicate port name(s) {duplicates}")
         for port in payload.get("ports", ()):
+            if port.get("kind") == "spin" and (
+                str(port.get("coordinate", "")) not in coordinates
+                or coordinates[str(port["coordinate"])]["kind"] != "rotation"
+            ):
+                raise AuthoringError(f"{where}: spin port {port['name']!r} needs a rotational coordinate")
             owner = str(port.get("owner", ""))
             if owner and owner not in body_names:
                 raise AuthoringError(
-                    f"{path}: port {port['name']!r} is attached to {owner!r}, which is "
+                    f"{where}: port {port['name']!r} is attached to {owner!r}, which is "
                     "not one of this template's bodies"
                 )
+            point = port.get("point")
+            marker = port.get("marker")
+            if marker is not None and str(marker) not in set(marker_names):
+                raise AuthoringError(
+                    f"{where}: port {port['name']!r} references unknown marker {marker!r}"
+                )
+            if marker is not None and point is not None:
+                raise AuthoringError(f"{where}: port {port['name']!r} declares both point and marker")
+            if point is not None and str(point) not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: port {port['name']!r} references unknown point {point!r}"
+                )
+        tire_names: list[str] = []
+        for tire in payload.get("tires", ()):
+            tire_names.append(str(tire["name"]))
+            body = tire["body"]
+            body_name = str(body["name"])
+            if body_name in set(bodies) and (body.get("mass_slot") or body.get("inertia_slot")):
+                raise AuthoringError(
+                    f"{where}: tire {tire['name']!r} body {body_name!r} is also declared in bodies"
+                )
+            for key in ("mass_slot", "inertia_slot", "model_slot"):
+                slot = body.get(key) if key != "model_slot" else tire.get(key)
+                if slot is not None and str(slot) not in slot_types:
+                    raise AuthoringError(f"{where}: tire {tire['name']!r} references unknown property slot {slot!r}")
+            for key in ("mass_slot", "inertia_slot"):
+                slot = tire.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: tire {tire['name']!r} references an invalid {key}")
+            for key, value in (("center_marker", body.get("center_marker")), ("spin_marker", tire.get("spin_marker"))):
+                if str(value) not in marker_names:
+                    raise AuthoringError(f"{where}: tire {tire['name']!r} references unknown {key} {value!r}")
+            frame_port = str(tire["contact_frame"]["port"])
+            port_names_set = {str(port["name"]) for port in payload.get("ports", ())}
+            if frame_port not in port_names_set | external or str(tire["mount_port"]) not in port_names_set | external or str(tire["road_port"]) not in port_names_set | external:
+                raise AuthoringError(f"{where}: tire {tire['name']!r} references an unknown port")
+        if len(tire_names) != len(set(tire_names)):
+            raise AuthoringError(f"{where}: duplicate tire name(s) {sorted({n for n in tire_names if tire_names.count(n) > 1})}")
 
     @property
     def name(self) -> str:
@@ -420,7 +655,10 @@ class TemplateDocument:
 
     @property
     def body_names(self) -> frozenset[str]:
-        return frozenset(str(row["name"]) for row in self.payload["bodies"])
+        return frozenset(
+            [str(row["name"]) for row in self.payload["bodies"]]
+            + [str(tire["body"]["name"]) for tire in self.payload.get("tires", ())]
+        )
 
     @property
     def fixed_bodies(self) -> frozenset[str]:
@@ -536,55 +774,120 @@ class EffectiveSubsystem:
 class SubsystemDocument:
     """One subsystem: values for exactly one template."""
 
-    path: Path
+    path: Path | None
     payload: dict[str, Any]
     template: TemplateDocument
+    #: Constitutive laws supplied by a caller rather than read from files.  They
+    #: travel with the document so a subsystem built in memory keeps working
+    #: after the directory it would have read them from is gone.
+    properties: Mapping[str, ElementPropertyDocument] = MappingProxyType({})
 
     @classmethod
     def load(cls, path: str | Path) -> "SubsystemDocument":
         target = Path(path).resolve()
-        payload = _read(target)
-        _check_contract(payload, target, validate_subsystem)
-        _check_role(
-            str(payload["functional_role"]), str(payload["placement_role"]), target
-        )
-        template_path = (target.parent / str(payload["template"])).resolve()
-        template = TemplateDocument.load(template_path)
+        return cls.from_payload(_read(target), path=target)
 
-        if str(payload["functional_role"]) != template.functional_role:
+    @classmethod
+    def from_payload(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        path: Path | None = None,
+        template: TemplateDocument | None = None,
+        resolve: "Callable[[str], TemplateDocument] | None" = None,
+        properties: "Mapping[str, ElementPropertyDocument] | None" = None,
+    ) -> "SubsystemDocument":
+        """
+        Build a subsystem from a declaration plus the template it is written for.
+
+        A subsystem names its template, and there are three ways that name can be
+        answered, in the order a caller is likely to have them: the template
+        object itself (in-memory assembly), a ``resolve`` callback (a project that
+        knows its own file layout), or the reference read relative to ``path``
+        (the file route).  The template is *supplied*, never inferred, because a
+        subsystem whose template cannot be answered is exactly the file the
+        document layer exists to refuse.
+        """
+        where = _where(path, str(payload.get("name", "?")))
+        declared = _document_payload(payload, where)
+        _check_contract(declared, where, validate_subsystem)
+        _check_role(
+            str(declared["functional_role"]), str(declared["placement_role"]), where
+        )
+        resolved_template = template
+        if resolved_template is None:
+            reference = str(declared["template"])
+            if resolve is not None:
+                resolved_template = resolve(reference)
+            elif path is not None:
+                resolved_template = TemplateDocument.load(path.parent / reference)
+            else:
+                raise AuthoringError(
+                    f"{where}: names template {reference!r}, and this subsystem has "
+                    "neither a file to resolve it against nor a template object; "
+                    "pass template= or resolve= to build it in memory"
+                )
+        if str(declared["functional_role"]) != resolved_template.functional_role:
             raise AuthoringError(
-                f"{target}: functional_role {payload['functional_role']!r} disagrees "
-                f"with template {template.name!r} of role {template.functional_role!r}"
+                f"{where}: functional_role {declared['functional_role']!r} disagrees "
+                f"with template {resolved_template.name!r} of role "
+                f"{resolved_template.functional_role!r}"
             )
-        placement = str(payload["placement_role"])
-        if placement not in template.allowed_placement_roles:
+        placement = str(declared["placement_role"])
+        if placement not in resolved_template.allowed_placement_roles:
             raise AuthoringError(
-                f"{target}: placement_role {placement!r} is not allowed by template "
-                f"{template.name!r}, which allows "
-                f"{sorted(template.allowed_placement_roles)}"
+                f"{where}: placement_role {placement!r} is not allowed by template "
+                f"{resolved_template.name!r}, which allows "
+                f"{sorted(resolved_template.allowed_placement_roles)}"
             )
-        missing_points = sorted(template.hardpoint_names - set(payload["hardpoints"]))
+        missing_points = sorted(
+            resolved_template.hardpoint_names - set(declared["hardpoints"])
+        )
         if missing_points:
             raise AuthoringError(
-                f"{target}: template {template.name!r} declares hardpoint(s) "
+                f"{where}: template {resolved_template.name!r} declares hardpoint(s) "
                 f"{missing_points} that this subsystem does not place; every declared "
                 "hardpoint needs a coordinate"
             )
-        unknown_points = sorted(set(payload["hardpoints"]) - template.hardpoint_names)
+        unknown_points = sorted(
+            set(declared["hardpoints"]) - resolved_template.hardpoint_names
+        )
         if unknown_points:
             raise AuthoringError(
-                f"{target}: unknown hardpoint(s) {unknown_points}; a subsystem may only "
+                f"{where}: unknown hardpoint(s) {unknown_points}; a subsystem may only "
                 "place the hardpoints its template declares"
             )
         unknown_slots = sorted(
-            set(payload["property_bindings"]) - set(template.property_slots)
+            set(declared["property_bindings"]) - set(resolved_template.property_slots)
         )
         if unknown_slots:
             raise AuthoringError(
-                f"{target}: unknown property binding(s) {unknown_slots}; a subsystem may "
+                f"{where}: unknown property binding(s) {unknown_slots}; a subsystem may "
                 "only bind the slots its template declares"
             )
-        return cls(target, copy.deepcopy(payload), template)
+        laws = (
+            MappingProxyType(dict(properties)) if properties else MappingProxyType({})
+        )
+        return cls(path, declared, resolved_template, laws)
+
+    @property
+    def where(self) -> str:
+        """How to name this document in a message: its file, or its own name."""
+        return _where(self.path, str(self.payload.get("name", "?")))
+
+    def to_payload(self) -> dict[str, Any]:
+        """Return a mutable copy of the declaration, safe for a caller to edit."""
+        return copy.deepcopy(self.payload)
+
+    def save(self, path: str | Path) -> Path:
+        """Write this declaration to a file and return the path written."""
+        target = Path(path).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(self.payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return target
+
 
     @property
     def placement_role(self) -> str:
@@ -612,7 +915,9 @@ class SubsystemDocument:
         return _hash(self.payload["property_bindings"])
 
     def _load_bindings(
-        self, bindings: Mapping[str, str]
+        self,
+        bindings: Mapping[str, str],
+        preloaded: Mapping[str, ElementPropertyDocument] | None = None,
     ) -> Mapping[str, ElementPropertyDocument]:
         """
         Load each bound property file against the slot that names it.
@@ -627,15 +932,43 @@ class SubsystemDocument:
         for slot_name, reference in sorted(bindings.items()):
             slot = slots[slot_name]
             allowed = slot.get("allowed_models")
+            expected = str(slot["element_type"])
+            models = tuple(str(m) for m in allowed) if allowed else None
+            if preloaded is not None and slot_name in preloaded:
+                # A caller that has already read the constitutive laws hands them
+                # in, so an optimisation loop can re-run without touching the
+                # property files again.  The law is still checked against the slot
+                # it is bound to: preloading skips the *read*, not the check.
+                document = preloaded[slot_name]
+                if document.element_type != expected:
+                    raise AuthoringError(
+                        f"{self.where}: property slot {slot_name!r} expects element "
+                        f"type {expected!r}, but the preloaded law is "
+                        f"{document.element_type!r}"
+                    )
+                if models is not None and document.model not in models:
+                    raise AuthoringError(
+                        f"{self.where}: property slot {slot_name!r} model "
+                        f"{document.model!r} is not allowed here; allowed models "
+                        f"are {sorted(models)}"
+                    )
+                loaded[slot_name] = document
+                continue
+            if self.path is None:
+                raise AuthoringError(
+                    f"{self.where}: property slot {slot_name!r} binds {reference!r}, "
+                    "which names a file, but this subsystem was built in memory; "
+                    "pass the loaded laws through properties= to avoid reading files"
+                )
             try:
                 loaded[slot_name] = ElementPropertyDocument.load(
                     self.path.parent / str(reference),
-                    expected_type=str(slot["element_type"]),
-                    allowed_models=tuple(str(m) for m in allowed) if allowed else None,
+                    expected_type=expected,
+                    allowed_models=models,
                 )
             except ElementPropertyError as exc:
                 raise AuthoringError(
-                    f"{self.path}: property slot {slot_name!r}: {exc}"
+                    f"{self.where}: property slot {slot_name!r}: {exc}"
                 ) from exc
         # A slot needs a binding only when the role requires one *and* the slot
         # carries no default of its own.  A default is a real value of the
@@ -649,13 +982,16 @@ class SubsystemDocument:
         )
         if missing:
             raise AuthoringError(
-                f"{self.path}: required property slot(s) {missing} of template "
+                f"{self.where}: required property slot(s) {missing} of template "
                 f"{self.template.name!r} have no binding"
             )
         return MappingProxyType(loaded)
 
     def effective(
-        self, *, overrides: Mapping[str, Any] | None = None
+        self,
+        *,
+        overrides: Mapping[str, Any] | None = None,
+        properties: Mapping[str, ElementPropertyDocument] | None = None,
     ) -> EffectiveSubsystem:
         """
         Return the read-only effective subsystem, with ``overrides`` applied.
@@ -663,7 +999,8 @@ class SubsystemDocument:
         An override is applied on top of the document and never written back: the
         result is a new value and ``self.payload`` is untouched, which is what
         makes an assembly's override copy-on-write rather than a mutation of the
-        subsystem file it refers to.
+        subsystem file it refers to.  ``properties`` supplies laws already in
+        memory, so a caller that has them does not have to read the files again.
         """
         hardpoints = {
             str(name): tuple(float(c) for c in value)
@@ -675,7 +1012,7 @@ class SubsystemDocument:
             illegal = sorted(set(overrides) - OVERRIDE_KEYS)
             if illegal:
                 raise AuthoringError(
-                    f"{self.path}: an assembly override may only restate "
+                    f"{self.where}: an assembly override may only restate "
                     f"{sorted(OVERRIDE_KEYS)}; found {illegal}"
                 )
             hardpoints.update(
@@ -690,12 +1027,12 @@ class SubsystemDocument:
         unknown = sorted(set(hardpoints) - self.template.hardpoint_names)
         if unknown:
             raise AuthoringError(
-                f"{self.path}: override names unknown hardpoint(s) {unknown}"
+                f"{self.where}: override names unknown hardpoint(s) {unknown}"
             )
         unknown = sorted(set(bindings) - set(self.template.property_slots))
         if unknown:
             raise AuthoringError(
-                f"{self.path}: override names unknown property slot(s) {unknown}"
+                f"{self.where}: override names unknown property slot(s) {unknown}"
             )
         return EffectiveSubsystem(
             name=str(self.payload["name"]),
@@ -704,7 +1041,9 @@ class SubsystemDocument:
             placement_role=self.placement_role,
             hardpoints=_frozen_numbers(hardpoints),
             parameters=MappingProxyType(parameters),
-            property_bindings=self._load_bindings(bindings),
+            property_bindings=self._load_bindings(
+                bindings, properties if properties is not None else self.properties or None
+            ),
         )
 
 
@@ -725,50 +1064,88 @@ class AssemblyEntry:
     #: subsystem that declares it, and a document-wide table would let two
     #: entries state the same requirement role and disagree.
     pairings: Mapping[str, str] = MappingProxyType({})
+    #: The constitutive laws this entry was resolved with, when a caller supplied
+    #: them.  They travel with the entry so that every later read of the entry --
+    #: the composition request, the provenance hash -- resolves the same laws from
+    #: memory instead of reading the files again.
+    properties: Mapping[str, ElementPropertyDocument] = MappingProxyType({})
 
-    def effective(self) -> EffectiveSubsystem:
+    def effective(
+        self,
+        *,
+        properties: Mapping[str, ElementPropertyDocument] | None = None,
+    ) -> EffectiveSubsystem:
         """Return this entry's effective subsystem, overrides applied."""
-        return self.subsystem.effective(overrides=self.overrides)
+        laws = self.properties if properties is None else properties
+        return self.subsystem.effective(
+            overrides=self.overrides, properties=laws or None
+        )
 
 
 @dataclass(frozen=True)
 class AssemblyDocument:
     """One assembly: which subsystems, at which roles, with local overrides."""
 
-    path: Path
+    path: Path | None
     payload: dict[str, Any]
     entries: tuple[AssemblyEntry, ...]
+    #: The rig to bind to, when the assembly was built in memory and so has no
+    #: directory a ``rig`` reference could be read against.
+    rig: "RigDocument | None" = None
 
     @classmethod
     def load(cls, path: str | Path) -> "AssemblyDocument":
         target = Path(path).resolve()
-        payload = _read(target)
-        # Three questions, asked in the order their repairs become possible.  A role
-        # the kind forbids is refused first: it is wrong no matter which file is
-        # named.  Then each reference is checked against the file it names, because
-        # "this assignment disagrees with the subsystem" is the fault to fix before
-        # any count is worth reporting.  Only then is the shape of the whole set
-        # judged -- a count taken over assignments that do not match their files
-        # would report a number rather than the mistake behind it.
-        _check_contract(payload, target, validate_assembly)
-        cls._check_forbidden(target, str(payload["assembly_kind"]), payload["subsystems"])
+        return cls.from_payload(_read(target), path=target)
+
+    @classmethod
+    def from_payload(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        path: Path | None = None,
+        subsystems: "Mapping[str, SubsystemDocument] | None" = None,
+        resolve_subsystem: "Callable[[str], SubsystemDocument] | None" = None,
+        properties: "Mapping[str, Mapping[str, ElementPropertyDocument]] | None" = None,
+        rig: "RigDocument | None" = None,
+    ) -> "AssemblyDocument":
+        """
+        Build an assembly from a declaration plus its subsystem documents.
+
+        The reference to each subsystem is answered the same three ways a
+        subsystem answers its template: the documents themselves (in-memory
+        assembly), a resolver callback, or the file route.  ``properties`` is
+        passed through to each entry so a caller holding the constitutive laws
+        does not have to keep files on disk to resolve them.
+
+        The questions are asked in the order their repairs become possible, and
+        the order is the same one ``load`` used before: a forbidden role is wrong
+        whatever else the document says, a reference that disagrees with the
+        document it names is the fault to fix before any count is reported, and
+        the shape of the whole set is judged last.
+        """
+        where = _where(path, str(payload.get("name", "?")))
+        declared = _document_payload(payload, where)
+        _check_contract(declared, where, validate_assembly)
+        cls._check_forbidden(where, str(declared["assembly_kind"]), declared["subsystems"])
         entries: list[AssemblyEntry] = []
-        for row in payload["subsystems"]:
-            subsystem = SubsystemDocument.load(
-                (target.parent / str(row["ref"])).resolve()
+        for row in declared["subsystems"]:
+            ref = str(row["ref"])
+            subsystem = _resolve_subsystem(
+                ref, where, path, subsystems, resolve_subsystem
             )
             functional = str(row["functional_role"])
             placement = str(row["placement_role"])
-            _check_role(functional, placement, target)
+            _check_role(functional, placement, where)
             if functional != subsystem.functional_role:
                 raise AuthoringError(
-                    f"{target}: assignment for {row['ref']!r} says functional_role "
+                    f"{where}: assignment for {ref!r} says functional_role "
                     f"{functional!r}, but that subsystem is a "
                     f"{subsystem.functional_role!r}"
                 )
             if not _placement_matches(placement, subsystem.placement_role):
                 raise AuthoringError(
-                    f"{target}: assignment for {row['ref']!r} says placement_role "
+                    f"{where}: assignment for {ref!r} says placement_role "
                     f"{placement!r}, but that subsystem declares "
                     f"{subsystem.placement_role!r}; a subsystem may only be reassigned "
                     "when it declares 'any'"
@@ -777,7 +1154,7 @@ class AssemblyDocument:
             illegal = sorted(set(overrides) - OVERRIDE_KEYS)
             if illegal:
                 raise AuthoringError(
-                    f"{target}: override for {row['ref']!r} may only restate "
+                    f"{where}: override for {ref!r} may only restate "
                     f"{sorted(OVERRIDE_KEYS)}; found {illegal}"
                 )
             stated = row.get("pairings", [])
@@ -796,12 +1173,12 @@ class AssemblyDocument:
                     }
                 )
                 raise AuthoringError(
-                    f"{target}: the pairings for {row['ref']!r} state "
+                    f"{where}: the pairings for {ref!r} state "
                     f"{repeated} more than once; one requirement gets one pairing, "
                     "or the file does not say which port is meant"
                 )
             entry = AssemblyEntry(
-                ref=str(row["ref"]),
+                ref=ref,
                 functional_role=functional,
                 placement_role=placement,
                 overrides=MappingProxyType(overrides),
@@ -810,13 +1187,37 @@ class AssemblyDocument:
             )
             # Resolve once here so an unreachable property file, an unknown
             # hardpoint or a topology-shaped override fails while loading the
-            # assembly, naming this file, rather than three steps later.
+            # assembly, naming where it came from, rather than three steps later.
+            laws = None if properties is None else properties.get(ref)
+            if laws:
+                entry = replace(entry, properties=MappingProxyType(dict(laws)))
+            # Resolve once here so an unreachable property file, an unknown
+            # hardpoint or a topology-shaped override fails while loading the
+            # assembly, naming where it came from, rather than three steps later.
             entry.effective()
             entries.append(entry)
-        # Only once every reference has been checked against the file it names is the
-        # shape of the whole set worth judging.
-        cls._check_shape(target, str(payload["assembly_kind"]), entries)
-        return cls(target, copy.deepcopy(payload), tuple(entries))
+        # Only once every reference has been checked against the document it names
+        # is the shape of the whole set worth judging.
+        cls._check_shape(where, str(declared["assembly_kind"]), entries)
+        return cls(path, declared, tuple(entries), rig)
+
+    @property
+    def where(self) -> str:
+        """How to name this document in a message: its file, or its own name."""
+        return _where(self.path, str(self.payload.get("name", "?")))
+
+    def to_payload(self) -> dict[str, Any]:
+        """Return a mutable copy of the declaration, safe for a caller to edit."""
+        return copy.deepcopy(self.payload)
+
+    def save(self, path: str | Path) -> Path:
+        """Write this declaration to a file and return the path written."""
+        target = Path(path).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(self.payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return target
 
     @property
     def name(self) -> str:
@@ -863,7 +1264,7 @@ class AssemblyDocument:
                 "assembly": _hash(self.payload),
                 "subsystems": {
                     entry.ref: {
-                        "template": str(entry.subsystem.template.path),
+                        "template": entry.subsystem.template.where,
                         "topology": entry.subsystem.template.topology_hash,
                         "values": entry.subsystem.values_hash,
                         "property_bindings": entry.subsystem.property_bindings_hash,
@@ -876,7 +1277,7 @@ class AssemblyDocument:
 
     @staticmethod
     def _check_forbidden(
-        path: Path,
+        where: str,
         kind: str,
         entries: Iterable[AssemblyEntry | Mapping[str, Any]],
     ) -> None:
@@ -892,11 +1293,12 @@ class AssemblyDocument:
         try:
             check_forbidden_roles(kind, [role for role, _placement in assignments])
         except RuleViolation as exc:
-            raise AuthoringError(f"{path}: {exc}") from exc
+            raise AuthoringError(f"{where}: {exc}") from exc
+
 
     @staticmethod
     def _check_shape(
-        path: Path,
+        where: str,
         kind: str,
         entries: Iterable[AssemblyEntry | Mapping[str, Any]],
     ) -> None:
@@ -905,8 +1307,33 @@ class AssemblyDocument:
         try:
             check_assembly_shape(kind, assignments)
         except RuleViolation as exc:
-            raise AuthoringError(f"{path}: {exc}") from exc
+            raise AuthoringError(f"{where}: {exc}") from exc
 
+def _resolve_subsystem(
+    ref: str,
+    where: str,
+    path: Path | None,
+    supplied: "Mapping[str, SubsystemDocument] | None",
+    resolve: "Callable[[str], SubsystemDocument] | None",
+) -> SubsystemDocument:
+    """
+    Answer one assembly entry's subsystem reference without guessing.
+
+    The three answers are checked in the order a caller is likely to have them,
+    and a reference that none of them can answer is refused by name rather than
+    read from a path nobody stated.
+    """
+    if supplied is not None and ref in supplied:
+        return supplied[ref]
+    if resolve is not None:
+        return resolve(ref)
+    if path is not None:
+        return SubsystemDocument.load((path.parent / ref).resolve())
+    raise AuthoringError(
+        f"{where}: subsystem reference {ref!r} cannot be resolved; this assembly has "
+        "neither a file to read it from nor the document itself; pass subsystems= "
+        "or resolve_subsystem= to build it in memory"
+    )
 
 def _assignment_of(entry: AssemblyEntry | Mapping[str, Any]) -> tuple[str, str]:
     """Return one entry's ``(functional_role, placement_role)`` assignment."""
@@ -952,43 +1379,75 @@ def _placement_matches(assigned: str, declared: str) -> bool:
 class RigDocument:
     """One test rig: what it supports, and the ports it insists on."""
 
-    path: Path
+    path: Path | None
     payload: dict[str, Any]
 
     @classmethod
     def load(cls, path: str | Path) -> "RigDocument":
         target = Path(path).resolve()
-        payload = _read(target)
-        _check_contract(payload, target, validate_rig)
+        return cls.from_payload(_read(target), path=target)
+
+    @classmethod
+    def from_payload(
+        cls, payload: Mapping[str, Any], *, path: Path | None = None
+    ) -> "RigDocument":
+        """
+        Build a rig from a declaration that may never have been a file.
+
+        A rig names a registered bench when it wants one, and that check is the
+        same here and in ``load``: the bench is code, and a file that names a
+        bench nobody registered is refused by name rather than driven silently.
+        """
+        where = _where(path, str(payload.get("name", "?")))
+        declared = _document_payload(payload, where)
+        _check_contract(declared, where, validate_rig)
         for key in ("required_ports", "optional_ports"):
-            names = [str(name) for name in payload.get(key, ())]
+            names = [str(name) for name in declared.get(key, ())]
             if len(names) != len(set(names)):
                 duplicates = sorted({n for n in names if names.count(n) > 1})
-                raise AuthoringError(f"{target}: {key} repeats {duplicates}")
+                raise AuthoringError(f"{where}: {key} repeats {duplicates}")
         overlap = sorted(
-            set(str(name) for name in payload.get("required_ports", ()))
-            & set(str(name) for name in payload.get("optional_ports", ()))
+            set(str(name) for name in declared.get("required_ports", ()))
+            & set(str(name) for name in declared.get("optional_ports", ()))
         )
         if overlap:
             raise AuthoringError(
-                f"{target}: port(s) {overlap} are declared both required and optional"
+                f"{where}: port(s) {overlap} are declared both required and optional"
             )
-        cls._check_supports(target, payload)
-        bench = payload.get("bench")
+        cls._check_supports(where, declared)
+        bench = declared.get("bench")
         if bench is not None:
             from ..rigs import get_rig, rig_names
 
             known = rig_names()
             if str(bench) not in known:
                 raise AuthoringError(
-                    f"{target}: bench {bench!r} is not a registered test bench; the "
+                    f"{where}: bench {bench!r} is not a registered test bench; the "
                     f"registered benches are {list(known)}"
                 )
-            cls._check_actuators(target, payload, get_rig(str(bench)))
-        return cls(target, copy.deepcopy(payload))
+            cls._check_actuators(where, declared, get_rig(str(bench)))
+        return cls(path, declared)
+
+    @property
+    def where(self) -> str:
+        """How to name this document in a message: its file, or its own name."""
+        return _where(self.path, str(self.payload.get("name", "?")))
+
+    def to_payload(self) -> dict[str, Any]:
+        """Return a mutable copy of the declaration, safe for a caller to edit."""
+        return copy.deepcopy(self.payload)
+
+    def save(self, path: str | Path) -> Path:
+        """Write this declaration to a file and return the path written."""
+        target = Path(path).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(self.payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return target
 
     @staticmethod
-    def _check_supports(path: Path, payload: Mapping[str, Any]) -> None:
+    def _check_supports(where: str, payload: Mapping[str, Any]) -> None:
         """
         Refuse a rig whose supports do not agree with the ports it insists on.
 
@@ -1002,20 +1461,20 @@ class RigDocument:
         names = [str(row["name"]) for row in payload.get("supports", ())]
         if len(names) != len(set(names)):
             repeated = sorted({name for name in names if names.count(name) > 1})
-            raise AuthoringError(f"{path}: supports repeats {repeated}")
+            raise AuthoringError(f"{where}: supports repeats {repeated}")
         if not names:
             return
         declared = set(names) | {str(name) for name in payload.get("optional_ports", ())}
         unsupported = sorted(set(str(name) for name in payload["required_ports"]) - declared)
         if unsupported:
             raise AuthoringError(
-                f"{path}: required port(s) {unsupported} are not declared in supports "
+                f"{where}: required port(s) {unsupported} are not declared in supports "
                 f"or optional_ports; a rig cannot require an attachment it declares "
                 f"no support for"
             )
 
     @staticmethod
-    def _check_actuators(path: Path, payload: Mapping[str, Any], spec: Any) -> None:
+    def _check_actuators(where: str, payload: Mapping[str, Any], spec: Any) -> None:
         """
         Refuse an actuator the bench this rig names does not drive.
 
@@ -1027,11 +1486,11 @@ class RigDocument:
         actuators = [str(name) for name in payload.get("actuators", ())]
         if len(actuators) != len(set(actuators)):
             repeated = sorted({name for name in actuators if actuators.count(name) > 1})
-            raise AuthoringError(f"{path}: actuators repeats {repeated}")
+            raise AuthoringError(f"{where}: actuators repeats {repeated}")
         unknown = sorted(set(actuators) - set(spec.coordinate_names()))
         if unknown:
             raise AuthoringError(
-                f"{path}: actuator(s) {unknown} are not driven by bench "
+                f"{where}: actuator(s) {unknown} are not driven by bench "
                 f"{spec.name!r}; it drives {list(spec.coordinate_names())}"
             )
 
@@ -1118,7 +1577,7 @@ class RigDocument:
         """
         if assembly.assembly_kind not in self.supported_kinds:
             raise AuthoringError(
-                f"{self.path}: does not support assembly kind "
+                f"{self.where}: does not support assembly kind "
                 f"{assembly.assembly_kind!r}; it supports "
                 f"{sorted(self.supported_kinds)}"
             )
@@ -1126,7 +1585,7 @@ class RigDocument:
         missing = sorted(self.required_ports - set(offered))
         if missing:
             raise AuthoringError(
-                f"{self.path}: assembly {assembly.name!r} does not offer required "
+                f"{self.where}: assembly {assembly.name!r} does not offer required "
                 f"port(s) {missing}; it offers {sorted(offered)}"
             )
 
@@ -1160,12 +1619,32 @@ class SimulationAssembly:
     @classmethod
     def load(cls, assembly_path: str | Path) -> "SimulationAssembly":
         assembly = AssemblyDocument.load(assembly_path)
+        return cls.bind(assembly)
+
+    @classmethod
+    def bind(cls, assembly: AssemblyDocument) -> "SimulationAssembly":
+        """
+        Bind an assembly to the rig it names, in memory.
+
+        The rig reference lives in the assembly declaration, so binding needs no
+        path: a file assembly resolves it relative to its own directory, and an
+        in-memory assembly must have its rig supplied first, because there is no
+        directory to read a reference relative to -- and reading the wrong one
+        would silently bind a model to another bench.
+        """
         rig_ref = assembly.payload.get("rig")
         if not rig_ref:
             raise AuthoringError(
-                f"{assembly.path}: a SimulationAssembly requires a rig reference"
+                f"{assembly.where}: a SimulationAssembly requires a rig reference"
             )
-        rig = RigDocument.load(assembly.path.parent / str(rig_ref))
+        rig = assembly.rig
+        if rig is None:
+            if assembly.path is None:
+                raise AuthoringError(
+                    f"{assembly.where}: names rig {rig_ref!r}, but this assembly was "
+                    "built in memory; pass a RigDocument to resolve it"
+                )
+            rig = RigDocument.load(assembly.path.parent / str(rig_ref))
         rig.check_assembly(assembly)
         offered = rig.offered_ports(assembly)
         # Both halves of the interface, resolved once: a required port is bound

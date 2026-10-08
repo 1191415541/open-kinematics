@@ -36,7 +36,8 @@ const JointEntry kJoints[] = {
 const char* const kElements[] = {
     "spring",           "damper",          "bump_stop",        "bushing",
     "anti_roll_bar",    "aerodynamic_drag", "steering_actuator", "rotational_torque",
-    "wheel_torque",     "point_wrench",     "gravity",
+    "wheel_torque",     "point_wrench",     "gravity",            "force",
+    "torque",           "wrench",
 };
 
 const char* const kTires[] = {"vertical_linear", "fiala", "pac2002", "native_brush"};

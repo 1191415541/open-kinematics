@@ -1,0 +1,7 @@
+{
+  "contract": "multibody-case", "contract_version": 1, "kind": "case",
+  "family": "kc_quasi_static", "name": "generic_travel_sweep", "drive_mode": "kinematics",
+  "k": {"axes": [{"coordinate": "travel", "values_mm": [0.0, 1.0, 2.0]}]},
+  "time": {"start_s": 0.0, "end_s": 0.002, "step_s": 0.001},
+  "solver": {"internal_step_s": 0.00025}
+}

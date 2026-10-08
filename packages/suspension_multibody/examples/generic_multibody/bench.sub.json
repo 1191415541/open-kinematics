@@ -1,0 +1,5 @@
+{
+  "document": "subsystem", "schema_version": 1, "name": "bench",
+  "template": "bench.tpl.json", "functional_role": "generic", "placement_role": "any",
+  "hardpoints": {"origin": [0.0, 0.0, 0.0]}, "property_bindings": {}
+}

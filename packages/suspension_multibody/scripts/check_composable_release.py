@@ -85,7 +85,19 @@ EXPECTED_BOUNDARY_FINDINGS: tuple[tuple[str, str], ...] = ()
 #: ``vehicle/``: the static wheel-load split and the roll-centre geometry are
 #: vehicle-level derived quantities, not kernel solves, so neither ever needed
 #: the static-solve ABI entry the old release condition asked for.
-RETIRED_PACKAGES: tuple[str, ...] = ("core", "model", "metrics", "analysis")
+RETIRED_PACKAGES: tuple[str, ...] = ("core", "model", "metrics", "analysis", "preparation", "subsystems")
+
+
+def _package_has_source(name: str) -> bool:
+    """
+    Return whether a package still contains tracked Python source.
+
+    Test runs can leave ``__pycache__`` directories behind after a retired
+    package has been removed.  Those caches are not an importable production
+    path and must not make the release gate depend on test cleanup order.
+    """
+    package = SOURCE_ROOT / name
+    return any(path.suffix == ".py" for path in package.rglob("*.py")) if package.is_dir() else False
 
 #: The live modules the current-state documentation claims, and that must exist.
 DOCUMENTED_PACKAGES: tuple[str, ...] = (
@@ -93,14 +105,14 @@ DOCUMENTED_PACKAGES: tuple[str, ...] = (
     "templates",
     "connections",
     "rigs",
-    "subsystems",
+    "authoring",
     "compilation",
     "simulation",
     "results",
     "outputs",
     "report",
     "studies",
-    "preparation",
+    "presets",
     "cases",
     "schema",
     "kernel",
@@ -157,7 +169,9 @@ def parse_findings(text: str) -> list[tuple[str, str]]:
     findings: list[tuple[str, str]] = []
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped.startswith("- ") or "legacy_module_import" not in stripped:
+        if not stripped.startswith("- ") or not any(rule in stripped for rule in (
+            "legacy_module_import", "legacy_module_dynamic_import", "retired_subsystem_import",
+        )):
             continue
         # `- src/.../api.py:42 [production/legacy_module_import/elements]`
         location, _, rest = stripped[2:].partition(" [")
@@ -203,9 +217,7 @@ def check_migration_list() -> Check:
             for path, symbol in missing
         )
         return Check("migration list", False, detail)
-    retired = [
-        name for name in RETIRED_PACKAGES if (SOURCE_ROOT / name).exists()
-    ]
+    retired = [name for name in RETIRED_PACKAGES if _package_has_source(name)]
     if retired:
         return Check(
             "migration list", False, f"retired package(s) still present: {retired}"
@@ -307,9 +319,7 @@ def check_documentation_matches_tree() -> Check:
     missing = [
         name for name in DOCUMENTED_PACKAGES if not (SOURCE_ROOT / name).is_dir()
     ]
-    retired_present = [
-        name for name in RETIRED_PACKAGES if (SOURCE_ROOT / name).is_dir()
-    ]
+    retired_present = [name for name in RETIRED_PACKAGES if _package_has_source(name)]
     if missing:
         return Check("documentation roots", False, f"documented but absent: {missing}")
     if retired_present:

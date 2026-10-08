@@ -1,0 +1,19 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/results/test_universal_result_channels.py",
+    "packages/suspension_multibody/tests/results/test_function_wrench.py",
+    "packages/suspension_multibody/tests/authoring/test_api_file_feature_parity.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T17:11:30.597373+00:00",
+  "finished_at": "2026-10-06T17:11:33.385125+00:00",
+  "log": "raw\\validation\\child-8-step-3.log",
+  "log_sha256": "47b0e65b12c856c35b57a8db4650d3b557258fb8029eec0bc6b6f473497a4ff6"
+}

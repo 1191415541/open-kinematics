@@ -49,7 +49,8 @@ def test_contract_kc_runners_are_gone() -> None:
         / "cases"
         / "kc_quasi_static"
     )
-    workflow = (package / "workflow.py").read_text(encoding="utf-8")
+    assert not (package / "workflow.py").exists()
+    workflow = "\n".join(path.read_text(encoding="utf-8") for path in package.glob("*.py"))
     exports = (package / "__init__.py").read_text(encoding="utf-8")
     assert "def run_k_grid_contract(" not in workflow
     assert "def run_c_paths_contract(" not in workflow

@@ -28,14 +28,10 @@ from __future__ import annotations
 import json
 import sys
 
-from suspension_multibody.api import run_case
+from suspension_multibody.api import kc_case_run
 from suspension_multibody.kernel.native import native_build_metadata
-from suspension_multibody.schema import (
-    CaseSpec,
-    DisplacementControl,
-    FrontAxleModel,
-    MassSpec,
-)
+from suspension_multibody.schema import CaseSpec, DisplacementControl, MassSpec
+from suspension_multibody.schema.model import AxleDeclaration
 
 #: The hardpoints of the package's own public K example, in millimetres.  Named
 #: here rather than read from a fixture: this script has to run where the
@@ -56,7 +52,7 @@ HARDPOINTS: dict[str, list[float]] = {
 
 def main() -> int:
     """Run one native K state and print what happened, as JSON."""
-    model = FrontAxleModel(
+    model = AxleDeclaration(
         hardpoints=HARDPOINTS, mass=MassSpec(sprung_mass=1000.0)
     )
     case = CaseSpec(
@@ -65,7 +61,7 @@ def main() -> int:
             DisplacementControl(target="wheel_travel_left", values=(0.0, 20.0)),
         ),
     )
-    bundle = run_case(model, case)
+    bundle = kc_case_run(model, case)
     states = list(bundle.states)
     payload = {
         # A repository path here would mean the isolation was not real.

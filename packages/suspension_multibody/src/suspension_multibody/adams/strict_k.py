@@ -12,13 +12,12 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-from ..cases.kc_quasi_static.contract import case_document, model_document
-from ..schema import FrontAxleModel, MassSpec
-from ..simulation import SimulationRequest, run_request
+from ..schema import MassSpec
+from ..schema.model import AxleDeclaration
 from .adapter import SmokeResult, Tolerance
 from .equivalent_model import write_equivalent_sources
 from .probe import AdamsProfile, _adams_environment, producer_id
-from .reference import _KC_SETTINGS, _KC_TIMES_S, _read_hardpoints, _side_fields
+from .reference import _k_grid_states, _read_hardpoints
 
 CONTRACT = "strict-adams-k-v1"
 SCHEMA_VERSION = 1
@@ -216,59 +215,16 @@ def run_suspension_multibody_pure_k(profile: AdamsProfile) -> list[dict[str, Any
     """
     manifest = build_equivalence_manifest(profile)
     physical = manifest["physical_input"]
-    model = FrontAxleModel(
+    model = AxleDeclaration(
         name="strict_adams_car_k_equivalent",
         hardpoints=physical["hardpoints_mm"],
         mass=MassSpec(sprung_mass=1.0),
     )
-    from ..preparation.kc_quasi_static import assembly_for
-
-    assembly = assembly_for(model, mode="K", rig="kc_quasi_static")
-    model_doc = model_document(assembly, name="native-k", drive_wheels=True)
-    case_doc = case_document(
-        assembly,
-        family="kc_quasi_static",
-        name="kc-k",
+    return _k_grid_states(
+        model,
         wheel_values_mm=WHEEL_VALUES_MM,
         rack_values_mm=RACK_VALUES_MM,
-        times_s=_KC_TIMES_S,
-        settings=_KC_SETTINGS,
-        drive_wheels=True,
     )
-    run = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model_doc,
-            case=case_doc,
-        )
-    ).raw
-    left_states = run.body_state("upright_L")
-    right_states = run.body_state("upright_R")
-    states: list[dict[str, Any]] = []
-    for index, entry in enumerate(run.cases):
-        wheel = WHEEL_VALUES_MM[index // len(RACK_VALUES_MM)]
-        rack = RACK_VALUES_MM[index % len(RACK_VALUES_MM)]
-        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
-        state: dict[str, Any] = {
-            "case_id": _case_id(wheel, rack),
-            "wheel_travel_mm": float(wheel),
-            "rack_displacement_mm": float(rack),
-        }
-        state.update(
-            _side_fields(assembly, "L", left_states[last, :3], left_states[last, 3:7])
-        )
-        state.update(
-            _side_fields(assembly, "R", right_states[last, :3], right_states[last, 3:7])
-        )
-        states.append(state)
-    for state in states:
-        expected = _case_id(float(state["wheel_travel_mm"]), float(state["rack_displacement_mm"]))
-        if state["case_id"] != expected:
-            raise RuntimeError(
-                f"the kernel expanded {state['case_id']!r} where {expected!r} was expected"
-            )
-    return states
 
 
 def run_adams_pure_k(

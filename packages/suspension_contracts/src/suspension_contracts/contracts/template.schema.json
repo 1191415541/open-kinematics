@@ -8,10 +8,18 @@
     "document": {"const": "template"},
     "schema_version": {"const": 1},
     "name": {"type": "string", "minLength": 1},
-    "functional_role": {"enum": ["suspension", "steering", "wheel", "chassis", "brake", "drive", "anti_roll_bar"]},
+    "functional_role": {"enum": ["suspension", "steering", "wheel", "chassis", "brake", "drive", "anti_roll_bar", "generic"]},
     "allowed_placement_roles": {"type": "array", "items": {"enum": ["any", "front", "rear", "front_left", "front_right", "rear_left", "rear_right"]}, "minItems": 1},
     "description": {"type": "string"},
     "suspension_kind": {"type": "string"},
+    "symmetry": {"enum": ["mirrored_xz", "asymmetric"]},
+    "configurations": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+    "default_configuration": {"type": "string", "minLength": 1},
+    "units": {
+      "type": "object", "additionalProperties": false,
+      "required": ["length"],
+      "properties": {"length": {"enum": ["m", "mm"]}}
+    },
     "sides": {"type": "array", "items": {"enum": ["left", "right"]}, "minItems": 1, "uniqueItems": true},
     "mirror": {"type": "boolean"},
     "bodies": {"type": "array", "items": {"$ref": "#/$defs/body"}},
@@ -19,9 +27,16 @@
     "joints": {"type": "array", "items": {"$ref": "#/$defs/joint"}},
     "elements": {"type": "array", "items": {"$ref": "#/$defs/element"}},
     "property_slots": {"type": "array", "items": {"$ref": "#/$defs/slot"}},
+    "markers": {"type": "array", "items": {"$ref": "#/$defs/marker"}},
     "ports": {"type": "array", "items": {"$ref": "#/$defs/port"}},
     "needs": {"type": "array", "items": {"$ref": "#/$defs/need"}},
-    "outputs": {"type": "array", "items": {"$ref": "#/$defs/output"}}
+    "outputs": {"type": "array", "items": {"$ref": "#/$defs/output"}},
+    "inputs": {"type": "array", "items": {"type": "object"}},
+    "coordinates": {"type": "array", "items": {"$ref": "#/$defs/coordinate"}},
+    "couplers": {"type": "array", "items": {"type": "object"}},
+    "gauges": {"type": "array", "items": {"type": "object"}},
+    "capabilities": {"type": "array", "items": {"type": "string"}},
+    "tires": {"type": "array", "items": {"$ref": "#/$defs/tire"}}
   },
   "$defs": {
     "body": {
@@ -29,8 +44,15 @@
       "properties": {
         "name": {"type": "string", "minLength": 1},
         "fixed": {"type": "boolean"},
+        "symmetric": {"type": "boolean"},
+        "position": {"$ref": "#/$defs/vector"},
+        "quaternion": {"type": "array", "items": {"type": "number", "finite": true}, "minItems": 4, "maxItems": 4},
+        "velocity": {"$ref": "#/$defs/vector"},
+        "omega": {"$ref": "#/$defs/vector"},
         "mass": {"type": "number", "minimum": 0, "finite": true},
         "mass_slot": {"type": "string"},
+        "inertia_slot": {"type": "string"},
+        "position_point": {"type": "string", "minLength": 1},
         "center_of_mass": {
           "type": "array", "items": {"type": "number", "finite": true},
           "minItems": 3, "maxItems": 3
@@ -52,27 +74,48 @@
     "hardpoint": {
       "type": "object", "additionalProperties": false, "required": ["name"],
       "properties": {
+        "space": {"enum": ["world", "body"]},
         "name": {"type": "string", "minLength": 1},
         "owner": {"type": "string"},
         "label": {"type": "string"},
         "symmetric": {"type": "boolean"}
       }
     },
+    "marker": {
+      "type": "object", "additionalProperties": false, "required": ["name", "owner", "point"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "owner": {"type": "string", "minLength": 1},
+        "point": {"type": "string", "minLength": 1},
+        "quaternion": {"type": "array", "items": {"type": "number", "finite": true}, "minItems": 4, "maxItems": 4},
+        "symmetric": {"type": "boolean"}
+      }
+    },
     "joint": {
       "type": "object", "additionalProperties": false, "required": ["name", "type", "body_a", "body_b"],
       "properties": {
+        "axis_space": {"enum": ["world", "body"]},
         "name": {"type": "string", "minLength": 1},
-        "type": {"enum": ["fixed", "revolute", "spherical", "prismatic", "universal", "cylindrical", "inplane"]},
+        "type": {"enum": ["fixed", "revolute", "spherical", "prismatic", "universal", "cylindrical", "inplane", "convel", "driven_translation", "driven_rotation"]},
         "body_a": {"type": "string", "minLength": 1},
         "body_b": {"type": "string", "minLength": 1},
         "point_a": {"type": "string"},
         "point_b": {"type": "string"},
         "far_label": {"type": "string"},
         "axis": {"type": "array", "items": {"type": "number", "finite": true}, "minItems": 3, "maxItems": 3},
+        "axis_b": {"$ref": "#/$defs/vector"},
+        "axis_a_secondary": {"$ref": "#/$defs/vector"},
+        "axis_b_secondary": {"$ref": "#/$defs/vector"},
+        "convel_angle_target": {"type": "number", "finite": true},
+        "reference_quaternion": {"type": "array", "items": {"type": "number", "finite": true}, "minItems": 4, "maxItems": 4},
+        "target": {"type": "string", "minLength": 1},
+        "symmetric": {"type": "boolean"},
         "axis_reference": {"type": "string"},
         "fixed_axis_reference": {"type": "string"},
         "modes": {"type": "array", "items": {"enum": ["K", "C"]}, "minItems": 1, "maxItems": 2},
-        "kind_by_mode": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/mode_joint"}}
+        "kind_by_mode": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/mode_joint"}},
+        "configurations": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+        "requires": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
       }
     },
     "mode_joint": {
@@ -83,15 +126,30 @@
       }
     },
     "element": {
-      "type": "object", "additionalProperties": false, "required": ["name", "type", "body_a", "body_b", "property_slot"],
+      "type": "object", "additionalProperties": false, "required": ["name", "type"],
       "properties": {
+        "target": {"type": "string", "minLength": 1},
         "name": {"type": "string", "minLength": 1},
-        "type": {"enum": ["spring", "damper", "bump_stop", "bushing", "anti_roll_bar", "tire", "steering_actuator", "wheel_torque"]},
+        "type": {"enum": ["spring", "damper", "bump_stop", "bushing", "anti_roll_bar", "tire", "steering_actuator", "aerodynamic_drag", "point_wrench", "gravity", "wheel_torque", "rotational_torque", "force", "torque", "wrench"]},
+        "action": {"type": "string", "minLength": 1},
+        "reaction": {"type": "string", "minLength": 1},
+        "reference": {"type": "string", "minLength": 1},
+        "axis": {"$ref": "#/$defs/vector"},
+        "function": {"type": "string", "minLength": 1},
+        "functions": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"type": "string", "minLength": 1}},
+        "bindings": {"type": "object"},
+        "variables": {"type": "object"},
+        "tables": {"type": "object"},
         "body_a": {"type": "string", "minLength": 1},
         "body_b": {"type": "string", "minLength": 1},
         "point_a": {"type": "string"},
         "point_b": {"type": "string"},
         "property_slot": {"type": "string", "minLength": 1},
+        "parameters": {"type": "object"},
+        "parameter_expressions": {"type": "object"},
+        "configurations": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+        "requires": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "symmetric": {"type": "boolean"},
         "modes": {"type": "array", "items": {"enum": ["K", "C"]}, "minItems": 1, "maxItems": 2}
       }
     },
@@ -99,9 +157,9 @@
       "type": "object", "additionalProperties": false, "required": ["name", "element_type", "required"],
       "properties": {
         "name": {"type": "string", "minLength": 1},
-        "element_type": {"enum": ["spring", "damper", "bump_stop", "bushing", "tire", "generic"]},
+        "element_type": {"enum": ["spring", "damper", "bump_stop", "bushing", "tire", "generic", "mass", "inertia"]},
         "unit": {"type": "string", "minLength": 1},
-        "allowed_models": {"type": "array", "items": {"enum": ["linear", "nonlinear", "piecewise"]}, "minItems": 1},
+        "allowed_models": {"type": "array", "items": {"enum": ["linear", "nonlinear", "piecewise", "pac2002", "fiala", "native_brush"]}, "minItems": 1},
         "required": {"type": "boolean"},
         "connections": {"type": "array", "items": {"type": "string", "minLength": 1}},
         "default": {"type": "number", "finite": true},
@@ -114,23 +172,45 @@
         "name": {"type": "string", "minLength": 1},
         "role": {"type": "string", "minLength": 1},
         "owner": {"type": "string"},
+        "point": {"type": "string", "minLength": 1},
+        "symmetric": {"type": "boolean"},
         "capabilities": {"type": "array", "items": {"type": "string"}},
         "labels": {"type": "array", "items": {"type": "string"}},
-        "cardinality": {"enum": ["one", "many"]},
+        "cardinality": {"enum": ["one", "many", "none"]},
         "family": {"type": "string"},
-        "units": {"type": "string"}
+        "units": {"type": "string"},
+        "kind": {"enum": ["geometry", "channel", "road", "spin"]},
+        "coordinate": {"type": "string", "minLength": 1},
+        "marker": {"type": "string", "minLength": 1},
+        "direction": {"$ref": "#/$defs/vector"},
+        "resource": {"type": "string", "minLength": 1}
       }
     },
     "need": {
       "type": "object", "additionalProperties": false, "required": ["role", "count", "required"],
       "properties": {
+        "name": {"type": "string", "minLength": 1},
         "role": {"type": "string", "minLength": 1},
         "count": {"type": "integer", "minimum": 1},
         "required": {"type": "boolean"},
         "requires_capabilities": {"type": "array", "items": {"type": "string"}},
         "match_labels": {"type": "array", "items": {"type": "string"}},
         "bound_outputs": {"type": "array", "items": {"type": "string"}},
-        "note": {"type": "string"}
+        "note": {"type": "string"},
+        "kind": {"enum": ["geometry", "channel", "road", "spin"]},
+        "units": {"type": "string", "minLength": 1},
+        "family": {"type": "string", "minLength": 1}
+      }
+    },
+    "coordinate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "joint", "kind"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "joint": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["rotation", "translation"]},
+        "reference": {"type": "number", "finite": true},
+        "symmetric": {"type": "boolean"}
       }
     },
     "output": {
@@ -139,6 +219,24 @@
         "name": {"type": "string", "minLength": 1},
         "unit": {"type": "string", "minLength": 1},
         "source": {"type": "string"}
+      }
+    },
+    "tire": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "body", "model_slot", "mount_port", "spin_marker", "contact_frame", "road_port"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "body": {"type": "object", "additionalProperties": false, "required": ["name", "center_marker"],
+          "properties": {"name": {"type": "string", "minLength": 1}, "mass_slot": {"type": "string", "minLength": 1}, "inertia_slot": {"type": "string", "minLength": 1}, "center_marker": {"type": "string", "minLength": 1}}},
+        "mirror": {"type": "boolean"},
+        "mass_slot": {"type": "string", "minLength": 1},
+        "inertia_slot": {"type": "string", "minLength": 1},
+        "model_slot": {"type": "string", "minLength": 1},
+        "mount_port": {"type": "string", "minLength": 1},
+        "spin_marker": {"type": "string", "minLength": 1},
+        "contact_frame": {"type": "object", "additionalProperties": false, "required": ["port"], "properties": {"port": {"type": "string", "minLength": 1}}},
+        "road_port": {"type": "string", "minLength": 1},
+        "symmetric": {"type": "boolean"}
       }
     }
   }

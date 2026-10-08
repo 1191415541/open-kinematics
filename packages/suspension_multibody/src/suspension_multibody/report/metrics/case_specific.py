@@ -72,29 +72,15 @@ def not_applicable_metrics(
     }
 
 
-def wheel_metrics(state: Any, assembly: Any, side: str) -> dict[str, float]:
+def wheel_metrics(result: Any, frame_id: str, side: str) -> dict[str, float]:
     """Compute wheel-center and orientation metrics for one vehicle side."""
     normalized = str(side).strip().upper()
     if normalized not in {"L", "R"}:
         raise ValueError(f"unknown wheel side {side!r}")
     side_name = "left" if normalized == "L" else "right"
-    body = f"upright_{normalized}"
-    pose = state.pose(body)
-    rotation = np.asarray(pose.rotation, dtype=float)
-    origin = np.asarray(pose.translation, dtype=float)
-    if (body, "wheel_center") in getattr(assembly, "points", ()):
-        center_local = np.asarray(assembly.point(body, "wheel_center"), dtype=float)
-        center = origin + rotation @ center_local
-    elif (body, "spindle") in getattr(assembly, "points", ()):
-        center_local = np.asarray(assembly.point(body, "spindle"), dtype=float)
-        center = origin + rotation @ center_local
-    elif (hub := f"wheel_hub_{normalized}") in getattr(assembly, "bodies", ()) and (hub, "wheel_center") in getattr(assembly, "points", ()):
-        hub_pose = state.pose(hub)
-        hub_center = np.asarray(assembly.point(hub, "wheel_center"), dtype=float)
-        center = np.asarray(hub_pose.translation, dtype=float) + np.asarray(hub_pose.rotation, dtype=float) @ hub_center
-    else:
-        center_local = np.asarray(assembly.point(body, "wheel_center"), dtype=float)
-        center = origin + rotation @ center_local
+    pose = result.frame_pose(frame_id)[-1]
+    rotation = np.asarray(pose[:3, :3], dtype=float)
+    center = np.asarray(pose[:3, 3], dtype=float) * 1000
     outward = -1.0 if normalized == "L" else 1.0
     lateral_axis_y = float(rotation[1, 1])
     camber_deg = -outward * float(
@@ -112,11 +98,11 @@ def wheel_metrics(state: Any, assembly: Any, side: str) -> dict[str, float]:
     }
 
 
-def compute_k_metrics(state: Any, assembly: Any) -> dict[str, float]:
+def compute_k_metrics(result: Any, wheel_frames: dict[str, str]) -> dict[str, float]:
     """Compute K&C geometry metrics with the established sign conventions."""
     metrics: dict[str, float] = {}
-    metrics.update(wheel_metrics(state, assembly, "L"))
-    metrics.update(wheel_metrics(state, assembly, "R"))
+    metrics.update(wheel_metrics(result, wheel_frames["L"], "L"))
+    metrics.update(wheel_metrics(result, wheel_frames["R"], "R"))
     metrics["track_mm"] = (
         metrics["right_wheel_center_y"] - metrics["left_wheel_center_y"]
     )

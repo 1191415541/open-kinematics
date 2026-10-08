@@ -1,0 +1,20 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/api/test_unified_validate.py",
+    "packages/suspension_multibody/tests/api/test_simulate.py",
+    "packages/suspension_multibody/tests/simulation/test_single_model_pipeline.py",
+    "packages/suspension_multibody/tests/simulation/test_memory_simulate.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T16:00:08.881716+00:00",
+  "finished_at": "2026-10-06T16:00:12.698237+00:00",
+  "log": "raw\\validation\\child-7-step-3.log",
+  "log_sha256": "d7149b88d9bf1849c153c24ddc9d67882a05a508376b5b1d3e2841da7efe6071"
+}

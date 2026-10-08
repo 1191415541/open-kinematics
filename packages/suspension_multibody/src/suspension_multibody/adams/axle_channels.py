@@ -9,14 +9,15 @@ import numpy as np
 
 from ..axle_dynamics import (
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleDynamicsResult,
 )
+from ..axle_dynamics.schema import AxleDynamicsModel
 from .axle_contract import (
     AxleChannelBindings,
     load_axle_channel_contract,
     validate_axle_channel_bindings,
 )
+from .axle_evidence_view import FrozenAxleEvidence
 from .time_domain import TimeHistory
 
 _POSITION = slice(0, 3)
@@ -29,7 +30,7 @@ _ALPHA = slice(16, 19)
 
 def axle_history_from_result(
     model: AxleDynamicsModel,
-    result: AxleDynamicsResult,
+    result: AxleDynamicsResult | FrozenAxleEvidence,
     bindings: AxleChannelBindings,
     *,
     case: AxleDynamicsCase | None = None,
@@ -152,7 +153,7 @@ def axle_history_from_result(
 
 def _validate_result_layout(
     model: AxleDynamicsModel,
-    result: AxleDynamicsResult,
+    result: AxleDynamicsResult | FrozenAxleEvidence,
 ) -> None:
     expected = {
         "body": tuple(body.name for body in model.bodies),
@@ -219,7 +220,7 @@ def _suspension_deflection(
 
 def _wheel_spin(
     model: AxleDynamicsModel,
-    result: AxleDynamicsResult,
+    result: AxleDynamicsResult | FrozenAxleEvidence,
     wheel_body: str,
     joint_name: str,
 ) -> np.ndarray:
@@ -283,7 +284,7 @@ def _corner_records(model: AxleDynamicsModel, name: str) -> tuple:
 
 
 def _conservative_axial_force(
-    model: AxleDynamicsModel, result: AxleDynamicsResult, name: str
+    model: AxleDynamicsModel, result: AxleDynamicsResult | FrozenAxleEvidence, name: str
 ) -> np.ndarray:
     """Return the corner's elastic and unilateral force, without dissipation."""
     springs, _, stops = _corner_records(model, name)
@@ -302,7 +303,7 @@ def _conservative_axial_force(
 
 
 def _dissipative_axial_force(
-    model: AxleDynamicsModel, result: AxleDynamicsResult, name: str
+    model: AxleDynamicsModel, result: AxleDynamicsResult | FrozenAxleEvidence, name: str
 ) -> np.ndarray:
     """
     Return the corner's dissipative force: the damper's, plus any stop's.
@@ -330,7 +331,7 @@ def _dissipative_axial_force(
 
 
 def _total_axial_force(
-    model: AxleDynamicsModel, result: AxleDynamicsResult, name: str
+    model: AxleDynamicsModel, result: AxleDynamicsResult | FrozenAxleEvidence, name: str
 ) -> np.ndarray:
     """Return the corner's whole axial force, which its reaction carries."""
     return _conservative_axial_force(model, result, name) + _dissipative_axial_force(
@@ -340,7 +341,7 @@ def _total_axial_force(
 
 def _fixture_wrench(
     model: AxleDynamicsModel,
-    result: AxleDynamicsResult,
+    result: AxleDynamicsResult | FrozenAxleEvidence,
     bindings: AxleChannelBindings,
     *,
     case: AxleDynamicsCase | None = None,
@@ -352,7 +353,7 @@ def _fixture_wrench(
 
 def _fixture_wrench_from_constraint_multipliers(
     model: AxleDynamicsModel,
-    result: AxleDynamicsResult,
+    result: AxleDynamicsResult | FrozenAxleEvidence,
     bindings: AxleChannelBindings,
 ) -> np.ndarray:
     """Fallback for result-only callers that do not carry the input case."""
@@ -486,7 +487,7 @@ def _fixture_wrench_from_constraint_multipliers(
 
 def _fixture_wrench_from_momentum_balance(
     model: AxleDynamicsModel,
-    result: AxleDynamicsResult,
+    result: AxleDynamicsResult | FrozenAxleEvidence,
     case: AxleDynamicsCase,
     bindings: AxleChannelBindings,
 ) -> np.ndarray:

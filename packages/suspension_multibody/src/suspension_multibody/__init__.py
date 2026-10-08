@@ -18,22 +18,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from .api import run_case, run_dynamic_case, simulate
-    from .axle_dynamics import AxleDynamicsResult
+    from .api import simulate, validate
     from .io.artifacts import read_artifact, write_artifact
-    from .results.vehicle import VehicleDynamicsResult
-    from .schema import (
-        CaseSpec,
-        FrontAxleModel,
-        Manifest,
-        ResultBundle,
-        SchemaVersion,
-        load_case,
-        load_model,
-        load_vehicle_dynamic_case,
-        load_vehicle_model,
-    )
-    from .vehicle.service import run_vehicle_dynamics
+    from .results.envelope import ResultEnvelope
 
 __version__ = "0.1.0"
 
@@ -41,45 +28,21 @@ __version__ = "0.1.0"
 #: the surface is inspectable and a typo is a lookup error rather than a silent
 #: missing attribute.
 _PUBLIC_NAMES: dict[str, tuple[str, str]] = {
-    "AxleDynamicsResult": (".axle_dynamics", "AxleDynamicsResult"),
-    "CaseSpec": (".schema", "CaseSpec"),
-    "FrontAxleModel": (".schema", "FrontAxleModel"),
-    "Manifest": (".schema", "Manifest"),
-    "ResultBundle": (".schema", "ResultBundle"),
-    "SchemaVersion": (".schema", "SchemaVersion"),
-    "VehicleDynamicsResult": (".results.vehicle", "VehicleDynamicsResult"),
-    "load_case": (".schema", "load_case"),
-    "load_model": (".schema", "load_model"),
-    "load_vehicle_dynamic_case": (".schema", "load_vehicle_dynamic_case"),
-    "load_vehicle_model": (".schema", "load_vehicle_model"),
+    "ResultEnvelope": (".results.envelope", "ResultEnvelope"),
     "read_artifact": (".io.artifacts", "read_artifact"),
-    "run_case": (".api", "run_case"),
-    "run_dynamic_case": (".api", "run_dynamic_case"),
-    "run_vehicle_dynamics": (".vehicle.service", "run_vehicle_dynamics"),
     "open_bus": (".signal_bus", "open_bus"),
     "simulate": (".api", "simulate"),
+    "validate": (".api", "validate"),
     "write_artifact": (".io.artifacts", "write_artifact"),
 }
 
 __all__ = [
-    "AxleDynamicsResult",
-    "CaseSpec",
-    "FrontAxleModel",
-    "Manifest",
-    "ResultBundle",
-    "SchemaVersion",
-    "VehicleDynamicsResult",
+    "ResultEnvelope",
     "__version__",
-    "load_case",
-    "load_model",
-    "load_vehicle_dynamic_case",
-    "load_vehicle_model",
     "open_bus",
     "read_artifact",
-    "run_case",
-    "run_dynamic_case",
-    "run_vehicle_dynamics",
     "simulate",
+    "validate",
     "write_artifact",
 ]
 

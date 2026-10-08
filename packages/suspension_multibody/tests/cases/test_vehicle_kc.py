@@ -1,381 +1,103 @@
-"""
-The vehicle K/C family: the sweep it prescribes is the sweep it was asked for.
-
-This family is a *new capability* -- there was no native vehicle-level K/C -- so
-its evidence is physical rather than a comparison against another
-implementation:
-
-* a zero sweep returns the assembling pose, because the kernel resolves each
-  driven coordinate to the separation it had when the model was assembled;
-* a non-zero sweep advances every driven coordinate by exactly the travel it was
-  given (that is the *definition* of the K in K/C, so it is asserted to solver
-  accuracy rather than loosely);
-* the left/right mode redistributes the same travel, so an opposite sweep does
-  not move the body the way a symmetric one does.
-
-The model is the **compliant** vehicle.  On the rigid one the driven directions
-are only marginally independent -- the analytic Jacobian's pivot sits just below
-the rank threshold while central differences put it just above -- and the audit
-refuses the set.  That is a conditioning property of the rigid linkage, not a
-defect in the sweep, and it is why these tests build the vehicle with bushings.
-
-The sweep is quasi-static, so it is reached by integrating the driven
-coordinates from the assembling pose to their target.  The ramp that carries
-them there has to be *resolved*: the kernel raises each driven coordinate along
-a raised cosine whose rate is zero at both ends, and the adaptive stepper's
-local-error controller needs enough samples across that window to follow it.
-Too coarse a grid (2 samples over the ramp) is rejected at ``t = 0`` with a
-non-convergent Newton step -- a property of the step size, not of the family --
-which is why the window and sample count below are part of the acceptance
-rather than incidentals.
-
-Consequence worth stating plainly: the body pose this family reports is the
-*incremental* response over the declared window, not a per-grid-point static
-equilibrium.  A K/C sweep that answers with one converged equilibrium per grid
-point is the next capability, and it needs a static solve that steps the driven
-target across its load steps; today's ``static_trim`` solves the target it is
-handed at ``t = 0`` and does not steer to a far one.  The kinematic assertions
-below are independent of that limitation: they test the drive, which is exact.
-"""
-
-from __future__ import annotations
-
-import importlib.util
-from pathlib import Path
+"""An ordinary vehicle K/C rig preserves zero pose and exact driven travel."""
 
 import numpy as np
 import pytest
 
-from suspension_multibody.axle_dynamics.schema import AxleSolverSettings
-from suspension_multibody.cases import (
-    vehicle_kc_case_document,
-    vehicle_kc_model_document,
-)
+from suspension_multibody.api import simulate, validate
+from suspension_multibody.authoring.migration import migrate_v1_vehicle_kc_case
 from suspension_multibody.modeling.primitives import quaternion_to_matrix
-from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
-from suspension_multibody.preparation.vehicle_kc import (
-    VehicleKcPrepared,
-    VehicleKcSweep,
-)
-from suspension_multibody.schema import Bushing6x6, Pose, Vec3
-from suspension_multibody.simulation import (
-    SimulationRequest,
-    compile_request,
-    default_preparation_registry,
-    prepare_request,
-    run_request,
-)
+from suspension_multibody.schema import Bushing6x6, Pose
+from tests.vehicle.vehicle_fixtures import _case, _positioned_vehicle, _vehicle
 
-_FIXTURE = Path(__file__).resolve().parents[1] / "vehicle" / "test_native_vehicle.py"
-
-#: The ramp window and its sampling.  20 ms reached at 1 ms steps (21 samples on
-#: the contract's uniform grid) is the coarsest grid the error controller
-#: accepted: 10 samples over the same window trips the local-error limit and 2
-#: samples fail outright at ``t = 0``.  See the module docstring.
-_WINDOW_S = 2e-2
-_SAMPLES = 21
-_TIMES_S = tuple(np.linspace(0.0, _WINDOW_S, _SAMPLES).tolist())
-
-#: The four driven wheel coordinates, in the order the family names them: the
-#: bodies that *declare* the wheel centre, which 方式 A puts on the wheel hub --
-#: the upright keeps the spindle the hub turns on and no wheel centre of its own.
-_WHEELS = (
-    "front_wheel_hub_L",
-    "front_wheel_hub_R",
-    "rear_wheel_hub_L",
-    "rear_wheel_hub_R",
-)
-
-_STIFFNESS = tuple(
-    tuple(
-        10_000.0 if row == column and row < 3
-        else 10_000_000.0 if row == column
-        else 0.0
-        for column in range(6)
-    )
-    for row in range(6)
-)
-
-
-def _fixture():
-    spec = importlib.util.spec_from_file_location("vehicle_kc_fixture", _FIXTURE)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+_TIMES = tuple(np.linspace(0., .02, 21).tolist())
+_STIFFNESS = tuple(tuple(10_000. if r == c and r < 3 else 10_000_000. if r == c else 0.
+    for c in range(6)) for r in range(6))
 
 
 def _compliant(axle):
-    """Give one axle the four compliant inboard mounts the C mode expects."""
-
-    def mount(name):
-        point = axle.hardpoints[name]
-        return Pose(translation=Vec3(x=float(point.x), y=float(point.y), z=float(point.z)))
-
-    bushings = tuple(
-        Bushing6x6(
-            name=f"{body}_{index}",
-            body_a="chassis",
-            body_b=body,
-            pose_a=mount(name),
-            pose_b=mount(name),
-            stiffness=_STIFFNESS,
-        )
-        for body, names in (
+    bushings = tuple(Bushing6x6(name=f"{body}_{index}", body_a="chassis", body_b=body,
+        pose_a=Pose(translation=axle.hardpoints[point]), pose_b=Pose(translation=axle.hardpoints[point]),
+        stiffness=_STIFFNESS) for body, names in (
             ("upper_arm", ("UPPER_INBOARD_FRONT", "UPPER_INBOARD_REAR")),
-            ("lower_arm", ("LOWER_INBOARD_FRONT", "LOWER_INBOARD_REAR")),
-        )
-        for index, name in enumerate(names)
-    )
+            ("lower_arm", ("LOWER_INBOARD_FRONT", "LOWER_INBOARD_REAR")))
+        for index, point in enumerate(names))
     return axle.model_copy(update={"bushings": bushings})
 
 
 @pytest.fixture(scope="module")
 def prepared():
-    fixture = _fixture()
-    rigid = fixture._positioned_vehicle(fixture._vehicle())
-    model = rigid.model_copy(
-        update={
-            "front_axle": _compliant(rigid.front_axle),
-            "rear_axle": _compliant(rigid.rear_axle),
-        }
-    )
-    case = fixture._case(model)
-    return model, case, prepare_vehicle_run(model, case)
+    rigid = _positioned_vehicle(_vehicle())
+    model = rigid.model_copy(update={"front_axle": _compliant(rigid.front_axle), "rear_axle": _compliant(rigid.rear_axle)})
+    return _case(model)
 
 
-def _run(prepared, *, wheels, mode):
-    model, case, base = prepared
-    sweep = vehicle_kc_case_document(
-        name=f"vehicle-kc-{mode}",
-        wheel_values_mm=wheels,
-        rack_values_mm=(0.0,),
-        times_s=_TIMES_S,
-        settings=AxleSolverSettings(),
-        left_right_mode=mode,
-    )
-    document = vehicle_kc_model_document(model, base)
-    run = run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="vehicle_kc",
-            model=document,
-            case=sweep,
-            context={
-                "model_document_pair": document,
-                "wheels": (),
-                "vehicle_assembly": base.assembly,
-            },
-        )
-    ).raw
-    return run, base
+def _documents(source, *, wheels=(0.,), mode="symmetric"):
+    return migrate_v1_vehicle_kc_case(source, wheel_values_mm=wheels,
+        rack_values_mm=(0.,), times_s=_TIMES, left_right_mode=mode)
 
 
-def _driven_value(run, base, body: str) -> float:
-    """
-    Return the wheel-centre separation the kernel drives, measured from the state.
-
-    The kernel's driven-translation row is
-    ``dot(point_a - point_b, R_chassis * axis)`` -- the signed separation along
-    the reaction body's axis -- so the same quantity can be reconstructed from
-    the reported body state and compared with the target.  Model documents are
-    written in metres, so the assembly points (millimetres) are scaled.
-    """
-    names = list(run.document["manifest"]["bodies"])
-    row = run.block("body_state")[-1]
-
-    def pose(name: str):
-        entry = row[names.index(name)]
-        return np.asarray(entry[:3], dtype=float), np.asarray(entry[3:7], dtype=float)
-
-    p_upright, q_upright = pose(body)
-    p_chassis, q_chassis = pose("chassis")
-    local = np.asarray(base.assembly.points[(body, "wheel_center")], dtype=float) / 1e3
-    world = p_upright + quaternion_to_matrix(q_upright) @ local
-    axis = quaternion_to_matrix(q_chassis) @ np.array([0.0, 0.0, 1.0])
-    return float(np.dot(world - p_chassis, axis))
+def _run(source, **kwargs):
+    assembly, case = _documents(source, **kwargs)
+    run = simulate(assembly, case)
+    return run.raw, run.compiled.model_document
 
 
-def test_a_zero_sweep_returns_the_assembling_pose(prepared) -> None:
-    run, base = _run(prepared, wheels=(0.0,), mode="symmetric")
-    states = run.block("body_state")
-    bodies = list(run.document["manifest"]["bodies"])
-    for index, body in enumerate(base.native_model.bodies):
-        found = states[-1, bodies.index(body.name)]
-        assert found[0] == pytest.approx(body.position_m[0], abs=1e-9)
-        assert found[1] == pytest.approx(body.position_m[1], abs=1e-9)
-        assert found[2] == pytest.approx(body.position_m[2], abs=1e-9)
+def _driven_value(raw, model, target):
+    joint = next(row for row in model["joints"] if row.get("target") == target)
+    bodies = list(raw.document["manifest"]["bodies"])
+    state = raw.block("body_state")[-1]
+    a, b = (state[bodies.index(joint["body_"+end])] for end in ("a", "b"))
+    ra, rb = quaternion_to_matrix(a[3:7]), quaternion_to_matrix(b[3:7])
+    return float(np.dot(a[:3]+ra@joint["point_a"]-b[:3]-rb@joint["point_b"], rb@joint["axis_b"]))
 
 
-def test_a_symmetric_bump_advances_every_wheel_drive_by_the_travel(prepared) -> None:
-    """
-    The K in K/C: every driven wheel coordinate ends at its requested travel.
-
-    Comparing the driven coordinate of a bumped run against a zero run cancels
-    the assembled separation, leaving the 10 mm the case asked for.
-    """
-    zero, base = _run(prepared, wheels=(0.0,), mode="symmetric")
-    bump, _ = _run(prepared, wheels=(10.0,), mode="symmetric")
-    for body in _WHEELS:
-        advance = _driven_value(bump, base, body) - _driven_value(zero, base, body)
-        assert advance == pytest.approx(0.010, abs=1e-6), (
-            f"{body} advanced {advance * 1e3:.4f} mm, not 10 mm"
-        )
+def test_a_zero_sweep_returns_the_assembling_pose(prepared):
+    raw, model = _run(prepared)
+    names = list(raw.document["manifest"]["bodies"])
+    for body in model["bodies"]:
+        np.testing.assert_allclose(raw.block("body_state")[-1, names.index(body["name"]), :3], body["position"], rtol=0, atol=1e-9)
 
 
-def test_the_mode_redistributes_the_same_travel(prepared) -> None:
-    """
-    The same travel, signed the other way from side to side.
-
-    A zero sweep is mode independent -- every offset is zero -- so one zero run
-    is the reference for both modes.
-    """
-    zero, base = _run(prepared, wheels=(0.0,), mode="symmetric")
-    opposite, _ = _run(prepared, wheels=(10.0,), mode="opposite")
-    for body in _WHEELS:
-        sign = 1.0 if body.endswith("_L") else -1.0
-        advance = _driven_value(opposite, base, body) - _driven_value(zero, base, body)
-        assert advance == pytest.approx(sign * 0.010, abs=1e-6), (
-            f"{body} advanced {advance * 1e3:.4f} mm under an opposite sweep"
-        )
+def test_a_symmetric_bump_advances_every_wheel_drive_by_the_travel(prepared):
+    zero, model = _run(prepared)
+    bump, _ = _run(prepared, wheels=(10.,))
+    targets = [row["target"] for row in model["joints"] if row["type"] == "driven_translation" and "wheel_drive" in row["target"]]
+    assert len(targets) == 4
+    for target in targets:
+        assert _driven_value(bump, model, target)-_driven_value(zero, model, target) == pytest.approx(.010, abs=1e-6)
 
 
-def test_an_unknown_mode_is_refused(prepared) -> None:
-    model, _, base = prepared
-    sweep = vehicle_kc_case_document(
-        name="vehicle-kc-bad",
-        wheel_values_mm=(0.0,),
-        rack_values_mm=(0.0,),
-        times_s=_TIMES_S,
-        settings=AxleSolverSettings(),
-    )
-    sweep["k"]["left_right_mode"] = "diagonal"
-    document = vehicle_kc_model_document(model, base)
+def test_the_mode_redistributes_the_same_travel(prepared):
+    zero, model = _run(prepared)
+    opposite, _ = _run(prepared, wheels=(10.,), mode="opposite")
+    for row in model["joints"]:
+        if row["type"] != "driven_translation" or "wheel_drive" not in row["target"]:
+            continue
+        sign = 1 if row["target"].endswith("left") else -1
+        assert _driven_value(opposite, model, row["target"])-_driven_value(zero, model, row["target"]) == pytest.approx(sign*.010, abs=1e-6)
+
+
+def test_an_unknown_mode_is_refused(prepared):
     with pytest.raises(Exception, match="left_right_mode"):
-        run_request(
-            SimulationRequest(
-                assembly="vehicle",
-                family="vehicle_kc",
-                model=document,
-                case=sweep,
-                context={
-                    "model_document_pair": document,
-                    "wheels": (),
-                    "vehicle_assembly": base.assembly,
-                },
-            )
-        )
+        validate(*_documents(prepared, mode="diagonal"))
 
 
-def _domain_request(model, case, *, wheels, mode):
-    """Return one sweep as a domain request rather than as authored documents."""
-    return SimulationRequest(
-        assembly="vehicle",
-        family="vehicle_kc",
-        model=model,
-        case=VehicleKcSweep(
-            vehicle_case=case,
-            wheel_values_mm=wheels,
-            rack_values_mm=(0.0,),
-            left_right_mode=mode,
-            times_s=_TIMES_S,
-        ),
-    )
+def test_the_declared_rig_contributes_one_drive_per_wheel_and_the_rack(prepared):
+    assembly, case = _documents(prepared)
+    compiled = validate(assembly, case)
+    driven = [row for row in compiled.model_document["joints"] if row["type"] == "driven_translation"]
+    assert len(driven) == 5
+    assert compiled.case_document["k"] == case.to_payload()["excitation"]["k"]
+    assert compiled.metadata["compiler"] == "ResolvedModelCompiler"
 
 
-def test_the_family_prepares_the_sweep_through_the_default_registry(prepared) -> None:
-    """The domain path: the registry prepares the sweep the compiler submits."""
-    model, case, base = prepared
-    request = _domain_request(model, case, wheels=(0.0,), mode="symmetric")
-
-    registry = default_preparation_registry()
-    assert ("vehicle", "vehicle_kc") in registry.keys()
-    result = prepare_request(request)
-
-    assert isinstance(result.value, VehicleKcPrepared)
-    assert result.context["prepared_simulation"].value is result.value
-    assert result.context["vehicle_assembly"] is result.value.assembly
-    assert result.context["wheels"] == ()
-    assert result.context["case_document"]["family"] == "vehicle_kc"
-    assert result.context["case_document"]["k"]["wheel_values_mm"] == [0.0]
-
-    compiled = compile_request(result.request)
-    # The compiler consumes the prepared pair and reads the sweep's driven
-    # coordinates off the prepared assembly: one row per wheel plus the rack.
-    driven = [
-        joint
-        for joint in compiled.model_document["joints"]
-        if joint["type"] == "driven_translation"
-    ]
-    assert compiled.metadata["derived_model"] is True
-    assert len(driven) == len(_WHEELS) + 1
-    assert compiled.case_document == result.value.case_document
-
-    # The prepared request runs natively, and a zero sweep returns the pose the
-    # model was assembled at.
-    run = run_request(request).raw
-    assert run.status == "success"
-    bodies = list(run.document["manifest"]["bodies"])
-    for body in base.native_model.bodies:
-        found = run.block("body_state")[-1, bodies.index(body.name)]
-        assert found[0] == pytest.approx(body.position_m[0], abs=1e-9)
-        assert found[1] == pytest.approx(body.position_m[1], abs=1e-9)
-        assert found[2] == pytest.approx(body.position_m[2], abs=1e-9)
-
-
-def test_a_document_request_bypasses_preparation_and_still_validates_identity(
-    prepared, monkeypatch
-) -> None:
-    from suspension_multibody.preparation import vehicle_kc as vehicle_kc_preparation
-
-    model, case, base = prepared
-    calls: list[SimulationRequest] = []
-    monkeypatch.setattr(
-        vehicle_kc_preparation, "prepare_request", lambda request: calls.append(request)
-    )
-    sweep = vehicle_kc_case_document(
-        name="vehicle-kc-bypass",
-        wheel_values_mm=(0.0,),
-        rack_values_mm=(0.0,),
-        times_s=_TIMES_S,
-        settings=AxleSolverSettings(),
-    )
-    document = vehicle_kc_model_document(model, base)
-    request = SimulationRequest(
-        assembly="vehicle",
-        family="vehicle_kc",
-        model=document,
-        case=sweep,
-        context={
-            "model_document_pair": document,
-            "wheels": (),
-            "vehicle_assembly": base.assembly,
-        },
-    )
-
-    bypassed = prepare_request(request)
-
-    # The request already carries its documents, so no family preparation runs
-    # and the vehicle is not assembled a second time.
-    assert calls == []
-    assert "prepared_simulation" not in bypassed.context
-    compiled = compile_request(bypassed.request)
-    assert compiled.case_document == sweep
-    # Bypassing preparation is not skipping the compiler: the documents still
-    # have to satisfy the family's contract identity.
-    wrong_family = dict(sweep)
-    wrong_family["family"] = "handling"
-    with pytest.raises(ValueError, match="case family"):
-        compile_request(
-            SimulationRequest(
-                assembly="vehicle",
-                family="vehicle_kc",
-                model=document,
-                case=wrong_family,
-                context={
-                    "model_document_pair": document,
-                    "wheels": (),
-                    "vehicle_assembly": base.assembly,
-                },
-            )
-        )
+def test_file_and_python_vehicle_kc_inputs_have_one_compiler(prepared, tmp_path):
+    assembly, case = _documents(prepared)
+    path = case.save(tmp_path/"case.json")
+    memory, file = validate(assembly, case), validate(assembly, path)
+    assert memory.model_payload == file.model_payload
+    assert memory.case_payload == file.case_payload
+    wrong = case.to_payload()
+    wrong["protocol"] = "handling"
+    with pytest.raises(ValueError, match="time-history protocol"):
+        validate(assembly, wrong)

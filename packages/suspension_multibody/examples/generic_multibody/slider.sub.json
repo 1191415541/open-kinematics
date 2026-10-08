@@ -1,0 +1,6 @@
+{
+  "document": "subsystem", "schema_version": 1, "name": "slider",
+  "template": "slider.tpl.json", "functional_role": "generic", "placement_role": "any",
+  "hardpoints": {"base": [0.0, 0.0, 0.0], "mount": [0.0, 0.0, 0.24019335]},
+  "property_bindings": {"spring": "spring.json", "damper": "damper.json"}
+}

@@ -19,7 +19,7 @@ import math
 
 import pytest
 
-from suspension_multibody.preparation.steering_allocator import (
+from suspension_multibody.authoring.steering_allocator import (
     FOUR_WHEEL_STEER_HIGH_SPEED_GAIN,
     FOUR_WHEEL_STEER_LOW_SPEED_GAIN,
     AllocationChannel,

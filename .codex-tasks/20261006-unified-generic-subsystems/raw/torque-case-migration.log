@@ -1,0 +1,2473 @@
+.E.EEEFFFFFFFFFF                                                         [100%]
+=================================== ERRORS ====================================
+_____ ERROR at setup of test_both_runs_succeed_and_produce_a_finite_state _____
+
+    @pytest.fixture(scope="module")
+    def with_element() -> np.ndarray:
+        """Run the case under test: the same model with the element declared."""
+>       return _run(with_element=True)
+
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:259: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:224: in _run
+    run = simulate(*torque_documents(document, _case_document()))
+packages\suspension_multibody\tests\cases\_torque_documents.py:18: in torque_documents
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:torque-document-route>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [{'fixed': False, 'inertia': [[0.01, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0,...': 'brake', 'parameters': {'axis_a': [0.0, 1.0, 0.0], 'damping': 0.0, 'max_torque': 1.0, 'stiffness': 1.0}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:torque-document-route>: element 'brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+____ ERROR at setup of test_the_couple_changes_the_driven_bodys_final_rate ____
+
+    @pytest.fixture(scope="module")
+    def with_element() -> np.ndarray:
+        """Run the case under test: the same model with the element declared."""
+>       return _run(with_element=True)
+
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:259: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:224: in _run
+    run = simulate(*torque_documents(document, _case_document()))
+packages\suspension_multibody\tests\cases\_torque_documents.py:18: in torque_documents
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:torque-document-route>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [{'fixed': False, 'inertia': [[0.01, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0,...': 'brake', 'parameters': {'axis_a': [0.0, 1.0, 0.0], 'damping': 0.0, 'max_torque': 1.0, 'stiffness': 1.0}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:torque-document-route>: element 'brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+____________ ERROR at setup of test_the_couple_meets_in_the_middle ____________
+
+    @pytest.fixture(scope="module")
+    def with_element() -> np.ndarray:
+        """Run the case under test: the same model with the element declared."""
+>       return _run(with_element=True)
+
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:259: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:224: in _run
+    run = simulate(*torque_documents(document, _case_document()))
+packages\suspension_multibody\tests\cases\_torque_documents.py:18: in torque_documents
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:torque-document-route>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [{'fixed': False, 'inertia': [[0.01, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0,...': 'brake', 'parameters': {'axis_a': [0.0, 1.0, 0.0], 'damping': 0.0, 'max_torque': 1.0, 'stiffness': 1.0}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:torque-document-route>: element 'brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+_ ERROR at setup of test_the_omitted_reference_pose_means_the_same_thing_on_both_routes _
+
+    @pytest.fixture(scope="module")
+    def with_element() -> np.ndarray:
+        """Run the case under test: the same model with the element declared."""
+>       return _run(with_element=True)
+
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:259: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:224: in _run
+    run = simulate(*torque_documents(document, _case_document()))
+packages\suspension_multibody\tests\cases\_torque_documents.py:18: in torque_documents
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:torque-document-route>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [{'fixed': False, 'inertia': [[0.01, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0,...': 'brake', 'parameters': {'axis_a': [0.0, 1.0, 0.0], 'damping': 0.0, 'max_torque': 1.0, 'stiffness': 1.0}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:torque-document-route>: element 'brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+================================== FAILURES ===================================
+_____________ test_the_document_route_carries_the_demand_channel ______________
+
+    def test_the_document_route_carries_the_demand_channel() -> None:
+        """
+        The two demand fields reach the kernel's own block slots (p2-08), and a bad
+        pair is refused at the document rather than silently defaulted.
+    
+        The parse is what is asserted: a document whose ``demand_source``/``demand_tire``
+        are accepted but dropped would run the element on the unit demand, and the
+        run would succeed -- the failure mode is a wrong couple, not a missing one.
+        The refusals below are the other half: a source that names no tire, and a
+        fractional index, are both errors about the document.
+        """
+        def submit(parameters: dict[str, Any]) -> None:
+            document = _model_document(with_element=True)
+            document["elements"][0]["parameters"].update(parameters)
+            run = simulate(*torque_documents(document, _case_document()))
+            assert run.status == "success", run.raw.document.get("manifest")
+    
+        # Read, not merely tolerated: the pair reaches the kernel's block slots.
+>       submit({"demand_source": 2, "demand_tire": 0})
+
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:398: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:394: in submit
+    run = simulate(*torque_documents(document, _case_document()))
+packages\suspension_multibody\tests\cases\_torque_documents.py:18: in torque_documents
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:torque-document-route>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [{'fixed': False, 'inertia': [[0.01, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0,...ake', 'parameters': {'axis_a': [0.0, 1.0, 0.0], 'damping': 0.0, 'demand_source': 2, 'demand_tire': 0, ...}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:torque-document-route>: element 'brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+_______________ test_the_couple_the_kernel_applied_is_non_zero ________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000026FD0865610>
+
+    def test_the_couple_the_kernel_applied_is_non_zero(monkeypatch) -> None:
+        """
+        The couple is *read back* from the run, not inferred from its consequences.
+    
+        Subtask p2-11.  Everything above proves the element reaches the solver: the
+        state trajectory differs, the reaction end moves, the two ends meet.  None of
+        those separates "the law applied the demanded couple" from "the law applied
+        some couple" -- and a law that scaled the demand by a wrong factor would pass
+        all of them.
+    
+        So this reads the kernel's own element-wrench channel: type code 10 is the
+        rotational actuator, the block carries one pair of rows per element per
+        sample, and the moment columns are the couple the law actually applied.  The
+        magnitude is asserted against the block's own `max_torque`, which is the
+        documented meaning of the cap (`min(stiffness * demand, max_torque)` with the
+        unit demand this document states).
+    
+        The control is the same model with the element removed: it must carry *no*
+        code-10 row at all, so "the rows are the element's" is a measurement rather
+        than an assumption.
+        """
+        from suspension_multibody.results.element_wrench import (
+            ELEMENT_WRENCH_SWITCH,
+            element_wrench_block,
+        )
+    
+        monkeypatch.setenv(ELEMENT_WRENCH_SWITCH, "1")
+>       with_couple = _raw(with_element=True)
+
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:436: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:242: in _raw
+    return simulate(*torque_documents(document, _case_document()))
+packages\suspension_multibody\tests\cases\_torque_documents.py:18: in torque_documents
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:torque-document-route>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [{'fixed': False, 'inertia': [[0.01, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0,...': 'brake', 'parameters': {'axis_a': [0.0, 1.0, 0.0], 'damping': 0.0, 'max_torque': 1.0, 'stiffness': 1.0}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:torque-document-route>: element 'brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+________ test_the_element_is_read_by_the_route_that_used_to_refuse_it _________
+
+    def test_the_element_is_read_by_the_route_that_used_to_refuse_it() -> None:
+        """
+        The refusal this file exists to remove is gone.
+    
+        ``run_contract`` raises ``KernelContractError`` when the kernel refuses a
+        document, so the positive runs above already prove the branch was taken.  The
+        explicit assertion is kept because it names the message the reproduction
+        recorded: if some later change reinstated the refusal -- by dropping the
+        registry entry, the schema enum, or the reader branch -- the failure would
+        otherwise be reported as a missing fixture rather than as this regression.
+        """
+        try:
+>           _run(with_element=True)
+
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:489: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_rotational_torque_document.py:224: in _run
+    run = simulate(*torque_documents(document, _case_document()))
+packages\suspension_multibody\tests\cases\_torque_documents.py:18: in torque_documents
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:torque-document-route>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [{'fixed': False, 'inertia': [[0.01, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0,...': 'brake', 'parameters': {'axis_a': [0.0, 1.0, 0.0], 'damping': 0.0, 'max_torque': 1.0, 'stiffness': 1.0}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:torque-document-route>: element 'brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+___________________ test_the_run_carries_all_three_segments ___________________
+
+channels = None
+
+    def test_the_run_carries_all_three_segments(channels) -> None:
+        """
+        One run, three readable segments: state, control and actuator.
+    
+        The control ledger is the segment the element-wrench channel *cannot* carry:
+        that channel means "the wrench actually applied", so its rows may not be
+        reinterpreted as a demand.  Its presence here is what makes the middle of the
+        loop observable rather than inferred from the torque.
+        """
+>       raw = run_rig(controller=True)
+
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:258: in run_rig
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:abs_brake>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [], 'document': 'template', 'elements': [{'body_a': '@carrier', 'body_b...rs': {'axis_a': [0.0, 1.0, 0.0], 'controller_enabled': True, 'controller_gain': 30.0, 'damping': 0.0, ...}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:abs_brake>: element 'abs_brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+___________ test_the_demand_follows_the_state_rather_than_the_clock ___________
+
+channels = None
+
+    def test_the_demand_follows_the_state_rather_than_the_clock(channels) -> None:
+        """
+        The control segment varies with the state, and is not the driver's ramp.
+    
+        A law that ignored the slip would produce a demand column proportional to the
+        driver's own signal.  The two columns are compared directly: they must differ
+        on some sample, and the derived one must settle somewhere the driver's own
+        column is no longer moving.
+        """
+>       raw = run_rig(controller=True)
+
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:353: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:258: in run_rig
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:abs_brake>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [], 'document': 'template', 'elements': [{'body_a': '@carrier', 'body_b...rs': {'axis_a': [0.0, 1.0, 0.0], 'controller_enabled': True, 'controller_gain': 30.0, 'damping': 0.0, ...}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:abs_brake>: element 'abs_brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+______________ test_the_actuator_moves_the_state_in_the_same_run ______________
+
+channels = None
+
+    def test_the_actuator_moves_the_state_in_the_same_run(channels) -> None:
+        """
+        The same rig with and without the law reaches different slip states.
+    
+        This is the half of "closed loop" that rules out a replay: a controller whose
+        output never reached the equations of motion would leave the two runs
+        identical.  The measured slip is a signed quantity, so the comparison is on
+        its absolute value.
+        """
+>       without = _slip(run_rig(controller=False), slice(0, SAMPLES))
+
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:383: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:258: in run_rig
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:abs_brake>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [], 'document': 'template', 'elements': [{'body_a': '@carrier', 'body_b...s': {'axis_a': [0.0, 1.0, 0.0], 'controller_enabled': False, 'controller_gain': 30.0, 'damping': 0.0, ...}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:abs_brake>: element 'abs_brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+_______________ test_the_measured_slip_converges_to_the_target ________________
+
+channels = None
+
+    def test_the_measured_slip_converges_to_the_target(channels) -> None:
+        """
+        The setpoint is reached: the settled measurement lies in the target band.
+    
+        This is the assertion the whole rig exists for, and it is a statement about
+        the measurement, not about a comparison with the uncontrolled run: on the
+        settled tail the slip is within ``CONVERGED_*_ERROR`` of the target.  The
+        uncontrolled run's error is checked too, because a law that could not move
+        the operating point would otherwise satisfy the band by luck.
+        """
+>       controlled = _slip(run_rig(controller=True))
+
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:399: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:258: in run_rig
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:abs_brake>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [], 'document': 'template', 'elements': [{'body_a': '@carrier', 'body_b...rs': {'axis_a': [0.0, 1.0, 0.0], 'controller_enabled': True, 'controller_gain': 30.0, 'damping': 0.0, ...}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:abs_brake>: element 'abs_brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+_______________ test_moving_the_setpoint_moves_the_measurement ________________
+
+channels = None
+
+    def test_moving_the_setpoint_moves_the_measurement(channels) -> None:
+        """
+        The settled slip tracks the setpoint across a sweep of targets.
+    
+        A rig whose measurement ignored the law's target would settle at the same
+        slip for every one of them.  The assertion is on the settled measurement, and
+        on the demand that produced it: the driver's signal is identical across the
+        sweep, so a demand that changed with the target can only have come from the
+        law.
+        """
+        targets = (0.15, 0.20, 0.25, 0.30, 0.35)
+        settled: list[float] = []
+        demands: list[float] = []
+        for target in targets:
+            control = np.asarray(
+>               run_rig(controller=True, target_slip=target).blocks["controller_output"]
+            )
+
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:432: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:258: in run_rig
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:abs_brake>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [], 'document': 'template', 'elements': [{'body_a': '@carrier', 'body_b...rs': {'axis_a': [0.0, 1.0, 0.0], 'controller_enabled': True, 'controller_gain': 30.0, 'damping': 0.0, ...}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:abs_brake>: element 'abs_brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+________ test_a_controller_that_reaches_the_blob_recorded_its_own_end _________
+
+channels = None
+
+    def test_a_controller_that_reaches_the_blob_recorded_its_own_end(channels) -> None:
+        """
+        The actuator segment is equal and opposite, and its magnitude is real.
+    
+        Two rows per sample, one per end, `atol=0` because the pair is one couple:
+        the kernel applies `+tau` to one body and `-tau` to the other, and a row that
+        disagrees by a rounding error would mean the two ends are not reacting to
+        each other.  At least one sample must carry a non-zero couple, or the ledger
+        is recording a brake that never engaged, and none may exceed the cap.
+        """
+>       raw = run_rig(controller=True)
+
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:460: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:258: in run_rig
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:abs_brake>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [], 'document': 'template', 'elements': [{'body_a': '@carrier', 'body_b...rs': {'axis_a': [0.0, 1.0, 0.0], 'controller_enabled': True, 'controller_gain': 30.0, 'damping': 0.0, ...}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:abs_brake>: element 'abs_brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+__________ test_the_control_ledger_is_absent_unless_it_is_asked_for ___________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000026FD082FA40>
+
+    def test_the_control_ledger_is_absent_unless_it_is_asked_for(monkeypatch) -> None:
+        """
+        The channel is off by default, so the default path's bytes do not move.
+    
+        The ledger is an addition to the result contract rather than to the ABI, and
+        its switch is what keeps that additive: with the switch off nothing is
+        allocated, described or appended.
+        """
+        monkeypatch.delenv("SUSPENSION_KERNEL_CONTROLLER_OUTPUT", raising=False)
+        monkeypatch.setenv("SUSPENSION_KERNEL_ELEMENT_WRENCH_OUTPUT", "1")
+>       raw = run_rig(controller=True)
+
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:484: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\test_abs_closed_loop.py:258: in run_rig
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:261: in from_payload
+    cls._check_topology(where, declared)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+where = '<memory:abs_brake>'
+payload = {'allowed_placement_roles': ['any'], 'bodies': [], 'document': 'template', 'elements': [{'body_a': '@carrier', 'body_b...rs': {'axis_a': [0.0, 1.0, 0.0], 'controller_enabled': True, 'controller_gain': 30.0, 'damping': 0.0, ...}, ...}], ...}
+
+    @staticmethod
+    def _check_topology(where: str, payload: Mapping[str, Any]) -> None:
+        """
+        Refuse a template whose own references do not resolve.
+    
+        Every failure names the entity and the reference: "template is invalid"
+        would not tell an author which body to add.  The checks are the ones a
+        composition would otherwise discover much later, in a merged model where
+        the originating file is no longer visible.
+        """
+        bodies = [str(row["name"]) for row in payload["bodies"]]
+        if len(bodies) != len(set(bodies)):
+            duplicates = sorted({n for n in bodies if bodies.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate body name(s) {duplicates}")
+        hardpoints = [str(row["name"]) for row in payload["hardpoints"]]
+        if len(hardpoints) != len(set(hardpoints)):
+            duplicates = sorted({n for n in hardpoints if hardpoints.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate hardpoint name(s) {duplicates}")
+        slots = [str(row["name"]) for row in payload["property_slots"]]
+        if len(slots) != len(set(slots)):
+            duplicates = sorted({n for n in slots if slots.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate property slot name(s) {duplicates}")
+    
+        tire_bodies = [str(tire["body"]["name"]) for tire in payload.get("tires", ())]
+        if len(tire_bodies) != len(set(tire_bodies)):
+            raise AuthoringError(f"{where}: duplicate tire body")
+        body_names = set(bodies) | set(tire_bodies)
+        hardpoint_names = set(hardpoints)
+        marker_names = [str(row["name"]) for row in payload.get("markers", ())]
+        if len(marker_names) != len(set(marker_names)):
+            duplicates = sorted({n for n in marker_names if marker_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate marker name(s) {duplicates}")
+        for marker in payload.get("markers", ()):
+            owner = str(marker["owner"])
+            point = str(marker["point"])
+            if owner not in body_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} is attached to unknown body {owner!r}"
+                )
+            if point not in hardpoint_names:
+                raise AuthoringError(
+                    f"{where}: marker {marker['name']!r} references unknown point {point!r}"
+                )
+        owners = {
+            str(row["name"]): str(row.get("owner", "")) for row in payload["hardpoints"]
+        }
+        external_owners = {"@"+str(row.get("name", row["role"])) for row in payload.get("needs", ())}
+        for name, owner in owners.items():
+            # An ownerless point is legal and is not a gap: a role that owns no
+            # bodies -- the simplified brake and drive, which contribute a torque
+            # and nothing else -- declares the mount some *other* role's body
+            # carries, exactly as the built-in template declares the steering,
+            # wheel and chassis mounts alongside its own.  Requiring an owner would
+            # make those two roles impossible to write as files.
+            if owner and owner not in body_names | external_owners:
+                raise AuthoringError(
+                    f"{where}: hardpoint {name!r} is owned by {owner!r}, which is not "
+                    "one of this template's bodies"
+                )
+        slot_types = {
+            str(row["name"]): str(row["element_type"]) for row in payload["property_slots"]
+        }
+        configurations = set(payload.get("configurations", ()))
+        if payload.get("default_configuration") is not None and payload["default_configuration"] not in configurations:
+            raise AuthoringError(f"{where}: unknown default_configuration")
+        for row in (*payload["joints"], *payload["elements"]):
+            if set(row.get("configurations", ())) - configurations:
+                raise AuthoringError(f"{where}: entity {row['name']!r} activates in an unknown configuration")
+        needs = payload.get("needs", ())
+        need_names = [str(row.get("name", row["role"])) for row in needs]
+        if len(need_names) != len(set(need_names)):
+            raise AuthoringError(f"{where}: duplicate external endpoint name")
+        external = {"@" + name for name in need_names}
+        for row in (*payload["joints"], *payload["elements"], *payload.get("inputs", ())):
+            if set(row.get("requires", ())) - set(need_names):
+                raise AuthoringError(f"{where}: entity {row['name']!r} requires an unknown endpoint")
+        for row in payload["bodies"]:
+            for key in ("mass_slot", "inertia_slot"):
+                slot = row.get(key)
+                if slot is not None and slot_types.get(str(slot)) != key.removesuffix("_slot"):
+                    raise AuthoringError(f"{where}: body {row['name']!r} has invalid {key} {slot!r}")
+            if row.get("position_point") is not None and row["position_point"] not in hardpoint_names:
+                raise AuthoringError(f"{where}: body {row['name']!r} references unknown position_point")
+    
+        joint_names: list[str] = []
+        for joint in payload["joints"]:
+            joint_names.append(str(joint["name"]))
+            for key in ("body_a", "body_b"):
+                if str(joint[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown body "
+                        f"{joint[key]!r} in {key}"
+                    )
+            for key in ("point_a", "point_b"):
+                point = joint.get(key)
+                if point is not None and str(point) not in hardpoint_names | external:
+                    raise AuthoringError(
+                        f"{where}: joint {joint['name']!r} references unknown {key} "
+                        f"{point!r}"
+                    )
+        if len(joint_names) != len(set(joint_names)):
+            duplicates = sorted({n for n in joint_names if joint_names.count(n) > 1})
+            raise AuthoringError(f"{where}: duplicate joint name(s) {duplicates}")
+    
+        element_names: list[str] = []
+        for coupler in payload.get("couplers", ()):
+            if any(coupler.get("joint_" + end) not in set(joint_names) for end in ("a", "b")):
+                raise AuthoringError(f"{where}: coupler {coupler.get('name')!r} references an unknown joint")
+        for gauge in payload.get("gauges", ()):
+            if gauge.get("body") not in body_names:
+                raise AuthoringError(f"{where}: rotation gauge references an unknown body")
+        for element in payload["elements"]:
+            element_names.append(str(element["name"]))
+            if element["type"] in {"force", "torque", "wrench"}:
+                for key in ("action", "reaction", "reference"):
+                    if str(element[key]) not in set(marker_names) | {str(port["name"]) for port in payload.get("ports", ())} | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key} marker {element[key]!r}")
+                continue
+            if element["type"] in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+                for key in ("body_a", "body_b"):
+                    if key in element and element[key] not in body_names | external:
+                        raise AuthoringError(f"{where}: element {element['name']!r} references unknown {key}")
+                if element.get("property_slot") is not None and element["property_slot"] not in slot_types:
+                    raise AuthoringError(f"{where}: element {element['name']!r} references an unknown property slot")
+                continue
+            for key in ("body_a", "body_b"):
+                if str(element[key]) not in body_names | _ASSEMBLY_SUPPLIED_BODIES | external:
+                    raise AuthoringError(
+                        f"{where}: element {element['name']!r} references unknown body "
+                        f"{element[key]!r} in {key}"
+                    )
+            # A two-point element (a spring, a damper, a bump stop) must say where
+            # both of its ends sit; a bushing acts at one point and states one.
+            # Requiring the second point of every element would refuse a legal
+            # bushing, and accepting a missing one of a spring would defer the
+            # failure to the builder, which has no file to name.
+            needs_both = str(element["type"]) in TWIN_ENDED_ELEMENTS
+            for key in ("point_a", "point_b") if needs_both else ("point_a",):
+                value = element.get(key)
+                if value is None:
+>                   raise AuthoringError(
+                        f"{where}: element {element['name']!r} of type "
+                        f"{element['type']!r} needs a {key!r}, since its two ends are "
+                        "placed on two different points"
+                    )
+E                   suspension_multibody.authoring.errors.AuthoringError: <memory:abs_brake>: element 'abs_brake' of type 'rotational_torque' needs a 'point_a', since its two ends are placed on two different points
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:499: AuthoringError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\cases\test_rotational_torque_document.py::test_the_document_route_carries_the_demand_channel
+FAILED packages\suspension_multibody\tests\cases\test_rotational_torque_document.py::test_the_couple_the_kernel_applied_is_non_zero
+FAILED packages\suspension_multibody\tests\cases\test_rotational_torque_document.py::test_the_element_is_read_by_the_route_that_used_to_refuse_it
+FAILED packages\suspension_multibody\tests\cases\test_abs_closed_loop.py::test_the_run_carries_all_three_segments
+FAILED packages\suspension_multibody\tests\cases\test_abs_closed_loop.py::test_the_demand_follows_the_state_rather_than_the_clock
+FAILED packages\suspension_multibody\tests\cases\test_abs_closed_loop.py::test_the_actuator_moves_the_state_in_the_same_run
+FAILED packages\suspension_multibody\tests\cases\test_abs_closed_loop.py::test_the_measured_slip_converges_to_the_target
+FAILED packages\suspension_multibody\tests\cases\test_abs_closed_loop.py::test_moving_the_setpoint_moves_the_measurement
+FAILED packages\suspension_multibody\tests\cases\test_abs_closed_loop.py::test_a_controller_that_reaches_the_blob_recorded_its_own_end
+FAILED packages\suspension_multibody\tests\cases\test_abs_closed_loop.py::test_the_control_ledger_is_absent_unless_it_is_asked_for
+ERROR packages\suspension_multibody\tests\cases\test_rotational_torque_document.py::test_both_runs_succeed_and_produce_a_finite_state
+ERROR packages\suspension_multibody\tests\cases\test_rotational_torque_document.py::test_the_couple_changes_the_driven_bodys_final_rate
+ERROR packages\suspension_multibody\tests\cases\test_rotational_torque_document.py::test_the_couple_meets_in_the_middle
+ERROR packages\suspension_multibody\tests\cases\test_rotational_torque_document.py::test_the_omitted_reference_pose_means_the_same_thing_on_both_routes
+10 failed, 2 passed, 4 errors in 2.74s

@@ -2,24 +2,19 @@
 
 import numpy as np
 
-from suspension_multibody.modeling.primitives import (
-    BushingElement,
-    LinearSpringElement,
-    VerticalTireElement,
-)
+from suspension_multibody.authoring import assemble_generic, migrate_v1_axle
 from suspension_multibody.schema import (
     Bushing6x6,
-    FrontAxleModel,
     LinearSpring,
     MassSpec,
     Pose,
     Vec3,
     VerticalTire,
 )
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.schema.model import AxleDeclaration
 
 
-def _model() -> FrontAxleModel:
+def _model() -> AxleDeclaration:
     hardpoints = {
         "uca_front": [-100, -500, 400],
         "uca_rear": [100, -500, 400],
@@ -36,7 +31,7 @@ def _model() -> FrontAxleModel:
         tuple(float(10 if row == column else 0) for column in range(6))
         for row in range(6)
     )
-    return FrontAxleModel(
+    return AxleDeclaration(
         hardpoints=hardpoints,
         mass=MassSpec(sprung_mass=1000),
         springs=(
@@ -72,17 +67,10 @@ def _model() -> FrontAxleModel:
 
 def test_force_elements_are_side_paired_and_c_bushings_are_active() -> None:
     model = _model()
-    k_assembly = compose_axle(model, "K")
-    c_assembly = compose_axle(model, "C")
-    assert (
-        sum(isinstance(item, LinearSpringElement) for item in k_assembly.elements) == 2
-    )
-    assert (
-        sum(isinstance(item, VerticalTireElement) for item in k_assembly.elements) == 2
-    )
-    assert not any(isinstance(item, BushingElement) for item in k_assembly.elements)
-    assert any(
-        isinstance(item, BushingElement) and np.linalg.norm(item.stiffness) > 0
-        for item in c_assembly.elements
-    )
-    assert len(c_assembly.ideal_constraints) > len(c_assembly.constraints)
+    k_assembly, c_assembly = [assemble_generic(migrate_v1_axle(model, mode=mode)) for mode in ("K", "C")]
+    assert sum(item["type"] == "spring" for item in k_assembly.elements) == 2
+    assert len(k_assembly.tires) == 2
+    assert not any(item["type"] == "bushing" for item in k_assembly.elements)
+    assert any(item["type"] == "bushing" and np.linalg.norm(item["parameters"]["stiffness"]) > 0
+               for item in c_assembly.elements)
+    assert len(k_assembly.joints) > len(c_assembly.joints)

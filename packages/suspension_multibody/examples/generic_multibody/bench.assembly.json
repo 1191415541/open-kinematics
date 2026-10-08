@@ -1,0 +1,12 @@
+{
+  "document": "assembly", "schema_version": 1, "name": "slider_on_bench",
+  "assembly_kind": "generic_multibody", "mode": "K",
+  "subsystems": [
+    {"ref": "slider.sub.json", "functional_role": "generic", "placement_role": "any"},
+    {"ref": "bench.sub.json", "functional_role": "generic", "placement_role": "any"}
+  ],
+  "connections": [
+    {"name": "actuator", "port_a": "slider.sub.json.input", "port_b": "bench.sub.json.actuator",
+     "type": "driven_translation", "axis": [0.0, 0.0, 1.0], "target": "travel"}
+  ]
+}

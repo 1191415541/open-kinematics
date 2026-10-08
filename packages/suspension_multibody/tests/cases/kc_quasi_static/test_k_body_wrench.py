@@ -17,10 +17,10 @@ import numpy as np
 import pytest
 from suspension_contracts import validate_case
 
-from suspension_multibody.cases.kc_quasi_static import model_document
-from suspension_multibody.simulation import SimulationRequest, run_request
-from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
+
+from ._documents import documents
+from ._documents import run as _run
 
 _TIMES = {"start_s": 0.0, "end_s": 1e-3, "step_s": 1e-3}
 
@@ -43,21 +43,8 @@ def _case(*, body_wrench: list[dict] | None = None) -> dict:
     }
 
 
-def _run(model: dict, case: dict):
-    """Run one K document pair through the unified simulation runner."""
-    return run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
-
-
 def test_a_body_wrench_moves_the_reactions_and_not_the_kinematics() -> None:
-    assembly = compose_axle(benchmark_model(), "K")
-    model = model_document(assembly, name="k-body-wrench", drive_wheels=True)
+    model = documents(benchmark_model(), "K")
     loaded_case = _case(body_wrench=[{"body": "upright_L", "wrench": [100.0, 0.0, 0.0, 0.0, 5000.0, 0.0]}])
     validate_case(loaded_case)
 
@@ -79,8 +66,7 @@ def test_a_body_wrench_moves_the_reactions_and_not_the_kinematics() -> None:
 
 
 def test_an_unknown_body_in_a_body_wrench_is_refused() -> None:
-    assembly = compose_axle(benchmark_model(), "K")
-    model = model_document(assembly, name="k-body-wrench", drive_wheels=True)
+    model = documents(benchmark_model(), "K")
     case = _case(body_wrench=[{"body": "no_such_body", "wrench": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]}])
     with pytest.raises(Exception, match="no_such_body"):
         _run(model, case)

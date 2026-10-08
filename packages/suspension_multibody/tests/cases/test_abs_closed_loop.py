@@ -66,8 +66,14 @@ from typing import Any
 
 import numpy as np
 import pytest
-from suspension_contracts import pack_container
 
+from suspension_multibody.api import simulate
+from suspension_multibody.authoring import (
+    AssemblyDocument,
+    SubsystemDocument,
+    TemplateDocument,
+)
+from suspension_multibody.authoring.migration import migrate_v1_dynamic_axle
 from suspension_multibody.axle_dynamics.schema import (
     AxleBody,
     AxleDynamicsCase,
@@ -75,12 +81,6 @@ from suspension_multibody.axle_dynamics.schema import (
     AxleJoint,
     AxleSolverSettings,
     AxleTire,
-)
-from suspension_multibody.cases.axle_dynamic import case_document, model_document
-from suspension_multibody.simulation import (
-    SimulationRequest,
-    compile_document_pair,
-    run_request,
 )
 
 #: The wheel's unloaded radius, in metres.  The contact is a real one: the wheel
@@ -258,15 +258,20 @@ def run_rig(
     """Run the rig once, with or without the ABS law engaged."""
     model = _model()
     case = _case()
-    document, blob = model_document(model)
-    document = dict(document)
-    document["elements"] = [
-        *document["elements"],
-        {
+    assembly, declared = migrate_v1_dynamic_axle(model, case)
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+        "name": "abs_brake", "functional_role": "brake", "allowed_placement_roles": ["any"],
+        "symmetry": "asymmetric", "units": {"length": "m"}, "bodies": [], "hardpoints": [], "joints": [],
+        "needs": [{"name": name, "role": "body:"+name, "count": 1, "required": True} for name in ("carrier", "wheel")],
+        "property_slots": [{"name": "law", "element_type": "generic", "required": False, "default": 0}],
+        "elements": [{
             "name": "abs_brake",
             "type": "rotational_torque",
-            "body_a": "carrier",
-            "body_b": "wheel",
+            "body_a": "@carrier",
+            "body_b": "@wheel",
+            "point_a": "@carrier",
+            "point_b": "@wheel",
+            "property_slot": "law",
             "parameters": {
                 "axis_a": [0.0, 1.0, 0.0],
                 "stiffness": stiffness,
@@ -280,29 +285,23 @@ def run_rig(
                 "target_slip": target_slip,
                 "controller_gain": gain,
             },
-        },
-    ]
-    case_doc, case_blob = case_document(model, case)
+        }]})
+    brake = SubsystemDocument.from_payload({"document": "subsystem", "schema_version": 1,
+        "name": "abs_brake", "template": "abs.tpl.json", "functional_role": "brake",
+        "placement_role": "any", "hardpoints": {}, "property_bindings": {}}, template=template)
+    payload = assembly.to_payload()
+    payload["subsystems"].append({"ref": "brake", "functional_role": "brake", "placement_role": "any"})
+    assembly = AssemblyDocument.from_payload(payload,
+        subsystems={**{entry.ref: entry.subsystem for entry in assembly.entries}, "brake": brake})
     times = np.asarray(case.times_s, dtype=float)
     pressure = peak * np.clip((times - RAMP_START_S) / RAMP_RISE_S, 0.0, 1.0)
-    case_doc, case_blob = _append_table(
-        case_doc, case_blob, "brake_pressure", pressure, "tire"
-    )
+    plan = declared.to_payload()
+    plan["inputs"].append({"name": "brake_pressure", "role": "brake_pressure", "tire": "wheel.tire", "values": pressure.tolist()})
     # The road's own speed.  The kernel composes it as the *vertical* road
     # velocity, so a carriage that travels forward states its speed on the body
     # rather than in this table -- and the road here is level and still.
-    case_doc, case_blob = _append_table(
-        case_doc, case_blob, "road_velocity", np.zeros(times.size), "tire"
-    )
-    return run_request(
-        compile_document_pair(
-            SimulationRequest(assembly="axle", family="axle_dynamic"),
-            model_document=document,
-            case_document=case_doc,
-            model_payload=pack_container(document, blob),
-            case_payload=pack_container(case_doc, case_blob),
-        )
-    ).raw
+    plan["inputs"].append({"name": "road_velocity", "role": "road_velocity", "tire": "wheel.tire", "values": np.zeros(times.size).tolist()})
+    return simulate(assembly, plan).raw
 
 
 def _slip(raw, window: slice = SETTLED) -> np.ndarray:

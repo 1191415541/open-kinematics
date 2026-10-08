@@ -26,12 +26,12 @@ from suspension_multibody.axle_dynamics import (
     AxleBody,
     AxleDrivenCoordinate,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
     NativeAxleError,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
+from tests.axle_dynamics._unified_entry import solve_axle
 
 _UNIT_INERTIA = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 
@@ -116,7 +116,7 @@ def _slide(column: str) -> AxleDrivenCoordinate:
 
 
 def _result(model: AxleDynamicsModel, case: AxleDynamicsCase):
-    return run_axle_dynamics(model, case)
+    return solve_axle(model, case)
 
 
 def test_a_constant_target_holds_the_coordinate_exactly() -> None:
@@ -338,7 +338,7 @@ def test_a_rotation_target_is_held_in_the_principal_branch() -> None:
             maximum_step_s=0.01,
         ),
     )
-    result = run_axle_dynamics(model, case)
+    result = solve_axle(model, case)
 
     arm = result.body_state("arm")
     # Quaternion z component is sin(theta/2) for a rotation about z.
@@ -415,7 +415,7 @@ def test_a_multi_turn_rotation_target_follows_the_unwrapped_rate() -> None:
             maximum_step_s=0.01,
         ),
     )
-    result = run_axle_dynamics(model, case)
+    result = solve_axle(model, case)
     arm = result.body_state("arm")
 
     np.testing.assert_allclose(arm[:, 12], 50.0, rtol=1e-9, atol=1e-9)
@@ -449,7 +449,7 @@ def test_a_redundant_driver_is_rejected_as_rank_deficient() -> None:
         ),
     )
     with pytest.raises(NativeAxleError, match="rank deficient"):
-        run_axle_dynamics(model, _case())
+        solve_axle(model, _case())
 
 
 def test_a_missing_target_is_an_error_not_a_silent_zero() -> None:
@@ -458,7 +458,7 @@ def test_a_missing_target_is_an_error_not_a_silent_zero() -> None:
     case = _case()
     case.driven_target_m.clear()
     with pytest.raises(ValueError, match="neither a target nor a rate"):
-        run_axle_dynamics(model, case)
+        solve_axle(model, case)
 
 
 def test_the_schema_rejects_a_driver_without_a_distinct_reaction_body() -> None:

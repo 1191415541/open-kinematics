@@ -1,73 +1,46 @@
-from __future__ import annotations
-
+"""One neutral adaptation feeds entity queries without family dispatch."""
 import numpy as np
 import pytest
 
 from suspension_multibody.kernel import ContractRun
-from suspension_multibody.results import (
-    AxleResult,
-    decode_result,
-    decoder_for,
-)
-from suspension_multibody.results.raw import RawContractResult
+from suspension_multibody.results import ResultEnvelope
+from suspension_multibody.results.raw import RawContractResult, _decode_contract_run
+from suspension_multibody.simulation import run_compiled
+
+from ..simulation._documents import simple_compiled, synthetic_run
 
 
-def _run() -> ContractRun:
-    return ContractRun(
-        document={"status": "success", "manifest": {"bodies": ["body"]}},
-        blocks={"body_state": np.zeros((2, 1, 19))},
-        model_document={"tires": []},
-        case_document={"family": "probe"},
-        times_s=np.array([0.0, 0.1]),
-    )
+def test_native_adaptation_preserves_status_and_times():
+    raw = _decode_contract_run(ContractRun(document={"status": "success", "manifest": {"bodies": ["body"]}},
+        blocks={"body_state": np.zeros((2, 1, 19))}, model_document={"tires": []}, times_s=np.array([0, .1])))
+    assert isinstance(raw, RawContractResult)
+    assert raw.status == "success"
+    assert raw.times_s.tolist() == [0, .1]
 
 
-def test_decoder_falls_back_to_neutral_result_without_typed_inputs() -> None:
-    result = decode_result(_run(), assembly="axle", family="axle_dynamic")
-
-    assert isinstance(result, RawContractResult)
-    assert result.status == "success"
-    assert result.times_s.tolist() == [0.0, 0.1]
-
-
-def test_decoder_for_binds_normalized_dimensions() -> None:
-    result = decoder_for(" AXLE ", " probe ")(_run())
-
-    assert isinstance(result, RawContractResult)
+def test_native_adaptation_rejects_an_unrecognized_result():
     with pytest.raises(TypeError, match="ContractRun"):
-        decoder_for("axle", "probe")(object())
+        _decode_contract_run(object())
 
 
-def test_axle_result_alias_preserves_existing_result_type() -> None:
-    from suspension_multibody.axle_dynamics.result import AxleDynamicsResult
+def test_envelope_preserves_raw_identity_without_a_compatibility_projection():
+    submission = simple_compiled()
+    raw = _decode_contract_run(synthetic_run(submission))
+    result = ResultEnvelope(raw, submission.request.model)
+    assert result.raw is raw
+    assert result.model is submission.request.model
+    assert result.body_ids == raw.body_names
+    np.testing.assert_array_equal(result.body_state(result.body_ids[0]), raw.states[:, 0])
 
-    assert AxleResult is AxleDynamicsResult
-def test_vehicle_decoder_preserves_axle_and_steering_compatibility(monkeypatch) -> None:
-    from types import SimpleNamespace
 
-    from suspension_multibody.results import decode_vehicle_result
-    from suspension_multibody.results.vehicle import VehicleDynamicsResult
+def test_every_result_type_is_the_uniform_envelope():
+    from ..simulation._documents import PROTOCOLS, compiled
 
-    axle = SimpleNamespace()
-    prepared = SimpleNamespace(steering=SimpleNamespace(names=("rack",)))
-    run = ContractRun(
-        document={"status": "success", "manifest": {"bodies": ["body"]}},
-        blocks={
-            "body_state": np.zeros((2, 1, 19)),
-            "steering_output": np.array([[[1.0]], [[2.0]]]),
-        },
-        model_document={"tires": []},
-        times_s=np.array([0.0, 0.1]),
-    )
-    monkeypatch.setattr(
-        "suspension_multibody.results.vehicle._vehicle_axle_result",
-        lambda _prepared, _run: axle,
-    )
+    class Backend:
+        def run(self, value):
+            return synthetic_run(value)
 
-    result = decode_vehicle_result(prepared, run, native_kernel_wall_time_s=1.5)
-
-    assert isinstance(result, VehicleDynamicsResult)
-    assert result.axle is axle
-    assert result.steering_names == ("rack",)
-    assert result.steering_state("rack").ravel().tolist() == [1.0, 2.0]
-    assert result.native_kernel_wall_time_s == 1.5
+    for protocol in PROTOCOLS:
+        result = run_compiled(compiled(protocol), backend=Backend())
+        assert isinstance(result.result, ResultEnvelope)
+        assert result.result.status == result.status

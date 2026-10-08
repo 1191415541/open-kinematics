@@ -383,7 +383,7 @@ MEASUREMENT_CHANNELS: tuple[MeasurementChannel, ...] = (
     MeasurementChannel(
         name="body_acceleration",
         block="body_state",
-        unit="mm/s^2",
+        unit="m/s^2",
         entity="body",
         columns=slice(13, 16),
         declaration="body_acceleration",
@@ -436,7 +436,7 @@ MEASUREMENT_CHANNELS: tuple[MeasurementChannel, ...] = (
 ACTUATOR_CHANNELS: tuple[ActuatorChannel, ...] = (
     ActuatorChannel(
         name="variable_damping_L",
-        unit="N*s/mm",
+        unit="N*s/m",
         # The coefficient lives in the *model* document, inside one element of
         # its ``elements`` array -- not at a nested key of the document root.
         document="model",
@@ -454,7 +454,7 @@ ACTUATOR_CHANNELS: tuple[ActuatorChannel, ...] = (
     ),
     ActuatorChannel(
         name="motor_torque_FL",
-        unit="N*mm",
+        unit="Nm",
         # The moment is a per-sample table in the case document's payload blob,
         # found through the descriptor that names the body it acts on.
         document="case",
@@ -528,7 +528,7 @@ def _entity_index(raw: Any, channel: MeasurementChannel, entity: str) -> int:
             f"on {names[0]!r} had it been guessed"
         )
     for index, name in enumerate(names):
-        if name == entity or str(name).endswith(entity):
+        if name == entity:
             return index
     raise BusError(
         f"channel {channel.name!r} names {entity!r} and the run carries no such "

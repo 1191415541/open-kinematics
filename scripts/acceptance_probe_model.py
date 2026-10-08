@@ -19,8 +19,8 @@ Three models:
 
 from __future__ import annotations
 
+from suspension_multibody.schema.model import AxleDeclaration
 from suspension_multibody.schema import (
-    FrontAxleModel,
     IdealJointSpec,
     LinearSpring,
     MassSpec,
@@ -52,7 +52,7 @@ _HARDPOINTS = {
 }
 
 
-def probe_model() -> FrontAxleModel:
+def probe_model() -> AxleDeclaration:
     """
     The plain axle the flow checks compose.
 
@@ -68,7 +68,7 @@ def probe_model() -> FrontAxleModel:
     could not solve the *default* template would make the template comparison a
     comparison between two failures.
     """
-    return FrontAxleModel(
+    return AxleDeclaration(
         hardpoints=dict(_HARDPOINTS),
         mass=MassSpec(sprung_mass=1000),
         springs=(
@@ -187,7 +187,7 @@ def trailing_arm() -> Template:
     )
 
 
-def explicit_model(*, rack_fixed: bool) -> FrontAxleModel:
+def explicit_model(*, rack_fixed: bool) -> AxleDeclaration:
     """
     An explicit-topology axle: it states its own parts and joints.
 
@@ -219,7 +219,7 @@ def explicit_model(*, rack_fixed: bool) -> FrontAxleModel:
             point_b=Vec3(x=50.0, y=-400.0, z=250.0),
         ),
     ]
-    return FrontAxleModel(
+    return AxleDeclaration(
         hardpoints={
             "wheel_center": Vec3(x=0.0, y=-700.0, z=300.0),
             "rack_center": Vec3(x=0.0, y=0.0, z=250.0),
@@ -230,3 +230,58 @@ def explicit_model(*, rack_fixed: bool) -> FrontAxleModel:
         bodies=tuple(bodies),
         joints=tuple(joints),
     )
+
+
+def probe_documents(*, mode: str = "K", template_name: str | None = None,
+    reading: str = "force_balance", wheel_values: tuple[float, ...] = (-20., 0., 20.),
+    rack: bool = True):
+    """Author acceptance geometry and an ordinary rig without runtime builders."""
+    from suspension_multibody.authoring import (
+        AssemblyDocument, CaseDocument, SubsystemDocument, TemplateDocument, migrate_v1_kc_case,
+    )
+
+    assembly, case = migrate_v1_kc_case(probe_model(), mode=mode,
+        wheel_values_mm=wheel_values, rack_values_mm=(0.,) if rack else (),
+        drive_mode=reading, times_s=(0., .001, .002))
+    documents = {entry.ref: entry.subsystem for entry in assembly.entries}
+    if template_name is not None:
+        if template_name != "trailing_arm":
+            raise ValueError(f"unknown acceptance template {template_name!r}")
+        ref = "model.sub.json"
+        subsystem = documents[ref]
+        payload = subsystem.template.to_payload()
+        removed = {"upper_arm_L", "upper_arm_R"}
+        payload["bodies"] = [row for row in payload["bodies"] if row["name"] not in removed]
+        payload["joints"] = [row for row in payload["joints"]
+            if row["body_a"] not in removed and row["body_b"] not in removed]
+        payload["elements"] = [row for row in payload["elements"]
+            if row["body_a"] not in removed and row["body_b"] not in removed
+            and row["name"] not in {"lca_bushing_L_inner_rear", "lca_bushing_R_inner_rear"}]
+        payload["hardpoints"] = [row for row in payload["hardpoints"] if row.get("owner") not in removed]
+        payload["ports"] = [row for row in payload["ports"] if row.get("owner") not in removed]
+        payload["name"] = template_name
+        template = TemplateDocument.from_payload(payload)
+        values = {key: value for key, value in subsystem.payload["hardpoints"].items() if key in template.hardpoint_names}
+        documents[ref] = SubsystemDocument.from_payload({**subsystem.to_payload(), "name": template_name, "hardpoints": values},
+            template=template, properties=subsystem.properties)
+    if not rack:
+        ref = "kc_rig.sub.json"
+        subsystem = documents[ref]
+        payload = subsystem.template.to_payload()
+        payload["joints"] = [row for row in payload["joints"] if row["name"] != "rack_drive"]
+        payload["needs"] = [row for row in payload["needs"] if row["name"] != "rack"]
+        payload["hardpoints"] = [row for row in payload["hardpoints"] if row["name"] != "rack_center"]
+        documents[ref] = SubsystemDocument.from_payload({**subsystem.to_payload(), "hardpoints": {"origin": [0, 0, 0]}},
+            template=TemplateDocument.from_payload(payload))
+    payload = assembly.to_payload()
+    if not rack:
+        payload["subsystems"][-1]["pairings"] = [row for row in payload["subsystems"][-1]["pairings"] if row["requirement_role"] != "rack"]
+    assembly = AssemblyDocument.from_payload(payload, subsystems=documents)
+    run = case.to_payload()
+    available = {entry.ref + "." + row["name"] for entry in assembly.entries
+        for row in (*entry.subsystem.template.payload.get("elements", ()), *entry.subsystem.template.payload.get("tires", ()))}
+    run["element_activation"] = [row for row in run.get("element_activation", ()) if row["entity"] in available]
+    if not rack:
+        run["excitation"]["k"]["axis_map"].pop("rack", None)
+        run["excitation"]["k"]["rack_values_mm"] = []
+    return assembly, CaseDocument(run)

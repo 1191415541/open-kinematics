@@ -22,11 +22,15 @@ Three things are pinned here:
 from __future__ import annotations
 
 import pathlib
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+from suspension_multibody.authoring import assemble_generic
+from suspension_multibody.authoring.migration import migrate_v1_axle
 from suspension_multibody.modeling.primitives import (
+    SE3,
     BallJoint,
     Constraint,
     DistanceConstraint,
@@ -34,14 +38,10 @@ from suspension_multibody.modeling.primitives import (
     RevoluteJoint,
     RigidBody,
     RigidBodyState,
+    WeldJoint,
 )
-from suspension_multibody.schema import (
-    FrontAxleModel,
-    MassSpec,
-    RigidBodySpec,
-    Vec3,
-)
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.schema import MassSpec, RigidBodySpec, Vec3
+from suspension_multibody.schema.model import AxleDeclaration
 from suspension_multibody.vehicle import screw_kinematics as sk
 
 #: How far the reported axis direction may sit off the declared axis, measured as
@@ -77,7 +77,7 @@ def double_wishbone_axle(
     name: str = "front",
     x: float = 1400.0,
     **overrides: tuple[float, float, float],
-) -> FrontAxleModel:
+) -> AxleDeclaration:
     """
     Build the fixture's double-wishbone axle.
 
@@ -100,7 +100,7 @@ def double_wishbone_axle(
     }
     for point, (px, py, pz) in overrides.items():
         hardpoints[point] = Vec3(x=px, y=py, z=pz)
-    return FrontAxleModel(
+    return AxleDeclaration(
         name=name,
         hardpoints=hardpoints,
         mass=MassSpec(sprung_mass=600.0),
@@ -121,15 +121,23 @@ def single_revolute(
     state = RigidBodyState(
         {"ground": RigidBody("ground", fixed=True), "arm": RigidBody("arm")}
     )
-    return (
-        (
-            RevoluteJoint(
-                "ground", np.asarray(point, dtype=float), np.asarray(axis, dtype=float),
-                "arm", np.asarray(point, dtype=float), np.asarray(axis, dtype=float),
-            ),
-        ),
-        state,
-    )
+    return ((RevoluteJoint("ground", np.asarray(point, dtype=float), np.asarray(axis, dtype=float),
+        "arm", np.asarray(point, dtype=float), np.asarray(axis, dtype=float)),), state)
+
+
+def _mechanism(source):
+    graph = assemble_generic(migrate_v1_axle(source)).resolved_model().to_document()
+    bodies = {row["name"]: RigidBody(row["name"], mass=row["mass"], fixed=row.get("fixed", False),
+        pose=SE3(np.asarray(row["position"]), np.asarray(row["quaternion"]))) for row in graph["bodies"]}
+    state = RigidBodyState(bodies)
+    constraints = []
+    kinds = {"spherical": BallJoint, "revolute": RevoluteJoint, "prismatic": PrismaticJoint, "fixed": WeldJoint}
+    for row in graph["joints"]:
+        fields = {key: np.asarray(row[key]) if key.startswith(("point_", "axis_")) else row[key]
+            for key in ("body_a", "body_b", "point_a", "point_b", "axis_a", "axis_b") if key in row}
+        constraints.append(kinds[row["type"]](**fields, name=row["name"]))
+    points = {(frame["body"], frame["name"]): np.asarray(frame["point"]) for frame in graph["frames"]}
+    return SimpleNamespace(constraints=tuple(constraints), state=state, points=points)
 
 
 # --------------------------------------------------------------------------- #
@@ -139,7 +147,7 @@ def single_revolute(
 
 def test_residual_rows_follow_the_kernel_joint_registry() -> None:
     """The assembled axle's row count is the sum of its declarations' kernel rows."""
-    runtime = compose_axle(double_wishbone_axle(), "K")
+    runtime = _mechanism(double_wishbone_axle())
 
     rows = sk.constraint_residual(runtime.constraints, runtime.state)
 
@@ -162,15 +170,15 @@ def test_residual_rows_follow_the_kernel_joint_registry() -> None:
 
 def test_the_motion_is_a_screw_on_the_assembled_axle() -> None:
     """Shapes, finiteness and the reconstruction identity of one real call."""
-    runtime = compose_axle(double_wishbone_axle(), "K")
+    runtime = _mechanism(double_wishbone_axle())
 
     motion = sk.solve_rigid_motion(
         runtime.constraints,
         runtime.state,
-        [sk.PointDrive("wheel_hub_L", "wheel_center", np.array([0.0, 0.0, 1.0]))],
+        [sk.PointDrive("wheel.sub.json.wheel_hub_L", "wheel.sub.json.wheel_center_L", np.array([0.0, 0.0, 1.0]))],
         points=runtime.points,
-        pivot_body="upright_L",
-        pivot_point=("upright_L", "spindle"),
+        pivot_body="model.sub.json.upright_L",
+        pivot_point=("model.sub.json.upright_L", "wheel.sub.json.spin_L.a"),
     )
 
     assert motion.bodies == sk.free_bodies(runtime.constraints, runtime.state)
@@ -193,8 +201,8 @@ def test_the_motion_is_a_screw_on_the_assembled_axle() -> None:
         assert np.all(np.isfinite(value))
     assert np.isfinite(motion.screw.pitch)
     assert np.isfinite(motion.screw.angular_speed)
-    assert motion.reference == "ground"
-    assert motion.pivot_body == "upright_L"
+    assert motion.reference == "model.sub.json.chassis"
+    assert motion.pivot_body == "model.sub.json.upright_L"
 
     # The weighted drive is satisfied, and the constraints are met.
     assert motion.drive_residual < 1e-9
@@ -211,41 +219,41 @@ def test_the_motion_is_a_screw_on_the_assembled_axle() -> None:
 
 def test_the_drive_value_follows_the_named_point_velocity() -> None:
     """``PointDrive`` really states the named point's velocity along the direction."""
-    runtime = compose_axle(double_wishbone_axle(), "K")
+    runtime = _mechanism(double_wishbone_axle())
     direction = np.array([0.0, 0.0, 1.0])
 
     motion = sk.solve_rigid_motion(
         runtime.constraints,
         runtime.state,
-        [sk.PointDrive("wheel_hub_L", "wheel_center", direction, rate=7.0)],
+        [sk.PointDrive("wheel.sub.json.wheel_hub_L", "wheel.sub.json.wheel_center_L", direction, rate=7.0)],
         points=runtime.points,
-        pivot_body="wheel_hub_L",
-        pivot_point=("wheel_hub_L", "wheel_center"),
+        pivot_body="wheel.sub.json.wheel_hub_L",
+        pivot_point=("wheel.sub.json.wheel_hub_L", "wheel.sub.json.wheel_center_L"),
     )
 
-    point_world = runtime.state.pose("wheel_hub_L").transform_point(
-        runtime.points[("wheel_hub_L", "wheel_center")]
+    point_world = runtime.state.pose("wheel.sub.json.wheel_hub_L").transform_point(
+        runtime.points[("wheel.sub.json.wheel_hub_L", "wheel.sub.json.wheel_center_L")]
     )
-    velocity = motion.twists["wheel_hub_L"].transform_point(point_world)
+    velocity = motion.twists["wheel.sub.json.wheel_hub_L"].transform_point(point_world)
     assert float(velocity @ direction) == pytest.approx(7.0, rel=1e-9)
 
 
 def test_a_drive_the_mechanism_cannot_meet_is_reported_and_the_drive_is_refused() -> None:
     """The two failure modes a caller can hand the engine are named, not guessed."""
-    runtime = compose_axle(double_wishbone_axle(), "K")
+    runtime = _mechanism(double_wishbone_axle())
 
     with pytest.raises(sk.KinematicError, match="is not movable in this assembly"):
         sk.solve_rigid_motion(
             runtime.constraints,
             runtime.state,
-            [sk.PointDrive("chassis", "center", np.array([0.0, 0.0, 1.0]))],
+            [sk.PointDrive("model.sub.json.chassis", "center", np.array([0.0, 0.0, 1.0]))],
         )
 
     with pytest.raises(sk.KinematicError, match="has no entry"):
         sk.solve_rigid_motion(
             runtime.constraints,
             runtime.state,
-            [sk.PointDrive("upright_L", "not_a_point", np.array([0.0, 0.0, 1.0]))],
+            [sk.PointDrive("model.sub.json.upright_L", "not_a_point", np.array([0.0, 0.0, 1.0]))],
             points=runtime.points,
         )
 
@@ -256,8 +264,8 @@ def test_a_drive_the_mechanism_cannot_meet_is_reported_and_the_drive_is_refused(
             runtime.constraints,
             runtime.state,
             [
-                sk.TangentDrive("rack", 1, 1.0),
-                sk.TangentDrive("upright_L", 3, 0.0),
+                sk.TangentDrive("model.sub.json.rack", 1, 1.0),
+                sk.TangentDrive("model.sub.json.upright_L", 3, 0.0),
             ],
         )
 
@@ -426,15 +434,11 @@ def test_roll_centers_routes_the_per_side_read_to_the_injected_construction() ->
     the same arithmetic fed a different geometry -- and the default path is the
     engine's own read, unchanged by the hook being present.
     """
-    from suspension_multibody.schema import (
-        SteeringSystemSpec,
-        TireModelSpec,
-        VehicleModel,
-        WheelSpec,
-    )
-    from suspension_multibody.vehicle.roll_centers import compute_vehicle_roll_centers
+    from suspension_multibody.schema import SteeringSystemSpec, TireModelSpec, WheelSpec
+    from suspension_multibody.schema.vehicle import VehicleDeclaration
+    from tests.physics.test_vehicle_physics import _roll_center_run
 
-    vehicle = VehicleModel(
+    vehicle = VehicleDeclaration(
         chassis=RigidBodySpec(name="chassis", mass=1200.0),
         front_axle=double_wishbone_axle(),
         rear_axle=double_wishbone_axle(name="rear", x=-1400.0),
@@ -452,22 +456,29 @@ def test_roll_centers_routes_the_per_side_read_to_the_injected_construction() ->
         steering=SteeringSystemSpec(ratio=16.0),
     )
 
-    default = compute_vehicle_roll_centers(vehicle)
-    injected = compute_vehicle_roll_centers(
-        vehicle, instant_center_engine=lambda model, side: np.array([-100.0, 200.0])
-    )
-
-    # The default reads the engine: the wishbone's own instant centres, and the
-    # height those force lines meet at.
-    assert np.allclose(default["front"].left_contact_patch[1], -750.0)
-    assert np.isclose(default["front"].left_contact_patch_slope, 0.24, atol=1e-6)
-    assert np.isclose(default["front"].center[1], -180.0, atol=1e-4)
-    # The routed construction is what the hook returned, expressed as a slope: the
-    # line from the patch to the injected centre.
-    expected_left = (200.0 - 0.0) / (-750.0 - -100.0)
-    expected_right = (200.0 - 0.0) / (750.0 - -100.0)
-    assert np.isclose(injected["front"].left_contact_patch_slope, expected_left, atol=1e-12)
-    assert np.isclose(injected["front"].right_contact_patch_slope, expected_right, atol=1e-12)
+    native = _roll_center_run(vehicle)
+    runtime = _mechanism(vehicle.front_axle)
+    slopes, patches = [], []
+    for side in ("L", "R"):
+        body, frame = "wheel.sub.json.wheel_hub_"+side, "wheel.sub.json.wheel_center_"+side
+        point = runtime.state.point_world(body, runtime.points[(body, frame)])
+        patch = np.array([point[0], point[1], 0])
+        motion = sk.solve_rigid_motion(runtime.constraints, runtime.state,
+            [sk.PointDrive(body, frame, np.array([0., 0., 1.]))], points=runtime.points)
+        velocity = motion.twist_of(body).transform_point(patch)
+        slopes.append(velocity[1]/velocity[2])
+        patches.append(patch)
+    assert patches[0][1] == pytest.approx(-.75)
+    assert slopes[0] == pytest.approx(.24, abs=1e-6)
+    assert slopes[1] == pytest.approx(-.24, abs=1e-6)
+    independent_height = np.mean(np.asarray(patches)[:, 1]*slopes)
+    assert independent_height == pytest.approx(-.180, abs=1e-7)
+    np.testing.assert_allclose(native.measure("front").values[:, 1], independent_height, atol=1e-7)
+    instant = np.array([-.100, .200])
+    injected_slopes = [(instant[1]-patch[2])/(patch[1]-instant[0]) for patch in patches]
+    assert injected_slopes[0] == pytest.approx(.200/(-.750+.100), abs=1e-12)
+    assert injected_slopes[1] == pytest.approx(.200/(.750+.100), abs=1e-12)
+    assert np.mean(np.asarray(patches)[:, 1]*injected_slopes) != pytest.approx(independent_height)
 
 
 def test_no_engine_source_names_a_hardpoint_role() -> None:

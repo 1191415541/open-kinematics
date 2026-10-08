@@ -1,0 +1,19 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/modeling/test_resolved_model.py",
+    "packages/suspension_multibody/tests/authoring/test_unified_subsystem_templates.py",
+    "packages/suspension_multibody/tests/subsystems/test_assembly_matches_snapshot.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T14:07:51.805799+00:00",
+  "finished_at": "2026-10-06T14:07:54.631300+00:00",
+  "log": "raw\\validation\\child-3-step-4.log",
+  "log_sha256": "2cf01c3fdc803ade70bd490bfcb25d0dedbb8f8bbb714183b5daa10359924b8e"
+}

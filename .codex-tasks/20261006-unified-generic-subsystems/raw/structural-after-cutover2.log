@@ -1,0 +1,19 @@
+uv run --no-sync ruff check .
+I001 [*] Import block is un-sorted or un-formatted
+   --> packages\suspension_multibody\tests\architecture\test_retired_entries_gate.py:245:5
+    |
+243 |       assert callable(package.simulate)
+244 |
+245 | /     from suspension_multibody.api import simulate, validate
+246 | |     from suspension_multibody.authoring.migration import migrate_v1_case, migrate_v1_dynamic_axle
+247 | |     from suspension_multibody.schema.model import AxleDeclaration
+248 | |     from suspension_multibody.schema.vehicle import VehicleDeclaration
+249 | |     from suspension_multibody.authoring.migration import migrate_v1_vehicle_case
+    | |________________________________________________________________________________^
+250 |
+251 |       for replacement in (simulate, validate, migrate_v1_case, migrate_v1_dynamic_axle, migrate_v1_vehicle_case):
+    |
+help: Organize imports
+
+Found 1 error.
+[*] 1 fixable with the `--fix` option.

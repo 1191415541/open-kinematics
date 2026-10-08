@@ -10,14 +10,14 @@ from suspension_multibody.axle_dynamics import (
     AxleBody,
     AxleDamper,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleDynamicsResult,
     AxleJoint,
     AxleSolverSettings,
     AxleSpring,
     AxleTire,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
+from tests.axle_dynamics._unified_entry import solve_axle
 
 _I = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _ZERO_I = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
@@ -108,7 +108,7 @@ def _run_sliding(
     rho_inf: float = 0.8,
 ) -> AxleDynamicsResult:
     times = _grid(duration_s, 0.0005)
-    return run_axle_dynamics(
+    return solve_axle(
         _sliding_model(friction_coefficient=friction_coefficient),
         AxleDynamicsCase(
             name="sliding-wheel",
@@ -290,7 +290,7 @@ def _liftoff_model() -> AxleDynamicsModel:
 
 def test_full_liftoff_and_recontact_stays_unilateral_and_dissipative() -> None:
     """A ballistic flight phase must release and land without pulling."""
-    result = run_axle_dynamics(
+    result = solve_axle(
         _liftoff_model(),
         AxleDynamicsCase(
             name="tire_liftoff_and_recontact",
@@ -382,7 +382,7 @@ def test_extreme_mass_stiffness_ratios_still_trim_and_integrate(
         dampers=(),
         bump_stops=(),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="ratio",
@@ -500,7 +500,7 @@ def _spin_axle(spin_kind: str) -> AxleDynamicsModel:
 
 
 def _trim(spin_kind: str) -> AxleDynamicsResult:
-    return run_axle_dynamics(
+    return solve_axle(
         _spin_axle(spin_kind),
         AxleDynamicsCase(
             name="static_equilibrium",
@@ -582,7 +582,7 @@ def test_measured_damper_curve_is_reproduced_not_fitted() -> None:
         ),
         bump_stops=(),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="measured-damper",

@@ -1,0 +1,4 @@
+{
+  "document": "assembly", "schema_version": 1, "name": "single_tire_bench", "assembly_kind": "generic_multibody",
+  "subsystems": [{"ref": "tire.sub.json", "functional_role": "generic", "placement_role": "any"}]
+}

@@ -89,6 +89,7 @@ set(MB_ELEMENT_SOURCES
     cpp/src/element/directional.cpp
     cpp/src/element/assembly_primitives.cpp
     cpp/src/element/drive_brake.cpp
+    cpp/src/element/function_program.cpp
     cpp/src/element/spring.cpp
     cpp/src/element/steering.cpp
 )

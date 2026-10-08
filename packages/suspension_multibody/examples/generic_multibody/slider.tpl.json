@@ -1,0 +1,30 @@
+{
+  "document": "template", "schema_version": 1, "name": "vertical_slider",
+  "functional_role": "generic", "allowed_placement_roles": ["any"],
+  "symmetry": "asymmetric", "units": {"length": "m"},
+  "bodies": [
+    {"name": "support", "fixed": true},
+    {"name": "carriage", "mass": 10.0, "position": [0.0, 0.0, 0.24019335]}
+  ],
+  "hardpoints": [
+    {"name": "base", "owner": "support"},
+    {"name": "mount", "owner": "carriage"}
+  ],
+  "joints": [
+    {"name": "guide", "type": "prismatic", "body_a": "support", "body_b": "carriage",
+     "point_a": "base", "point_b": "mount", "axis": [0.0, 0.0, 1.0]}
+  ],
+  "elements": [
+    {"name": "spring", "type": "spring", "body_a": "support", "body_b": "carriage",
+     "point_a": "base", "point_b": "mount", "property_slot": "spring"},
+    {"name": "damper", "type": "damper", "body_a": "support", "body_b": "carriage",
+     "point_a": "base", "point_b": "mount", "property_slot": "damper"}
+  ],
+  "property_slots": [
+    {"name": "spring", "element_type": "spring", "required": true},
+    {"name": "damper", "element_type": "damper", "required": true}
+  ],
+  "ports": [
+    {"name": "input", "role": "translation_input", "owner": "carriage", "point": "mount"}
+  ]
+}

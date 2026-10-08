@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 
@@ -13,14 +13,10 @@ from suspension_multibody.adams.time_domain import (
     AdamsResultChannel,
     parse_adams_result_history,
 )
-from suspension_multibody.preparation.vehicle_dynamic import (
-    _build_tires,
-    _initial_body_state,
-    _length_scale,
-    _select_assembly_mode,
-)
-from suspension_multibody.schema import VehicleDynamicCase, VehicleModel
-from suspension_multibody.subsystems.vehicle_assembly import compose_vehicle_runtime
+from suspension_multibody.api import validate
+from suspension_multibody.authoring.migration import migrate_v1_vehicle_case
+from suspension_multibody.schema import VehicleDynamicCase
+from suspension_multibody.schema.vehicle import VehicleDeclaration
 
 WHEELS = (
     ("front_left", "til", "front", "front_spindle_L"),
@@ -67,27 +63,10 @@ def _channels() -> dict[str, AdamsResultChannel]:
 def diagnose(adams_result: Path, native_artifact: Path) -> dict[str, Any]:
     """对比 Adams 与 native 的 PAC2002 接触坐标系."""
     manifest = _read_json(native_artifact / "manifest.json")
-    model = VehicleModel.model_validate(manifest["model"])
+    model = VehicleDeclaration.model_validate(manifest["model"])
     case = VehicleDynamicCase.model_validate(manifest["case"])
-    scale = _length_scale(model.units)
-    # The composed runtime, matching what the run itself builds.  The mode is
-    # narrowed here because the reader accepts only K or C, while the selector
-    # returns the resolved spelling.
-    selected: Literal["K", "C"] = (
-        "K" if _select_assembly_mode(model, case.suspension_mode) == "K" else "C"
-    )
-    assembly = compose_vehicle_runtime(model, mode=selected)
-    _, body_frames = _initial_body_state(assembly, case, scale)
-    native_tires = {
-        tire.name: tire
-        for tire in _build_tires(
-            model.wheels,
-            assembly,
-            body_frames,
-            scale,
-            case.road.friction_coefficient,
-        )
-    }
+    compiled = validate(*migrate_v1_vehicle_case(case.model_copy(update={"vehicle": model})))
+    native_tires = {row["name"].rsplit(".", 1)[-1]: row for row in compiled.model_document["tires"]}
     arrays = np.load(native_artifact / str(manifest["arrays_file"]))
     body_names = [str(value) for value in arrays["body_names"]]
     tire_names = [str(value) for value in arrays["tire_names"]]
@@ -98,11 +77,14 @@ def diagnose(adams_result: Path, native_artifact: Path) -> dict[str, Any]:
     result: dict[str, Any] = {"time_s": float(arrays["times_s"][0]), "wheels": {}}
     for wheel, _, _, _ in WHEELS:
         tire = native_tires[wheel]
-        frame_body = tire.frame_body or tire.body
-        body_index = body_names.index(frame_body)
-        tire_index = tire_names.index(wheel)
+        parameters = tire["parameters"]
+        frame_body = parameters["frame_body"]
+        def body_index_of(name):
+            return body_names.index(name) if name in body_names else body_names.index(name.split(".json.")[-1].removeprefix("body."))
+        body_index = body_index_of(frame_body)
+        tire_index = tire_names.index(tire["name"] if tire["name"] in tire_names else wheel)
         forward = _rotation(states[0, body_index, 3:7]) @ np.asarray(
-            tire.forward_axis_local, dtype=float
+            parameters["forward_axis"], dtype=float
         )
         forward[2] = 0.0
         forward /= np.linalg.norm(forward)
@@ -128,15 +110,15 @@ def diagnose(adams_result: Path, native_artifact: Path) -> dict[str, Any]:
             [history.channels[f"{wheel}.position_{axis}"][0] for axis in ("x", "y", "z")],
             dtype=float,
         ) * 1.0e-3
-        force_body_index = body_names.index(tire.body)
+        force_body_index = body_index_of(tire["body"])
         force_body_rotation = _rotation(states[0, force_body_index, 3:7])
         center = states[0, force_body_index, :3] + force_body_rotation @ np.asarray(
-            tire.center_local_m, dtype=float
+            tire["center"], dtype=float
         )
-        loaded_radius = tire.unloaded_radius_m - tire_output[0, tire_index, 2]
+        loaded_radius = parameters["unloaded_radius"] - tire_output[0, tire_index, 2]
         native_position = center + np.array((0.0, 0.0, -loaded_radius))
         spin = _rotation(states[0, body_index, 3:7]) @ np.asarray(
-            tire.spin_axis_local, dtype=float
+            parameters["spin_axis"], dtype=float
         )
         spin /= np.linalg.norm(spin)
         radial_down = -(np.array((0.0, 0.0, 1.0)) - spin * spin[2])

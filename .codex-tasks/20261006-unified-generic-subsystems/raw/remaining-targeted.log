@@ -1,0 +1,215 @@
+.................F...........F................................F.F..F...  [100%]
+================================== FAILURES ===================================
+_____________ test_vehicle_entity_data_matches_existing_producer ______________
+
+    def test_vehicle_entity_data_matches_existing_producer():
+        from suspension_multibody.compilation.resolved import native_model_document
+        from tests.vehicle.vehicle_fixtures import _vehicle
+    
+        reference = Path(__file__).parents[1]/"data/vehicle_dynamics_baseline/reference"
+        old = json.loads((reference/"0.model.json").read_text())
+        old_payload = (reference/"0.model.bin").read_bytes()
+        migrated = assemble_generic(migrate_v1_vehicle(_vehicle())).resolved_model()
+        new = native_model_document(migrated)
+        old_bodies = {row["name"]: row for row in old["bodies"]}
+        new_bodies = {_legacy_entity_id(row["name"]): row for row in new["bodies"]}
+        assert old_bodies.keys() == new_bodies.keys()
+        for name, body in old_bodies.items():
+            for key in ("mass", "inertia", "position", "quaternion", "fixed", "velocity", "omega"):
+>               np.testing.assert_array_equal(new_bodies[name].get(key, [0, 0, 0]), body[key])
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:309: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = ([0.0, 0.0, 0.0], [1.45, -0.5833333333333334, 0.45]), kwargs = {}
+old_name = 'y', new_name = 'desired'
+
+    @functools.wraps(fun)
+    def wrapper(*args, **kwargs):
+        for old_name, new_name in zip(old_names, new_names):
+            if old_name in kwargs:
+                if dep_version:
+                    end_version = dep_version.split('.')
+                    end_version[1] = str(int(end_version[1]) + 2)
+                    end_version = '.'.join(end_version)
+                    msg = (f"Use of keyword argument `{old_name}` is "
+                           f"deprecated and replaced by `{new_name}`. "
+                           f"Support for `{old_name}` will be removed "
+                           f"in NumPy {end_version}.")
+                    warnings.warn(msg, DeprecationWarning, stacklevel=2)
+                if new_name in kwargs:
+                    msg = (f"{fun.__name__}() got multiple values for "
+                           f"argument now known as `{new_name}`")
+                    raise TypeError(msg)
+                kwargs[new_name] = kwargs.pop(old_name)
+>       return fun(*args, **kwargs)
+E       AssertionError: 
+E       Arrays are not equal
+E       
+E       Mismatched elements: 3 / 3 (100%)
+E       Max absolute difference among violations: 1.45
+E       Max relative difference among violations: 1.
+E        ACTUAL: array([0., 0., 0.])
+E        DESIRED: array([ 1.45    , -0.583333,  0.45    ])
+
+.venv\Lib\site-packages\numpy\_utils\__init__.py:85: AssertionError
+__ test_vehicle_case_migration_matches_declared_excitation_and_initial_state __
+
+    def test_vehicle_case_migration_matches_declared_excitation_and_initial_state():
+        from suspension_multibody.authoring.migration import migrate_v1_vehicle_case
+        from suspension_multibody.schema import TimeSignal
+        from tests.vehicle.vehicle_fixtures import _case, _vehicle
+    
+        vehicle = _vehicle()
+        source = _case(vehicle)
+        reference = Path(__file__).parents[1]/"data/vehicle_dynamics_baseline/reference"
+        old = json.loads((reference/"0.case.json").read_text())
+        blob = (reference/"0.case.bin").read_bytes()
+        old_model = json.loads((reference/"0.model.json").read_text())
+        assembly, case = migrate_v1_vehicle_case(source)
+        graph = assemble_generic(assembly).resolved_model().to_document()
+        ids = {"body:"+_legacy_entity_id(row["name"]): row["name"] for row in graph["bodies"]}
+        ids.update({row["name"].split(".", 1)[1]: row["name"] for row in graph["tires"]})
+        ids.update({row["target"].split(".", 1)[1]: row["target"] for row in graph["elements"] if row["type"] == "steering_actuator"})
+        migrated_native = migrate_v1_case(old, entity_ids=ids, input_payload=blob).to_payload()
+        actual = case.to_payload()
+        assert actual["solver"] == migrated_native["solver"]
+        assert actual["samples"] == migrated_native["samples"]
+        assert actual["excitation"] == migrated_native["excitation"]
+        def inputs(rows):
+            return {(row["role"], row.get("tire", row.get("actuator"))): row["values"] for row in rows}
+        assert inputs(actual["inputs"]) == inputs(migrated_native["inputs"])
+        for body in old_model["bodies"]:
+            initial = actual["initial_state"][ids["body:"+body["name"]]]
+            for key in ("position", "quaternion", "velocity", "omega"):
+>               np.testing.assert_array_equal(initial[key], body[key])
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:455: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = ([0.0, 0.0, 0.0], [1.45, -0.5833333333333334, 0.45]), kwargs = {}
+old_name = 'y', new_name = 'desired'
+
+    @functools.wraps(fun)
+    def wrapper(*args, **kwargs):
+        for old_name, new_name in zip(old_names, new_names):
+            if old_name in kwargs:
+                if dep_version:
+                    end_version = dep_version.split('.')
+                    end_version[1] = str(int(end_version[1]) + 2)
+                    end_version = '.'.join(end_version)
+                    msg = (f"Use of keyword argument `{old_name}` is "
+                           f"deprecated and replaced by `{new_name}`. "
+                           f"Support for `{old_name}` will be removed "
+                           f"in NumPy {end_version}.")
+                    warnings.warn(msg, DeprecationWarning, stacklevel=2)
+                if new_name in kwargs:
+                    msg = (f"{fun.__name__}() got multiple values for "
+                           f"argument now known as `{new_name}`")
+                    raise TypeError(msg)
+                kwargs[new_name] = kwargs.pop(old_name)
+>       return fun(*args, **kwargs)
+E       AssertionError: 
+E       Arrays are not equal
+E       
+E       Mismatched elements: 3 / 3 (100%)
+E       Max absolute difference among violations: 1.45
+E       Max relative difference among violations: 1.
+E        ACTUAL: array([0., 0., 0.])
+E        DESIRED: array([ 1.45    , -0.583333,  0.45    ])
+
+.venv\Lib\site-packages\numpy\_utils\__init__.py:85: AssertionError
+______________ test_the_direct_law_preserves_a_one_channel_input ______________
+
+full_vehicle_model = VehicleDeclaration(schema_version=1, name='full_vehicle', units=<UnitSystem.ENGINEERING: 'mm-N-N*mm-kg-deg'>, coordina...fective_piston_radius=145.0, max_brake_value=0.1, torque_demand='none'), coordinate_couplers=(), aerodynamic_drag=None)
+
+    def test_the_direct_law_preserves_a_one_channel_input(full_vehicle_model):
+        source = _case(full_vehicle_model)
+        _, case = migrate_v1_vehicle_case(source)
+        payload = case.to_payload()
+        targets = [row for row in payload["inputs"] if row["role"] == "steering_target"]
+        assert len(targets) == 1
+>       np.testing.assert_array_equal(targets[0]["values"], [source.steering_input.value_at(t)/1000 for t in payload["samples"]])
+
+packages\suspension_multibody\tests\preparation\test_steering_channels.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = ([0.0, 5e-06, 1e-05, 1.5e-05, 2e-05], [0.0, 5e-06, 1e-05, 1.4999999999999999e-05, 2e-05])
+kwargs = {}, old_name = 'y', new_name = 'desired'
+
+    @functools.wraps(fun)
+    def wrapper(*args, **kwargs):
+        for old_name, new_name in zip(old_names, new_names):
+            if old_name in kwargs:
+                if dep_version:
+                    end_version = dep_version.split('.')
+                    end_version[1] = str(int(end_version[1]) + 2)
+                    end_version = '.'.join(end_version)
+                    msg = (f"Use of keyword argument `{old_name}` is "
+                           f"deprecated and replaced by `{new_name}`. "
+                           f"Support for `{old_name}` will be removed "
+                           f"in NumPy {end_version}.")
+                    warnings.warn(msg, DeprecationWarning, stacklevel=2)
+                if new_name in kwargs:
+                    msg = (f"{fun.__name__}() got multiple values for "
+                           f"argument now known as `{new_name}`")
+                    raise TypeError(msg)
+                kwargs[new_name] = kwargs.pop(old_name)
+>       return fun(*args, **kwargs)
+E       AssertionError: 
+E       Arrays are not equal
+E       
+E       Mismatched elements: 1 / 5 (20%)
+E       Max absolute difference among violations: 1.69406589e-21
+E       Max relative difference among violations: 1.12937726e-16
+E        ACTUAL: array([0.0e+00, 5.0e-06, 1.0e-05, 1.5e-05, 2.0e-05])
+E        DESIRED: array([0.0e+00, 5.0e-06, 1.0e-05, 1.5e-05, 2.0e-05])
+
+.venv\Lib\site-packages\numpy\_utils\__init__.py:85: AssertionError
+_________________ test_old_runtime_entry_modules_are_retired __________________
+
+    def test_old_runtime_entry_modules_are_retired():
+        for relative in ("preparation", "subsystems", "authoring/solver.py", "rigs/compose.py"):
+>           assert not (SOURCE / relative).exists()
+E           AssertionError: assert not True
+E            +  where True = exists()
+E            +    where exists = (WindowsPath('E:/�Ӽ�/open-kinematics/packages/suspension_multibody/src/suspension_multibody') / 'preparation').exists
+
+packages\suspension_multibody\tests\simulation\test_no_production_bridge.py:14: AssertionError
+__________ test_an_axle_declaring_no_inertia_remains_kinematic_data ___________
+
+    def test_an_axle_declaring_no_inertia_remains_kinematic_data():
+        source = explicit_source()
+        source["bodies"][0]["mass"] = 0
+        source["bodies"][0]["inertia"] = [[0, 0, 0]]*3
+>       graph = assemble_generic(migrate_v1_axle(source))
+
+packages\suspension_multibody\tests\simulation\test_no_production_bridge.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\authoring\migration.py:347: in migrate_v1_axle
+    return _migrate_explicit(model, mode)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = AxleDeclaration(schema_version=1, name='slider', units=<UnitSystem.ENGINEERING: 'mm-N-N*mm-kg-deg'>, coordinate_system...0), constant_velocity_angle_target=0.0),), rack_axis=Vec3(x=0.0, y=1.0, z=0.0), rack_fixed_to_chassis=False, road=None)
+mode = 'K'
+
+    def _migrate_explicit(model: AxleDeclaration, mode: str) -> AssemblyDocument:
+        specs = {spec.name: spec for spec in model.bodies}
+        bodies: list[dict[str, Any]] = [{"name": "chassis", "fixed": True, "mass": 0}]
+        poses = {"chassis": SE3.identity()}
+        gauges = []
+        for name, spec in specs.items():
+            if name == "chassis":
+                raise MigrationError("explicit v1 axle cannot redefine chassis")
+            if not spec.fixed and spec.mass <= 0:
+>               raise MigrationError(f"body {name!r}: free body has no declared mass")
+E               suspension_multibody.authoring.migration.MigrationError: body 'slider': free body has no declared mass
+
+packages\suspension_multibody\src\suspension_multibody\authoring\migration.py:359: MigrationError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_vehicle_entity_data_matches_existing_producer
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_vehicle_case_migration_matches_declared_excitation_and_initial_state
+FAILED packages\suspension_multibody\tests\preparation\test_steering_channels.py::test_the_direct_law_preserves_a_one_channel_input
+FAILED packages\suspension_multibody\tests\simulation\test_no_production_bridge.py::test_old_runtime_entry_modules_are_retired
+FAILED packages\suspension_multibody\tests\simulation\test_no_production_bridge.py::test_an_axle_declaring_no_inertia_remains_kinematic_data
+5 failed, 66 passed in 11.59s

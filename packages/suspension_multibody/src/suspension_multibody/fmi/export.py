@@ -94,7 +94,7 @@ from pathlib import Path
 from typing import Any, Literal
 from xml.etree import ElementTree
 
-from suspension_contracts import contract_hash, pack_container, unpack_container
+from suspension_contracts import contract_hash, unpack_container
 
 from ..io import canonical_hash
 from ..signal_bus import MEASUREMENT_CHANNELS
@@ -795,44 +795,6 @@ def _require_binary(package_root: Path) -> Path:
     return binary
 
 
-def _document_and_payload(
-    value: Any, *, label: str, document: Mapping[str, Any]
-) -> tuple[Mapping[str, Any], bytes]:
-    """
-    Return the document and its container bytes for one half of the pair.
-
-    The export is handed the *same* pair the case module returns -- a document
-    and the blob its descriptors point into -- because a case document whose
-    ``blobs`` name byte ranges but whose container carries no bytes is a run the
-    kernel refuses, and the refusal happens far from the export that caused it.
-    So a document with descriptors and no payload is refused here, by name, and
-    a payload is packed into the container the runner would have submitted:
-    ``pack_container`` is the one framing the kernel reads, and the archive has
-    to carry frames rather than bare blobs.
-    """
-    if isinstance(value, tuple) and len(value) == 2:
-        document, payload = value
-        if isinstance(document, Mapping) and isinstance(payload, bytes):
-            return document, pack_container(document, payload)
-        raise FmiExportError(
-            f"{label} must be a (document, payload) pair; got a "
-            f"{type(document).__name__} and a {type(payload).__name__}"
-        )
-    if isinstance(value, Mapping):
-        if document.get("blobs"):
-            raise FmiExportError(
-                f"{label} declares {len(document['blobs'])} blob table(s) but no "
-                "payload was handed in, so the containers this export would "
-                "write carry no bytes for those descriptors; pass the "
-                "(document, blob) pair the case module returns"
-            )
-        return value, pack_container(value, b"")
-    raise FmiExportError(
-        f"{label} must be a document mapping or a (document, payload) pair; got "
-        f"{type(value).__name__}"
-    )
-
-
 def export_fmu(
     destination: Path,
     *,
@@ -842,29 +804,17 @@ def export_fmu(
     """
     Export one run as an FMI 2.0 Co-Simulation FMU and return what it declares.
 
-    ``assembly_document`` and ``case_document`` are the two halves of one run:
-    either the documents alone or the ``(document, blob)`` pairs the case
-    modules return -- the same pair ``simulation.run_request`` accepts -- so an
-    export cannot describe a different run than the one a caller solved.  The
-    two containers are written into the archive as resources and the wrapper
-    binary solves them with the native kernel; there is deliberately no Python
-    evaluation in the artifact, which is exactly the D4 scope.
-
-    The export is a side channel: it authors containers and writes a file, and
-    it reaches the kernel only through the same submission point every other
-    path uses.  A run performed before and after an export is therefore the
-    same run.
+    The ordinary assembly and case documents use the same validation and
+    compilation entry as ``simulate``. The compiled containers are archived
+    unchanged and the FMI binary evaluates them with the native kernel.
 
     ``destination`` may be a ``.fmu`` path or a directory, in which case the
     file is named after the model identifier.
     """
-    model_doc, model_payload = _document_and_payload(
-        assembly_document, label="assembly_document", document=_as_mapping(assembly_document)
-    )
-    case_doc, case_payload = _document_and_payload(
-        case_document, label="case_document", document=_as_mapping(case_document)
-    )
-    compiled = _compile_pair(model_doc, case_doc, model_payload, case_payload)
+    from ..api import validate
+
+    compiled = validate(assembly_document, case_document)
+    model_doc, case_doc = compiled.model_document, compiled.case_document
     name = str(case_doc.get("name") or compiled.request.name or "run")
     variables = variable_declarations(case_doc, model_doc)
     guid = _guid(compiled.model_document, compiled.case_payload)
@@ -908,69 +858,12 @@ def export_fmu(
     )
 
 
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    """Return the document half of a document-or-pair, for the refusal messages."""
-    if isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], Mapping):
-        return value[0]
-    if isinstance(value, Mapping):
-        return value
-    return {}
-
-
 def _write_member(archive: zipfile.ZipFile, name: str, payload: bytes) -> None:
     """Write one archive member with a fixed timestamp, for reproducibility."""
     info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
     info.compress_type = zipfile.ZIP_DEFLATED
     info.external_attr = 0o644 << 16
     archive.writestr(info, payload)
-
-
-def _compile_pair(
-    model_document: Mapping[str, Any],
-    case_document: Mapping[str, Any],
-    model_payload: bytes,
-    case_payload: bytes,
-):
-    """
-    Return the compiled submission the two documents describe.
-
-    Reached through ``simulation.compiler`` so the export frames the pair with
-    the same compiler every other caller uses: the containers it writes are the
-    ones the runner would have submitted, not a second packing of the same
-    mappings.  The payloads travel with the documents because the case
-    document's descriptors index into them -- a container whose blob is empty
-    is a run the kernel refuses.
-    """
-    from ..simulation import SimulationRequest, compile_document_pair
-
-    family = str(case_document.get("family", "")).strip().lower()
-    if not family:
-        raise FmiExportError(
-            "a case document must name its 'family'; an export needs to know "
-            "which family's container layout it is writing"
-        )
-    return compile_document_pair(
-        SimulationRequest(
-            assembly=str(
-                case_document.get("assembly") or _assembly_name(model_document)
-            ),
-            family=family,
-            name=str(case_document.get("name") or "fmu"),
-        ),
-        model_document=dict(model_document),
-        case_document=dict(case_document),
-        model_payload=model_payload,
-        case_payload=case_payload,
-    )
-
-
-def _assembly_name(assembly_document: Any) -> str:
-    """Return the assembly a model document belongs to, from its own identity."""
-    if isinstance(assembly_document, Mapping):
-        declared = assembly_document.get("assembly")
-        if isinstance(declared, str) and declared:
-            return declared
-    return "axle"
 
 
 def read_description(path: Path) -> ElementTree.Element:

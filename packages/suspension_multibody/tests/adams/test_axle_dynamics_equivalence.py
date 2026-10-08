@@ -39,7 +39,6 @@ from suspension_multibody.axle_dynamics import (
     AxleBushing,
     AxleDamper,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleDynamicsResult,
     AxleJoint,
     AxleRunDiagnostics,
@@ -47,6 +46,7 @@ from suspension_multibody.axle_dynamics import (
     AxleSpring,
     AxleTire,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
 from suspension_multibody.io import canonical_hash
 
 

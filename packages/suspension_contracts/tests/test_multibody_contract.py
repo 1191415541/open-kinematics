@@ -193,14 +193,14 @@ def test_tire_validation_rejects_a_malformed_inertia_by_name() -> None:
     Check that a tensor with a bad entry is refused by name.
 
     The four entries cover the wrong shape in both directions, a non-numeric
-    element and a negative element; each message has to name the inertia path.
+    element and a negative principal inertia; each message names the inertia path.
     """
     cases = (
         ([[1.0, 0.0], [0.0, 1.0]], "needs at least 3 items"),
         ([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]],
          "at most 3 items"),
         ([[1.0, 0.0, 0.0], [0.0, "x", 0.0], [0.0, 0.0, 1.0]], "expected number"),
-        ([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]], "must be >= 0"),
+        ([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]], "positive semidefinite"),
     )
     for bad, expected in cases:
         document = _tire_model()
@@ -270,6 +270,20 @@ def test_case_validation_rejects_an_unknown_family() -> None:
 def test_result_validation_requires_a_case_identity() -> None:
     document = _result()
     del document["case_identity"]
+    with pytest.raises(ContractError):
+        validate_result(document)
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_result_validation_accepts_supported_channel_versions(version):
+    document = _result()
+    document["contract_version"] = version
+    validate_result(document)
+
+
+def test_result_validation_rejects_unknown_channel_version():
+    document = _result()
+    document["contract_version"] = 3
     with pytest.raises(ContractError):
         validate_result(document)
 

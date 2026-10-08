@@ -16,7 +16,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from suspension_multibody.cases.kc_quasi_static import model_document
+from suspension_multibody.api import simulate
+from suspension_multibody.authoring.migration import migrate_v1_kc_case
 from suspension_multibody.results import (
     ELEMENT_WRENCH_BLOCK,
     ELEMENT_WRENCH_SWITCH,
@@ -30,9 +31,8 @@ from suspension_multibody.results.element_wrench import (
     ELEMENT_WRENCH_TYPE_NAMES,
     rows_per_element,
 )
-from suspension_multibody.schema import Bushing6x6, FrontAxleModel, Pose, Vec3
-from suspension_multibody.simulation import SimulationRequest, run_request
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.schema import Bushing6x6, Pose, Vec3
+from suspension_multibody.schema.model import AxleDeclaration
 from tests.benchmark_fixture import benchmark_model
 
 _NAN = float("nan")
@@ -203,7 +203,8 @@ def test_the_appended_codes_are_named_and_none_of_them_moved() -> None:
     assert ELEMENT_WRENCH_TYPE_NAMES[9] == "bump_stop"
     assert ELEMENT_WRENCH_TYPE_NAMES[10] == "rotational_torque"
     # Every frozen code keeps its name and its position.
-    assert tuple(sorted(ELEMENT_WRENCH_TYPE_NAMES)) == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+    assert ELEMENT_WRENCH_TYPE_NAMES[11] == "function"
+    assert tuple(sorted(ELEMENT_WRENCH_TYPE_NAMES)) == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
 
 
 def test_a_missing_block_is_the_off_channel_and_not_an_error(monkeypatch) -> None:
@@ -279,7 +280,7 @@ def test_body_names_are_checked_and_never_written_into_the_records() -> None:
     assert single[0].body_b == -1
 
 
-def _compliant_model() -> FrontAxleModel:
+def _compliant_model() -> AxleDeclaration:
     """Return the synthetic bushing model: the channel records what laws applied."""
     base = benchmark_model()
     stiffness = tuple(
@@ -322,30 +323,10 @@ def _compliant_model() -> FrontAxleModel:
 
 def _run_c():
     """Run one loaded C case on the compliant model through the runner."""
-    assembly = compose_axle(_compliant_model(), "C")
-    model = model_document(assembly, name="c-element-wrench", drive_wheels=False)
-    case = {
-        "contract": "multibody-case",
-        "contract_version": 1,
-        "kind": "case",
-        "family": "kc_quasi_static",
-        "name": "c-element-wrench",
-        "time": {"start_s": 0.0, "end_s": 1e-3, "step_s": 1e-3},
-        "c": {
-            "load_marker": "wheel_center_L",
-            "mirror_marker": "wheel_center_R",
-            "side_mode": "single",
-            "loads": [{"fz": 500.0, "fx": 120.0}],
-        },
-    }
-    return run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
+    assembly, case = migrate_v1_kc_case(_compliant_model(), mode="C", paths=("fz",), levels=3, maximum=500)
+    payload = case.to_payload()
+    payload["excitation"]["c"]["loads"] = [{"fz": 500.0, "fx": 120.0}]
+    return simulate(assembly, payload).raw
 
 
 def test_a_real_run_decodes_bushing_facts_when_the_switch_is_on(monkeypatch) -> None:
@@ -353,11 +334,7 @@ def test_a_real_run_decodes_bushing_facts_when_the_switch_is_on(monkeypatch) -> 
     result = _run_c()
 
     block = element_wrench_block(result)
-    if block is None:
-        pytest.skip(
-            "the loaded kernel emits no element_wrench block: the packaged "
-            "library predates the channel or the switch did not reach it"
-        )
+    assert block is not None
     assert block.shape[2] == ELEMENT_WRENCH_WIDTH
     assert result.document["contract_version"] == 2
 
@@ -373,10 +350,10 @@ def test_a_real_run_decodes_bushing_facts_when_the_switch_is_on(monkeypatch) -> 
     ), "every bushing moment was zero, so the decode may be reading padding"
 
 
-def test_the_default_path_has_no_element_wrench_block(monkeypatch) -> None:
+def test_the_unified_path_explicitly_requests_wrench_facts_without_an_environment_switch(monkeypatch) -> None:
     monkeypatch.delenv(ELEMENT_WRENCH_SWITCH, raising=False)
     result = _run_c()
 
-    assert result.document["contract_version"] == 1
-    assert element_wrench_block(result) is None
-    assert decode_element_wrench(result) == ()
+    assert result.document["contract_version"] == 2
+    assert element_wrench_block(result) is not None
+    assert decode_element_wrench(result)

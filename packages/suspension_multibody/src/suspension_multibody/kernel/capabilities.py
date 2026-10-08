@@ -41,16 +41,8 @@ class Pac2002FeatureFamily:
 
 
 @functools.lru_cache(maxsize=1)
-def _kernel_scope() -> tuple[
-    frozenset[int], frozenset[str], frozenset[str], tuple[Pac2002FeatureFamily, ...]
-]:
-    """
-    Return the kernel's capability declaration.
-
-    Read from the shared library rather than carried here, and read lazily: the
-    authoring schemas import this module, and there is no reason for them to need
-    a built kernel until a tire actually reaches the scope check.
-    """
+def kernel_capability_document() -> dict[str, Any]:
+    """Read the kernel's versioned feature declaration lazily."""
     import ctypes
 
     from .native import load_library
@@ -72,7 +64,20 @@ def _kernel_scope() -> tuple[
     status = int(reader(buffer, int(needed.value), ctypes.byref(needed)))
     if status != 0:
         raise RuntimeError(f"kernel capability read returned {status}")
-    document = json.loads(buffer.value.decode("utf-8"))
+    return json.loads(buffer.value.decode("utf-8"))
+
+
+def require_function_program_version(version: int) -> None:
+    """Reject a program before submission when the loaded kernel cannot run it."""
+    if version not in kernel_capability_document().get("function_program_versions", ()):
+        raise ValueError(f"loaded kernel does not support function program version {version}")
+
+
+@functools.lru_cache(maxsize=1)
+def _kernel_scope() -> tuple[
+    frozenset[int], frozenset[str], frozenset[str], tuple[Pac2002FeatureFamily, ...]
+]:
+    document = kernel_capability_document()
     families = tuple(
         Pac2002FeatureFamily(
             name=str(entry["name"]),

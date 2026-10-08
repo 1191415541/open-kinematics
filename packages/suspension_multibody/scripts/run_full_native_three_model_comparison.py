@@ -29,10 +29,13 @@ from suspension_multibody.adams.time_domain import (
     parse_adams_result_history,
     read_time_history,
 )
-from suspension_multibody.axle_dynamics import NativeAxleError
+from suspension_multibody.api import validate
+from suspension_multibody.authoring.migration import migrate_v1_vehicle_case
 from suspension_multibody.io.artifacts import write_artifact
+from suspension_multibody.kernel import KernelContractError
+from suspension_multibody.results.envelope import ResultEnvelope
 from suspension_multibody.schema import UnitSystem
-from suspension_multibody.vehicle.service import run_vehicle_dynamics
+from suspension_multibody.simulation import run_compiled
 
 WHEELS = ("front_left", "front_right", "rear_left", "rear_right")
 TIRE_OUTPUT_COLUMNS = {
@@ -208,18 +211,18 @@ def _assert_adams_tire_geometry_matches(
         )
 
 
-def _native_tire_history(result: Any) -> TimeHistory:
+def _native_tire_history(result: ResultEnvelope, tire_ids: dict[str, str]) -> TimeHistory:
     """提取与 Adams wheel_tire_forces 等价的轮胎 ISO 输出."""
-    output = np.asarray(result.axle.tire_output, dtype=float)
-    if output.shape[:2] != (len(result.times_s), len(result.tire_names)):
-        raise ValueError(f"native tire_output shape invalid: {output.shape}")
     channels: dict[str, tuple[float, ...]] = {}
-    for tire_index, wheel in enumerate(result.tire_names):
+    for wheel, tire_id in tire_ids.items():
         if wheel not in WHEELS:
             raise ValueError(f"unexpected native wheel name: {wheel}")
+        output = np.asarray(result.tire_state(tire_id), dtype=float)
+        if output.shape != (len(result.times_s), 41):
+            raise ValueError(f"native tire_output shape invalid: {output.shape}")
         for force, column in TIRE_OUTPUT_COLUMNS.items():
             channels[f"{wheel}.tire_{force}"] = tuple(
-                float(value) for value in output[:, tire_index, column]
+                float(value) for value in output[:, column]
             )
     return TimeHistory(
         time=tuple(float(value) for value in result.times_s),
@@ -247,11 +250,12 @@ def _native_handling_history(result: Any, case: Any) -> TimeHistory:
     history = full_vehicle_time_history(
         result,
         "handling_stability",
+        chassis_body_id="body.chassis",
         steering_ratio_m_per_rad=steering_ratio * length_scale,
         # The channel and its physical kind come from this case's own steering
         # declaration; this script builds a prescribed rack translation, so the
         # ratio above is the conversion that applies.
-        steering_channel=steering.channel_name,
+        steering_channel="steering_"+steering.channel_name+".actuator",
         steering_actuator_mode=steering.actuator_mode,
         chassis_center_of_mass_m=tuple(
             value * length_scale
@@ -426,20 +430,25 @@ def generate(
             source_drive_brake_result_path=adams_result_path,
             adaptive_substepping=adaptive_substepping,
         )
+        assembly, declared_case = migrate_v1_vehicle_case(case)
+        compiled = validate(assembly, declared_case)
         try:
-            result = run_vehicle_dynamics(model, case)
-        except NativeAxleError as exc:
+            result = run_compiled(compiled).result
+        except KernelContractError as exc:
             write_artifact(
                 None,
                 output_root / f"native_{tire_kind}_artifact",
-                model=model,
-                case=case,
+                model=compiled.model_document,
+                case=compiled.case_document,
                 failure=exc,
+                partial=exc.partial_raw_result,
             )
             raise
-        if not bool(np.all(result.diagnostics.accepted)):
+        if not isinstance(result, ResultEnvelope):
+            raise TypeError("ordinary documents must return a ResultEnvelope")
+        if result.diagnostics is None or not bool(np.all(result.diagnostics[:, 0])):
             raise RuntimeError(f"完整 native {tire_kind} 运行存在未接受采样")
-        native_tire = _native_tire_history(result)
+        native_tire = _native_tire_history(result, {wheel.name: "wheel_"+wheel.name+"."+wheel.name for wheel in model.wheels})
         native_handling = _native_handling_history(result, case)
         if native_tire.time != native_handling.time:
             raise ValueError(f"native {tire_kind} 轮胎力和操稳时间网格不一致")
@@ -550,7 +559,7 @@ def generate(
                     ),
                 },
                 "same_initial_state_and_inputs": True,
-                "native_solver": "run_vehicle_dynamics",
+                "native_solver": "vehicle_dynamics_run",
             },
             indent=2,
         ),

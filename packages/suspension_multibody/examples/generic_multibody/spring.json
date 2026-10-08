@@ -1,0 +1,6 @@
+{
+  "document": "element_properties", "schema_version": 1, "name": "spring",
+  "element_type": "spring", "model": "linear",
+  "units": {"force": "N", "length": "mm"},
+  "parameters": {"stiffness": 10.0, "free_length": 250.0}
+}

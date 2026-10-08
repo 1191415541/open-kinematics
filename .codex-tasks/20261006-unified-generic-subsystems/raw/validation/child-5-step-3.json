@@ -1,0 +1,18 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/physics/test_wheel_spin_boundary.py",
+    "packages/suspension_multibody/tests/authoring/test_generic_tire.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T15:03:32.474125+00:00",
+  "finished_at": "2026-10-06T15:03:35.613718+00:00",
+  "log": "raw\\validation\\child-5-step-3.log",
+  "log_sha256": "a35805f5898982df8fa8c101d54cfa0a0c7267c5d5bdc113ca6a00406728c67b"
+}

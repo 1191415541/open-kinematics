@@ -8,14 +8,14 @@ from suspension_multibody.axle_dynamics import (
     AxleBody,
     AxleDamper,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
     AxleSpring,
     AxleTire,
     native_build_metadata,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
+from tests.axle_dynamics._unified_entry import solve_axle
 
 
 def _model() -> AxleDynamicsModel:
@@ -138,7 +138,7 @@ def test_native_performance_counters_are_exposed(monkeypatch) -> None:
     monkeypatch.setenv("SUSPENSION_AXLE_PROFILE", "1")
     monkeypatch.setenv("SUSPENSION_AXLE_VALIDATE_JACOBIAN", "1")
 
-    result = run_axle_dynamics(_model(), _case())
+    result = solve_axle(_model(), _case())
 
     performance = result.performance
     assert performance.available
@@ -180,7 +180,7 @@ def test_nonsmooth_contact_boundary_uses_finite_difference_fallback(monkeypatch)
     monkeypatch.setenv("SUSPENSION_AXLE_PROFILE", "1")
     monkeypatch.setenv("SUSPENSION_AXLE_VALIDATE_JACOBIAN", "1")
 
-    result = run_axle_dynamics(
+    result = solve_axle(
         _tire_contact_boundary_model(),
         AxleDynamicsCase(
             name="contact-boundary",
@@ -206,7 +206,7 @@ def test_concurrent_native_runs_are_isolated() -> None:
     case = _case()
 
     def run_once() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        result = run_axle_dynamics(model, case)
+        result = solve_axle(model, case)
         return result.states, result.diagnostics.position_residual, result.energy
 
     with ThreadPoolExecutor(max_workers=4) as executor:

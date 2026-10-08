@@ -365,33 +365,20 @@ void joint_jacobian_directional_driven_rotation(
     const DirectionalJacobianWriter& writer
 ) {
     const Constraint& c = writer.constraint;
-    // Directional counterpart of the scalar driven-rotation row, written
-    // like the prescribed-steering rotation row it shares its derivation
-    // with.  Normalizing the reference-frame axis is a no-op for a unit
-    // axis, which registration guarantees.
     const DQuat& body_q = writer.qa;
     const DQuat& reaction_q = writer.qb;
     const DQuat relative = d_qmul(d_qconj(reaction_q), body_q);
     const DQuat reference_conjugate{
         c.reference.w, -c.reference.x, -c.reference.y, -c.reference.z
     };
-    const DVec3 error_rotation = d_qlog(
-        d_qmul(reference_conjugate, relative), writer.smooth
-    );
-    const DMat3 map = d_log_left_jacobian_inverse(
-        error_rotation, writer.smooth
-    ) * d_transpose(d_qmat(DQuat{
-        c.reference.w, c.reference.x, c.reference.y, c.reference.z
-    })) * d_transpose(d_qmat(reaction_q));
-    const Vec3 axis_reference_value = rotate(c.reference, c.axis_a);
-    const DVec3 axis_reference(
-        axis_reference_value.x,
-        axis_reference_value.y,
-        axis_reference_value.z
-    );
-    const DVec3 row_value = d_row_times(
-        d_normalized(axis_reference, writer.smooth), map
-    );
+    const DQuat delta = d_qmul(relative, reference_conjugate);
+    const DVec3 vector{delta.x, delta.y, delta.z};
+    const DVec3 axis{c.axis_a.x, c.axis_a.y, c.axis_a.z};
+    const DirectionalScalar axial = d_dot(vector, axis);
+    const DirectionalScalar denominator = delta.w*delta.w + axial*axial;
+    const DVec3 local = (axis*(delta.w*delta.w)
+        + d_cross(vector, axis)*delta.w + vector*axial)/denominator;
+    const DVec3 row_value = d_qmat(reaction_q)*local;
     writer.add_row(writer.row, c.a, {}, row_value);
     writer.add_row(writer.row, c.b, {}, -row_value);
 }

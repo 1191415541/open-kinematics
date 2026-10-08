@@ -27,11 +27,11 @@ class _NativeRun:
         self._steering[:, 2] = steering_target
 
     def body_state(self, name: str) -> np.ndarray:
-        if name != "chassis":
+        if name != "body.chassis":
             raise KeyError(name)
         return self._chassis
 
-    def steering_state(self, name: str) -> np.ndarray:
+    def element_state(self, name: str) -> np.ndarray:
         if name != self.steering_names[0]:
             raise KeyError(name)
         return self._steering
@@ -47,6 +47,7 @@ def test_native_handling_lateral_axis_follows_vehicle_forward_direction(
     history = full_vehicle_time_history(
         _NativeRun(forward_velocity),
         "handling_stability",
+        chassis_body_id="body.chassis",
         steering_ratio_m_per_rad=1.0,
         steering_channel="front_rack",
     )
@@ -61,6 +62,7 @@ def test_native_handling_scales_the_rack_displacement_by_the_ratio() -> None:
     history = full_vehicle_time_history(
         _NativeRun(10.0, steering_target=0.0552),
         "handling_stability",
+        chassis_body_id="body.chassis",
         steering_ratio_m_per_rad=0.0276,
         steering_channel="front_rack",
         steering_actuator_mode="prescribed_translation",
@@ -82,6 +84,7 @@ def test_native_handling_reads_a_prescribed_rotation_as_an_angle() -> None:
     history = full_vehicle_time_history(
         _NativeRun(10.0, steering_target=0.0552),
         "handling_stability",
+        chassis_body_id="body.chassis",
         steering_ratio_m_per_rad=0.0276,
         steering_channel="front_rack",
         steering_actuator_mode="prescribed_rotation",
@@ -98,6 +101,7 @@ def test_native_handling_uses_the_declared_channel_name() -> None:
     history = full_vehicle_time_history(
         _NativeRun(10.0, channel="rear_rack", steering_target=0.005),
         "handling_stability",
+        chassis_body_id="body.chassis",
         steering_ratio_m_per_rad=0.5,
         steering_channel="rear_rack",
         steering_actuator_mode="prescribed_translation",
@@ -112,6 +116,7 @@ def test_native_handling_rejects_an_undeclared_channel_name() -> None:
         full_vehicle_time_history(
             _NativeRun(10.0, channel="front_rack"),
             "handling_stability",
+        chassis_body_id="body.chassis",
             steering_ratio_m_per_rad=1.0,
             steering_channel="steering_input",
         )
@@ -122,6 +127,7 @@ def test_native_handling_rejects_a_missing_channel_name() -> None:
         full_vehicle_time_history(
             _NativeRun(10.0),
             "handling_stability",
+        chassis_body_id="body.chassis",
             steering_ratio_m_per_rad=1.0,
         )
 
@@ -131,6 +137,7 @@ def test_native_handling_rejects_a_non_positive_ratio_for_a_rack_translation() -
         full_vehicle_time_history(
             _NativeRun(10.0, steering_target=0.005),
             "handling_stability",
+        chassis_body_id="body.chassis",
             steering_ratio_m_per_rad=0.0,
             steering_channel="front_rack",
             steering_actuator_mode="prescribed_translation",

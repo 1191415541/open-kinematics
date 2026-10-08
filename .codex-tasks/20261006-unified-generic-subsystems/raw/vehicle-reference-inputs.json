@@ -1,0 +1,418 @@
+[
+  {
+    "name": "default",
+    "model_differences": [
+      {
+        "field": "tires[0].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_L",
+        "new": "front_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[0].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[1].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_R",
+        "new": "front_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[1].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[2].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_L",
+        "new": "rear_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[2].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[3].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_R",
+        "new": "rear_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[3].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      }
+    ],
+    "case_differences": [],
+    "fingerprints": {
+      "original_model": "fc6a055dd53bec1f8ca1ea4e54e8423c318f72611d9bd04973f12cb9ee2ac609",
+      "current_model": "985af8d111b82fe9b98603e000d9b43df0185d69863394aab59442c0acafeea0",
+      "original_case": "af0f2895973d5568584f9af82e5b1bfea2f2c060051aa95bdaa3c0bc9b5d0150",
+      "current_case": "af0f2895973d5568584f9af82e5b1bfea2f2c060051aa95bdaa3c0bc9b5d0150"
+    }
+  },
+  {
+    "name": "braking",
+    "model_differences": [
+      {
+        "field": "tires[0].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_L",
+        "new": "front_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[0].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[1].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_R",
+        "new": "front_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[1].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[2].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_L",
+        "new": "rear_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[2].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[3].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_R",
+        "new": "rear_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[3].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      }
+    ],
+    "case_differences": [],
+    "fingerprints": {
+      "original_model": "fc6a055dd53bec1f8ca1ea4e54e8423c318f72611d9bd04973f12cb9ee2ac609",
+      "current_model": "985af8d111b82fe9b98603e000d9b43df0185d69863394aab59442c0acafeea0",
+      "original_case": "e7e6a5154467550cf58c97afa8d230562040412dc36e95ed25f212b4e9c29bcc",
+      "current_case": "e7e6a5154467550cf58c97afa8d230562040412dc36e95ed25f212b4e9c29bcc"
+    }
+  },
+  {
+    "name": "steering",
+    "model_differences": [
+      {
+        "field": "tires[0].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_L",
+        "new": "front_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[0].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[1].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_R",
+        "new": "front_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[1].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[2].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_L",
+        "new": "rear_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[2].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[3].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_R",
+        "new": "rear_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[3].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      }
+    ],
+    "case_differences": [],
+    "fingerprints": {
+      "original_model": "fc6a055dd53bec1f8ca1ea4e54e8423c318f72611d9bd04973f12cb9ee2ac609",
+      "current_model": "985af8d111b82fe9b98603e000d9b43df0185d69863394aab59442c0acafeea0",
+      "original_case": "b90a224a4f8460ad738089c84917cbb889024556356eb5941d0c973c3b970d82",
+      "current_case": "b90a224a4f8460ad738089c84917cbb889024556356eb5941d0c973c3b970d82"
+    }
+  },
+  {
+    "name": "pac2002",
+    "model_differences": [
+      {
+        "field": "tires[0].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_L",
+        "new": "front_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[0].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[1].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_R",
+        "new": "front_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[1].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[2].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_L",
+        "new": "rear_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[2].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[3].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_R",
+        "new": "rear_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[3].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      }
+    ],
+    "case_differences": [],
+    "fingerprints": {
+      "original_model": "e08c8e905a18f70d7cb499f4dd7d6fc342b67b5c805a6748f6fb38d0c54edd5e",
+      "current_model": "a961ac21af238d7b0fbf88c7a03b5efb2e7e5b43a14ef57ffc177051762a4184",
+      "original_case": "af0f2895973d5568584f9af82e5b1bfea2f2c060051aa95bdaa3c0bc9b5d0150",
+      "current_case": "af0f2895973d5568584f9af82e5b1bfea2f2c060051aa95bdaa3c0bc9b5d0150"
+    }
+  },
+  {
+    "name": "pac2002 adams",
+    "model_differences": [
+      {
+        "field": "tires[0].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_L",
+        "new": "front_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[0].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[1].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_R",
+        "new": "front_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[1].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[2].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_L",
+        "new": "rear_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[2].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[3].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_R",
+        "new": "rear_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[3].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      }
+    ],
+    "case_differences": [],
+    "fingerprints": {
+      "original_model": "f9a2a7e92a0fc24917025f4a9344816eebe4793bca0bdcf50a1553d95745d799",
+      "current_model": "4c8b5a311013a2359af9c85ee176f3f14a5ebd2e6bd3cf2f86190ed67142d2d3",
+      "original_case": "af0f2895973d5568584f9af82e5b1bfea2f2c060051aa95bdaa3c0bc9b5d0150",
+      "current_case": "af0f2895973d5568584f9af82e5b1bfea2f2c060051aa95bdaa3c0bc9b5d0150"
+    }
+  },
+  {
+    "name": "nondefault road and initial state",
+    "model_differences": [
+      {
+        "field": "tires[0].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_L",
+        "new": "front_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[0].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[1].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_R",
+        "new": "front_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[1].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[2].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_L",
+        "new": "rear_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[2].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[3].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_R",
+        "new": "rear_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[3].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      }
+    ],
+    "case_differences": [],
+    "fingerprints": {
+      "original_model": "6a7307fe13e124c81523189a7a02b1a124a623600cde1011fe075e549395378d",
+      "current_model": "05b5cce1bc02b48b473b070adbff0c9807980de8686ded1e9fde47588c27e0bf",
+      "original_case": "2fc43b88ff181553557204e42bf6a8bc9b5b9622fb05d844abd3e7089b1839ab",
+      "current_case": "2fc43b88ff181553557204e42bf6a8bc9b5b9622fb05d844abd3e7089b1839ab"
+    }
+  },
+  {
+    "name": "measured tire table",
+    "model_differences": [
+      {
+        "field": "tires[0].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_L",
+        "new": "front_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[0].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[1].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_R",
+        "new": "front_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[1].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[2].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_L",
+        "new": "rear_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[2].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[3].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_R",
+        "new": "rear_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[3].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      }
+    ],
+    "case_differences": [],
+    "fingerprints": {
+      "original_model": "2523979579c5a52884a79d720f6094cdf988f9ff28c573182df4604ab94aebeb",
+      "current_model": "4977b1ae0aaa47bca7f4b793644a74fba5590f5b8b3f7c3c4b4e5524032fded8",
+      "original_case": "af0f2895973d5568584f9af82e5b1bfea2f2c060051aa95bdaa3c0bc9b5d0150",
+      "current_case": "af0f2895973d5568584f9af82e5b1bfea2f2c060051aa95bdaa3c0bc9b5d0150"
+    }
+  },
+  {
+    "name": "bushing force curves",
+    "model_differences": [
+      {
+        "field": "tires[0].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_L",
+        "new": "front_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[0].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[1].parameters.frame_body",
+        "old": "front_wheel.sub.json.wheel_hub_R",
+        "new": "front_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[1].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[2].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_L",
+        "new": "rear_model.sub.json.upright_L"
+      },
+      {
+        "field": "tires[2].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      },
+      {
+        "field": "tires[3].parameters.frame_body",
+        "old": "rear_wheel.sub.json.wheel_hub_R",
+        "new": "rear_model.sub.json.upright_R"
+      },
+      {
+        "field": "tires[3].parameters.frame_center_local[2]",
+        "old": 0.0,
+        "new": 0.04999999999999999
+      }
+    ],
+    "case_differences": [],
+    "fingerprints": {
+      "original_model": "acff8bc188bcd25d4c18d2651b6789f8de50b10165e961a2ce5919cd5769f7f4",
+      "current_model": "6f0a909974acb0555e7d7bd933bde36575600f988b9e5df67acdf1a6d7a84080",
+      "original_case": "af0f2895973d5568584f9af82e5b1bfea2f2c060051aa95bdaa3c0bc9b5d0150",
+      "current_case": "af0f2895973d5568584f9af82e5b1bfea2f2c060051aa95bdaa3c0bc9b5d0150"
+    }
+  }
+]

@@ -30,12 +30,12 @@ from suspension_multibody.kernel.capabilities import (
 )
 from suspension_multibody.schema import RoadSurfaceSpec, Vec3
 from suspension_multibody.schema.dynamic import DynamicSolverSettings
-from suspension_multibody.vehicle.service import run_vehicle_dynamics
+from tests.vehicle._unified_entry import solve_vehicle as vehicle_dynamics_run
 
 
 def _load_sibling_helpers():
     """
-    Reuse the PAC2002 vehicle fixtures from ``test_native_vehicle``.
+    Reuse the PAC2002 vehicle fixtures from ``vehicle_fixtures``.
 
     pytest runs with ``--import-mode=importlib``, so a sibling test module is not
     importable by name; load it by path instead of duplicating the fixtures.
@@ -44,7 +44,7 @@ def _load_sibling_helpers():
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(
-        name, pathlib.Path(__file__).with_name("test_native_vehicle.py")
+        name, pathlib.Path(__file__).with_name("vehicle_fixtures.py")
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -148,7 +148,7 @@ def _run(
             ),
         }
     )
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
     assert np.all(result.diagnostics.accepted)
     return result.axle.tire_output[-1]
 

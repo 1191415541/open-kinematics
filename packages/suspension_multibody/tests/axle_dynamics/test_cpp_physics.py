@@ -6,12 +6,12 @@ import pytest
 from suspension_multibody.axle_dynamics import (
     AxleBody,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
     NativeAxleError,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
+from tests.axle_dynamics._unified_entry import solve_axle
 
 _I = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 _ZERO_I = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
@@ -46,7 +46,7 @@ def _free_body_model(
 
 
 def test_constant_wrench_produces_physical_translation_and_rotation() -> None:
-    result = run_axle_dynamics(
+    result = solve_axle(
         _free_body_model(),
         AxleDynamicsCase(
             name="constant-wrench",
@@ -88,7 +88,7 @@ def test_si_scale_inertia_remains_solvable() -> None:
     )
     model = base.model_copy(update={"bodies": tuple(bodies)})
 
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="si-scale-inertia",
@@ -139,7 +139,7 @@ def test_provided_initial_state_rejects_velocity_constraint_violation() -> None:
     )
 
     with pytest.raises(NativeAxleError, match="initial velocity"):
-        run_axle_dynamics(
+        solve_axle(
             model,
             AxleDynamicsCase(
                 name="inconsistent-velocity",
@@ -174,7 +174,7 @@ def test_fixed_joint_reaction_maps_to_world_wrench() -> None:
             ),
         ),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="fixed-reaction",
@@ -227,7 +227,7 @@ def test_rank_deficient_constraint_set_is_rejected() -> None:
         ),
     )
     with pytest.raises(NativeAxleError, match="rank deficient"):
-        run_axle_dynamics(
+        solve_axle(
             model,
             AxleDynamicsCase(name="rank-deficient", times_s=(0.0, 0.001)),
         )
@@ -277,7 +277,7 @@ def test_ideal_joint_preserves_only_its_allowed_motion(
             ),
         ),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name=f"{kind}-motion",
@@ -355,7 +355,7 @@ def test_prismatic_joint_accepts_rotated_initial_frame() -> None:
         ),
     )
 
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="rotated-prismatic",
@@ -458,7 +458,7 @@ def test_analytic_constraint_jacobian_agrees_with_central_differences(
         ),
     )
     try:
-        run_axle_dynamics(
+        solve_axle(
             model,
             AxleDynamicsCase(
                 name="jacobian-audit",

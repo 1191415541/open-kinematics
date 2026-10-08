@@ -12,14 +12,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeAlias, cast
 
-from ..api import run_dynamic_case
-from ..schema import DynamicCaseSpec, FrontAxleModel
+from ..api import validate
+from ..authoring import CaseDocument, migrate_v1_kc_case
+from ..authoring.signals import motion, time_grid, wrenches_at_time
+from ..report.kc_evidence import frame_fields
+from ..results.envelope import ResultEnvelope
+from ..schema import DynamicCaseSpec, UnitSystem
+from ..schema.model import AxleDeclaration
+from ..simulation.runner import run_compiled
 from .probe import AdamsProfile
 from .time_domain import (
     TimeHistory,
     TimeHistoryTolerance,
     compare_time_histories,
-    history_from_result_series,
     read_time_history,
 )
 
@@ -60,7 +65,7 @@ class AdamsTimeDomainAdapter:
         self,
         *,
         analysis: str,
-        model: FrontAxleModel,
+        model: AxleDeclaration,
         case: DynamicCaseSpec,
         reference: TimeHistory,
         tolerances: Mapping[str, TimeHistoryTolerance],
@@ -133,9 +138,43 @@ class AdamsTimeDomainAdapter:
         )
 
 
+def _axle_time_history(model: AxleDeclaration, case: DynamicCaseSpec, channels: Sequence[str]) -> TimeHistory:
+    """Sample independent equilibria through the ordinary document pipeline."""
+    if case.solver.integrator != "quasi_static":
+        raise ValueError("axle time-domain reference requires independent quasi-static equilibria")
+    document, study = migrate_v1_kc_case(model, mode="K", name=case.name,
+        wheel_values_mm=(0,), rack_values_mm=(0,), drive_mode="kinematics")
+    wheel = next(entry for entry in document.entries if entry.functional_role == "wheel")
+    owners = {row["name"]: entry.ref+"."+row["name"] for entry in document.entries
+        for row in entry.subsystem.template.payload["bodies"]}
+    times = time_grid(case)
+    millimetres = 1 if case.units == UnitSystem.ENGINEERING else 1000
+    values = {name: [] for name in channels}
+    for time in times:
+        payload = study.to_payload()
+        axes = [{"coordinate": "kc_rig.sub.json.wheel_drive_"+side,
+            "values_mm": [motion(case, target).value_at(time)*millimetres]}
+            for side, target in (("L", "wheel_travel_left"), ("R", "wheel_travel_right"))]
+        if "rack" in owners:
+            axes.append({"coordinate": "kc_rig.sub.json.rack_drive", "values_mm": [motion(case, "rack").value_at(time)*millimetres]})
+        payload["excitation"]["k"] = {"axes": axes, "drive": "wheel_center",
+            "body_wrench": [{"body": owners[name], "wrench": [*wrench[:3], *(wrench[3:]*millimetres)]}
+                for name, wrench in wrenches_at_time(case, time).items()]}
+        result = run_compiled(validate(document, CaseDocument(payload))).result
+        if not isinstance(result, ResultEnvelope):
+            raise TypeError("document simulation must return ResultEnvelope")
+        fields = {}
+        for side in ("L", "R"):
+            fields.update({name.removesuffix("_mm"): value for name, value in
+                frame_fields(result.frame_pose(wheel.ref+".wheel_center_"+side)[-1], side=side).items()})
+        for name in channels:
+            values[name].append(fields[name])
+    return TimeHistory(time=times, channels={name: tuple(samples) for name, samples in values.items()})
+
+
 def validate_axle_time_domain(
     profile: AdamsProfile,
-    model: FrontAxleModel,
+    model: AxleDeclaration,
     case: DynamicCaseSpec,
     *,
     runner: TimeDomainRunner,
@@ -145,11 +184,7 @@ def validate_axle_time_domain(
     """Validate an axle time trace, including its prescribed motions and wrenches."""
     if case.mode != "axle_dynamic":
         raise ValueError("axle Adams gate requires mode='axle_dynamic'")
-    reference = history_from_result_series(
-        run_dynamic_case(model, case),
-        body="axle",
-        channels=channels,
-    )
+    reference = _axle_time_history(model, case, channels)
     return AdamsTimeDomainAdapter(profile, runner).validate(
         analysis="axle_time_domain",
         model=model,

@@ -1,0 +1,5 @@
+archived numeric: exit 0, log SHA256 verified
+archived structural: exit 0, log SHA256 verified
+archived pytest: exit 0, log SHA256 verified
+PASS: pre-delete evidence for 196 consumers and 9 unchanged frozen files
+Archive verification only; original pre-delete execution remains in cutover-validation.json.

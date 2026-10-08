@@ -81,8 +81,6 @@ class RigSpec:
     outputs: tuple[str, ...] = ()
     #: The study this bench belongs to, or None for a bench that fits either.
     study: str | None = None
-    #: Whether this bench supplies the wheels itself (a single-axle rig does).
-    supplies_wheels: bool = False
     #: The case family this bench runs through, when that differs from the
     #: bench's own name.  Empty means the two coincide, which is how every
     #: shipped bench has been named until now.
@@ -115,7 +113,6 @@ RIGS: dict[str, RigSpec] = {
     "kc_quasi_static": RigSpec(
         name="kc_quasi_static",
         study="quasi_static",
-        supplies_wheels=True,
         drives=(
             DriveSpec("wheel_drive_L", coupled_with=("wheel_drive_R",)),
             DriveSpec("wheel_drive_R"),
@@ -123,15 +120,13 @@ RIGS: dict[str, RigSpec] = {
         ),
         outputs=("wheel_load", "rig_frame_pose"),
         description=(
-            "The suspension K&C bench.  It supplies the wheels (a single-axle "
-            "assembly builds no wheel body) and drives wheel travel, with the rack "
-            "driven only when the assembly has steering to drive."
+            "The suspension K&C bench drives travel through declared ports. "
+            "Wheel and tire entities belong to the specimen's wheel subsystem."
         ),
     ),
     "axle_dynamic": RigSpec(
         name="axle_dynamic",
         study="dynamic",
-        supplies_wheels=True,
         drives=(DriveSpec("road_height", kind="displacement", from_assembly=False),),
         outputs=("wheel_load", "road_height"),
         description=(

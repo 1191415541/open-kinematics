@@ -45,12 +45,9 @@ from .loader import (
     load_case,
     load_dynamic_case,
     load_dynamic_result,
-    load_model,
     load_vehicle_dynamic_case,
-    load_vehicle_model,
 )
 from .model import (
-    FrontAxleModel,
     HardpointPair,
     IdealJointSpec,
     MassSpec,
@@ -74,7 +71,6 @@ from .vehicle import (
     SteeringChannelSpec,
     SteeringSystemSpec,
     VehicleDynamicCase,
-    VehicleModel,
     WheelSpec,
 )
 
@@ -96,7 +92,6 @@ __all__ = [
     "DynamicSolverSettings",
     "DynamicTimeSample",
     "ExplicitSweep",
-    "FrontAxleModel",
     "HardpointPair",
     "IdealJointSpec",
     "InitialBodyState",
@@ -132,12 +127,9 @@ __all__ = [
     "SteeringChannelSpec",
     "SteeringSystemSpec",
     "VehicleDynamicCase",
-    "VehicleModel",
     "WheelSpec",
     "load_case",
     "load_dynamic_case",
     "load_dynamic_result",
-    "load_model",
     "load_vehicle_dynamic_case",
-    "load_vehicle_model",
 ]

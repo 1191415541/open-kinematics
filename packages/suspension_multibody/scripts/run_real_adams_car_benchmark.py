@@ -57,10 +57,8 @@ from suspension_multibody.adams import (
     write_dynamic_axle_manifest,
     write_time_history,
 )
-from suspension_multibody.axle_dynamics import (
-    native_build_metadata,
-    run_axle_dynamics,
-)
+from suspension_multibody.adams.axle_equivalence import _run_document_evidence
+from suspension_multibody.axle_dynamics import native_build_metadata
 
 ADAMS_FIXED_ITERATIONS = 40
 
@@ -86,11 +84,11 @@ def _execution_environment() -> dict[str, object]:
 
 def _native_timing(model: Any, case: Any, warmups: int, runs: int) -> dict[str, object]:
     for _ in range(warmups):
-        run_axle_dynamics(model, case)
+        _run_document_evidence(model, case)
     samples: list[float] = []
     for _ in range(runs):
         started = time.perf_counter()
-        run_axle_dynamics(model, case)
+        _run_document_evidence(model, case)
         samples.append(time.perf_counter() - started)
     median = statistics.median(samples)
     duration = float(case.times_s[-1] - case.times_s[0])
@@ -336,7 +334,7 @@ def _run_case(
         }
     )
     trim_started = time.perf_counter()
-    trim_result = run_axle_dynamics(model, trim_case)
+    trim_result = _run_document_evidence(model, trim_case)
     trim_elapsed_s = time.perf_counter() - trim_started
     bindings = bindings_for(model)
     trim_evidence = initialization_evidence_from_result(

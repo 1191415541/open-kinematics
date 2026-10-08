@@ -1,0 +1,6 @@
+{
+  "document": "subsystem", "schema_version": 1, "name": "single_tire",
+  "template": "tire.tpl.json", "functional_role": "generic", "placement_role": "any",
+  "hardpoints": {"origin": [0, 0, 0], "carrier_center": [0, 0, 0.34297030175], "center": [0, 0, 0.34297030175]},
+  "property_bindings": {"mass": "wheel_mass.json", "inertia": "wheel_inertia.json", "tire": "vertical.tir"}
+}

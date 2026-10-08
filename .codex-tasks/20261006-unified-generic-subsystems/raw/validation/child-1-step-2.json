@@ -1,0 +1,17 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_contracts/tests",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T13:18:17.595721+00:00",
+  "finished_at": "2026-10-06T13:18:18.399795+00:00",
+  "log": "raw\\validation\\child-1-step-2.log",
+  "log_sha256": "6df8d14a0ff06e8b67a6b62f8b8d066331f58c81ebabfa067819f77fc10a9f8d"
+}

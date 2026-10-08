@@ -1,0 +1,485 @@
+FFF....FF...........F.F..                                                [100%]
+================================== FAILURES ===================================
+____________ test_a_mirror_is_required_when_both_sides_are_loaded _____________
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1f3c2092ab0>
+payload = {'boundaries': [{'coordinate': 'wheel.sub.json.spin_L', 'mode': 'locked', 'name': 'hold:wheel.sub.json.spin_L', 'units...wheel.sub.json.wheel_center_L', 'maximum': 0, 'paths': ['fz'], ...}, 'drive_mode': 'force_balance'}, 'inputs': [], ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        if not isinstance(payload, Mapping):
+            raise AuthoringError("case input must be a document object or path")
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+                validate_case(declared)
+                required = {"ride_four_post": ("four_post", "corners"),
+                    "ride_random_road": ("ride_random_road", "wheels")}
+                if declared.get("family") in required:
+                    section, rows = required[declared["family"]]
+                    if not declared.get(section, {}).get(rows):
+                        raise AuthoringError(f"case requires '{section}' section with at least one {rows}")
+            else:
+>               validate_solve_plan(declared)
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_contracts\src\suspension_contracts\resolved.py:233: in validate_solve_plan
+    validate_case({"contract": "multibody-case", "contract_version": 1, "kind": "case",
+packages\suspension_contracts\src\suspension_contracts\multibody.py:364: in validate_case
+    validate(document, "case")
+packages\suspension_contracts\src\suspension_contracts\multibody.py:253: in validate
+    _check(document, schema, "$", schema)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+value = 1, schema = {'minimum': 3, 'type': 'integer'}, path = '$/c/levels'
+root = {'$id': 'https://open-kinematics.dev/contracts/multibody_case_v1.json', '$schema': 'https://json-schema.org/draft/2020...l rules below are enforced by the case layer, and the expanded identity is reported back in the result manifest.', ...}
+
+    def _check(
+        value: Any, schema: Mapping[str, Any], path: str, root: Mapping[str, Any]
+    ) -> None:
+        ref = schema.get("$ref")
+        if isinstance(ref, str):
+            if not ref.startswith("#/"):
+                raise ContractError(f"{path}: unsupported $ref {ref!r}")
+            target: Any = root
+            for token in ref[2:].split("/"):
+                target = target[token]
+            _check(value, target, path, root)
+            return
+    
+        if "const" in schema and value != schema["const"]:
+            raise ContractError(f"{path}: expected {schema['const']!r}, got {value!r}")
+        if "enum" in schema and value not in schema["enum"]:
+            raise ContractError(f"{path}: {value!r} is not one of {schema['enum']}")
+    
+        declared = schema.get("type")
+        if isinstance(declared, str) and not _type_matches(value, declared):
+            raise ContractError(f"{path}: expected {declared}, got {type(value).__name__}")
+    
+        if isinstance(value, dict):
+            for key in schema.get("required", []):
+                if key not in value:
+                    raise ContractError(f"{path}: missing required field {key!r}")
+            properties = schema.get("properties", {})
+            if schema.get("additionalProperties") is False:
+                extra = sorted(set(value) - set(properties))
+                if extra:
+                    raise ContractError(f"{path}: unexpected fields {extra}")
+            for key, sub in properties.items():
+                if key in value:
+                    _check(value[key], sub, f"{path}/{key}", root)
+        elif isinstance(value, list):
+            items = schema.get("items")
+            if isinstance(items, dict):
+                for index, item in enumerate(value):
+                    _check(item, items, f"{path}[{index}]", root)
+            minimum_items = schema.get("minItems")
+            if isinstance(minimum_items, int) and len(value) < minimum_items:
+                raise ContractError(f"{path}: needs at least {minimum_items} items")
+            maximum_items = schema.get("maxItems")
+            if isinstance(maximum_items, int) and len(value) > maximum_items:
+                raise ContractError(f"{path}: allows at most {maximum_items} items")
+        elif isinstance(value, str):
+            minimum_length = schema.get("minLength")
+            if isinstance(minimum_length, int) and len(value) < minimum_length:
+                raise ContractError(f"{path}: needs at least {minimum_length} characters")
+            maximum_length = schema.get("maxLength")
+            if isinstance(maximum_length, int) and len(value) > maximum_length:
+                raise ContractError(f"{path}: allows at most {maximum_length} characters")
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            if schema.get("finite") is True and not math.isfinite(value):
+                raise ContractError(f"{path}: must be finite")
+            minimum = schema.get("minimum")
+            if isinstance(minimum, (int, float)) and value < minimum:
+>               raise ContractError(f"{path}: must be >= {minimum}")
+E               suspension_contracts.multibody.ContractError: $/c/levels: must be >= 3
+
+packages\suspension_contracts\src\suspension_contracts\multibody.py:248: ContractError
+
+The above exception was the direct cause of the following exception:
+
+    def test_a_mirror_is_required_when_both_sides_are_loaded() -> None:
+>       model = documents(_compliant_model(), "C", driven=False)
+
+packages\suspension_multibody\tests\cases\kc_quasi_static\test_c_loads_and_sides.py:54: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\kc_quasi_static\_documents.py:10: in documents
+    return migrate_v1_kc_case(model, mode=mode,
+packages\suspension_multibody\src\suspension_multibody\authoring\migration.py:579: in migrate_v1_kc_case
+    return document, CaseDocument({"schema_version": 1, "name": name, "study": "quasi_static",
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1f3c2092ab0>
+payload = {'boundaries': [{'coordinate': 'wheel.sub.json.spin_L', 'mode': 'locked', 'name': 'hold:wheel.sub.json.spin_L', 'units...wheel.sub.json.wheel_center_L', 'maximum': 0, 'paths': ['fz'], ...}, 'drive_mode': 'force_balance'}, 'inputs': [], ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        if not isinstance(payload, Mapping):
+            raise AuthoringError("case input must be a document object or path")
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+                validate_case(declared)
+                required = {"ride_four_post": ("four_post", "corners"),
+                    "ride_random_road": ("ride_random_road", "wheels")}
+                if declared.get("family") in required:
+                    section, rows = required[declared["family"]]
+                    if not declared.get(section, {}).get(rows):
+                        raise AuthoringError(f"case requires '{section}' section with at least one {rows}")
+            else:
+                validate_solve_plan(declared)
+        except ContractError as error:
+>           raise AuthoringError(f"case {declared.get('name', '?')!r}: {error}") from error
+E           suspension_multibody.authoring.errors.AuthoringError: case 'kc': $/c/levels: must be >= 3
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:54: AuthoringError
+_____________ test_an_explicit_load_list_is_the_sweep_it_replaces _____________
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1f3c1f875c0>
+payload = {'boundaries': [{'coordinate': 'wheel.sub.json.spin_L', 'mode': 'locked', 'name': 'hold:wheel.sub.json.spin_L', 'units...wheel.sub.json.wheel_center_L', 'maximum': 0, 'paths': ['fz'], ...}, 'drive_mode': 'force_balance'}, 'inputs': [], ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        if not isinstance(payload, Mapping):
+            raise AuthoringError("case input must be a document object or path")
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+                validate_case(declared)
+                required = {"ride_four_post": ("four_post", "corners"),
+                    "ride_random_road": ("ride_random_road", "wheels")}
+                if declared.get("family") in required:
+                    section, rows = required[declared["family"]]
+                    if not declared.get(section, {}).get(rows):
+                        raise AuthoringError(f"case requires '{section}' section with at least one {rows}")
+            else:
+>               validate_solve_plan(declared)
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_contracts\src\suspension_contracts\resolved.py:233: in validate_solve_plan
+    validate_case({"contract": "multibody-case", "contract_version": 1, "kind": "case",
+packages\suspension_contracts\src\suspension_contracts\multibody.py:364: in validate_case
+    validate(document, "case")
+packages\suspension_contracts\src\suspension_contracts\multibody.py:253: in validate
+    _check(document, schema, "$", schema)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+value = 1, schema = {'minimum': 3, 'type': 'integer'}, path = '$/c/levels'
+root = {'$id': 'https://open-kinematics.dev/contracts/multibody_case_v1.json', '$schema': 'https://json-schema.org/draft/2020...l rules below are enforced by the case layer, and the expanded identity is reported back in the result manifest.', ...}
+
+    def _check(
+        value: Any, schema: Mapping[str, Any], path: str, root: Mapping[str, Any]
+    ) -> None:
+        ref = schema.get("$ref")
+        if isinstance(ref, str):
+            if not ref.startswith("#/"):
+                raise ContractError(f"{path}: unsupported $ref {ref!r}")
+            target: Any = root
+            for token in ref[2:].split("/"):
+                target = target[token]
+            _check(value, target, path, root)
+            return
+    
+        if "const" in schema and value != schema["const"]:
+            raise ContractError(f"{path}: expected {schema['const']!r}, got {value!r}")
+        if "enum" in schema and value not in schema["enum"]:
+            raise ContractError(f"{path}: {value!r} is not one of {schema['enum']}")
+    
+        declared = schema.get("type")
+        if isinstance(declared, str) and not _type_matches(value, declared):
+            raise ContractError(f"{path}: expected {declared}, got {type(value).__name__}")
+    
+        if isinstance(value, dict):
+            for key in schema.get("required", []):
+                if key not in value:
+                    raise ContractError(f"{path}: missing required field {key!r}")
+            properties = schema.get("properties", {})
+            if schema.get("additionalProperties") is False:
+                extra = sorted(set(value) - set(properties))
+                if extra:
+                    raise ContractError(f"{path}: unexpected fields {extra}")
+            for key, sub in properties.items():
+                if key in value:
+                    _check(value[key], sub, f"{path}/{key}", root)
+        elif isinstance(value, list):
+            items = schema.get("items")
+            if isinstance(items, dict):
+                for index, item in enumerate(value):
+                    _check(item, items, f"{path}[{index}]", root)
+            minimum_items = schema.get("minItems")
+            if isinstance(minimum_items, int) and len(value) < minimum_items:
+                raise ContractError(f"{path}: needs at least {minimum_items} items")
+            maximum_items = schema.get("maxItems")
+            if isinstance(maximum_items, int) and len(value) > maximum_items:
+                raise ContractError(f"{path}: allows at most {maximum_items} items")
+        elif isinstance(value, str):
+            minimum_length = schema.get("minLength")
+            if isinstance(minimum_length, int) and len(value) < minimum_length:
+                raise ContractError(f"{path}: needs at least {minimum_length} characters")
+            maximum_length = schema.get("maxLength")
+            if isinstance(maximum_length, int) and len(value) > maximum_length:
+                raise ContractError(f"{path}: allows at most {maximum_length} characters")
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            if schema.get("finite") is True and not math.isfinite(value):
+                raise ContractError(f"{path}: must be finite")
+            minimum = schema.get("minimum")
+            if isinstance(minimum, (int, float)) and value < minimum:
+>               raise ContractError(f"{path}: must be >= {minimum}")
+E               suspension_contracts.multibody.ContractError: $/c/levels: must be >= 3
+
+packages\suspension_contracts\src\suspension_contracts\multibody.py:248: ContractError
+
+The above exception was the direct cause of the following exception:
+
+    def test_an_explicit_load_list_is_the_sweep_it_replaces() -> None:
+        """`c.loads` and `paths`+`levels`+`maximum` must agree load for load."""
+>       model = documents(_compliant_model(), "C", driven=False)
+
+packages\suspension_multibody\tests\cases\kc_quasi_static\test_c_loads_and_sides.py:62: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\kc_quasi_static\_documents.py:10: in documents
+    return migrate_v1_kc_case(model, mode=mode,
+packages\suspension_multibody\src\suspension_multibody\authoring\migration.py:579: in migrate_v1_kc_case
+    return document, CaseDocument({"schema_version": 1, "name": name, "study": "quasi_static",
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1f3c1f875c0>
+payload = {'boundaries': [{'coordinate': 'wheel.sub.json.spin_L', 'mode': 'locked', 'name': 'hold:wheel.sub.json.spin_L', 'units...wheel.sub.json.wheel_center_L', 'maximum': 0, 'paths': ['fz'], ...}, 'drive_mode': 'force_balance'}, 'inputs': [], ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        if not isinstance(payload, Mapping):
+            raise AuthoringError("case input must be a document object or path")
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+                validate_case(declared)
+                required = {"ride_four_post": ("four_post", "corners"),
+                    "ride_random_road": ("ride_random_road", "wheels")}
+                if declared.get("family") in required:
+                    section, rows = required[declared["family"]]
+                    if not declared.get(section, {}).get(rows):
+                        raise AuthoringError(f"case requires '{section}' section with at least one {rows}")
+            else:
+                validate_solve_plan(declared)
+        except ContractError as error:
+>           raise AuthoringError(f"case {declared.get('name', '?')!r}: {error}") from error
+E           suspension_multibody.authoring.errors.AuthoringError: case 'kc': $/c/levels: must be >= 3
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:54: AuthoringError
+_______ test_the_side_modes_load_the_mirror_in_phase_and_in_anti_phase ________
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1f3c1ed5f10>
+payload = {'boundaries': [{'coordinate': 'wheel.sub.json.spin_L', 'mode': 'locked', 'name': 'hold:wheel.sub.json.spin_L', 'units...wheel.sub.json.wheel_center_L', 'maximum': 0, 'paths': ['fz'], ...}, 'drive_mode': 'force_balance'}, 'inputs': [], ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        if not isinstance(payload, Mapping):
+            raise AuthoringError("case input must be a document object or path")
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+                validate_case(declared)
+                required = {"ride_four_post": ("four_post", "corners"),
+                    "ride_random_road": ("ride_random_road", "wheels")}
+                if declared.get("family") in required:
+                    section, rows = required[declared["family"]]
+                    if not declared.get(section, {}).get(rows):
+                        raise AuthoringError(f"case requires '{section}' section with at least one {rows}")
+            else:
+>               validate_solve_plan(declared)
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_contracts\src\suspension_contracts\resolved.py:233: in validate_solve_plan
+    validate_case({"contract": "multibody-case", "contract_version": 1, "kind": "case",
+packages\suspension_contracts\src\suspension_contracts\multibody.py:364: in validate_case
+    validate(document, "case")
+packages\suspension_contracts\src\suspension_contracts\multibody.py:253: in validate
+    _check(document, schema, "$", schema)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+value = 1, schema = {'minimum': 3, 'type': 'integer'}, path = '$/c/levels'
+root = {'$id': 'https://open-kinematics.dev/contracts/multibody_case_v1.json', '$schema': 'https://json-schema.org/draft/2020...l rules below are enforced by the case layer, and the expanded identity is reported back in the result manifest.', ...}
+
+    def _check(
+        value: Any, schema: Mapping[str, Any], path: str, root: Mapping[str, Any]
+    ) -> None:
+        ref = schema.get("$ref")
+        if isinstance(ref, str):
+            if not ref.startswith("#/"):
+                raise ContractError(f"{path}: unsupported $ref {ref!r}")
+            target: Any = root
+            for token in ref[2:].split("/"):
+                target = target[token]
+            _check(value, target, path, root)
+            return
+    
+        if "const" in schema and value != schema["const"]:
+            raise ContractError(f"{path}: expected {schema['const']!r}, got {value!r}")
+        if "enum" in schema and value not in schema["enum"]:
+            raise ContractError(f"{path}: {value!r} is not one of {schema['enum']}")
+    
+        declared = schema.get("type")
+        if isinstance(declared, str) and not _type_matches(value, declared):
+            raise ContractError(f"{path}: expected {declared}, got {type(value).__name__}")
+    
+        if isinstance(value, dict):
+            for key in schema.get("required", []):
+                if key not in value:
+                    raise ContractError(f"{path}: missing required field {key!r}")
+            properties = schema.get("properties", {})
+            if schema.get("additionalProperties") is False:
+                extra = sorted(set(value) - set(properties))
+                if extra:
+                    raise ContractError(f"{path}: unexpected fields {extra}")
+            for key, sub in properties.items():
+                if key in value:
+                    _check(value[key], sub, f"{path}/{key}", root)
+        elif isinstance(value, list):
+            items = schema.get("items")
+            if isinstance(items, dict):
+                for index, item in enumerate(value):
+                    _check(item, items, f"{path}[{index}]", root)
+            minimum_items = schema.get("minItems")
+            if isinstance(minimum_items, int) and len(value) < minimum_items:
+                raise ContractError(f"{path}: needs at least {minimum_items} items")
+            maximum_items = schema.get("maxItems")
+            if isinstance(maximum_items, int) and len(value) > maximum_items:
+                raise ContractError(f"{path}: allows at most {maximum_items} items")
+        elif isinstance(value, str):
+            minimum_length = schema.get("minLength")
+            if isinstance(minimum_length, int) and len(value) < minimum_length:
+                raise ContractError(f"{path}: needs at least {minimum_length} characters")
+            maximum_length = schema.get("maxLength")
+            if isinstance(maximum_length, int) and len(value) > maximum_length:
+                raise ContractError(f"{path}: allows at most {maximum_length} characters")
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            if schema.get("finite") is True and not math.isfinite(value):
+                raise ContractError(f"{path}: must be finite")
+            minimum = schema.get("minimum")
+            if isinstance(minimum, (int, float)) and value < minimum:
+>               raise ContractError(f"{path}: must be >= {minimum}")
+E               suspension_contracts.multibody.ContractError: $/c/levels: must be >= 3
+
+packages\suspension_contracts\src\suspension_contracts\multibody.py:248: ContractError
+
+The above exception was the direct cause of the following exception:
+
+    def test_the_side_modes_load_the_mirror_in_phase_and_in_anti_phase() -> None:
+>       model = documents(_compliant_model(), "C", driven=False)
+
+packages\suspension_multibody\tests\cases\kc_quasi_static\test_c_loads_and_sides.py:78: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\cases\kc_quasi_static\_documents.py:10: in documents
+    return migrate_v1_kc_case(model, mode=mode,
+packages\suspension_multibody\src\suspension_multibody\authoring\migration.py:579: in migrate_v1_kc_case
+    return document, CaseDocument({"schema_version": 1, "name": name, "study": "quasi_static",
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1f3c1ed5f10>
+payload = {'boundaries': [{'coordinate': 'wheel.sub.json.spin_L', 'mode': 'locked', 'name': 'hold:wheel.sub.json.spin_L', 'units...wheel.sub.json.wheel_center_L', 'maximum': 0, 'paths': ['fz'], ...}, 'drive_mode': 'force_balance'}, 'inputs': [], ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        if not isinstance(payload, Mapping):
+            raise AuthoringError("case input must be a document object or path")
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+                validate_case(declared)
+                required = {"ride_four_post": ("four_post", "corners"),
+                    "ride_random_road": ("ride_random_road", "wheels")}
+                if declared.get("family") in required:
+                    section, rows = required[declared["family"]]
+                    if not declared.get(section, {}).get(rows):
+                        raise AuthoringError(f"case requires '{section}' section with at least one {rows}")
+            else:
+                validate_solve_plan(declared)
+        except ContractError as error:
+>           raise AuthoringError(f"case {declared.get('name', '?')!r}: {error}") from error
+E           suspension_multibody.authoring.errors.AuthoringError: case 'kc': $/c/levels: must be >= 3
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:54: AuthoringError
+____________ test_ideal_model_document_is_a_valid_contract_member _____________
+
+    def test_ideal_model_document_is_a_valid_contract_member():
+        assembly, case = migrate_v1_kc_case(benchmark_model(), mode="K", wheel_values_mm=(0.,))
+        graph = assemble_generic(assembly)
+        document = validate(assembly, case).model_document
+        validate_model(document)
+        assert document["units"]["length"] == "m"
+        assert len(document["bodies"]) == len(graph.bodies)
+        expected = {row["name"] for row in graph.joints}
+        assert expected <= {row["name"] for row in document["joints"]}
+        driven = [row for row in document["joints"] if row["type"].startswith("driven_")]
+>       assert [row["target"].rsplit(".", 1)[-1] for row in driven] == ["wheel_drive_L", "wheel_drive_R", "rack_drive"]
+E       AssertionError: assert ['wheel_drive..._L', 'spin_R'] == ['wheel_drive... 'rack_drive']
+E         
+E         Left contains 2 more items, first extra item: 'spin_L'
+E         Use -v to get more diff
+
+packages\suspension_multibody\tests\cases\kc_quasi_static\test_contract_documents.py:31: AssertionError
+_____________ test_compliant_model_document_carries_its_bushings ______________
+
+    def test_compliant_model_document_carries_its_bushings():
+        assembly, case = migrate_v1_kc_case(_compliant_model(), mode="C", paths=("fz",))
+        graph = assemble_generic(assembly)
+        document = validate(assembly, case).model_document
+        validate_model(document)
+        bushings = [row for row in document["elements"] if row["type"] == "bushing"]
+        assert len(bushings) == len([row for row in graph.elements if row["type"] == "bushing"])
+        assert len(bushings[0]["parameters"]["stiffness"]) == 6
+        assert {row["name"] for row in graph.joints} <= {row["name"] for row in document["joints"]}
+>       assert [row["target"].rsplit(".", 1)[-1] for row in document["joints"] if row["type"].startswith("driven_")] == ["rack_neutral"]
+E       AssertionError: assert ['rack_neutra..._L', 'spin_R'] == ['rack_neutral']
+E         
+E         Left contains 2 more items, first extra item: 'spin_L'
+E         Use -v to get more diff
+
+packages\suspension_multibody\tests\cases\kc_quasi_static\test_contract_documents.py:44: AssertionError
+______________ test_the_model_document_declares_the_vehicle_path ______________
+
+fixture = <module 'native_vehicle_fixture' from 'E:\\тс╪Ч\\open-kinematics\\packages\\suspension_multibody\\tests\\vehicle\\vehicle_fixtures.py'>
+
+    def test_the_model_document_declares_the_vehicle_path(fixture) -> None:
+        from suspension_contracts import unpack_container
+    
+        model = fixture._positioned_vehicle(fixture._pac2002_model(combined=True))
+        compiled = compile_vehicle(model, fixture._case(model))
+        document = compiled.model_document
+>       model_blob = unpack_container(compiled.model_payload).blob
+E       AttributeError: 'tuple' object has no attribute 'blob'
+
+packages\suspension_multibody\tests\cases\test_vehicle_dynamic_contract.py:121: AttributeError
+__________ test_the_case_document_carries_the_road_and_the_steering ___________
+
+fixture = <module 'native_vehicle_fixture' from 'E:\\тс╪Ч\\open-kinematics\\packages\\suspension_multibody\\tests\\vehicle\\vehicle_fixtures.py'>
+
+    def test_the_case_document_carries_the_road_and_the_steering(fixture) -> None:
+        from suspension_contracts import unpack_container
+    
+        model = fixture._positioned_vehicle(fixture._vehicle())
+        case = fixture._case(model, brake=0.3, steering=TimeSignal(constant=0.02))
+        compiled = compile_vehicle(model, case)
+>       document, blob = compiled.case_document, unpack_container(compiled.case_payload).blob
+E       AttributeError: 'tuple' object has no attribute 'blob'
+
+packages\suspension_multibody\tests\cases\test_vehicle_dynamic_contract.py:177: AttributeError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\cases\kc_quasi_static\test_c_loads_and_sides.py::test_a_mirror_is_required_when_both_sides_are_loaded
+FAILED packages\suspension_multibody\tests\cases\kc_quasi_static\test_c_loads_and_sides.py::test_an_explicit_load_list_is_the_sweep_it_replaces
+FAILED packages\suspension_multibody\tests\cases\kc_quasi_static\test_c_loads_and_sides.py::test_the_side_modes_load_the_mirror_in_phase_and_in_anti_phase
+FAILED packages\suspension_multibody\tests\cases\kc_quasi_static\test_contract_documents.py::test_ideal_model_document_is_a_valid_contract_member
+FAILED packages\suspension_multibody\tests\cases\kc_quasi_static\test_contract_documents.py::test_compliant_model_document_carries_its_bushings
+FAILED packages\suspension_multibody\tests\cases\test_vehicle_dynamic_contract.py::test_the_model_document_declares_the_vehicle_path
+FAILED packages\suspension_multibody\tests\cases\test_vehicle_dynamic_contract.py::test_the_case_document_carries_the_road_and_the_steering
+7 failed, 18 passed in 6.00s

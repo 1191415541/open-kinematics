@@ -8,8 +8,7 @@ result document carries -- a fixture would only prove the bus agrees with itself
 
 from __future__ import annotations
 
-import importlib.util
-import pathlib
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -23,27 +22,12 @@ from suspension_multibody.signal_bus import (
     open_bus,
 )
 
-_FIXTURE = pathlib.Path(__file__).resolve().parents[1] / "vehicle" / "test_native_vehicle.py"
-_CONTRACT = (
-    pathlib.Path(__file__).resolve().parents[1]
-    / "cases"
-    / "test_vehicle_dynamic_contract.py"
-)
-
-
-def _contract_module():
-    spec = importlib.util.spec_from_file_location("vd_contract", _CONTRACT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
 
 @pytest.fixture(scope="module")
 def run_document():
     """Produce a real run with the wheels spinning, so the reads are not vacuous."""
-    contract = _contract_module()
-    fixture = contract._fixture()
+    from tests.vehicle import vehicle_fixtures as fixture
+    from tests.vehicle._unified_entry import solve_vehicle
     model = fixture._positioned_vehicle(fixture._vehicle())
     case = fixture._case(
         model,
@@ -52,7 +36,7 @@ def run_document():
             for name in ("front_left", "front_right", "rear_left", "rear_right")
         ),
     )
-    raw = contract._run(model, case)
+    raw = solve_vehicle(model, case).run.raw
     assert raw.status == "success"
     return raw
 
@@ -68,7 +52,7 @@ def test_the_read_channels_exist_and_are_named(run_document) -> None:
     assert {"wheel_speed", "body_acceleration"} <= names
     bus = open_bus(run_document)
     assert bus.measurement("wheel_speed").unit == "rad/s"
-    assert bus.measurement("body_acceleration").unit == "mm/s^2"
+    assert bus.measurement("body_acceleration").unit == "m/s^2"
 
 
 def test_a_wheel_speed_read_is_the_result_documents_own_number(run_document) -> None:
@@ -92,9 +76,9 @@ def test_a_wheel_speed_read_is_the_result_documents_own_number(run_document) -> 
 def test_a_body_acceleration_read_is_the_result_documents_own_number(run_document) -> None:
     """The same parity for the second read channel, taken from a different body."""
     bus = open_bus(run_document)
-    read = bus.read("body_acceleration", entity="chassis")
+    read = bus.read("body_acceleration", entity="body.chassis")
     direct = run_document.block("body_state")[
-        -1, run_document.body_names.index("chassis"), 13:16
+        -1, run_document.body_names.index("body.chassis"), 13:16
     ]
     assert np.array_equal(read, direct)
 
@@ -333,29 +317,32 @@ def _two_body_rig(damping: float | None):
 
 def _solve_axle(model, case):
     """Submit one axle model and case, returning the wheel's state series."""
-    from suspension_contracts import pack_container
+    from suspension_contracts import unpack_container
 
-    from suspension_multibody.cases.axle_dynamic import case_document, model_document
-    from suspension_multibody.simulation import (
-        SimulationRequest,
-        compile_document_pair,
-        run_request,
-    )
+    from suspension_multibody.api import simulate
+    from suspension_multibody.authoring.migration import migrate_v1_dynamic_axle
 
-    model_doc, model_blob = model_document(model)
-    case_doc, case_blob = case_document(model, case)
-    raw = run_request(
-        compile_document_pair(
-            SimulationRequest(assembly="axle", family="axle_dynamic"),
-            model_document=model_doc,
-            case_document=case_doc,
-            model_payload=pack_container(model_doc, model_blob),
-            case_payload=pack_container(case_doc, case_blob),
-        )
-    ).raw
-    return model_doc, model_blob, case_doc, case_blob, np.asarray(
-        raw.body_state("front_wheel_hub_L"), dtype=float
+    run = simulate(*migrate_v1_dynamic_axle(model, case))
+    compiled = run.compiled
+    _, model_blob = unpack_container(compiled.model_payload)
+    _, case_blob = unpack_container(compiled.case_payload)
+    body = next(name for name in run.result.body_ids if name.endswith(".front_wheel_hub_L"))
+    return compiled, model_blob, case_blob, body, run.result.body_state(body)
+
+
+def _resubmit(compiled, model_document, case_document, case_blob):
+    from suspension_multibody.compilation.resolved import (
+        compile_resolved,
+        plan_from_case,
     )
+    from suspension_multibody.modeling.resolved import ResolvedModel
+    from suspension_multibody.simulation import run_compiled
+
+    model = compiled.request.model
+    graph = model.to_document()
+    graph["elements"] = model_document["elements"]
+    return run_compiled(compile_resolved(ResolvedModel(graph, model.resource_payload),
+        plan_from_case(case_document, case_blob))).result
 
 
 def _rig_case():
@@ -387,32 +374,17 @@ def test_a_damping_write_changes_the_solved_trajectory() -> None:
     element -- or outside the ``elements`` array -- would leave the two runs
     identical, which is the failure this asserts against.
     """
-    from suspension_contracts import pack_container
-
-    from suspension_multibody.simulation import (
-        SimulationRequest,
-        compile_document_pair,
-        run_request,
-    )
-
     model = _two_body_rig(1.0)
     case = _rig_case()
-    model_doc, model_blob, case_doc, case_blob, baseline = _solve_axle(model, case)
-
-    bus = open_bus(model_document=model_doc, case_document=case_doc, case_blob=case_blob)
+    compiled, _, case_blob, body, baseline = _solve_axle(model, case)
+    model_doc, case_doc = compiled.documents()
+    damper = next(row["name"] for row in model_doc["elements"] if row["type"] == "damper")
+    bus = SignalBus(model_document=model_doc, case_document=case_doc, case_blob=case_blob,
+        actuators=(replace(ACTUATOR_CHANNELS[0], element=damper, unit="N*s/m"),))
     written, _blob = bus.write("variable_damping_L", 10_000.0)
     assert written is not model_doc
 
-    raw = run_request(
-        compile_document_pair(
-            SimulationRequest(assembly="axle", family="axle_dynamic"),
-            model_document=written,
-            case_document=case_doc,
-            model_payload=pack_container(written, model_blob),
-            case_payload=pack_container(case_doc, case_blob),
-        )
-    ).raw
-    after = np.asarray(raw.body_state("front_wheel_hub_L"), dtype=float)
+    after = _resubmit(compiled, written, case_doc, case_blob).body_state(body)
 
     delta = float(np.max(np.abs(after - baseline)))
     assert delta > _TRAJECTORY_TOLERANCE, (delta, _TRAJECTORY_TOLERANCE)
@@ -426,17 +398,10 @@ def test_a_motor_torque_write_changes_the_solved_trajectory() -> None:
     descriptor points at.  This is the counterpart of the damping test for the
     case side of the bus: the document is unchanged and the *blob* is what moved.
     """
-    from suspension_contracts import pack_container
-
-    from suspension_multibody.simulation import (
-        SimulationRequest,
-        compile_document_pair,
-        run_request,
-    )
-
     model = _two_body_rig(1.0)
     case = _rig_case()
-    model_doc, model_blob, case_doc, case_blob, baseline = _solve_axle(model, case)
+    compiled, _, case_blob, body, baseline = _solve_axle(model, case)
+    model_doc, case_doc = compiled.documents()
 
     samples = baseline.shape[0]
     moment = 50_000.0
@@ -446,7 +411,8 @@ def test_a_motor_torque_write_changes_the_solved_trajectory() -> None:
     case_doc["blobs"] = list(case_doc.get("blobs", [])) + [
         {
             "role": "body_wrench",
-            "body": "front_wheel_hub_L",
+            "body": body,
+            "name": "motor-wrench",
             "offset": offset,
             "length": wrench.nbytes,
             "dtype": "float64",
@@ -455,23 +421,13 @@ def test_a_motor_torque_write_changes_the_solved_trajectory() -> None:
     ]
     case_blob = case_blob + wrench.tobytes()
 
-    bus = open_bus(
-        model_document=model_doc, case_document=case_doc, case_blob=case_blob
-    )
+    bus = SignalBus(model_document=model_doc, case_document=case_doc, case_blob=case_blob,
+        actuators=(replace(ACTUATOR_CHANNELS[1], entity=body, unit="Nm"),))
     written_doc, written_blob = bus.write("motor_torque_FL", moment)
     assert written_doc is case_doc
     assert written_blob != case_blob
 
-    raw = run_request(
-        compile_document_pair(
-            SimulationRequest(assembly="axle", family="axle_dynamic"),
-            model_document=model_doc,
-            case_document=written_doc,
-            model_payload=pack_container(model_doc, model_blob),
-            case_payload=pack_container(written_doc, written_blob),
-        )
-    ).raw
-    after = np.asarray(raw.body_state("front_wheel_hub_L"), dtype=float)
+    after = _resubmit(compiled, model_doc, written_doc, written_blob).body_state(body)
 
     delta = float(np.max(np.abs(after - baseline)))
     assert delta > _TRAJECTORY_TOLERANCE, (delta, _TRAJECTORY_TOLERANCE)

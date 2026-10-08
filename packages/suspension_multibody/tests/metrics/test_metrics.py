@@ -21,13 +21,18 @@ from suspension_multibody.report.metrics import (
 
 
 class FakeResult:
+    tire_ids = ("wheel.contact",)
     times_s = np.array([0.0, 0.5, 1.0])
     tire_output = np.zeros((3, 1, 7))
     tire_output[:, 0, 4] = [1.0, 2.0, 3.0]
     tire_output[:, 0, 5] = [0.0, 1.0, 0.0]
     tire_output[:, 0, 6] = [2.0, 2.0, 2.0]
     diagnostics = None
-    performance = SimpleNamespace(available=False)
+    performance = {"available": False}
+
+    def tire_state(self, entity):
+        assert entity == "wheel.contact"
+        return self.tire_output[:, 0]
 
 
 def test_common_metrics_validate_and_summarize_samples() -> None:
@@ -54,31 +59,23 @@ def test_axle_and_vehicle_metrics_keep_output_prefixes() -> None:
     assert axle_metrics["rms_lateral_force_n"] == pytest.approx(2.0)
     assert axle_metrics["performance_available"] is False
 
-    vehicle = SimpleNamespace(
-        axle=FakeResult(),
-        steering_output=np.array([[1.0, -2.0], [3.0, 0.0]]),
-        native_kernel_wall_time_s=1.5,
-    )
-    vehicle_metrics = compute_vehicle_metrics(vehicle)
+    vehicle = FakeResult()
+    vehicle.element_state = lambda entity: np.array([[1.0, -2.0], [3.0, 0.0]])
+    vehicle_metrics = compute_vehicle_metrics(vehicle, steering_ids=("steering.actuator",), native_kernel_wall_time_s=1.5)
     assert vehicle_metrics["axle_maximum_normal_force_n"] == 3.0
     assert vehicle_metrics["maximum_steering_output"] == 3.0
     assert vehicle_metrics["native_kernel_wall_time_s"] == 1.5
 
 def test_vehicle_metrics_ignore_not_applicable_steering_components() -> None:
-    vehicle = SimpleNamespace(
-        axle=FakeResult(),
-        steering_output=np.array(
-            [[[1.0, np.nan], [3.0, np.nan]], [[2.0, np.nan], [0.0, np.nan]]]
-        ),
-        native_kernel_wall_time_s=0.0,
-    )
-    metrics = compute_vehicle_metrics(vehicle)
+    vehicle = FakeResult()
+    vehicle.element_state = lambda entity: np.array([[1., np.nan], [3., np.nan], [2., np.nan], [0., np.nan]])
+    metrics = compute_vehicle_metrics(vehicle, steering_ids=("steering.actuator",), native_kernel_wall_time_s=0.)
     assert metrics["maximum_steering_output"] == 3.0
     assert metrics["rms_steering_output"] == pytest.approx(np.sqrt(3.5))
 def test_axle_metrics_mark_empty_partial_results_unavailable() -> None:
     result = SimpleNamespace(
         times_s=np.asarray((), dtype=float),
-        performance=SimpleNamespace(available=False),
+        performance={"available": False},
         diagnostics=None,
     )
     metrics = compute_axle_metrics(result)
@@ -105,7 +102,7 @@ def test_case_specific_metrics_cover_supported_families() -> None:
 def test_case_specific_metrics_are_registered_by_family() -> None:
     assert compute_case_metrics("vehicle_kc_dynamic", FakeResult())["status"] == "not_applicable"
 def test_vehicle_metrics_include_explicit_wheel_load_derivations() -> None:
-    vehicle = SimpleNamespace(axle=FakeResult(), steering_output=None)
+    vehicle = FakeResult()
     metrics = compute_vehicle_metrics(
         vehicle,
         wheel_loads={

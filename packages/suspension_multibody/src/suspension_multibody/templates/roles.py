@@ -175,6 +175,11 @@ ROLES: dict[str, RoleSpec] = {
     ),
 }
 
+_GENERIC_ROLE = RoleSpec(
+    name="generic",
+    note="A data-driven multibody graph with no business-role contract.",
+)
+
 
 def _check_roles() -> None:
     """Reject a role table that cannot be trusted, where it is written."""
@@ -213,6 +218,8 @@ _check_roles()
 
 def get_role(name: str) -> RoleSpec:
     """Return a role by name, naming the unknown one if it is not registered."""
+    if name == "generic":
+        return _GENERIC_ROLE
     try:
         return ROLES[name]
     except KeyError as exc:

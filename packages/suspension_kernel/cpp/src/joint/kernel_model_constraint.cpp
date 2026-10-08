@@ -68,8 +68,7 @@ double driven_target_value(const Constraint& c, const SampleInput* input) {
     if (c.signal < 0 || input == nullptr) return 0.0;
     const std::size_t index = static_cast<std::size_t>(c.signal);
     if (index >= input->driven_target.size()) return 0.0;
-    const double target = input->driven_target[index];
-    return c.type == AXLE_DRIVEN_ROTATION ? wrap_to_pi(target) : target;
+    return input->driven_target[index];
 }
 
 double driven_row_target_rate(
@@ -242,17 +241,14 @@ void joint_residual_driven_translation(const JointResidualContext& context) {
 
 void joint_residual_driven_rotation(const JointResidualContext& context) {
     const Constraint& c = context.constraint;
-    // Same measure the steering actuator uses: the principal rotation
-    // vector of ``reference^-1 * (q_b^-1 * q_a)`` projected on the axis.
-    // The principal branch bounds the driven angle to (-pi, pi]; the
-    // registration path rejects targets outside it rather than letting a
-    // multi-turn joint wrap silently.
     const Quat relative = qmul(qconj(context.state.q[c.b]), context.state.q[c.a]);
-    const Vec3 error_rotation = qlog(
-        qmul(qconj(c.reference), relative)
+    const Quat delta = qmul(relative, qconj(c.reference));
+    const double axial = dot(Vec3{delta.x, delta.y, delta.z}, c.axis_a);
+    const double angle = 2.0*std::atan2(axial, delta.w);
+    // Wrap the error, not the target: phase remains in the prescribed signal.
+    context.out[context.row] = wrap_to_pi(
+        angle - driven_target_value(c, context.input)
     );
-    context.out[context.row] = dot(error_rotation, c.axis_a)
-        - driven_target_value(c, context.input);
 }
 
 void perturb_pose(State& state, const Model& model, const std::vector<double>& dy, double scale) {
@@ -328,44 +324,14 @@ std::vector<double> constraint_jacobian(const Model& model, const State& state) 
             const Constraint& joint = model.constraints[
                 static_cast<std::size_t>(joint_index)
             ];
-            const Mat3 ra = qmat(state.q[joint.a]);
-            const Vec3 arm_a = rotate(state.q[joint.a], joint.pa);
-            const Vec3 arm_b = rotate(state.q[joint.b], joint.pb);
             const ScalarJacobianWriter writer{
-                model, state, joint, J, row, ra, arm_a, arm_b, Vec3{}
+                model, state, joint, J, row, {}, {}, {}, {}
             };
-            if (coordinate == 0) {
-                const Quat relative = qmul(
-                    qconj(state.q[joint.a]), state.q[joint.b]
-                );
-                const Quat delta_rotation = qmul(
-                    qconj(reference_rotation), relative
-                );
-                const Vec3 phi = qlog(delta_rotation);
-                const Mat3 map = log_left_jacobian_inverse(phi)
-                    * transpose(qmat(reference_rotation)) * transpose(ra);
-                const Vec3 row_value = row_times(
-                    normalized(joint.axis_a), map
-                ) * scale;
-                writer.add_row(row, joint.a, {}, row_value*(-1.0));
-                writer.add_row(row, joint.b, {}, row_value);
-                return;
-            }
-            const Vec3 axis = normalized(
-                rotate(state.q[joint.a], joint.axis_a)
-            );
-            const Vec3 separation = state_point(state, joint.a, joint.pa)
-                - state_point(state, joint.b, joint.pb);
-            const Mat3 d_axis = skew(axis)*(-1.0);
-            writer.add_row(
-                row, joint.a, axis*scale,
-                (row_times(axis, skew(arm_a)*(-1.0))
-                    + row_times(separation, d_axis))*scale
-            );
-            writer.add_row(
-                row, joint.b, axis*(-scale),
-                row_times(axis, skew(arm_b))*scale
-            );
+            Vec3 linear[2]{}, angular[2]{};
+            joint_coordinate_gradients(model, state, joint_index, coordinate,
+                reference_rotation, scale, linear, angular);
+            writer.add_row(row, joint.a, linear[0], angular[0]);
+            writer.add_row(row, joint.b, linear[1], angular[1]);
         };
         add_joint_coordinate(
             coupler.row, coupler.joint_a, coupler.coordinate_a,
@@ -377,6 +343,33 @@ std::vector<double> constraint_jacobian(const Model& model, const State& state) 
         );
     }
     return J;
+}
+
+void joint_coordinate_gradients(const Model& model, const State& state,
+    int joint_index, int coordinate, const Quat& reference_rotation,
+    double scale, Vec3 (&linear)[2], Vec3 (&angular)[2]) {
+    const Constraint& joint = model.constraints[static_cast<std::size_t>(joint_index)];
+    const Mat3 ra = qmat(state.q[joint.a]);
+    if (coordinate == 0) {
+        const Quat relative = qmul(qconj(state.q[joint.a]), state.q[joint.b]);
+        const Vec3 phi = qlog(qmul(qconj(reference_rotation), relative));
+        const Mat3 map = log_left_jacobian_inverse(phi)
+            * transpose(qmat(reference_rotation)) * transpose(ra);
+        const Vec3 value = row_times(normalized(joint.axis_a), map)*scale;
+        linear[0] = {}; linear[1] = {};
+        angular[0] = value*(-1.0); angular[1] = value;
+        return;
+    }
+    const Vec3 arm_a = rotate(state.q[joint.a], joint.pa);
+    const Vec3 arm_b = rotate(state.q[joint.b], joint.pb);
+    const Vec3 axis = normalized(rotate(state.q[joint.a], joint.axis_a));
+    const Vec3 separation = state_point(state, joint.a, joint.pa)
+        - state_point(state, joint.b, joint.pb);
+    const Mat3 d_axis = skew(axis)*(-1.0);
+    linear[0] = axis*scale; linear[1] = axis*(-scale);
+    angular[0] = (row_times(axis, skew(arm_a)*(-1.0))
+        + row_times(separation, d_axis))*scale;
+    angular[1] = row_times(axis, skew(arm_b))*scale;
 }
 
 void joint_jacobian_fixed(const ScalarJacobianWriter& writer) {
@@ -524,18 +517,14 @@ void joint_jacobian_driven_translation(const ScalarJacobianWriter& writer) {
 
 void joint_jacobian_driven_rotation(const ScalarJacobianWriter& writer) {
     const Constraint& c = writer.constraint;
-    // Same derivation as the prescribed-steering rotation row: the
-    // rotation-vector measure maps world angular increments into the
-    // reference frame through the left Jacobian inverse.  The axis needs
-    // no separate rotation because ``map`` already carries the reference
-    // frame's transpose.
-    const Mat3 reaction_matrix = qmat(writer.state.q[c.b]);
     const Quat relative = qmul(qconj(writer.state.q[c.b]), writer.state.q[c.a]);
-    const Vec3 phi = qlog(qmul(qconj(c.reference), relative));
-    const Mat3 map = log_left_jacobian_inverse(phi)
-        * transpose(qmat(c.reference))
-        * transpose(reaction_matrix);
-    const Vec3 row_value = row_times(c.axis_a, map);
+    const Quat delta = qmul(relative, qconj(c.reference));
+    const Vec3 vector{delta.x, delta.y, delta.z};
+    const double axial = dot(vector, c.axis_a);
+    const double denominator = delta.w*delta.w + axial*axial;
+    const Vec3 local = (c.axis_a*(delta.w*delta.w)
+        + cross(vector, c.axis_a)*delta.w + vector*axial)/denominator;
+    const Vec3 row_value = rotate(writer.state.q[c.b], local);
     writer.add_row(writer.row, c.a, {}, row_value);
     writer.add_row(writer.row, c.b, {}, row_value*(-1.0));
 }

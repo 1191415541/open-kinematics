@@ -35,18 +35,20 @@ from suspension_multibody.adams.full_vehicle_model import (
     _parse_tire,
     parse_tire_tables,
 )
+from suspension_multibody.api import validate
+from suspension_multibody.authoring import migrate_v1_dynamic_axle
 from suspension_multibody.axle_dynamics import (
     AxleBody,
     AxleDrivenCoordinate,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
     AxleTire,
-    run_axle_dynamics,
 )
 from suspension_multibody.axle_dynamics.result import TIRE_OUTPUT_COLUMNS
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
 from suspension_multibody.schema.pac2002_scope import validate_pac2002_native_scope
+from suspension_multibody.simulation import run_compiled
 
 #: 前向单位向量（轴级坐标 x 指向车尾）。
 FORWARD = (-1.0, 0.0, 0.0)
@@ -824,13 +826,10 @@ def build_pac2002_rig(
 
 def run_rig(model: AxleDynamicsModel, case: AxleDynamicsCase):
     """
-    跑一次台架并返回轴级结果.
-
-    The public axle entry now follows the same versioned contract route for every
-    tire law, including Fiala; the rig no longer needs a private flat-ABI call or
-    a zero brake-torque side channel just to select the vehicle stages.
+    跑一次普通文档台架并返回统一结果信封.
     """
-    return run_axle_dynamics(model, case)
+    assembly, plan = migrate_v1_dynamic_axle(model, case)
+    return run_compiled(validate(assembly, plan))
 
 
 def _rotate_vectors_by_quaternions(
@@ -862,8 +861,9 @@ def report(
     由 toe/camber 关节真的转出来，轮胎平面随时间变化，所以必须给 `frame_body`
     （`"camber_yoke"`），否则重建的 `rolling_speed`/`kappa`/`R_e` 会落在错误的轴上。
     """
+    result = result.result
     columns = {name: i for i, name in enumerate(TIRE_OUTPUT_COLUMNS)}
-    state = result.tire_state(tire_name)
+    state = result.tire_state("wheel."+tire_name)
     out = {
         "t": np.asarray(result.times_s, float),
         "penetration_m": state[:, columns["penetration_m"]],
@@ -879,14 +879,14 @@ def report(
         "vy_m_per_s": state[:, columns["lateral_slip_velocity_m_per_s"]],
         "rolling_speed_m_per_s": state[:, columns["rolling_speed_m_per_s"]],
     }
-    wheel = result.body_state("wheel")
+    wheel = result.body_state("wheel.wheel")
     # 轴级输出的 rolling_speed / slip_reference 两列在 Fiala 路径下不填（是 PAC2002 的
     # 槽位），故这里按内核的定义自行重构：rolling_speed = |dot(v_wheel, forward)|、
     # spin_rate = dot(omega, spin_axis)、kappa = -vx / rolling_speed。
     velocity = np.asarray(wheel[:, 7:10], float)
     omega = np.asarray(wheel[:, 10:13], float)
     if frame_body is not None:
-        quaternions = np.asarray(result.body_state(frame_body)[:, 3:7], float)
+        quaternions = np.asarray(result.body_state(frame_body+"."+frame_body)[:, 3:7], float)
         forward = _rotate_vectors_by_quaternions(forward, quaternions)
         spin_axis = _rotate_vectors_by_quaternions(spin_axis, quaternions)
     else:

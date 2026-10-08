@@ -1,346 +1,130 @@
-from __future__ import annotations
-
-from types import SimpleNamespace
+"""One compiler frames all resolved graphs and retains native failure evidence."""
+from dataclasses import replace
 
 import numpy as np
 import pytest
 from suspension_contracts import unpack_container
 
-from suspension_multibody.kernel import ContractRun, KernelContractError
-from suspension_multibody.simulation import (
-    AxleDynamicCompiler,
-    HandlingCompiler,
-    KcQuasiStaticCompiler,
-    RideFourPostCompiler,
-    RideRandomRoadCompiler,
-    SimulationRequest,
-    VehicleDynamicCompiler,
-    VehicleKcCompiler,
-    compile_document_pair,
-    run_compiled,
-)
+from suspension_multibody.api import validate
+from suspension_multibody.authoring.errors import AuthoringError
+from suspension_multibody.authoring.loader import DocumentLoader
+from suspension_multibody.compilation.resolved import compile_resolved, plan_from_case
+from suspension_multibody.kernel import KernelContractError
+from suspension_multibody.modeling.resolved import ResolvedModel, ResolvedSolvePlan
+from suspension_multibody.simulation import run_compiled
+
+from ._documents import PROTOCOLS, compiled, documents, simple_compiled, synthetic_run
 
 
-def _documents(family: str) -> tuple[dict[str, object], dict[str, object]]:
-    return (
-        {
-            "contract": "multibody-model",
-            "contract_version": 1,
-            "kind": "model",
-            "name": f"{family}-model",
-        },
-        {
-            "contract": "multibody-case",
-            "contract_version": 1,
-            "kind": "case",
-            "family": family,
-            "name": f"{family}-case",
-        },
-    )
+@pytest.mark.parametrize("protocol", PROTOCOLS)
+def test_document_compiler_materializes_contracts_and_metadata(protocol):
+    source, case = documents(protocol)
+    result = validate(source, case)
+    assert result.case_document["family"] == protocol
+    assert result.request.assembly == "generic"
+    assert result.request.model.name == source.name
+    assert result.layout == {"document_order": ["model", "case"], "payload_order": ["model", "case"]}
+    assert result.metadata["compiler"] == "ResolvedModelCompiler"
+    assert result.metadata["family"] == protocol
+    assert result.metadata["model_fingerprint"] == result.request.model.fingerprint
+    for payload, document in zip(result.payloads(), result.documents(), strict=True):
+        assert isinstance(payload, bytes)
+        assert unpack_container(payload)[0] == document
 
 
-def _request(
-    assembly: str,
-    family: str,
-    *,
-    model: object | None = None,
-    case: object | None = None,
-    context: dict[str, object] | None = None,
-) -> SimulationRequest:
-    return SimulationRequest(
-        assembly=assembly,
-        family=family,
-        model=model,
-        case=case,
-        context=context or {},
-    )
+def test_compiler_preserves_pinned_binary_resources():
+    from ..authoring.test_unified_document_loader import EXAMPLES
+
+    bundle = DocumentLoader(resource_root=EXAMPLES).load("tire.assembly.json", "dynamic.case.json")
+    model = bundle.resolve()
+    result = compile_resolved(model, plan_from_case(bundle.case.to_payload()))
+    assert unpack_container(result.model_payload)[1] == model.resource_payload
+    assert model.resource_payload
+    assert result.metadata["resource_manifest"] == model.to_document()["resource_manifest"]
 
 
-@pytest.mark.parametrize(
-    ("compiler", "assembly", "family"),
-    [
-        (KcQuasiStaticCompiler(), "axle", "kc_quasi_static"),
-        (HandlingCompiler(), "vehicle", "handling"),
-        (RideFourPostCompiler(), "vehicle", "ride_four_post"),
-        (RideRandomRoadCompiler(), "vehicle", "ride_random_road"),
-    ],
-)
-def test_document_pair_compilers_materialize_contracts_and_metadata(
-    compiler, assembly: str, family: str
-) -> None:
-    model, case = _documents(family)
-    compiled = compiler.compile(
-        _request(
-            assembly,
-            family,
-            context={"model_document": model, "case_document": case},
-        )
-    )
-
-    assert compiled.documents() == (model, case)
-    assert compiled.layout == {
-        "document_order": ["model", "case"],
-        "payload_order": ["model", "case"],
-    }
-    assert compiled.metadata["compiler"] == type(compiler).__name__
-    assert compiled.metadata["assembly"] == assembly
-    assert compiled.metadata["family"] == family
-    assert compiled.metadata["request_kind"] == family
-    assert all(isinstance(payload, bytes) for payload in compiled.payloads())
+def test_compiler_checks_contract_version_and_explicit_protocol_identity():
+    source, case = documents()
+    with pytest.raises(AuthoringError, match="contract_version"):
+        validate(source, {**case, "contract_version": 2})
+    result = validate(source, case)
+    with pytest.raises(ValueError, match="disagrees"):
+        compile_resolved(result.request.model, result.request.case,
+            request=replace(result.request, family="vehicle_dynamic"))
 
 
-def test_document_pair_compiler_preserves_embedded_payloads() -> None:
-    model, case = _documents("handling")
-    model_payload = b"model-payload"
-    case_payload = b"case-payload"
-    compiled = HandlingCompiler().compile(
-        _request(
-            "vehicle",
-            "handling",
-            context={
-                "model_document": (model, model_payload),
-                "case_document": (case, case_payload),
-            },
-        )
-    )
-
-    assert compiled.model_payload == model_payload
-    assert compiled.case_payload == case_payload
+@pytest.mark.parametrize("protocol", ["axle_dynamic", "vehicle_dynamic"])
+def test_compiler_frames_the_same_resolved_entities(protocol):
+    result = compiled(protocol)
+    graph = result.request.model.to_document()
+    assert result.model_document["bodies"] == graph["bodies"]
+    assert result.model_document["joints"] == graph["joints"]
+    assert result.model_document["elements"] == graph["elements"]
+    assert unpack_container(result.model_payload)[0] == result.model_document
+    assert unpack_container(result.case_payload)[0] == result.case_document
 
 
-def test_document_pair_compiler_checks_contract_version_and_request_identity() -> None:
-    model, case = _documents("kc_quasi_static")
-    compiler = KcQuasiStaticCompiler()
-    context = {"model_document": model, "case_document": case}
+def test_compiler_never_mutates_the_source_ir_when_adding_driven_joint():
+    from ..physics.test_wheel_spin_boundary import plan, wheel_assembly
 
-    with pytest.raises(ValueError, match="assembly"):
-        compiler.compile(_request("vehicle", "kc_quasi_static", context=context))
-    with pytest.raises(ValueError, match="request kind"):
-        compiler.compile(
-            SimulationRequest(
-                "axle",
-                "kc_quasi_static",
-                request_kind="wrong_kind",
-                context=context,
-            )
-        )
-
-    bad_case = dict(case)
-    bad_case["contract_version"] = 2
-    with pytest.raises(ValueError, match="case contract_version"):
-        compiler.compile(
-            _request(
-                "axle",
-                "kc_quasi_static",
-                context={"model_document": model, "case_document": bad_case},
-            )
-        )
+    model = DocumentLoader().load(wheel_assembly(), plan().to_document()).resolve()
+    given = model.to_document()
+    result = compile_resolved(model, plan())
+    assert model.to_document() == given
+    assert result.model_document["joints"][:-1] == given["joints"]
+    assert result.model_document["joints"][-1]["type"] == "driven_rotation"
+    assert result.metadata["model_fingerprint"] == model.fingerprint
 
 
-def test_axle_dynamic_compiler_frames_the_prepared_documents() -> None:
-    """The compiler frames the family's preparation; it authors no document."""
-    from suspension_multibody.preparation.axle_dynamic import (
-        PREPARED_KEY,
-        AxleDynamicPrepared,
-    )
-
-    model_document = _documents("axle_dynamic")[0]
-    case_document = _documents("axle_dynamic")[1]
-    prepared = AxleDynamicPrepared(
-        model_document=model_document,
-        model_payload=b"model-blob",
-        case_document=case_document,
-        case_payload=b"case-blob",
-    )
-
-    compiled = AxleDynamicCompiler().compile(
-        _request(
-            "axle",
-            "axle_dynamic",
-            model=object(),
-            case=object(),
-            context={PREPARED_KEY: prepared},
-        )
-    )
-    model, model_blob = unpack_container(compiled.model_payload)
-    case, case_blob = unpack_container(compiled.case_payload)
-
-    assert model == model_document
-    assert case == case_document
-    assert model_blob == b"model-blob"
-    assert case_blob == b"case-blob"
+def test_compiler_requires_resolved_inputs():
+    result = simple_compiled()
+    with pytest.raises(TypeError, match="ResolvedModel"):
+        compile_resolved(object(), result.request.case)
+    with pytest.raises(TypeError, match="ResolvedSolvePlan"):
+        compile_resolved(result.request.model, object())
+    assert isinstance(result.request.model, ResolvedModel)
+    assert isinstance(result.request.case, ResolvedSolvePlan)
 
 
-def test_axle_dynamic_compiler_carries_authored_documents_through() -> None:
-    """A request that already owns its documents bypasses preparation."""
-    model_document = _documents("axle_dynamic")[0]
-    case_document = _documents("axle_dynamic")[1]
-
-    compiled = AxleDynamicCompiler().compile(
-        _request(
-            "axle", "axle_dynamic", model=model_document, case=case_document
-        )
-    )
-
-    assert compiled.documents() == (model_document, case_document)
-
-
-def test_vehicle_dynamic_compiler_uses_prepared_context(monkeypatch) -> None:
-    from suspension_multibody.cases import vehicle_dynamic
-
-    model_document = _documents("vehicle_dynamic")[0]
-    case_document = _documents("vehicle_dynamic")[1]
-    prepared = SimpleNamespace(name="prepared")
-    seen: dict[str, object] = {}
-
-    def emit_model(model, actual_prepared, *, name=None):
-        seen["model_prepared"] = actual_prepared
-        return model_document, b"model-blob"
-
-    def emit_case(model, case, actual_prepared, *, name=None):
-        seen["case_prepared"] = actual_prepared
-        return case_document, b"case-blob"
-
-    monkeypatch.setattr(vehicle_dynamic, "model_document", emit_model)
-    monkeypatch.setattr(vehicle_dynamic, "case_document", emit_case)
-
-    compiled = VehicleDynamicCompiler().compile(
-        _request(
-            "vehicle",
-            "vehicle_dynamic",
-            model=object(),
-            case=object(),
-            context={"vehicle_dynamic_prepared": prepared},
-        )
-    )
-
-    assert seen == {"model_prepared": prepared, "case_prepared": prepared}
-    assert compiled.metadata["prepared"] is True
-    assert compiled.model_payload
-    assert compiled.case_payload
-
-
-def test_vehicle_kc_compiler_derives_driven_model_metadata(monkeypatch) -> None:
-    from suspension_multibody.cases import vehicle_kc
-
-    source_model, source_payload = _documents("vehicle_kc")[0], b"source"
-    case = _documents("vehicle_kc")[1]
-    derived_model = dict(source_model)
-    derived_model["joints"] = [{"type": "driven_translation"}, {"type": "fixed"}]
-    monkeypatch.setattr(
-        vehicle_kc,
-        "model_document",
-        lambda pair, *, wheels, assembly: (derived_model, b"derived-blob"),
-    )
-
-    compiled = VehicleKcCompiler().compile(
-        _request(
-            "vehicle",
-            "vehicle_kc",
-            model=(source_model, source_payload),
-            case=case,
-            context={
-                "model_document_pair": (source_model, source_payload),
-                "wheels": (),
-                "vehicle_assembly": object(),
-            },
-        )
-    )
-
-    assert compiled.model_document == derived_model
-    assert compiled.metadata["derived_model"] is True
-    assert compiled.metadata["driven_joint_count"] == 1
-
-
-def test_run_compiled_preserves_partial_status_diagnostics_and_performance() -> None:
-    model, case = _documents("handling")
-    compiled = compile_document_pair(
-        _request("vehicle", "handling"),
-        model_document=model,
-        case_document=case,
-    )
-    diagnostics = np.zeros((3, 16), dtype=float)
-    diagnostics[1, 0] = 1.0
+def test_run_compiled_preserves_partial_status_diagnostics_and_performance():
+    submission = simple_compiled()
+    diagnostics = np.zeros((3, 16))
+    diagnostics[1, 0] = 1
 
     class PartialBackend:
         def run(self, submitted):
-            return ContractRun(
-                document={
-                    "status": "partial",
-                    "manifest": {
-                        "bodies": ["body"],
-                        "cases": [{"sample_offset": 0, "sample_count": 1}],
-                    },
-                },
-                blocks={
-                    "body_state": np.zeros((1, 1, 19)),
-                    "diagnostics": diagnostics,
-                },
-                model_document=submitted.model_document,
-                case_document=submitted.case_document,
-                times_s=np.array([0.0]),
-            )
+            return synthetic_run(submitted, status="partial", diagnostics=diagnostics)
 
-    result = run_compiled(compiled, backend=PartialBackend())
-
+    result = run_compiled(submission, backend=PartialBackend())
     assert result.status == "partial"
-    assert result.raw.diagnostics is not None
     assert result.raw.diagnostics.shape == (1, 16)
     assert result.raw.performance["available"] is True
-def test_run_compiled_preserves_failed_raw_result() -> None:
-    model, case = _documents("handling")
-    compiled = compile_document_pair(
-        _request("vehicle", "handling"),
-        model_document=model,
-        case_document=case,
-    )
 
+
+def test_run_compiled_preserves_failed_raw_result():
     class FailedBackend:
         def run(self, submitted):
-            return ContractRun(
-                document={"status": "failed", "manifest": {"failure_message": "trim failed"}},
-                blocks={},
-                model_document=submitted.model_document,
-                case_document=submitted.case_document,
-                times_s=np.array([]),
-            )
+            return synthetic_run(submitted, status="failed", manifest={"failure_message": "trim failed"})
 
-    result = run_compiled(compiled, backend=FailedBackend())
-
+    result = run_compiled(simple_compiled(), backend=FailedBackend())
     assert result.status == "failed"
-    assert result.raw.document["manifest"]["failure_message"] == "trim failed"
-def test_native_backend_attaches_partial_raw_result(monkeypatch) -> None:
-    from suspension_multibody.simulation import backend as backend_module
+    assert result.raw.metadata["failure_message"] == "trim failed"
 
-    model, case = _documents("handling")
-    compiled = compile_document_pair(
-        _request("vehicle", "handling"),
-        model_document=model,
-        case_document=case,
-    )
-    diagnostics = np.zeros((3, 16), dtype=float)
-    diagnostics[1, 0] = 1.0
-    partial = ContractRun(
-        document={
-            "status": "partial",
-            "manifest": {
-                "bodies": ["body"],
-                "cases": [{"sample_offset": 0, "sample_count": 1}],
-            },
-        },
-        blocks={"body_state": np.zeros((1, 1, 19)), "diagnostics": diagnostics},
-        model_document=model,
-        case_document=case,
-        times_s=np.array([0.0]),
-    )
+
+def test_native_backend_attaches_partial_raw_result(monkeypatch):
+    from suspension_multibody.simulation import backend
+
+    submission = simple_compiled()
+    diagnostics = np.zeros((3, 16))
+    diagnostics[1, 0] = 1
+    partial = synthetic_run(submission, status="partial", diagnostics=diagnostics)
 
     def raise_partial(*args, **kwargs):
         raise KernelContractError("trim failed", partial_run=partial)
 
-    monkeypatch.setattr(backend_module, "run_contract", raise_partial)
+    monkeypatch.setattr(backend, "run_contract", raise_partial)
     with pytest.raises(KernelContractError) as caught:
-        run_compiled(compiled)
-
+        run_compiled(submission)
     error = caught.value
     assert error.partial_raw_result is not None
     assert error.partial_raw_result.status == "partial"

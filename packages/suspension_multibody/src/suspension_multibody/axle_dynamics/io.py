@@ -9,7 +9,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from .schema import AxleDynamicsCase, AxleDynamicsModel
+from .schema import AxleDynamicsCase
 
 
 def _read(path: str | Path) -> dict[str, Any]:
@@ -30,14 +30,6 @@ def _read(path: str | Path) -> dict[str, Any]:
             f"unsupported schema_version {data.get('schema_version')!r}; expected 1"
         )
     return data
-
-
-def load_axle_dynamics_model(path: str | Path) -> AxleDynamicsModel:
-    """Load a closed SI axle dynamics model from YAML or JSON."""
-    try:
-        return AxleDynamicsModel.model_validate(_read(path))
-    except ValidationError as exc:
-        raise ValueError(f"invalid AxleDynamicsModel in {path}: {exc}") from exc
 
 
 def load_axle_dynamics_case(path: str | Path) -> AxleDynamicsCase:

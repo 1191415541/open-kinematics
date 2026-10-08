@@ -1,0 +1,19 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/authoring/test_unified_document_loader.py",
+    "packages/suspension_multibody/tests/authoring/test_documents.py",
+    "packages/suspension_multibody/tests/authoring/test_memory_documents.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T13:27:50.506409+00:00",
+  "finished_at": "2026-10-06T13:27:53.732775+00:00",
+  "log": "raw\\validation\\child-2-step-1.log",
+  "log_sha256": "5437d5935a3b277fff713cd4491c19266d347fe7a63a5e972c8455f2223f714d"
+}

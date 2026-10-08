@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Resolved SI Model V1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "name", "units", "bodies", "frames", "joints", "elements"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "name": {"type": "string", "minLength": 1},
+    "units": {"const": "SI"},
+    "bodies": {"type": "array", "items": {"type": "object"}},
+    "frames": {"type": "array", "items": {"$ref": "#/$defs/frame"}},
+    "joints": {"type": "array", "items": {"type": "object"}},
+    "elements": {"type": "array", "items": {"type": "object"}},
+    "tires": {"type": "array", "items": {"type": "object"}},
+    "function_programs": {"type": "array", "items": {"type": "object"}},
+    "ports": {"type": "array", "items": {"$ref": "#/$defs/port"}},
+    "coordinates": {"type": "array", "items": {"$ref": "#/$defs/coordinate"}},
+    "couplers": {"type": "array", "items": {"type": "object"}},
+    "gauges": {"type": "array", "items": {"type": "object"}},
+    "capabilities": {"type": "array", "items": {"type": "string"}},
+    "element_properties": {"type": "object"},
+    "signals": {"type": "array", "items": {"type": "object"}},
+    "measurements": {"type": "array", "items": {"type": "object"}},
+    "initial_state": {"type": "object"},
+    "provenance": {"type": "object"},
+    "resource_manifest": {"type": "array", "items": {"type": "object"}},
+    "gravity": {"type": "array", "items": {"type": "number", "finite": true}, "minItems": 3, "maxItems": 3},
+    "road": {"type": "object"},
+    "blobs": {"type": "array"}
+  },
+  "$defs": {
+    "vector": {"type": "array", "items": {"type": "number", "finite": true}, "minItems": 3, "maxItems": 3},
+    "frame": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "body", "point", "quaternion"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "body": {"type": "string", "minLength": 1},
+        "point": {"$ref": "#/$defs/vector"},
+        "quaternion": {"type": "array", "items": {"type": "number", "finite": true}, "minItems": 4, "maxItems": 4}
+      }
+    },
+    "port": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "kind", "owner"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["geometry", "channel", "road", "spin"]},
+        "owner": {"type": "string", "minLength": 1},
+        "frame": {"type": "string"}, "coordinate": {"type": "string"},
+        "units": {"type": "string"}, "role": {"type": "string"},
+        "cardinality": {"enum": ["one", "many", "none"]},
+        "capabilities": {"type": "array", "items": {"type": "string"}},
+        "labels": {"type": "array", "items": {"type": "string"}},
+        "resource": {"type": "string"}, "direction": {"$ref": "#/$defs/vector"}
+      }
+    },
+    "coordinate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "source_joint_id", "kind", "frame_a", "frame_b", "axis", "units", "reference"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "source_joint_id": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["rotation", "translation"]},
+        "frame_a": {"type": "string", "minLength": 1},
+        "frame_b": {"type": "string", "minLength": 1},
+        "axis": {"$ref": "#/$defs/vector"},
+        "units": {"enum": ["rad", "m"]},
+        "reference": {"type": "number", "finite": true}
+      }
+    }
+  }
+}

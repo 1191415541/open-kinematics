@@ -1,0 +1,171 @@
+.................F.....................F............                     [100%]
+================================== FAILURES ===================================
+_____________ test_vehicle_entity_data_matches_existing_producer ______________
+
+    def test_vehicle_entity_data_matches_existing_producer():
+        from suspension_multibody.compilation.resolved import native_model_document
+        from tests.vehicle.vehicle_fixtures import _positioned_vehicle, _vehicle
+    
+        reference = Path(__file__).parents[1]/"data/vehicle_dynamics_baseline/reference"
+        old = json.loads((reference/"0.model.json").read_text())
+        old_payload = (reference/"0.model.bin").read_bytes()
+        migrated = assemble_generic(migrate_v1_vehicle(_positioned_vehicle(_vehicle()))).resolved_model()
+        from suspension_multibody.properties.tire_native import compile_tires
+    
+        new = native_model_document(migrated)
+        new["tires"], new["blobs"], new_payload = compile_tires(tuple(new["tires"]))
+        old_bodies = {row["name"]: row for row in old["bodies"]}
+        new_bodies = {_legacy_entity_id(row["name"]): row for row in new["bodies"]}
+        assert old_bodies.keys() == new_bodies.keys()
+        for name, body in old_bodies.items():
+            for key in ("mass", "inertia", "position", "quaternion", "fixed", "velocity", "omega"):
+                np.testing.assert_array_equal(new_bodies[name].get(key, [0, 0, 0]), body[key])
+        old_joints = {(row["body_a"], row["body_b"], row["type"]): row for row in old["joints"]}
+        new_joints = {(_legacy_entity_id(row["body_a"]), _legacy_entity_id(row["body_b"]), row["type"]): row for row in new["joints"]}
+        assert old_joints.keys() == new_joints.keys()
+        assert len(old_joints) == len(old["joints"]) == len(new["joints"])
+        for key, joint in old_joints.items():
+            fields = ("point_a", "point_b") if joint["type"] in {"fixed", "spherical"} else ("point_a", "point_b", "axis_a", "axis_b")
+            for field in fields:
+                np.testing.assert_array_equal(new_joints[key][field], joint[field])
+        steering_old = next(row["parameters"] for row in old["elements"] if row["type"] == "steering_actuator")
+        steering_new = next(row["parameters"] for row in new["elements"] if row["type"] == "steering_actuator")
+        for key, value in steering_old.items():
+            actual = _legacy_entity_id(steering_new[key]) if key in {"body", "reaction_body"} else steering_new[key]
+            if isinstance(value, str):
+                assert actual == value
+            else:
+                np.testing.assert_array_equal(actual, value)
+        for tire_old, tire_new in zip(old["tires"], new["tires"]):
+            assert _legacy_entity_id(tire_new["body"]) == tire_old["body"]
+            assert tire_new["model"] == tire_old["model"]
+            for key, value in tire_old["parameters"].items():
+                if key not in {"frame_body", "frame_center_local", "blob"}:
+                    np.testing.assert_array_equal(tire_new["parameters"][key], value)
+            # The declared non-spinning carrier replaces the old spinning hub.
+            assert tire_old["parameters"]["frame_body"].endswith(("wheel_hub_L", "wheel_hub_R"))
+            assert tire_new["parameters"]["frame_body"].endswith(("upright_L", "upright_R"))
+            for document, payload, tire in ((old, old_payload, tire_old), (new, new_payload, tire_new)):
+>               descriptor = next(row for row in document["blobs"] if row["name"] == tire["parameters"]["blob"])
+E               StopIteration
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:338: StopIteration
+
+The above exception was the direct cause of the following exception:
+
+cls = <class '_pytest.runner.CallInfo'>
+func = <function call_and_report.<locals>.<lambda> at 0x000001814BD77D80>
+when = 'call'
+reraise = (<class '_pytest.outcomes.Exit'>, <class 'KeyboardInterrupt'>)
+
+    @classmethod
+    def from_call(
+        cls,
+        func: Callable[[], TResult],
+        when: Literal["collect", "setup", "call", "teardown"],
+        reraise: type[BaseException] | tuple[type[BaseException], ...] | None = None,
+    ) -> CallInfo[TResult]:
+        """Call func, wrapping the result in a CallInfo.
+    
+        :param func:
+            The function to call. Called without arguments.
+        :type func: Callable[[], _pytest.runner.TResult]
+        :param when:
+            The phase in which the function is called.
+        :param reraise:
+            Exception or exceptions that shall propagate if raised by the
+            function, instead of being wrapped in the CallInfo.
+        """
+        excinfo = None
+        start = timing.time()
+        precise_start = timing.perf_counter()
+        try:
+>           result: TResult | None = func()
+
+.venv\Lib\site-packages\_pytest\runner.py:341: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\_pytest\runner.py:242: in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+.venv\Lib\site-packages\pluggy\_hooks.py:513: in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+.venv\Lib\site-packages\pluggy\_manager.py:120: in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+.venv\Lib\site-packages\_pytest\threadexception.py:92: in pytest_runtest_call
+    yield from thread_exception_runtest_hook()
+.venv\Lib\site-packages\_pytest\threadexception.py:68: in thread_exception_runtest_hook
+    yield
+.venv\Lib\site-packages\_pytest\unraisableexception.py:95: in pytest_runtest_call
+    yield from unraisable_exception_runtest_hook()
+.venv\Lib\site-packages\_pytest\unraisableexception.py:70: in unraisable_exception_runtest_hook
+    yield
+.venv\Lib\site-packages\_pytest\logging.py:846: in pytest_runtest_call
+    yield from self._runtest_for(item, "call")
+.venv\Lib\site-packages\_pytest\logging.py:829: in _runtest_for
+    yield
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <CaptureManager _method='fd' _global_capturing=<MultiCapture out=<FDCapture 1 oldfd=6 _state='suspended' tmpfile=<_io...._io.TextIOWrapper name='nul' mode='r' encoding='utf-8'>> _state='suspended' _in_suspended=False> _capture_fixture=None>
+item = <Function test_vehicle_entity_data_matches_existing_producer>
+
+    @hookimpl(wrapper=True)
+    def pytest_runtest_call(self, item: Item) -> Generator[None]:
+        with self.item_capture("call", item):
+>           return (yield)
+E           RuntimeError: generator raised StopIteration
+
+.venv\Lib\site-packages\_pytest\capture.py:880: RuntimeError
+_______ test_axle_schema_loader_and_result_artifact_are_self_describing _______
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3326/test_axle_schema_loader_and_re0')
+
+    def test_axle_schema_loader_and_result_artifact_are_self_describing(
+        tmp_path: Path,
+    ) -> None:
+        model = _vertical_slider_model()
+        case = AxleDynamicsCase(
+            name="artifact",
+            times_s=(0.0, 0.001),
+            solver=AxleSolverSettings(internal_step_s=0.00025),
+        )
+        model_path = tmp_path / "model.json"
+        case_path = tmp_path / "case.yaml"
+        model_path.write_text(
+            json.dumps(model.model_dump(mode="json")),
+            encoding="utf-8",
+        )
+        import yaml
+    
+        case_path.write_text(
+            yaml.safe_dump(case.model_dump(mode="json")),
+            encoding="utf-8",
+        )
+        # The SI model loader is retired with the modelling route (G7), so the file
+        # round trip goes through the schema itself; the case loader stays public.
+        loaded_model = AxleDynamicsModel.model_validate(
+            json.loads(model_path.read_text(encoding="utf-8"))
+        )
+        loaded_case = load_axle_dynamics_case(case_path)
+        result = solve_axle(loaded_model, loaded_case)
+        manifest_path = write_artifact(
+            result.envelope,
+            tmp_path / "artifact",
+            model=loaded_model,
+            case=loaded_case,
+        )
+    
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert manifest["status"] == "success"
+        assert len(manifest["model_sha256"]) == 64
+        assert len(manifest["case_sha256"]) == 64
+        for name, columns in (
+            ("body_state", BODY_STATE_COLUMNS), ("diagnostics", DIAGNOSTIC_COLUMNS),
+            ("energy", ENERGY_COLUMNS), ("tire_output", TIRE_OUTPUT_COLUMNS),
+        ):
+>           values = result.envelope.named_blocks[name]
+E           KeyError: 'tire_output'
+
+packages\suspension_multibody\tests\axle_dynamics\test_api.py:427: KeyError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_vehicle_entity_data_matches_existing_producer
+FAILED packages\suspension_multibody\tests\axle_dynamics\test_api.py::test_axle_schema_loader_and_result_artifact_are_self_describing
+2 failed, 50 passed in 8.07s

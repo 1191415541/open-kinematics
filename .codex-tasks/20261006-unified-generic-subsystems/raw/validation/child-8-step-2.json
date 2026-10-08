@@ -1,0 +1,20 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/results/test_measurement_queries.py",
+    "packages/suspension_multibody/tests/results/test_adapters.py",
+    "packages/suspension_multibody/tests/results/test_pad_outputs.py",
+    "packages/suspension_multibody/tests/physics/test_roll_centres_by_topology.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T17:11:27.321270+00:00",
+  "finished_at": "2026-10-06T17:11:30.596373+00:00",
+  "log": "raw\\validation\\child-8-step-2.log",
+  "log_sha256": "5e405ad79b8c34bccf4b0a1f6891f502bf9808f788f916ae0340c14bc4035ac9"
+}

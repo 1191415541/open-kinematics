@@ -1,0 +1,8 @@
+release probe: E:\�Ӽ�\open-kinematics
+scratch      : C:\Users\zzy11\AppData\Local\Temp\suspension-release-u9wabrfe
+
+[FAIL] migration list: retired package(s) still present: ['preparation', 'subsystems']
+[FAIL] documentation roots: documented as retired but present: ['preparation', 'subsystems']
+[PASS] documentation examples: 4 example(s) executed: E-1, E-2, E-3, E-4
+
+FAIL: 2 of 3 release checks failed

@@ -175,7 +175,41 @@ bool contract_expand_case(const JsonValue& document, const std::string& blob,
     case Support::kSupported:
       break;
   }
-  return find_row(*family)->expander(document, blob, model, out, error);
+  if (!find_row(*family)->expander(document, blob, model, out, error)) return false;
+  const JsonValue* inputs = document.find("inputs");
+  const JsonValue* motions = inputs == nullptr ? nullptr : inputs->find("motion");
+  if (motions == nullptr) return true;
+  if (!motions->is_array()) return fail(error, "inputs.motion must be an array");
+  std::vector<bool> controlled(model.driven_count(), false);
+  for (const JsonValue& motion : motions->items) {
+    const std::string* coordinate = motion.find_string("coordinate");
+    const std::string* values = motion.find_string("blob");
+    const std::string* rates = motion.find_string("rate_blob");
+    if (coordinate == nullptr || values == nullptr || rates == nullptr) {
+      return fail(error, "a motion boundary needs coordinate, blob and rate_blob");
+    }
+    const int index = model.driven_index(*coordinate);
+    if (index < 0) return fail(error, "motion names unknown coordinate " + *coordinate);
+    const std::size_t signal = static_cast<std::size_t>(index);
+    if (controlled[signal]) return fail(error, "duplicate motion boundary " + *coordinate);
+    controlled[signal] = true;
+    for (ContractCase& run : out.cases) {
+      std::vector<double> target, rate;
+      if (!case_detail::read_described_array(document, blob, *values, run.sample_count, target, error) ||
+          !case_detail::read_described_array(document, blob, *rates, run.sample_count, rate, error)) return false;
+      const double offset = model.driven_is_rotation(signal) ? 0.0 : model.driven_separation(signal);
+      run.driven_target.resize(run.sample_count * model.driven_count(), 0.0);
+      run.driven_target_rate.resize(run.sample_count * model.driven_count(), 0.0);
+      for (std::size_t sample = 0; sample < run.sample_count; ++sample) {
+        if (!std::isfinite(target[sample]) || !std::isfinite(rate[sample])) {
+          return fail(error, "motion history must be finite");
+        }
+        run.driven_target[sample * model.driven_count() + signal] = target[sample] + offset;
+        run.driven_target_rate[sample * model.driven_count() + signal] = rate[sample];
+      }
+    }
+  }
+  return true;
 }
 
 void contract_apply_solver(const ContractPlan& plan, AxleInput& input) {

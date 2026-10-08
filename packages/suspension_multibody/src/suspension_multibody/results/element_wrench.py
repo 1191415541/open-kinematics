@@ -43,11 +43,24 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Mapping, Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 import numpy as np
 
 from .raw import RawContractResult
+
+
+def _declared_element_names(run: Any) -> Mapping[int, tuple[str, ...]]:
+    """Resolve native wrench type indices to declared stable element IDs."""
+    document = run.model_document or {}
+    types = {1: ("elements", "spring"), 2: ("elements", "bushing"),
+        6: ("tires", ""), 8: ("elements", "damper"),
+        9: ("elements", "bump_stop"), 10: ("elements", "rotational_torque"),
+        11: ("elements", "function")}
+    return MappingProxyType({code: tuple(str(row["name"]) for row in document.get(key, ())
+        if "name" in row and (not kind or row.get("type") == kind
+            or kind == "function" and row.get("type") in {"force", "torque", "wrench"}))
+        for code, (key, kind) in types.items()})
 
 ELEMENT_WRENCH_WIDTH = 13
 """Columns per record: force, moment, type code, point, body a, body b, body."""
@@ -96,6 +109,7 @@ _ELEMENT_WRENCH_TYPES: tuple[tuple[int, str, int], ...] = (
     # code is `kElementWrenchRotationalTorque = 10`).  It applies a pure couple
     # on each end, like the anti-roll bar above, so it has two rows.
     (10, "rotational_torque", 2),
+    (11, "function", 2),
 )
 
 ELEMENT_WRENCH_TYPE_NAMES: Mapping[int, str] = MappingProxyType(

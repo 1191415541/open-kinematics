@@ -1,0 +1,491 @@
+F.F..FFFF.                                                               [100%]
+================================== FAILURES ===================================
+_ test_declared_joint_family_encodes_and_materializes[universal-UniversalJoint] _
+
+kind = 'universal'
+expected = <class 'suspension_multibody.modeling.primitives.joints.UniversalJoint'>
+
+    @pytest.mark.parametrize("kind,expected", [("universal", UniversalJoint), ("cylindrical", CylindricalJoint),
+        ("inplane", InPlaneJoint), ("prismatic", PrismaticJoint), ("fixed", WeldJoint)])
+    def test_declared_joint_family_encodes_and_materializes(kind, expected):
+        payload = _template(elements=[], property_slots=[])
+        payload["joints"][0]["type"] = kind
+>       built = assemble_generic(_assembly({"unit": _subsystem(payload)}))
+
+packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py:17: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1151: in assemble_generic
+    assembler.assemble(
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:495: in assemble
+    self._axes(entry, row, available_bodies, side=side, axis=axis, rotation=mounting.rotation)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+entry = {'body_a': 'unit.support', 'body_b': 'unit.carriage', 'name': 'unit.guide', 'point_a': [0.0, 0.0, 0.0], ...}
+row = {'axis': [0.0, 0.0, 1.0], 'body_a': 'support', 'body_b': 'carriage', 'name': 'guide', ...}
+bodies = {'unit.carriage': RigidBody(name='unit.carriage', pose=SE3(translation=array([0.        , 0.        , 0.24019335]), qu...ertia=array([[1., 0., 0.],
+       [0., 1., 0.],
+       [0., 0., 1.]]), center_of_mass=array([0., 0., 0.]), fixed=True)}
+
+    @staticmethod
+    def _axes(
+        entry: dict[str, Any],
+        row: Mapping[str, Any],
+        bodies: Mapping[str, RigidBody],
+        *,
+        side: str = "",
+        axis: Any = None,
+        rotation: np.ndarray | None = None,
+    ) -> None:
+        if axis is None:
+            axis = row.get("axis")
+        if axis is None:
+            raise AuthoringError(
+                f"joint {entry['name']!r} needs axis or axis_reference"
+            )
+        a = _unit_axis(axis, entry["name"])
+        if row.get("axis_space") == "body":
+            for end, declared in (("a", axis), ("b", row.get("axis_b", axis))):
+                vector = _unit_axis(declared, entry["name"])
+                if side == "R":
+                    vector = (-1 if entry["type"] in _AXIAL_JOINTS else 1)*_MIRROR @ vector
+                entry["axis_"+end] = vector.tolist()
+            return
+        if entry["type"] == "universal" and "axis_b" not in row:
+>           raise AuthoringError(f"universal joint {entry['name']!r} needs axis_b")
+E           suspension_multibody.authoring.errors.AuthoringError: universal joint 'unit.guide' needs axis_b
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:918: AuthoringError
+__ test_declared_joint_family_encodes_and_materializes[inplane-InPlaneJoint] __
+
+row = {'axis_a': [0.0, 0.0, 1.0], 'axis_b': [0.0, 0.0, 1.0], 'body_a': 'unit.support', 'body_b': 'unit.carriage', ...}
+
+    def joint_from_data(row: Mapping[str, Any]) -> Constraint:
+        """Create a joint from resolved body-local endpoints and axes."""
+        kind = str(row["type"])
+        constructors = {
+            "spherical": BallJoint,
+            "fixed": WeldJoint,
+            "revolute": RevoluteJoint,
+            "prismatic": PrismaticJoint,
+            "universal": UniversalJoint,
+            "cylindrical": CylindricalJoint,
+        }
+        try:
+>           constructor = constructors[kind]
+E           KeyError: 'inplane'
+
+packages\suspension_multibody\src\suspension_multibody\modeling\primitives\factory.py:49: KeyError
+
+The above exception was the direct cause of the following exception:
+
+kind = 'inplane'
+expected = <class 'suspension_multibody.modeling.primitives.joints.InPlaneJoint'>
+
+    @pytest.mark.parametrize("kind,expected", [("universal", UniversalJoint), ("cylindrical", CylindricalJoint),
+        ("inplane", InPlaneJoint), ("prismatic", PrismaticJoint), ("fixed", WeldJoint)])
+    def test_declared_joint_family_encodes_and_materializes(kind, expected):
+        payload = _template(elements=[], property_slots=[])
+        payload["joints"][0]["type"] = kind
+        built = assemble_generic(_assembly({"unit": _subsystem(payload)}))
+        row = built.joints[0]
+        assert row["type"] == kind
+>       assert isinstance(GenericSubsystemAssembler.materialize_joint(row), expected)
+
+packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py:20: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:261: in materialize_joint
+    return joint_from_data(row)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+row = {'axis_a': [0.0, 0.0, 1.0], 'axis_b': [0.0, 0.0, 1.0], 'body_a': 'unit.support', 'body_b': 'unit.carriage', ...}
+
+    def joint_from_data(row: Mapping[str, Any]) -> Constraint:
+        """Create a joint from resolved body-local endpoints and axes."""
+        kind = str(row["type"])
+        constructors = {
+            "spherical": BallJoint,
+            "fixed": WeldJoint,
+            "revolute": RevoluteJoint,
+            "prismatic": PrismaticJoint,
+            "universal": UniversalJoint,
+            "cylindrical": CylindricalJoint,
+        }
+        try:
+            constructor = constructors[kind]
+        except KeyError as exc:
+>           raise ValueError(f"unsupported ideal joint kind {kind!r}") from exc
+E           ValueError: unsupported ideal joint kind 'inplane'
+
+packages\suspension_multibody\src\suspension_multibody\modeling\primitives\factory.py:51: ValueError
+___________ test_body_names_do_not_create_a_hidden_rack_guide[rack] ___________
+
+name = 'rack'
+
+    @pytest.mark.parametrize("name", ["rack", "rack_housing", "upright", "arbitrary_body"])
+    def test_body_names_do_not_create_a_hidden_rack_guide(name):
+        payload = _template(bodies=[{"name": name, "mass": 10}], hardpoints=[], joints=[], elements=[], ports=[], property_slots=[])
+>       built = assemble_generic(_assembly({"unit": _subsystem(payload)}))
+
+packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\authoring\test_generic_multibody.py:120: in _subsystem
+    return SubsystemDocument.from_payload(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+cls = <class 'suspension_multibody.authoring.documents.SubsystemDocument'>
+payload = {'document': 'subsystem', 'functional_role': 'generic', 'hardpoints': {'base': [0.0, 0.0, 0.0], 'mount': [0.0, 0.0, 0.24019335]}, 'name': 'slider', ...}
+
+    @classmethod
+    def from_payload(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        path: Path | None = None,
+        template: TemplateDocument | None = None,
+        resolve: "Callable[[str], TemplateDocument] | None" = None,
+        properties: "Mapping[str, ElementPropertyDocument] | None" = None,
+    ) -> "SubsystemDocument":
+        """
+        Build a subsystem from a declaration plus the template it is written for.
+    
+        A subsystem names its template, and there are three ways that name can be
+        answered, in the order a caller is likely to have them: the template
+        object itself (in-memory assembly), a ``resolve`` callback (a project that
+        knows its own file layout), or the reference read relative to ``path``
+        (the file route).  The template is *supplied*, never inferred, because a
+        subsystem whose template cannot be answered is exactly the file the
+        document layer exists to refuse.
+        """
+        where = _where(path, str(payload.get("name", "?")))
+        declared = _document_payload(payload, where)
+        _check_contract(declared, where, validate_subsystem)
+        _check_role(
+            str(declared["functional_role"]), str(declared["placement_role"]), where
+        )
+        resolved_template = template
+        if resolved_template is None:
+            reference = str(declared["template"])
+            if resolve is not None:
+                resolved_template = resolve(reference)
+            elif path is not None:
+                resolved_template = TemplateDocument.load(path.parent / reference)
+            else:
+                raise AuthoringError(
+                    f"{where}: names template {reference!r}, and this subsystem has "
+                    "neither a file to resolve it against nor a template object; "
+                    "pass template= or resolve= to build it in memory"
+                )
+        if str(declared["functional_role"]) != resolved_template.functional_role:
+            raise AuthoringError(
+                f"{where}: functional_role {declared['functional_role']!r} disagrees "
+                f"with template {resolved_template.name!r} of role "
+                f"{resolved_template.functional_role!r}"
+            )
+        placement = str(declared["placement_role"])
+        if placement not in resolved_template.allowed_placement_roles:
+            raise AuthoringError(
+                f"{where}: placement_role {placement!r} is not allowed by template "
+                f"{resolved_template.name!r}, which allows "
+                f"{sorted(resolved_template.allowed_placement_roles)}"
+            )
+        missing_points = sorted(
+            resolved_template.hardpoint_names - set(declared["hardpoints"])
+        )
+        if missing_points:
+            raise AuthoringError(
+                f"{where}: template {resolved_template.name!r} declares hardpoint(s) "
+                f"{missing_points} that this subsystem does not place; every declared "
+                "hardpoint needs a coordinate"
+            )
+        unknown_points = sorted(
+            set(declared["hardpoints"]) - resolved_template.hardpoint_names
+        )
+        if unknown_points:
+>           raise AuthoringError(
+                f"{where}: unknown hardpoint(s) {unknown_points}; a subsystem may only "
+                "place the hardpoints its template declares"
+            )
+E           suspension_multibody.authoring.errors.AuthoringError: <memory:slider>: unknown hardpoint(s) ['base', 'mount']; a subsystem may only place the hardpoints its template declares
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:856: AuthoringError
+_______ test_body_names_do_not_create_a_hidden_rack_guide[rack_housing] _______
+
+name = 'rack_housing'
+
+    @pytest.mark.parametrize("name", ["rack", "rack_housing", "upright", "arbitrary_body"])
+    def test_body_names_do_not_create_a_hidden_rack_guide(name):
+        payload = _template(bodies=[{"name": name, "mass": 10}], hardpoints=[], joints=[], elements=[], ports=[], property_slots=[])
+>       built = assemble_generic(_assembly({"unit": _subsystem(payload)}))
+
+packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\authoring\test_generic_multibody.py:120: in _subsystem
+    return SubsystemDocument.from_payload(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+cls = <class 'suspension_multibody.authoring.documents.SubsystemDocument'>
+payload = {'document': 'subsystem', 'functional_role': 'generic', 'hardpoints': {'base': [0.0, 0.0, 0.0], 'mount': [0.0, 0.0, 0.24019335]}, 'name': 'slider', ...}
+
+    @classmethod
+    def from_payload(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        path: Path | None = None,
+        template: TemplateDocument | None = None,
+        resolve: "Callable[[str], TemplateDocument] | None" = None,
+        properties: "Mapping[str, ElementPropertyDocument] | None" = None,
+    ) -> "SubsystemDocument":
+        """
+        Build a subsystem from a declaration plus the template it is written for.
+    
+        A subsystem names its template, and there are three ways that name can be
+        answered, in the order a caller is likely to have them: the template
+        object itself (in-memory assembly), a ``resolve`` callback (a project that
+        knows its own file layout), or the reference read relative to ``path``
+        (the file route).  The template is *supplied*, never inferred, because a
+        subsystem whose template cannot be answered is exactly the file the
+        document layer exists to refuse.
+        """
+        where = _where(path, str(payload.get("name", "?")))
+        declared = _document_payload(payload, where)
+        _check_contract(declared, where, validate_subsystem)
+        _check_role(
+            str(declared["functional_role"]), str(declared["placement_role"]), where
+        )
+        resolved_template = template
+        if resolved_template is None:
+            reference = str(declared["template"])
+            if resolve is not None:
+                resolved_template = resolve(reference)
+            elif path is not None:
+                resolved_template = TemplateDocument.load(path.parent / reference)
+            else:
+                raise AuthoringError(
+                    f"{where}: names template {reference!r}, and this subsystem has "
+                    "neither a file to resolve it against nor a template object; "
+                    "pass template= or resolve= to build it in memory"
+                )
+        if str(declared["functional_role"]) != resolved_template.functional_role:
+            raise AuthoringError(
+                f"{where}: functional_role {declared['functional_role']!r} disagrees "
+                f"with template {resolved_template.name!r} of role "
+                f"{resolved_template.functional_role!r}"
+            )
+        placement = str(declared["placement_role"])
+        if placement not in resolved_template.allowed_placement_roles:
+            raise AuthoringError(
+                f"{where}: placement_role {placement!r} is not allowed by template "
+                f"{resolved_template.name!r}, which allows "
+                f"{sorted(resolved_template.allowed_placement_roles)}"
+            )
+        missing_points = sorted(
+            resolved_template.hardpoint_names - set(declared["hardpoints"])
+        )
+        if missing_points:
+            raise AuthoringError(
+                f"{where}: template {resolved_template.name!r} declares hardpoint(s) "
+                f"{missing_points} that this subsystem does not place; every declared "
+                "hardpoint needs a coordinate"
+            )
+        unknown_points = sorted(
+            set(declared["hardpoints"]) - resolved_template.hardpoint_names
+        )
+        if unknown_points:
+>           raise AuthoringError(
+                f"{where}: unknown hardpoint(s) {unknown_points}; a subsystem may only "
+                "place the hardpoints its template declares"
+            )
+E           suspension_multibody.authoring.errors.AuthoringError: <memory:slider>: unknown hardpoint(s) ['base', 'mount']; a subsystem may only place the hardpoints its template declares
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:856: AuthoringError
+_________ test_body_names_do_not_create_a_hidden_rack_guide[upright] __________
+
+name = 'upright'
+
+    @pytest.mark.parametrize("name", ["rack", "rack_housing", "upright", "arbitrary_body"])
+    def test_body_names_do_not_create_a_hidden_rack_guide(name):
+        payload = _template(bodies=[{"name": name, "mass": 10}], hardpoints=[], joints=[], elements=[], ports=[], property_slots=[])
+>       built = assemble_generic(_assembly({"unit": _subsystem(payload)}))
+
+packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\authoring\test_generic_multibody.py:120: in _subsystem
+    return SubsystemDocument.from_payload(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+cls = <class 'suspension_multibody.authoring.documents.SubsystemDocument'>
+payload = {'document': 'subsystem', 'functional_role': 'generic', 'hardpoints': {'base': [0.0, 0.0, 0.0], 'mount': [0.0, 0.0, 0.24019335]}, 'name': 'slider', ...}
+
+    @classmethod
+    def from_payload(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        path: Path | None = None,
+        template: TemplateDocument | None = None,
+        resolve: "Callable[[str], TemplateDocument] | None" = None,
+        properties: "Mapping[str, ElementPropertyDocument] | None" = None,
+    ) -> "SubsystemDocument":
+        """
+        Build a subsystem from a declaration plus the template it is written for.
+    
+        A subsystem names its template, and there are three ways that name can be
+        answered, in the order a caller is likely to have them: the template
+        object itself (in-memory assembly), a ``resolve`` callback (a project that
+        knows its own file layout), or the reference read relative to ``path``
+        (the file route).  The template is *supplied*, never inferred, because a
+        subsystem whose template cannot be answered is exactly the file the
+        document layer exists to refuse.
+        """
+        where = _where(path, str(payload.get("name", "?")))
+        declared = _document_payload(payload, where)
+        _check_contract(declared, where, validate_subsystem)
+        _check_role(
+            str(declared["functional_role"]), str(declared["placement_role"]), where
+        )
+        resolved_template = template
+        if resolved_template is None:
+            reference = str(declared["template"])
+            if resolve is not None:
+                resolved_template = resolve(reference)
+            elif path is not None:
+                resolved_template = TemplateDocument.load(path.parent / reference)
+            else:
+                raise AuthoringError(
+                    f"{where}: names template {reference!r}, and this subsystem has "
+                    "neither a file to resolve it against nor a template object; "
+                    "pass template= or resolve= to build it in memory"
+                )
+        if str(declared["functional_role"]) != resolved_template.functional_role:
+            raise AuthoringError(
+                f"{where}: functional_role {declared['functional_role']!r} disagrees "
+                f"with template {resolved_template.name!r} of role "
+                f"{resolved_template.functional_role!r}"
+            )
+        placement = str(declared["placement_role"])
+        if placement not in resolved_template.allowed_placement_roles:
+            raise AuthoringError(
+                f"{where}: placement_role {placement!r} is not allowed by template "
+                f"{resolved_template.name!r}, which allows "
+                f"{sorted(resolved_template.allowed_placement_roles)}"
+            )
+        missing_points = sorted(
+            resolved_template.hardpoint_names - set(declared["hardpoints"])
+        )
+        if missing_points:
+            raise AuthoringError(
+                f"{where}: template {resolved_template.name!r} declares hardpoint(s) "
+                f"{missing_points} that this subsystem does not place; every declared "
+                "hardpoint needs a coordinate"
+            )
+        unknown_points = sorted(
+            set(declared["hardpoints"]) - resolved_template.hardpoint_names
+        )
+        if unknown_points:
+>           raise AuthoringError(
+                f"{where}: unknown hardpoint(s) {unknown_points}; a subsystem may only "
+                "place the hardpoints its template declares"
+            )
+E           suspension_multibody.authoring.errors.AuthoringError: <memory:slider>: unknown hardpoint(s) ['base', 'mount']; a subsystem may only place the hardpoints its template declares
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:856: AuthoringError
+______ test_body_names_do_not_create_a_hidden_rack_guide[arbitrary_body] ______
+
+name = 'arbitrary_body'
+
+    @pytest.mark.parametrize("name", ["rack", "rack_housing", "upright", "arbitrary_body"])
+    def test_body_names_do_not_create_a_hidden_rack_guide(name):
+        payload = _template(bodies=[{"name": name, "mass": 10}], hardpoints=[], joints=[], elements=[], ports=[], property_slots=[])
+>       built = assemble_generic(_assembly({"unit": _subsystem(payload)}))
+
+packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\authoring\test_generic_multibody.py:120: in _subsystem
+    return SubsystemDocument.from_payload(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+cls = <class 'suspension_multibody.authoring.documents.SubsystemDocument'>
+payload = {'document': 'subsystem', 'functional_role': 'generic', 'hardpoints': {'base': [0.0, 0.0, 0.0], 'mount': [0.0, 0.0, 0.24019335]}, 'name': 'slider', ...}
+
+    @classmethod
+    def from_payload(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        path: Path | None = None,
+        template: TemplateDocument | None = None,
+        resolve: "Callable[[str], TemplateDocument] | None" = None,
+        properties: "Mapping[str, ElementPropertyDocument] | None" = None,
+    ) -> "SubsystemDocument":
+        """
+        Build a subsystem from a declaration plus the template it is written for.
+    
+        A subsystem names its template, and there are three ways that name can be
+        answered, in the order a caller is likely to have them: the template
+        object itself (in-memory assembly), a ``resolve`` callback (a project that
+        knows its own file layout), or the reference read relative to ``path``
+        (the file route).  The template is *supplied*, never inferred, because a
+        subsystem whose template cannot be answered is exactly the file the
+        document layer exists to refuse.
+        """
+        where = _where(path, str(payload.get("name", "?")))
+        declared = _document_payload(payload, where)
+        _check_contract(declared, where, validate_subsystem)
+        _check_role(
+            str(declared["functional_role"]), str(declared["placement_role"]), where
+        )
+        resolved_template = template
+        if resolved_template is None:
+            reference = str(declared["template"])
+            if resolve is not None:
+                resolved_template = resolve(reference)
+            elif path is not None:
+                resolved_template = TemplateDocument.load(path.parent / reference)
+            else:
+                raise AuthoringError(
+                    f"{where}: names template {reference!r}, and this subsystem has "
+                    "neither a file to resolve it against nor a template object; "
+                    "pass template= or resolve= to build it in memory"
+                )
+        if str(declared["functional_role"]) != resolved_template.functional_role:
+            raise AuthoringError(
+                f"{where}: functional_role {declared['functional_role']!r} disagrees "
+                f"with template {resolved_template.name!r} of role "
+                f"{resolved_template.functional_role!r}"
+            )
+        placement = str(declared["placement_role"])
+        if placement not in resolved_template.allowed_placement_roles:
+            raise AuthoringError(
+                f"{where}: placement_role {placement!r} is not allowed by template "
+                f"{resolved_template.name!r}, which allows "
+                f"{sorted(resolved_template.allowed_placement_roles)}"
+            )
+        missing_points = sorted(
+            resolved_template.hardpoint_names - set(declared["hardpoints"])
+        )
+        if missing_points:
+            raise AuthoringError(
+                f"{where}: template {resolved_template.name!r} declares hardpoint(s) "
+                f"{missing_points} that this subsystem does not place; every declared "
+                "hardpoint needs a coordinate"
+            )
+        unknown_points = sorted(
+            set(declared["hardpoints"]) - resolved_template.hardpoint_names
+        )
+        if unknown_points:
+>           raise AuthoringError(
+                f"{where}: unknown hardpoint(s) {unknown_points}; a subsystem may only "
+                "place the hardpoints its template declares"
+            )
+E           suspension_multibody.authoring.errors.AuthoringError: <memory:slider>: unknown hardpoint(s) ['base', 'mount']; a subsystem may only place the hardpoints its template declares
+
+packages\suspension_multibody\src\suspension_multibody\authoring\documents.py:856: AuthoringError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py::test_declared_joint_family_encodes_and_materializes[universal-UniversalJoint]
+FAILED packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py::test_declared_joint_family_encodes_and_materializes[inplane-InPlaneJoint]
+FAILED packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py::test_body_names_do_not_create_a_hidden_rack_guide[rack]
+FAILED packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py::test_body_names_do_not_create_a_hidden_rack_guide[rack_housing]
+FAILED packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py::test_body_names_do_not_create_a_hidden_rack_guide[upright]
+FAILED packages\suspension_multibody\tests\subsystems\test_explicit_in_composition.py::test_body_names_do_not_create_a_hidden_rack_guide[arbitrary_body]
+6 failed, 4 passed in 2.15s

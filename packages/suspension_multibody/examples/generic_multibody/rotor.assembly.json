@@ -1,0 +1,5 @@
+{
+  "document": "assembly", "schema_version": 1, "name": "rotor_bench",
+  "assembly_kind": "generic_multibody", "gravity": [0, 0, 0],
+  "subsystems": [{"ref": "rotor.sub.json", "functional_role": "generic", "placement_role": "any"}]
+}

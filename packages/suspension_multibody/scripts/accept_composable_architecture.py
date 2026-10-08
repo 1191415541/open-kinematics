@@ -41,6 +41,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from suspension_multibody.results.envelope import ResultEnvelope
+
 ROOT = Path(__file__).resolve().parents[3]
 PACKAGE_ROOT = ROOT / "packages" / "suspension_multibody"
 SOURCE_ROOT = PACKAGE_ROOT / "src" / "suspension_multibody"
@@ -154,7 +156,7 @@ def _benchmark_payload() -> dict[str, Any]:
 
 def _benchmark_model(*, massed: bool = False):
     """Return the shared benchmark axle as a model, optionally with inertia."""
-    from suspension_multibody.schema import FrontAxleModel
+    from suspension_multibody.schema.model import AxleDeclaration
 
     raw = dict(_benchmark_payload())
     if massed:
@@ -166,7 +168,7 @@ def _benchmark_model(*, massed: bool = False):
         raw["bodies"] = [
             {"name": name, "mass": 100.0, "inertia": inertia} for name in names
         ]
-    return FrontAxleModel.model_validate(raw)
+    return AxleDeclaration.model_validate(raw)
 
 
 def probe_a1() -> Outcome:
@@ -284,30 +286,17 @@ def probe_a2() -> Outcome:
     evidence.
     """
     outcome = Outcome("A2", "a new topology solves in both readings")
-    from suspension_contracts import pack_container
+    import numpy as np
 
-    from suspension_multibody import api
-    from suspension_multibody.axle_dynamics.schema import (
-        AxleDynamicsCase,
-        AxleSolverSettings,
+    from suspension_multibody.api import simulate, validate
+    from suspension_multibody.authoring.migration import (
+        migrate_v1_axle,
+        migrate_v1_kc_case,
     )
-    from suspension_multibody.compilation import KcStudyInputs, compile_plan, plan_for
-    from suspension_multibody.schema import (
-        CaseSpec,
-        DisplacementControl,
-        FrontAxleModel,
-    )
+    from suspension_multibody.compilation.resolved import compile_resolved
+    from suspension_multibody.modeling.resolved import ResolvedSolvePlan
+    from suspension_multibody.schema.model import AxleDeclaration
     from suspension_multibody.simulation import run_compiled
-    from suspension_multibody.simulation.request import (
-        CompiledSimulation,
-        SimulationRequest,
-    )
-    from suspension_multibody.studies import (
-        DYNAMIC,
-        axle_dynamics_model,
-        build_study_assembly,
-    )
-    from suspension_multibody.subsystems.entry import compose_axle
 
     fixture = json.loads(
         (PACKAGE_ROOT / "tests" / "data" / "composable"
@@ -315,16 +304,23 @@ def probe_a2() -> Outcome:
     )
     if fixture.get("_synthetic") is not True:
         outcome.problems.append("the synthetic fixture is not marked _synthetic")
-    synthetic = FrontAxleModel.model_validate(fixture["model"])
+    synthetic = AxleDeclaration.model_validate(fixture["model"])
     wishbone = _benchmark_model()
 
     # The graph difference, asserted rather than assumed.
-    synthetic_assembly = compose_axle(synthetic, "K")
-    wishbone_assembly = compose_axle(wishbone, "K")
-    synthetic_count = len(synthetic_assembly.constraints)
-    wishbone_count = len(wishbone_assembly.constraints)
-    kinds = {type(c).__name__ for c in synthetic_assembly.constraints}
-    if (synthetic_count, wishbone_count, kinds) != (2, 13, {"RevoluteJoint"}):
+    synthetic_document = migrate_v1_axle(synthetic)
+    wishbone_document = migrate_v1_axle(wishbone)
+    neutral = {"schema_version": 1, "name": "topology", "study": "dynamic",
+        "samples": [0, .001], "solver": {}, "boundaries": [], "inputs": [], "outputs": []}
+    synthetic_assembly = validate(synthetic_document, neutral).request.model
+    wishbone_assembly = validate(wishbone_document, neutral).request.model
+    synthetic_joints = synthetic_assembly.to_document()["joints"]
+    wishbone_joints = wishbone_assembly.to_document()["joints"]
+    synthetic_count = len(synthetic_joints)
+    # The two explicitly declared wheel bearings supplement the old 13-row graph.
+    wishbone_count = len(wishbone_joints)
+    kinds = {row["type"] for row in synthetic_joints}
+    if (synthetic_count, wishbone_count, kinds) != (2, 16, {"revolute"}):
         outcome.problems.append(
             f"the graph is not the documented difference: "
             f"{synthetic_count} vs {wishbone_count} constraints, kinds {kinds}"
@@ -338,14 +334,12 @@ def probe_a2() -> Outcome:
     # independently derived rotation.
     expected = fixture["expected"]
     travels = tuple(expected["wheel_travel_mm"])
-    bundle = api.run_case(
-        synthetic,
-        CaseSpec(
-            mode="K",
-            controls=(DisplacementControl(target="wheel_travel_left", values=travels),),
-        ),
-    )
-    solved = [state.metrics["left_wheel_center_z"] for state in bundle.states]
+    assembly, case = migrate_v1_kc_case(synthetic, mode="K", wheel_values_mm=travels,
+        drive_mode="kinematics")
+    run = simulate(assembly, case.to_payload())
+    assert isinstance(run.result, ResultEnvelope)
+    solved = [float(run.result.frame_pose("wheel.sub.json.wheel_center_L")[
+        run.result.case_samples(index).stop-1, 2, 3])*1000 for index in range(len(run.result.cases))]
     slope = float(expected["wheel_centre_dz_per_radian_mm"])
     pivot = next(
         joint for joint in synthetic.joints if joint.name.startswith("arm_pivot")
@@ -370,58 +364,29 @@ def probe_a2() -> Outcome:
             f"quasi-static wheel-centre height differs from the derived rotation "
             f"by {worst:.4f} mm"
         )
-    if not all(state.converged for state in bundle.states):
+    if run.status != "success":
         outcome.problems.append("a quasi-static state did not converge")
     outcome.evidence.append(
-        f"quasi-static: {len(bundle.states)} states converged, worst deviation from "
+        f"quasi-static: {len(run.result.cases)} states converged, worst deviation from "
         f"the derived rotation {worst:.4f} mm"
     )
 
     # The dynamic reading, solved for real.  The static initialisation of this
     # assembly needs more Newton iterations than the default, which is a solver
     # setting and not a model change.
-    study_assembly = build_study_assembly(synthetic_assembly, study=DYNAMIC, mode="K")
-    dynamic_model = axle_dynamics_model(study_assembly, name="trailing-arm")
-    case = AxleDynamicsCase(
-        name="acceptance",
-        times_s=(0.0, 1e-3, 2e-3),
-        solver=AxleSolverSettings(max_newton_iterations=100),
-    )
-    plan = plan_for(
-        "axle_dynamic",
-        mode="K",
-        inputs=KcStudyInputs(name="acceptance", wheel_values_mm=(0.0,), rack_values_mm=(0.0,)),
-        dynamic_model=dynamic_model,
-        dynamic_case=case,
-    )
-    model_document, case_document, model_blob, case_blob, metadata = compile_plan(
-        plan, synthetic_assembly
-    )
-    run = run_compiled(
-        CompiledSimulation(
-            request=SimulationRequest(
-                assembly="axle", rig="axle_dynamic", family=plan.family,
-                study=plan.study, model=synthetic_assembly, case=case_document,
-                name="acceptance",
-            ),
-            model_document=model_document,
-            case_document=case_document,
-            model_payload=model_blob or pack_container(model_document),
-            case_payload=case_blob or pack_container(case_document),
-            metadata=metadata,
-        )
-    )
+    plan = ResolvedSolvePlan({**neutral, "name": "trailing-arm", "protocol": "axle_dynamic",
+        "samples": [0, .001, .002], "solver": {"max_newton_iterations": 100}})
+    run = run_compiled(compile_resolved(synthetic_assembly, plan))
+    assert isinstance(run.result, ResultEnvelope)
     states = run.raw.states
     if run.status != "success" or states.size == 0:
         outcome.problems.append(
             f"the dynamic reading did not solve: {run.status} {run.raw.failure_evidence}"
         )
     else:
-        import numpy as np
-
         if not bool(np.isfinite(states).all()):
             outcome.problems.append("the dynamic state is not finite")
-        body = run.raw.body_names.index("upright_L")
+        body = run.result.body_ids.index("wheel.sub.json.upright_L")
         outcome.evidence.append(
             f"dynamic: {len(run.raw.cases)} case(s), {states.shape[0]} samples, "
             f"upright_L z {states[-1, body, 2]:.6f} m, finite "
@@ -445,23 +410,21 @@ def probe_a3() -> Outcome:
     import hashlib
 
     from suspension_multibody import api
-    from suspension_multibody.rigs import (
-        bench_capability,
-        build_rig_fragment,
-        rig_ports,
+    from suspension_multibody.authoring import (
+        AssemblyDocument,
+        SubsystemDocument,
+        TemplateDocument,
     )
-    from suspension_multibody.schema import CaseSpec, MassSpec
+    from suspension_multibody.authoring.properties import ElementPropertyDocument
 
     core = (
-        "cases/kc_quasi_static/contract.py",
-        "compilation/compile.py",
-        "compilation/plan.py",
-        "simulation/compiler.py",
+        "authoring/loader.py",
+        "authoring/generic.py",
+        "compilation/resolved.py",
+        "compilation/motion.py",
         "simulation/runner.py",
-        "simulation/dispatch.py",
-        "rigs/compose.py",
-        "modeling/assembly.py",
-        "subsystems/composition.py",
+        "modeling/resolved.py",
+        "results/envelope.py",
     )
 
     def digests() -> dict[str, str]:
@@ -491,71 +454,69 @@ def probe_a3() -> Outcome:
         f"{len(forces)} forces"
     )
 
-    # A vehicle-loading bench must not create wheels: the vehicle owns them.
     before = digests()
-    wheel_fragment = build_rig_fragment("kc_quasi_static")
-    vehicle_fragment = build_rig_fragment("vehicle_kc")
-    if bench_capability("kc_quasi_static") != "wheel_supplying":
-        outcome.problems.append("the K&C bench is not wheel-supplying")
-    if wheel_fragment.tires == {} or len(wheel_fragment.bodies) != 3:
-        outcome.problems.append(
-            f"the wheel-supplying bench emitted {sorted(wheel_fragment.bodies)} and "
-            f"{len(wheel_fragment.tires)} tires"
-        )
-    if vehicle_fragment.tires != {}:
-        outcome.problems.append("a vehicle-loading bench created tires")
-    if len(rig_ports("kc_quasi_static")) != 2:
-        outcome.problems.append("the K&C bench does not offer two wheel-centre ports")
-    outcome.evidence.append(
-        f"capability branch: wheel-supplying {sorted(wheel_fragment.bodies)}, "
-        f"vehicle-loading {sorted(vehicle_fragment.bodies)}"
-    )
-
-    # The bench's own force elements reach the solver and carry a load.
-    model = _benchmark_model()
-    spring = next(item for item in bench["forces"] if item["kind"] == "spring")
-    from suspension_multibody.schema import (
-        FrontAxleModel,
-        LinearSpring,
-        StaticDamper,
-        Vec3,
-    )
-
-    damper = next(item for item in bench["forces"] if item["kind"] == "damper")
-    loaded = FrontAxleModel(
-        name=model.name,
-        hardpoints=dict(model.hardpoints),
-        mass=MassSpec(sprung_mass=600.0),
-        springs=(
-            LinearSpring(
-                name=spring["name"], body_a="chassis", body_b="lower_arm_L",
-                point_a=Vec3(x=0.0, y=-600.0, z=100.0),
-                point_b=Vec3(x=0.0, y=-600.0, z=400.0),
-                stiffness=spring["stiffness_n_per_m"] / 1000.0, free_length=250.0,
-            ),
-        ),
-        dampers=(
-            StaticDamper(
-                name=damper["name"], body_a="chassis", body_b="lower_arm_L",
-                point_a=Vec3(x=0.0, y=-600.0, z=100.0),
-                point_b=Vec3(x=0.0, y=-600.0, z=400.0),
-                viscous_damping=damper["viscous_damping_n_s_per_m"],
-            ),
-        ),
-    )
-    bundle = api.run_case(loaded, CaseSpec(mode="K"))
-    components = {load.component for load in bundle.component_loads}
-    names = {f"{spring['name']}_L", f"{spring['name']}_R"}
-    if not names <= components:
-        outcome.problems.append(f"the bench spring is absent from the component table: {components}")
+    points, rows, elements = {}, [], []
+    for item in (*bench["joints"], *bench["forces"]):
+        row = {"name": item["name"], "type": item["kind"],
+            "body_a": item["body_a"], "body_b": item["body_b"]}
+        for end in ("a", "b"):
+            key = item["name"]+"_"+end
+            points[key] = item["point_"+end+"_m"]
+            rows.append({"name": key, "owner": item["body_"+end], "space": "body"})
+            row["point_"+end] = key
+        if item in bench["joints"]:
+            row.update(axis=item["axis_a"], axis_b=item["axis_b"], axis_space="body")
+        else:
+            row["parameters"] = ({"stiffness": item["stiffness_n_per_m"], "free_length": item["free_length_m"]}
+                if item["kind"] == "spring" else {"viscous_damping": item["viscous_damping_n_s_per_m"]})
+            row["property_slot"] = item["name"]
+            elements.append(row)
+            continue
+        bench.setdefault("declared_joints", []).append(row)
+    rows.extend([{"name": "origin", "owner": "bench_frame", "space": "body"},
+        {"name": "input", "owner": "load_carriage", "space": "body"}])
+    points.update(origin=[0, 0, 0], input=[0, 0, 0])
+    joints = bench["declared_joints"] + [{"name": "motion_load_travel", "type": "driven_translation",
+        "body_a": "load_carriage", "body_b": "bench_frame", "point_a": "input", "point_b": "origin",
+        "axis": [0, 0, 1], "axis_b": [0, 0, 1], "axis_space": "body", "target": "load_travel"}]
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+        "name": "loading_bench", "functional_role": "generic", "allowed_placement_roles": ["any"],
+        "symmetry": "asymmetric", "units": {"length": "m"},
+        "bodies": [{"name": item["name"], "fixed": item["fixed"], "mass": item["mass"],
+            "inertia": item["inertia"], "position": item["position_m"], "quaternion": item["quaternion"]}
+            for item in bench["bodies"]], "hardpoints": rows, "joints": joints,
+        "elements": elements, "ports": [], "property_slots": [
+            {"name": item["name"], "element_type": item["kind"], "required": True}
+            for item in bench["forces"]]})
+    subsystem = SubsystemDocument.from_payload({"document": "subsystem", "schema_version": 1,
+        "name": "loading_bench", "template": "bench.tpl", "functional_role": "generic",
+        "placement_role": "any", "hardpoints": points,
+        "property_bindings": {item["name"]: item["name"] for item in bench["forces"]}}, template=template,
+        properties={item["name"]: ElementPropertyDocument.from_payload({
+            "document": "element_properties", "schema_version": 1, "name": item["name"],
+            "element_type": item["kind"], "model": "linear", "units": {"length": "m", "force": "N"},
+            "parameters": ({"stiffness": item["stiffness_n_per_m"], "free_length": item["free_length_m"]}
+                if item["kind"] == "spring" else {"viscous_damping": item["viscous_damping_n_s_per_m"]})
+        }) for item in bench["forces"]})
+    assembly = AssemblyDocument.from_payload({"document": "assembly", "schema_version": 1,
+        "name": "bench_extension", "assembly_kind": "generic_multibody", "gravity": [0, 0, 0],
+        "subsystems": [{"ref": "bench", "functional_role": "generic", "placement_role": "any"}]},
+        subsystems={"bench": subsystem})
+    case = {"schema_version": 1, "name": "loading", "study": "quasi_static", "protocol": "kc_quasi_static",
+        "samples": [0, .001], "solver": {}, "inputs": [], "outputs": [], "boundaries": [],
+        "excitation": {"drive_mode": "force_balance", "k": {"axes": [{"coordinate": "bench.load_travel", "values_mm": [10.0]}]}}}
+    run = api.simulate(assembly, case)
+    if run.status != "success":
+        outcome.problems.append(f"the bench solve failed: {run.result.failure_evidence}")
     else:
-        entry = next(load for load in bundle.component_loads if load.component == f"{spring['name']}_L")
-        if not any(value != 0.0 for value in entry.global_load.as_tuple()):
-            outcome.problems.append("the bench spring reports an all-zero wrench")
-        outcome.evidence.append(
-            f"the bench spring reaches the solve and carries "
-            f"{entry.global_load.as_tuple()}"
-        )
+        import numpy as np
+
+        force = run.result.element_wrench("bench.bench_spring", body_id="bench.load_carriage").force
+        if not np.allclose(np.linalg.norm(force, axis=1), declared["spring_force_at_10mm_n"], atol=1e-6, rtol=0):
+            outcome.problems.append(f"the declared bench spring did not exert 250 N: {force.tolist()}")
+        outcome.evidence.append(f"ordinary bench owns two bodies, one guide and one drive; spring wrench {force[-1].tolist()} N")
+    if run.compiled.model_document.get("tires"):
+        outcome.problems.append("the loading bench created a tire")
 
     # The extension boundary, measured rather than asserted.
     after = digests()
@@ -582,6 +543,7 @@ def probe_a4() -> Outcome:
     import numpy as np
 
     from suspension_multibody import api
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
     from suspension_multibody.connections import port_world_pose, solve_mount
     from suspension_multibody.modeling.identity import EntityId
     from suspension_multibody.modeling.ports import GeometryPort
@@ -589,13 +551,8 @@ def probe_a4() -> Outcome:
         SE3,
         rotation_vector_to_quaternion,
     )
-    from suspension_multibody.schema import (
-        CaseSpec,
-        DisplacementControl,
-        FrontAxleModel,
-        MassSpec,
-    )
-    from suspension_multibody.subsystems.entry import compose_axle
+    from suspension_multibody.schema import MassSpec
+    from suspension_multibody.schema.model import AxleDeclaration
 
     hardpoints = {
         "uca_front": [-100.0, -500.0, 400.0], "uca_rear": [100.0, -500.0, 400.0],
@@ -606,36 +563,32 @@ def probe_a4() -> Outcome:
     }
 
     def model(points):
-        return FrontAxleModel(hardpoints=dict(points), mass=MassSpec(sprung_mass=1000.0))
+        return AxleDeclaration(hardpoints=dict(points), mass=MassSpec(sprung_mass=1000.0))
 
     def sweep(points):
-        case = CaseSpec(
-            mode="K",
-            controls=(DisplacementControl(target="wheel_travel_left", values=(0.0, 20.0)),),
-        )
-        return api.run_case(model(points), case).states
+        assembly, case = migrate_v1_kc_case(model(points), mode="K", wheel_values_mm=(0., 20.), rack_values_mm=(0.,), drive_mode="kinematics")
+        return api.simulate(assembly, case.to_payload())
 
     moved = dict(hardpoints)
     moved["uca_outer"] = [0.0, -700.0, 470.0]
-    before = compose_axle(model(hardpoints), "K")
-    after = compose_axle(model(moved), "K")
-    key = ("upright_L", "upper_arm_L_outer")
-    if float(before.points[key][2]) != 450.0 or float(after.points[key][2]) != 470.0:
-        outcome.problems.append(
-            f"the attachment did not follow the hardpoint: "
-            f"{float(before.points[key][2])} -> {float(after.points[key][2])}"
-        )
-    else:
-        outcome.evidence.append("hardpoint +20 mm moved the attachment +20 mm exactly")
-
     base = sweep(hardpoints)
     shifted = sweep(moved)
-    camber_before = [state.metrics["left_camber_deg"] for state in base]
-    camber_after = [state.metrics["left_camber_deg"] for state in shifted]
+    def attachment(run):
+        graph = run.compiled.request.model.to_document()
+        joint = next(row for row in graph["joints"] if row["name"] == "model.sub.json.upper_arm_L_outer_joint")
+        body = next(row for row in graph["bodies"] if row["name"] == joint["body_b"])
+        return SE3(np.asarray(body["position"]), np.asarray(body["quaternion"])).transform_point(np.asarray(joint["point_b"]))[2]
+    np.testing.assert_allclose([attachment(base), attachment(shifted)], [.45, .47], atol=1e-12, rtol=0)
+    outcome.evidence.append("hardpoint +20 mm moved the SI attachment +20 mm exactly")
+    def cambers(run):
+        frames = run.result.frame_pose("wheel.sub.json.wheel_center_L")
+        return [math.degrees(math.atan2(frames[run.result.case_samples(i).stop-1, 2, 1],
+            frames[run.result.case_samples(i).stop-1, 1, 1])) for i in range(len(run.result.cases))]
+    camber_before, camber_after = cambers(base), cambers(shifted)
     delta = abs(camber_after[1] - camber_before[1])
     if delta < 1e-6:
         outcome.problems.append("the perturbation did not change the solved response")
-    if not all(state.converged for state in (*base, *shifted)):
+    if any(run.status != "success" for run in (base, shifted)):
         outcome.problems.append("a perturbed state did not converge")
     outcome.evidence.append(
         f"perturbation reached the solve: camber {camber_before[1]:.6f} -> "
@@ -693,154 +646,66 @@ def probe_a4() -> Outcome:
 
 
 def probe_a5() -> Outcome:
-    """
-    A5: one physical input, two schemas, one SI model, every entity traceable.
+    """A5: file and memory preserve mass, entities and subsystem provenance."""
+    import numpy as np
 
-    The two schemas are the K/C authoring schema (millimetres, kinematic) and the
-    SI dynamic schema the dynamic reading needs.  Both are built here from the
-    same hardpoint input, and the entities are compared one by one; then the
-    composition's provenance is walked to confirm each subsystem's entities can
-    be traced back to the template that produced them.
-    """
-    outcome = Outcome("A5", "two schemas, one SI model, traceable entities")
-    from suspension_multibody.schema import FrontAxleModel
-    from suspension_multibody.studies import (
-        DYNAMIC,
-        axle_dynamics_model,
-        build_study_assembly,
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring import (
+        AssemblyDocument,
+        SubsystemDocument,
+        TemplateDocument,
     )
-    from suspension_multibody.subsystems import AssemblyRequest
-    from suspension_multibody.subsystems.entry import compose_axle
-    from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
-
-    kinematic = compose_axle(_benchmark_model(), "K")
-    massed = compose_axle(_benchmark_model(massed=True), "K")
-    study_assembly = build_study_assembly(massed, study=DYNAMIC, mode="K")
-    dynamic = axle_dynamics_model(study_assembly, name="acceptance")
-
-    # The SI model is a reading of the same assembly: names, order, masses and
-    # the constraint count all have to line up.
-    if list(massed.bodies) != [body.name for body in dynamic.bodies]:
-        outcome.problems.append(
-            "the SI model's bodies are not the assembly's, in order"
-        )
-    if len(massed.constraints) != len(dynamic.joints):
-        outcome.problems.append(
-            f"constraint count differs: {len(massed.constraints)} vs {len(dynamic.joints)}"
-        )
-    off_mass = [
-        body.name
-        for body in dynamic.bodies
-        if body.mass_kg != massed.bodies[body.name].mass
-    ]
-    if off_mass:
-        outcome.problems.append(f"these bodies' SI mass differs: {off_mass}")
-    total = sum(body.mass for body in massed.bodies.values())
-    dynamic_total = sum(body.mass_kg for body in dynamic.bodies)
-    if abs(total - dynamic_total) > 1e-9:
-        outcome.problems.append(
-            f"total mass is not conserved: {total} vs {dynamic_total}"
-        )
-    outcome.evidence.append(
-        f"SI reading: {len(dynamic.bodies)} bodies, {len(dynamic.joints)} joints, "
-        f"total mass {dynamic_total:.1f} kg matches the K/C assembly"
+    from suspension_multibody.authoring.migration import (
+        migrate_v1_axle,
+        save_migrated_assembly,
     )
 
-    # Wheels: the single-axle assembly builds none in either schema.
-    if any(name.startswith("wheel_") for name in kinematic.bodies):
-        outcome.problems.append("the single-axle assembly built a wheel body")
-    outcome.evidence.append(
-        "the single-axle assembly owns no wheel body in either schema "
-        "(the bench supplies it)"
-    )
-
-    # Provenance: every subsystem's contribution is traceable to its template.
-    composed = si_assembly_for_axle(
-        FrontAxleModel.model_validate(_benchmark_payload()),
-        request=AssemblyRequest(mode="K"),
-    )
-    walked = [level for level in composed.assembly.walk()]
-    contributed = [level for level in walked if level.subsystems]
-    missing = [level.name for level in contributed if level.provenance is None]
-    if missing:
-        outcome.problems.append(f"levels without provenance: {missing}")
-    traces = {
-        level.name: level.provenance.template
-        for level in contributed
-        if level.provenance is not None
-    }
-    if len(traces) < 2:
-        outcome.problems.append("the composition does not nest per-subsystem levels")
-    outcome.evidence.append(
-        "provenance traces: "
-        + ", ".join(f"{name}->{template}" for name, template in sorted(traces.items()))
-    )
-    if not composed.fingerprint:
-        outcome.problems.append("the composition carries no fingerprint")
-    else:
-        outcome.evidence.append(f"composition fingerprint {composed.fingerprint[:16]}")
-
-    # The refusals: each illegal combination must be named, not silently dropped.
-    from suspension_multibody.rigs import CompositionError, resolve_combination
-
+    outcome = Outcome("A5", "file and memory share one traceable SI model")
+    assembly = migrate_v1_axle(_benchmark_model(massed=True))
+    case = {"schema_version": 1, "name": "identity", "study": "dynamic",
+        "samples": [0, .001], "solver": {}, "boundaries": [], "inputs": [], "outputs": []}
+    memory = validate(assembly, case)
+    with tempfile.TemporaryDirectory() as directory:
+        filename = save_migrated_assembly(assembly, directory)
+        loaded = validate(filename, case)
+    if memory.model_payload != loaded.model_payload or memory.case_payload != loaded.case_payload:
+        outcome.problems.append("file and memory emitted different contract payloads")
+    graph = memory.request.model.to_document()
+    expected_mass = sum(row.get("mass", 0) for entry in assembly.entries
+        for row in entry.subsystem.template.payload["bodies"])
+    actual_mass = sum(row["mass"] for row in graph["bodies"])
+    if not np.isclose(actual_mass, expected_mass, atol=1e-9, rtol=0):
+        outcome.problems.append(f"declared mass changed: {expected_mass} -> {actual_mass}")
+    for row in graph["bodies"]:
+        trace = graph["provenance"].get(row["name"], {})
+        if not all(trace.get(key) for key in ("template", "revision", "properties_fingerprint")):
+            outcome.problems.append(f"body {row['name']} has incomplete provenance")
+    wheels = next(entry for entry in assembly.entries if entry.functional_role == "wheel")
+    wheel_names = {wheels.ref+"."+row["name"] for row in wheels.subsystem.template.payload["bodies"]}
+    if wheel_names != {row["name"] for row in graph["bodies"] if row["name"].startswith(wheels.ref+".")}:
+        outcome.problems.append("Wheel body ownership differs from its declaration")
+    outcome.evidence.append(f"{len(graph['bodies'])} bodies, mass {actual_mass} kg, complete provenance; identical file/memory payloads")
+    # An arbitrary subsystem role can be composed; missing physical interfaces still fail.
+    template = TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+        "name": "unbound_brake", "functional_role": "brake", "allowed_placement_roles": ["any"],
+        "symmetry": "asymmetric", "units": {"length": "m"}, "bodies": [], "joints": [],
+        "elements": [], "hardpoints": [], "property_slots": [], "ports": [],
+        "needs": [{"name": "rotor", "role": "rotor", "count": 1, "required": True}]})
+    sub = SubsystemDocument.from_payload({"document": "subsystem", "schema_version": 1,
+        "name": "unbound_brake", "template": "brake.tpl", "functional_role": "brake",
+        "placement_role": "any", "hardpoints": {}, "property_bindings": {}}, template=template)
+    bad = AssemblyDocument.from_payload({"document": "assembly", "schema_version": 1,
+        "name": "unbound", "assembly_kind": "generic_multibody",
+        "subsystems": [{"ref": "brake", "functional_role": "brake", "placement_role": "any"}]},
+        subsystems={"brake": sub})
     try:
-        compose_axle(
-            _benchmark_model(),
-            "K",
-            AssemblyRequest(mode="K", subsystems=frozenset({"chassis", "suspension", "brake"})),
-        )
-        outcome.problems.append("a single axle accepted a brake subsystem")
+        validate(bad, case)
+        outcome.problems.append("an unconnected required rotor port was accepted")
     except ValueError as error:
-        if "brake" not in str(error):
-            outcome.problems.append(f"the brake refusal does not name brake: {error}")
+        if "rotor" not in str(error):
+            outcome.problems.append(f"missing-port refusal does not identify rotor: {error}")
         else:
-            outcome.evidence.append("a single axle refuses a brake subsystem by name")
-
-    try:
-        compose_axle(
-            _benchmark_model(),
-            "K",
-            AssemblyRequest(mode="K", subsystems=frozenset({"chassis", "suspension", "drive"})),
-        )
-        outcome.problems.append("a single axle accepted a drive subsystem")
-    except ValueError as error:
-        if "drive" not in str(error):
-            outcome.problems.append(f"the drive refusal does not name drive: {error}")
-        else:
-            outcome.evidence.append("a single axle refuses a drive subsystem by name")
-
-    capabilities = kinematic.capabilities
-    if capabilities is None:
-        raise AcceptanceError(
-            "the axle built through the production path reports no capabilities, so "
-            "the bench's interface cannot be resolved"
-        )
-
-    # A rig that belongs to another kind of assembly is refused by name, and the
-    # refusal is about registration rather than about capability.
-    try:
-        resolve_combination("axle", "ride_four_post", capabilities)
-        outcome.problems.append("a vehicle four-post bench was accepted for an axle")
-    except CompositionError as error:
-        if "ride_four_post" not in str(error):
-            outcome.problems.append(
-                f"the ride_four_post refusal does not name the bench: {error}"
-            )
-        else:
-            outcome.evidence.append(
-                "a bench registered for another assembly kind is refused by name"
-            )
-
-    # A drive the assembly cannot offer is dropped, not driven at zero.
-    composition = resolve_combination("axle", "kc_quasi_static", capabilities)
-    if composition.dropped:
-        outcome.problems.append(
-            f"the steering axle dropped drives it can offer: {composition.dropped}"
-        )
-    else:
-        outcome.evidence.append(
-            f"the steering axle keeps all {len(composition.drives)} bench drives"
-        )
+            outcome.evidence.append("unconnected rotor requirement is refused by identity")
     outcome.ok = not outcome.problems
     return outcome
 
@@ -855,88 +720,41 @@ def probe_a6() -> Outcome:
     is merely declared.
     """
     outcome = Outcome("A6", "one assembly, two studies, a live vertical tire")
-    from suspension_multibody.axle_dynamics.schema import (
-        AxleDynamicsCase,
-        AxleSolverSettings,
-    )
-    from suspension_multibody.compilation import KcStudyInputs, compile_plan, plan_for
-    from suspension_multibody.studies import (
-        DYNAMIC,
-        QUASI_STATIC,
-        axle_dynamics_model,
-        build_study_assembly,
-    )
-    from suspension_multibody.subsystems import AssemblyRequest
-    from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring.migration import migrate_v1_axle
+    from suspension_multibody.compilation.resolved import compile_resolved
+    from suspension_multibody.modeling.resolved import ResolvedSolvePlan
 
-    composed = si_assembly_for_axle(
-        _benchmark_model(massed=True), request=AssemblyRequest(mode="K")
-    )
-    inputs = KcStudyInputs(
-        name="acceptance", wheel_values_mm=(0.0,), rack_values_mm=(0.0,)
-    )
-    dynamic_model = axle_dynamics_model(
-        build_study_assembly(composed.assembly.physical, study=DYNAMIC, mode="K"),
-        name="acceptance",
-    )
-    quasistatic = plan_for("kc_quasi_static", mode="K", inputs=inputs)
-    dynamic = plan_for(
-        "axle_dynamic",
-        mode="K",
-        inputs=inputs,
-        dynamic_model=dynamic_model,
-        dynamic_case=AxleDynamicsCase(
-            name="acceptance", times_s=(0.0, 1e-3), solver=AxleSolverSettings()
-        ),
-    )
-    _, _, _, _, quasi_meta = compile_plan(quasistatic, composed)
-    _, _, _, _, dynamic_meta = compile_plan(dynamic, composed)
-    if quasi_meta["study"] != QUASI_STATIC or dynamic_meta["study"] != DYNAMIC:
-        outcome.problems.append(
-            f"the plans do not carry their studies: {quasi_meta['study']} / "
-            f"{dynamic_meta['study']}"
-        )
-    if quasi_meta["fingerprint"] != dynamic_meta["fingerprint"]:
-        outcome.problems.append("the two studies report different fingerprints")
-    if quasi_meta["fingerprint"] != composed.fingerprint:
-        outcome.problems.append("the compiled fingerprint is not the composition's")
-    outcome.evidence.append(
-        f"one fingerprint under two studies: {quasi_meta['fingerprint'][:16]} "
-        f"(quasi-static tire activation {quasi_meta['tire_activation']}, "
-        f"dynamic {dynamic_meta['tire_activation']})"
-    )
-
-    # A rig whose name is not the family name still runs.
-    from dataclasses import replace
-
-    from suspension_multibody.rigs.rig import RIGS
-
-    original = RIGS["kc_quasi_static"]
-    RIGS["acceptance_bench"] = replace(
-        original, name="acceptance_bench", family="kc_quasi_static"
-    )
-    try:
-        renamed = plan_for("acceptance_bench", mode="K", inputs=inputs)
-        if renamed.family != "kc_quasi_static" or renamed.rig != "acceptance_bench":
-            outcome.problems.append(
-                f"a renamed bench routed wrong: {renamed.rig} / {renamed.family}"
-            )
-        else:
-            outcome.evidence.append(
-                "a bench named 'acceptance_bench' routes to kc_quasi_static"
-            )
-    finally:
-        del RIGS["acceptance_bench"]
+    assembly = migrate_v1_axle(_benchmark_model(massed=True))
+    case = {"schema_version": 1, "name": "acceptance_bench", "study": "dynamic",
+        "samples": [0, .001], "solver": {}, "boundaries": [], "inputs": [], "outputs": []}
+    resolved = validate(assembly, case).request.model
+    dynamic = compile_resolved(resolved, ResolvedSolvePlan(case))
+    static_case = {**case, "study": "quasi_static", "protocol": "kc_quasi_static",
+        "excitation": {"c": {"loads": [{"fz": 0}], "load_marker": "wheel.sub.json.wheel_center_L"}}}
+    quasistatic = compile_resolved(resolved, ResolvedSolvePlan(static_case))
+    if quasistatic.metadata["model_fingerprint"] != dynamic.metadata["model_fingerprint"] or dynamic.metadata["model_fingerprint"] != resolved.fingerprint:
+        outcome.problems.append("the two studies report different physical model fingerprints")
+    if quasistatic.metadata["study"] != "quasi_static" or dynamic.metadata["study"] != "dynamic":
+        outcome.problems.append("the compiled studies differ from their declarations")
+    for section in ("bodies", "joints", "elements", "tires"):
+        if quasistatic.model_document.get(section) != dynamic.model_document.get(section):
+            outcome.problems.append(f"study selection changed physical {section}")
+    outcome.evidence.append(f"one physical fingerprint under two studies: {resolved.fingerprint[:16]}")
+    if dynamic.case_document["family"] == dynamic.case_document["name"]:
+        outcome.problems.append("a bench name was interpreted as its execution protocol")
+    outcome.evidence.append("arbitrary bench name keeps its explicitly declared study protocol")
 
     # The quasi-static vertical tire really enters the residual: two stiffnesses
     # over the same travel must report two different forces.
-    from suspension_multibody.cases.kc_quasi_static import model_document
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring.loader import CaseDocument
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
     from suspension_multibody.schema import (
         Vec3,
         VerticalTire,
     )
-    from suspension_multibody.simulation import SimulationRequest, run_request
-    from suspension_multibody.subsystems.entry import compose_axle
+    from suspension_multibody.simulation import run_compiled
 
     def tire_state(stiffness: float) -> tuple[float, float]:
         """
@@ -957,37 +775,15 @@ def probe_a6() -> Outcome:
             local_axis=Vec3(x=0.0, y=0.0, z=1.0),
         )
         model = _benchmark_model().model_copy(update={"tires": (tire,)})
-        assembly = compose_axle(model, "K")
-        document = model_document(assembly, name="tire-probe", drive_wheels=True)
-        run = run_request(
-            SimulationRequest(
-                assembly="axle",
-                rig="kc_quasi_static",
-                family="kc_quasi_static",
-                model=document,
-                case={
-                    "contract": "multibody-case",
-                    "contract_version": 1,
-                    "kind": "case",
-                    "family": "kc_quasi_static",
-                    "name": "tire-probe",
-                    "time": {"start_s": 0.0, "end_s": 1e-3, "step_s": 1e-3},
-                    "k": {
-                        "wheel_values_mm": [-20.0],
-                        "rack_values_mm": [0.0],
-                        "axis_map": {
-                            "wheel": ["wheel_drive_L", "wheel_drive_R"],
-                            "rack": "rack_drive",
-                        },
-                        "drive": "wheel_center",
-                        "left_right_mode": "symmetric",
-                    },
-                },
-            )
-        )
-        block = run.raw.block("tire_output")
-        compression_m = float(block[0, 0, 2])
-        normal_force_n = float(block[0, 0, 4])
+        assembly, case = migrate_v1_kc_case(model, mode="K", name="tire-probe",
+            wheel_values_mm=(-20.,), rack_values_mm=(0.,), times_s=(0., .001))
+        data = case.to_payload()
+        data["element_activation"] = []
+        run = run_compiled(validate(assembly, CaseDocument(data)))
+        assert isinstance(run.result, ResultEnvelope)
+        block = run.result.tire_state("wheel.sub.json.tire_0_L")
+        compression_m = float(block[0, 2])
+        normal_force_n = float(block[0, 4])
         return compression_m, normal_force_n
 
     soft_compression, soft_force = tire_state(200.0)
@@ -1065,21 +861,21 @@ def probe_a7() -> Outcome:
     # the public-API boundary gate forbids for a script.
     from suspension_contracts import pack_container
 
-    from suspension_multibody.cases.kc_quasi_static import model_document
+    from suspension_multibody.api import validate
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
     from suspension_multibody.kernel import KernelContractError
-    from suspension_multibody.schema import VerticalTire
     from suspension_multibody.simulation import run_compiled
     from suspension_multibody.simulation.request import (
         CompiledSimulation,
         SimulationRequest,
     )
-    from suspension_multibody.subsystems.entry import compose_axle
 
     # A real model document, authored by the production authoring layer, so the
     # refusal being tested is the family's and not the model reader's.
-    assembly = compose_axle(_benchmark_model(), "K")
-    model = model_document(assembly, name="acceptance")
-    del VerticalTire
+    assembly, declared_case = migrate_v1_kc_case(_benchmark_model(), mode="K", name="acceptance",
+        wheel_values_mm=(0.,), rack_values_mm=(0.,), drive_mode="kinematics")
+    compiled = validate(assembly, declared_case)
+    model = compiled.model_document
 
     def refusal_for(family: str) -> str:
         """Return the message a case document for `family` is refused with."""
@@ -1101,7 +897,7 @@ def probe_a7() -> Outcome:
         try:
             run_compiled(
                 CompiledSimulation(
-                    request=SimulationRequest(assembly="axle", family=family, name="probe"),
+                    request=SimulationRequest(assembly="generic", family=family, name="probe", model=compiled.request.model),
                     model_document=model,
                     case_document=case,
                     model_payload=pack_container(model),
@@ -1143,213 +939,115 @@ def probe_a7() -> Outcome:
 
 
 def probe_a8() -> Outcome:
-    """
-    A8: the optional branch disappears rather than zeroing, and the rules hold.
+    """A8: removing an optional subsystem removes its entities and result channels."""
+    from copy import deepcopy
 
-    The rack channel is the concrete case: an axle without steering must lose the
-    rack input *and* the rack result channel, and a vehicle missing a required
-    subsystem must fail by name.
-    """
-    outcome = Outcome("A8", "an absent branch disappears, and the global rules hold")
-    from suspension_multibody import api
-    from suspension_multibody.cases.kc_quasi_static.contract import has_rack
-    from suspension_multibody.rigs import resolve_combination
-    from suspension_multibody.schema import CaseSpec, DisplacementControl
-    from suspension_multibody.subsystems import AssemblyRequest
-    from suspension_multibody.subsystems.entry import compose_axle
-
-    with_rack = compose_axle(_benchmark_model(), "K")
-    without = compose_axle(
-        _benchmark_model(),
-        "K",
-        AssemblyRequest(
-            mode="K", subsystems=frozenset({"chassis", "suspension", "wheel"})
-        ),
+    from suspension_multibody.api import simulate
+    from suspension_multibody.authoring import (
+        AssemblyDocument,
+        SubsystemDocument,
+        TemplateDocument,
     )
-    if not has_rack(with_rack):
-        outcome.problems.append("the steering axle does not declare a rack")
-    if has_rack(without):
-        outcome.problems.append("the steering-less axle still declares a rack")
-    if any(name.startswith("rack") or name.startswith("tie_rod") for name in without.bodies):
-        outcome.problems.append(
-            f"the steering-less axle kept rack bodies: {sorted(without.bodies)}"
-        )
-    outcome.evidence.append(
-        f"steering-less assembly: {len(without.bodies)} bodies, no rack or tie rod"
-    )
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
 
-    # The result channel, not just the input.
-    case = CaseSpec(
-        mode="K",
-        controls=(DisplacementControl(target="wheel_travel_left", values=(0.0, 10.0)),),
-    )
-    no_steering = api.run_case(
-        _benchmark_model(),
-        case.model_copy(update={"subsystems": frozenset({"chassis", "suspension", "wheel"})}),
-    )
-    drives = set(no_steering.states[0].drives)
-    if "rack_displacement" in drives:
-        outcome.problems.append("the steering-less run still reports a rack channel")
-    if not {"wheel_travel_left", "wheel_travel_right"} <= drives:
-        outcome.problems.append(f"the wheel channels are missing: {drives}")
-    outcome.evidence.append(
-        f"the steering-less run's drives are {sorted(drives)} -- no rack channel, "
-        "not a zero one"
-    )
-
-    steered = api.run_case(_benchmark_model(), case)
-    if "rack_displacement" not in steered.states[0].drives:
-        outcome.problems.append("the steered run lost its rack channel")
-    else:
-        outcome.evidence.append("the steered run keeps its rack channel")
-
-    # The bench's interface shrinks with the capability.
-    without_capabilities = without.capabilities
-    if without_capabilities is None:
-        raise AcceptanceError("the steering-less axle reports no capabilities")
-    composition = resolve_combination("axle", "kc_quasi_static", without_capabilities)
-    if "rack_drive" not in composition.dropped:
-        outcome.problems.append(
-            f"the bench did not drop the rack drive: {composition.dropped}"
-        )
-    else:
-        outcome.evidence.append(
-            f"the bench's interface shrank: dropped {list(composition.dropped)}"
-        )
-
-    # The global rules, on the axle path: a subsystem the category forbids is
-    # refused by name rather than silently dropped.
-    for role in ("brake", "drive"):
-        try:
-            compose_axle(
-                _benchmark_model(),
-                "K",
-                AssemblyRequest(
-                    mode="K", subsystems=frozenset({"chassis", "suspension", role})
-                ),
-            )
-            outcome.problems.append(f"a single axle accepted the {role} subsystem")
-        except ValueError as error:
-            if role not in str(error):
-                outcome.problems.append(f"the {role} refusal does not name it: {error}")
-            else:
-                outcome.evidence.append(f"the global rule refuses {role} by name")
+    outcome = Outcome("A8", "absent steering removes inputs, entities and channels")
+    full, case = migrate_v1_kc_case(_benchmark_model(), mode="K",
+        wheel_values_mm=(0., 10.), rack_values_mm=(0.,), drive_mode="kinematics")
+    documents = {}
+    removed = {"rack", "rack_housing", "tie_rod_L", "tie_rod_R"}
+    for entry in full.entries:
+        template = deepcopy(entry.subsystem.template.to_payload())
+        template["bodies"] = [row for row in template["bodies"] if row["name"] not in removed]
+        for key in ("joints", "elements"):
+            template[key] = [row for row in template[key]
+                if row.get("body_a") not in removed and row.get("body_b") not in removed
+                and "@rack" not in (row.get("body_a"), row.get("body_b"))]
+        template["ports"] = [row for row in template["ports"] if row.get("owner") not in removed]
+        template["hardpoints"] = [row for row in template["hardpoints"]
+            if row.get("owner") not in removed and row.get("owner") != "@rack"]
+        template["needs"] = [row for row in template["needs"] if row["name"] != "rack"]
+        points = {row["name"] for row in template["hardpoints"]}
+        payload = entry.subsystem.to_payload()
+        payload["hardpoints"] = {key: value for key, value in payload["hardpoints"].items() if key in points}
+        documents[entry.ref] = SubsystemDocument.from_payload(payload,
+            template=TemplateDocument.from_payload(template), properties=entry.subsystem.properties)
+    payload = full.to_payload()
+    for entry in payload["subsystems"]:
+        entry["pairings"] = [row for row in entry.get("pairings", ()) if row["requirement_role"] != "rack"]
+    reduced = AssemblyDocument.from_payload(payload, subsystems=documents)
+    data = case.to_payload()
+    data["excitation"]["k"]["axis_map"].pop("rack")
+    data["excitation"]["k"]["rack_values_mm"] = []
+    steered, unsteered = simulate(full, case.to_payload()), simulate(reduced, data)
+    assert isinstance(steered.result, ResultEnvelope)
+    assert isinstance(unsteered.result, ResultEnvelope)
+    assert unsteered.compiled is not None
+    if any(run.status != "success" for run in (steered, unsteered)):
+        outcome.problems.append("an optional-branch solve failed")
+    rack = "kc_rig.sub.json.rack_drive"
+    if rack not in steered.result.constraint_ids or rack in unsteered.result.constraint_ids:
+        outcome.problems.append("rack result channel was not removed with its declaration")
+    if any(body.rsplit(".", 1)[-1] in removed for body in unsteered.result.body_ids):
+        outcome.problems.append("removed steering bodies remain in the result")
+    axes = unsteered.compiled.case_document["k"]["axis_map"]
+    if "rack" in axes or len(axes["wheel"]) != 2:
+        outcome.problems.append(f"incorrect reduced input interfaces: {axes}")
+    outcome.evidence.append(f"{len(unsteered.result.body_ids)} bodies; two wheel drives; no rack entity, input or result channel")
     outcome.ok = not outcome.problems
     return outcome
 
 
 def probe_a9() -> Outcome:
-    """
-    A9: the historical surfaces still behave, and no numeric baseline moved.
+    """A9: one result envelope survives export and exposes real solver diagnostics."""
+    import numpy as np
 
-    The entry points are re-imported and called, a result bundle is written and
-    read back, and a failed solve is shown to be diagnosed rather than silently
-    returned as a success.  The numeric gates themselves are in the frozen
-    command set; what is checked here is that the *public* surface a caller uses
-    still exists and still refuses what it always refused.
-    """
-    outcome = Outcome("A9", "public entry points, historical reads and diagnostics")
-    from suspension_multibody import api
-    from suspension_multibody.schema import (
-        Bushing6x6,
-        CaseSpec,
-        DisplacementControl,
-        FrontAxleModel,
-        LoadControl,
-        MassSpec,
-        Pose,
-        SixVector,
-    )
+    from suspension_multibody.api import simulate, validate
+    from suspension_multibody.authoring.loader import CaseDocument
+    from suspension_multibody.authoring.migration import migrate_v1_kc_case
+    from suspension_multibody.io import read_artifact, write_artifact
+    from suspension_multibody.schema import Bushing6x6, Pose
 
-    # K through the public entry, writing an artifact and reading it back.
-    hardpoints = {
-        "uca_front": [-100, -500, 400], "uca_rear": [100, -500, 400],
-        "uca_outer": [0, -700, 450], "lca_front": [-120, -500, 150],
-        "lca_rear": [120, -500, 150], "lca_outer": [0, -700, 150],
-        "tierod_inner": [100, -400, 250], "tierod_outer": [50, -700, 250],
-        "wheel_center": [0, -700, 300], "rack_center": [0, 0, 250],
-    }
-    model = FrontAxleModel(hardpoints=hardpoints, mass=MassSpec(sprung_mass=1000))
+    outcome = Outcome("A9", "uniform results, artifact round trip and diagnostics")
+    model = _benchmark_model()
+    assembly, case = migrate_v1_kc_case(model, mode="K", name="acceptance",
+        wheel_values_mm=(0., 10.), rack_values_mm=(0.,), drive_mode="kinematics")
+    run = simulate(assembly, case.to_payload())
+    assert isinstance(run.result, ResultEnvelope)
     with tempfile.TemporaryDirectory() as directory:
-        bundle = api.run_case(model, CaseSpec(name="acceptance", mode="K"), directory)
-        manifest = Path(directory) / "manifest.json"
-        if not manifest.is_file():
-            outcome.problems.append("run_case wrote no manifest")
-        else:
-            payload = json.loads(manifest.read_text(encoding="utf-8"))
-            if int(payload.get("manifest", payload).get("state_count", -1)) != bundle.manifest.state_count:
-                outcome.problems.append("the written manifest disagrees with the bundle")
-            else:
-                outcome.evidence.append(
-                    f"K artifact round trip: {bundle.manifest.state_count} state(s), "
-                    "manifest agrees"
-                )
-
-    # C through the public entry.
-    stiffness = tuple(
-        tuple(
-            10_000.0 if row == column and row < 3
-            else 10_000_000.0
-            if row == column
-            else 0.0
-            for column in range(6)
-        )
-        for row in range(6)
-    )
-    bushings = tuple(
-        Bushing6x6(
-            name=f"{body}_{index}", body_a="chassis", body_b=body,
-            pose_a=Pose(translation=model.hardpoints[name]),
-            pose_b=Pose(translation=model.hardpoints[name]),
-            stiffness=stiffness,
-        )
-        for body, names in (
-            ("upper_arm", ("uca_front", "uca_rear")),
-            ("lower_arm", ("lca_front", "lca_rear")),
-        )
-        for index, name in enumerate(names)
-    )
+        write_artifact(run.result, directory)
+        artifact = read_artifact(directory)
+        if artifact["manifest"]["model_fingerprint"] != run.result.model_fingerprint:
+            outcome.problems.append("artifact model identity differs from the run")
+        for name, values in run.result.named_blocks.items():
+            np.testing.assert_array_equal(artifact["arrays"][name], values)
+        outcome.evidence.append(f"artifact round trip preserves all {len(run.result.named_blocks)} native channel arrays")
+    stiffness = np.diag([10_000.]*3+[10_000_000.]*3).tolist()
+    names = {key.lower(): value for key, value in model.hardpoints.items()}
+    bushings = tuple(Bushing6x6(name=f"{body}_{i}", body_a="chassis", body_b=body,
+        pose_a=Pose(translation=names[key]), pose_b=Pose(translation=names[key]), stiffness=stiffness)
+        for body, keys in (("upper_arm", ("uca_front", "uca_rear")),
+                           ("lower_arm", ("lca_front", "lca_rear")))
+        for i, key in enumerate(keys))
     compliant = model.model_copy(update={"bushings": bushings})
-    c_bundle = api.run_case(
-        compliant,
-        CaseSpec(
-            mode="C",
-            controls=(LoadControl(target="fz", values=(SixVector(fz=100.0),)),),
-            left_right_mode="single",
-        ),
-    )
-    if not any(state.converged for state in c_bundle.states):
-        outcome.problems.append("the C run produced no converged state")
+    c_assembly, c_case = migrate_v1_kc_case(compliant, mode="C", paths=("fz",),
+        levels=3, maximum=100., side_mode="single", drive_mode="force_balance")
+    c_run = simulate(c_assembly, c_case.to_payload())
+    assert isinstance(c_run.result, ResultEnvelope)
+    if c_run.status != "success" or not c_run.result.cases:
+        outcome.problems.append("the compliant load sweep did not converge")
     else:
-        outcome.evidence.append(
-            f"C run: {len(c_bundle.states)} state(s), converged"
-        )
-
-    # A refusal the historical surface has always made: a contact-point drive on
-    # an ideal-joint axle is a different question and must not be answered with a
-    # wheel-centre result.
+        outcome.evidence.append(f"C load sweep: {len(c_run.result.cases)} cases, residuals {c_run.result.case_residuals()}")
+    invalid = case.to_payload()
+    invalid["excitation"]["k"]["axis_map"]["wheel"][0] = "undeclared.contact_patch"
     try:
-        api.run_case(
-            model,
-            CaseSpec(
-                mode="K",
-                controls=(DisplacementControl(target="contact_patch_left", values=(0.0,)),),
-            ),
-        )
-        outcome.problems.append("a contact-point drive was accepted on a K axle")
-    except Exception as error:  # noqa: BLE001 - the refusal type is the layer's
-        outcome.evidence.append(
-            f"the contact-point drive is still refused: {type(error).__name__}"
-        )
-
-    # Failure diagnostics: a case that cannot converge must report why.
-    if not isinstance(bundle.states[0].diagnostics, tuple):
-        outcome.problems.append("a state carries no diagnostics tuple")
+        validate(assembly, CaseDocument(invalid))
+        outcome.problems.append("an undeclared contact drive was accepted")
+    except ValueError as error:
+        outcome.evidence.append(f"undeclared drive is refused before submission: {error}")
+    if run.result.diagnostics is None or not np.isfinite(run.result.diagnostics).all():
+        outcome.problems.append("the run has no finite native diagnostics")
     else:
-        outcome.evidence.append(
-            f"each state carries {len(bundle.states[0].diagnostics)} diagnostic "
-            "record(s)"
-        )
+        outcome.evidence.append(f"native diagnostics retain {run.result.diagnostics.shape[1]} columns")
     outcome.ok = not outcome.problems
     return outcome
 

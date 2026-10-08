@@ -1,0 +1,19 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/physics/test_wheel_spin_boundary.py",
+    "packages/suspension_multibody/tests/cases/kc_quasi_static/test_k_axes_grid.py",
+    "packages/suspension_multibody/tests/physics/test_function_forces.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T15:03:35.615719+00:00",
+  "finished_at": "2026-10-06T15:03:38.544984+00:00",
+  "log": "raw\\validation\\child-5-step-4.log",
+  "log_sha256": "526f1988f7e7bfe51ddcd6378cac559764130277d41d68a36f2f8e1abaf4ea8f"
+}

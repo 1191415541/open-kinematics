@@ -1,0 +1,112 @@
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+.................................................F.....F................ [ 76%]
+....................F...........F................................        [100%]
+================================== FAILURES ===================================
+__________ test_dynamic_import_through_a_module_constant_is_detected __________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3347/test_dynamic_import_through_a_0')
+
+    def test_dynamic_import_through_a_module_constant_is_detected(tmp_path: Path) -> None:
+        """``import_module(_X)`` where ``_X`` names a retired package must fire."""
+        root = _package(tmp_path)
+        _write(
+            _module_path(root, "loader.py"),
+            "from importlib import import_module\n\n"
+            "_LEGACY_MODULE = \"suspension_multibody.core\"\n"
+            "_LIVE_MODULE = \"suspension_multibody.results.decoder\"\n\n"
+            "def load():\n"
+            "    return import_module(_LEGACY_MODULE)\n"
+            "def load_live():\n"
+            "    return import_module(_LIVE_MODULE)\n",
+        )
+        findings = gate.scan_tree(root)
+>       assert _rules(findings) == {"legacy_module_dynamic_import"}
+E       AssertionError: assert {'legacy_modu...ystem_import'} == {'legacy_modu...namic_import'}
+E         
+E         Extra items in the left set:
+E         'retired_subsystem_import'
+E         Use -v to get more diff
+
+packages\suspension_multibody\tests\architecture\test_legacy_surface_gate.py:237: AssertionError
+_________________ test_report_reading_decoded_results_passes __________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3347/test_report_reading_decoded_re0')
+
+    def test_report_reading_decoded_results_passes(tmp_path: Path) -> None:
+        root = _package(tmp_path)
+        _write(
+            _module_path(root, "report/metrics/wheel_loads.py"),
+            "from suspension_multibody.results.decoder import decode_result\n\n"
+            "def wheel_loads(bundle):\n"
+            "    return [row.force_z for row in decode_result(bundle)]\n",
+        )
+>       assert gate.scan_tree(root) == []
+E       AssertionError: assert [SurfaceFindi...der', line=1)] == []
+E         
+E         Left contains one more item: SurfaceFinding(path='src/suspension_multibody/report/metrics/wheel_loads.py', scope='production', rule='retired_subsystem_import', symbol='suspension_multibody.results.decoder', line=1)
+E         Use -v to get more diff
+
+packages\suspension_multibody\tests\architecture\test_legacy_surface_gate.py:351: AssertionError
+______________________ test_contract_kc_runners_are_gone ______________________
+
+    def test_contract_kc_runners_are_gone() -> None:
+        """The strict target: the case layer authors documents, it does not run them."""
+        package = (
+            Path(__file__).parents[2]
+            / "src"
+            / "suspension_multibody"
+            / "cases"
+            / "kc_quasi_static"
+        )
+>       workflow = (package / "workflow.py").read_text(encoding="utf-8")
+
+packages\suspension_multibody\tests\architecture\test_no_legacy_kc_runner.py:52: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\zzy11\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\pathlib.py:1027: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('E:/杂件/open-kinematics/packages/suspension_multibody/src/suspension_multibody/cases/kc_quasi_static/workflow.py')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+E       FileNotFoundError: [Errno 2] No such file or directory: 'E:\\杂件\\open-kinematics\\packages\\suspension_multibody\\src\\suspension_multibody\\cases\\kc_quasi_static\\workflow.py'
+
+C:\Users\zzy11\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\pathlib.py:1013: FileNotFoundError
+____________ test_the_retired_entries_are_not_referenced_anywhere _____________
+
+    def test_the_retired_entries_are_not_referenced_anywhere() -> None:
+        """
+        No production module, test module or script *calls* a retired entry.
+    
+        The whole point of the consolidation is that ``simulate`` is the one door, so
+        a single live call means a consumer was not moved -- or was moved back.
+        """
+        findings: list[str] = []
+        for root in _SOURCES:
+            findings.extend(_findings(root, RETIRED_ENTRIES))
+>       assert not findings, (
+            "the retired simulation entries are referenced again: "
+            + ", ".join(findings)
+            + ". ``simulate`` is the one public door; a call to one of these names is a"
+            " second door onto a reading that already has an internal spelling."
+        )
+E       AssertionError: the retired simulation entries are referenced again: E:\杂件\open-kinematics\packages\suspension_multibody\scripts\diagnose_native_initial_pac_moments.py:run_case, E:\杂件\open-kinematics\packages\suspension_multibody\scripts\measure_native_fiala_solver_time.py:run_case, E:\杂件\open-kinematics\packages\suspension_multibody\scripts\run_full_native_three_model_comparison.py:run_case. ``simulate`` is the one public door; a call to one of these names is a second door onto a reading that already has an internal spelling.
+E       assert not ['E:\\杂件\\open-kinematics\\packages\\suspension_multibody\\scripts\\diagnose_native_initial_pac_moments.py:run_case', ...'E:\\杂件\\open-kinematics\\packages\\suspension_multibody\\scripts\\run_full_native_three_model_comparison.py:run_case']
+
+packages\suspension_multibody\tests\architecture\test_retired_entries_gate.py:186: AssertionError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\architecture\test_legacy_surface_gate.py::test_dynamic_import_through_a_module_constant_is_detected
+FAILED packages\suspension_multibody\tests\architecture\test_legacy_surface_gate.py::test_report_reading_decoded_results_passes
+FAILED packages\suspension_multibody\tests\architecture\test_no_legacy_kc_runner.py::test_contract_kc_runners_are_gone
+FAILED packages\suspension_multibody\tests\architecture\test_retired_entries_gate.py::test_the_retired_entries_are_not_referenced_anywhere
+4 failed, 277 passed in 504.86s (0:08:24)

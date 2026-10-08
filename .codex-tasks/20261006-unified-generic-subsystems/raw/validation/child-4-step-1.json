@@ -1,0 +1,19 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/connections/test_unified_port_binding.py",
+    "packages/suspension_multibody/tests/connections/test_policy.py",
+    "packages/suspension_multibody/tests/authoring/test_generic_markers.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T14:28:35.422613+00:00",
+  "finished_at": "2026-10-06T14:28:41.811394+00:00",
+  "log": "raw\\validation\\child-4-step-1.log",
+  "log_sha256": "11c4fdd46e5522e5281640d1fa5b281713613ff7fe85983056a411bd19b51776"
+}

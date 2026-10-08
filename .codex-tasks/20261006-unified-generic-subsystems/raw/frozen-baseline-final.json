@@ -1,0 +1,11 @@
+{
+  "packages/suspension_multibody/tests/data/dynamic_hash_baseline.json": true,
+  "packages/suspension_multibody/tests/data/kc_perf_baseline.json": true,
+  "packages/suspension_multibody/tests/data/kc_perf_baseline_native.json": true,
+  "packages/suspension_multibody/tests/data/properties/baseline_compliance.json": true,
+  "packages/suspension_multibody/tests/data/axle_dynamics_baseline/sha256.json": true,
+  "packages/suspension_multibody/tests/data/kc_baseline/c_states.json": true,
+  "packages/suspension_multibody/tests/data/kc_baseline/k_states.json": true,
+  "packages/suspension_multibody/tests/data/kc_baseline/manifest.json": true,
+  "packages/suspension_multibody/tests/data/vehicle_dynamics_baseline/sha256.json": true
+}

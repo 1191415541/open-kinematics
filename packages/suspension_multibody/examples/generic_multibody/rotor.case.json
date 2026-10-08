@@ -1,0 +1,6 @@
+{
+  "contract": "multibody-case", "contract_version": 1, "kind": "case",
+  "family": "axle_dynamic", "name": "signed_torque_feedback",
+  "time": {"start_s": 0, "end_s": 0.02, "step_s": 0.002},
+  "solver": {"initialization_mode": "provided_consistent_state", "adaptive_step": false, "rho_inf": 1, "internal_step_s": 0.0005}
+}

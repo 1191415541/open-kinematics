@@ -9,7 +9,8 @@ from suspension_contracts import (
     TopologyProfile,
 )
 
-from suspension_multibody.schema import FrontAxleModel, MassSpec, Vec3
+from suspension_multibody.schema import MassSpec, Vec3
+from suspension_multibody.schema.model import AxleDeclaration
 
 _ROLE_TO_HARDPOINT: tuple[tuple[str, str], ...] = (
     ("upper_arm_inboard_front", "upper_front"),
@@ -34,14 +35,14 @@ def _validate_contract(contract: GeometryContract) -> None:
         raise ValueError("Multibody adapter requires the V1 vehicle coordinate frame")
 
 
-def front_axle_model_from_contract(
+def axle_declaration_from_contract(
     contract: GeometryContract,
     *,
     mass: MassSpec,
     name: str | None = None,
-) -> FrontAxleModel:
+) -> AxleDeclaration:
     """
-    Create a geometry-only Multibody front-axle model from Contract V1.
+    Create a geometry-only axle declaration from Contract V1.
 
     The Geometry Contract intentionally contains no mass or force-element data,
     so the caller supplies the Multibody mass specification explicitly.
@@ -72,7 +73,7 @@ def front_axle_model_from_contract(
             z=position.z,
         )
 
-    return FrontAxleModel(
+    return AxleDeclaration(
         name=contract.name if name is None else name,
         hardpoints=hardpoints,
         mass=mass,

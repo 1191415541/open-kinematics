@@ -1,0 +1,22 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/simulation/test_orthogonal_requests.py",
+    "packages/suspension_multibody/tests/simulation/test_document_route_reaches_every_registered_family.py",
+    "packages/suspension_multibody/tests/cases/test_handling.py",
+    "packages/suspension_multibody/tests/cases/test_ride_four_post.py",
+    "packages/suspension_multibody/tests/cases/test_ride_random_road.py",
+    "packages/suspension_multibody/tests/cases/test_vehicle_kc.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T15:59:32.914770+00:00",
+  "finished_at": "2026-10-06T16:00:08.879714+00:00",
+  "log": "raw\\validation\\child-7-step-2.log",
+  "log_sha256": "52015045d9917833a97574fb13fe3e1c95c0b109cb585d73b5e3fb3feeb4eb06"
+}

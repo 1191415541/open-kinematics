@@ -16,28 +16,16 @@ from pathlib import Path
 
 import numpy as np
 
-from suspension_multibody.cases.kc_quasi_static import (
-    AXIS_ORDER,
-    MM,
-    NativeKcError,
-    case_document,
-    model_document,
-    quaternion_to_rotation,
-)
+from suspension_multibody.api import validate
+from suspension_multibody.authoring import migrate_v1_kc_case
 from suspension_multibody.cases.kc_quasi_static.load_paths import LoadPath
-from suspension_multibody.cases.kc_quasi_static.workflow import (
+from suspension_multibody.cases.kc_quasi_static.settings import (
     DEFAULT_SETTINGS,
     DEFAULT_TIMES,
-    SIDES,
-    _assembling_pose,
-    _side_fields,
-    quaternion_conjugate,
-    quaternion_multiply,
-    wheel_center_world,
 )
-from suspension_multibody.modeling.primitives import quaternion_to_rotation_vector
-from suspension_multibody.simulation import SimulationRequest, run_request
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.report.kc_evidence import c_records
+from suspension_multibody.results.envelope import ResultEnvelope
+from suspension_multibody.simulation import run_compiled
 
 BASELINE = Path("packages/suspension_multibody/tests/data/kc_baseline")
 OUT = Path("artifacts/kc-native-probe")
@@ -64,12 +52,10 @@ def tolerance(index: int, reference: float) -> float:
     return (1e-6 + 1e-4 * magnitude) if index < 3 else (1e-8 + 1e-4 * magnitude)
 
 
-def c_path_states(assembly, *, paths: tuple[str, ...]) -> list[dict[str, object]]:
+def c_path_states(model, *, paths: tuple[str, ...]) -> list[dict[str, object]]:
     """Solve the C load paths through the unified simulation service."""
-    model = model_document(assembly, name="native-c", drive_wheels=False)
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
+    assembly, case = migrate_v1_kc_case(
+        model, mode="C",
         name="kc-c",
         paths=tuple(paths),
         levels=LEVELS,
@@ -77,97 +63,18 @@ def c_path_states(assembly, *, paths: tuple[str, ...]) -> list[dict[str, object]
         side_mode="single",
         times_s=DEFAULT_TIMES,
         settings=DEFAULT_SETTINGS,
-        drive_wheels=False,
     )
-    run = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
-    left_states = run.body_state("upright_L")
-    right_states = run.body_state("upright_R")
-    # The C deformation is measured against the neutral K pose, which is the
-    # assembling pose: at the design separation every driven target has zero
-    # residual, so the reference is the model document's own initial state.
-    reference = {side: _assembling_pose(model, side) for side in SIDES}
-    # The K reference the C response is measured from.  The driven case's zero
-    # target resolves to the separation the model was assembled with, so the
-    # assembling pose *is* the K reference -- the same thing the Python solver's
-    # `KReferenceCache` solves for, reached without solving it again.
-    reference_metrics = {
-        ("left" if side == "L" else "right"): _side_fields(
-            assembly, side, reference[side][0], reference[side][1]
-        )
-        for side in SIDES
-    }
-
-    records: list[dict[str, object]] = []
-    for index, entry in enumerate(run.cases):
-        axis = paths[index // LEVELS]
-        position_in_path = index % LEVELS
-        if position_in_path == 0:
-            level = -MAXIMUM
-        elif position_in_path == LEVELS - 1:
-            level = MAXIMUM
-        else:
-            level = -MAXIMUM + position_in_path * (2.0 * MAXIMUM / (LEVELS - 1))
-        case_id = f"c-{axis}-{level:+.2f}"
-        if str(entry["name"]) != case_id:
-            raise NativeKcError(
-                f"the kernel expanded {entry['name']!r} where {case_id!r} was expected"
-            )
-        load = [0.0] * 6
-        load[AXIS_ORDER.index(axis)] = float(level)
-        record = {
-            "case_id": case_id,
-            "path": axis,
-            "level": float(level),
-            "side_mode": "single",
-            "load_left": list(load),
-            "load_right": [0.0] * 6,
-        }
-        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
-        metrics: dict[str, dict[str, float]] = {}
-        for side, key, states in (
-            ("L", "deformation_left", left_states),
-            ("R", "deformation_right", right_states),
-        ):
-            state = states[last]
-            metrics["left" if side == "L" else "right"] = _side_fields(
-                assembly, side, state[:3], state[3:7]
-            )
-            ref_position, ref_quaternion = reference[side]
-            centre = wheel_center_world(assembly, side, state[:3], state[3:7])
-            ref_centre = wheel_center_world(assembly, side, ref_position, ref_quaternion)
-            relative = quaternion_multiply(
-                quaternion_conjugate(np.asarray(ref_quaternion, dtype=float)),
-                np.asarray(state[3:7], dtype=float),
-            )
-            rotation = quaternion_to_rotation(
-                ref_quaternion
-            ) @ quaternion_to_rotation_vector(relative)
-            record[key] = [
-                float(value)
-                for value in np.concatenate(((centre - ref_centre) / MM, rotation))
-            ]
-        record["metrics"] = metrics
-        record["c_minus_k"] = {
-            key: float(value - reference_metrics[side][key])
-            for side in ("left", "right")
-            for key, value in metrics[side].items()
-        }
-        records.append(record)
-    return records
+    result = run_compiled(validate(assembly, case)).result
+    if not isinstance(result, ResultEnvelope):
+        raise TypeError("K/C documents must produce ResultEnvelope")
+    return c_records(result, frames={side: "wheel.sub.json.wheel_center_"+side for side in ("L", "R")},
+        paths=paths, levels=LEVELS, maximum=MAXIMUM)
 
 
 def main() -> int:
     """Run the C paths natively and score them against the frozen snapshot."""
-    assembly = compose_axle(_compliant_model(), "C")
     axes = tuple(path.name for path in LoadPath.standard())
-    produced = c_path_states(assembly, paths=axes)
+    produced = c_path_states(_compliant_model(), paths=axes)
     frozen = json.loads((BASELINE / "c_states.json").read_text(encoding="utf-8"))
     expected = {state["case_id"]: state for state in frozen}
     worst, worst_component = 0.0, None

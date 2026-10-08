@@ -227,7 +227,7 @@ def test_dynamic_import_through_a_module_constant_is_detected(tmp_path: Path) ->
         _module_path(root, "loader.py"),
         "from importlib import import_module\n\n"
         "_LEGACY_MODULE = \"suspension_multibody.core\"\n"
-        "_LIVE_MODULE = \"suspension_multibody.results.decoder\"\n\n"
+        "_LIVE_MODULE = \"suspension_multibody.results.envelope\"\n\n"
         "def load():\n"
         "    return import_module(_LEGACY_MODULE)\n"
         "def load_live():\n"
@@ -344,9 +344,9 @@ def test_report_reading_decoded_results_passes(tmp_path: Path) -> None:
     root = _package(tmp_path)
     _write(
         _module_path(root, "report/metrics/wheel_loads.py"),
-        "from suspension_multibody.results.decoder import decode_result\n\n"
-        "def wheel_loads(bundle):\n"
-        "    return [row.force_z for row in decode_result(bundle)]\n",
+        "from suspension_multibody.results.envelope import ResultEnvelope\n\n"
+        "def wheel_loads(bundle: ResultEnvelope):\n"
+        "    return bundle.energy\n",
     )
     assert gate.scan_tree(root) == []
 
@@ -367,7 +367,7 @@ def test_report_importing_or_running_preparation_is_detected(tmp_path: Path) -> 
     root = _package(tmp_path)
     _write(
         _module_path(root, "report/authors_inputs.py"),
-        "from suspension_multibody.preparation.signals import time_grid\n"
+        "from suspension_multibody.authoring.signals import time_grid\n"
         "from ..subsystems.entry import compose_axle\n\n"
         "def replay(model, case):\n"
         "    return compose_axle(model, 'K'), time_grid(case)\n",
@@ -382,7 +382,7 @@ def test_report_importing_or_running_preparation_is_detected(tmp_path: Path) -> 
     # it does -- it authors a model.  The assertion here used to name
     # the authoring layer's `assembly` subpackage, which was a second preparation
     # import in the fixture and is no longer a module at all.
-    assert "suspension_multibody.preparation.signals" in imported
+    assert "suspension_multibody.authoring.signals" in imported
     called = _symbols(findings, "report_preparation_call")
     assert {"compose_axle", "time_grid"} <= called
     assert gate.evaluate(findings, mode=gate.MODE_MIGRATION) != []

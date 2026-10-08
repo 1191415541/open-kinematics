@@ -1,0 +1,279 @@
+uv run --no-sync ruff check .
+All checks passed!
+uv run --no-sync ty check .
+All checks passed!
+WARN ty is pre-release software and not ready for production use. Expect to encounter bugs, missing features, and fatal errors.
+uv run --no-sync python packages/suspension_multibody/tests/architecture/legacy_surface_gate.py --check
+mode      : migration
+findings  : 0
+
+OK: no unregistered Python boundary violation
+uv run --no-sync python packages/suspension_kernel/scripts/check_module_layering.py --strict --final
+kernel root                : E:\�Ӽ�\open-kinematics\packages\suspension_kernel
+mode                       : final
+headers                    : 58
+cpp translation units      : 76
+modules present            : 23
+header edges               : 119
+source edges               : 107
+source edge evidence       : 234 records (tu_include 217, symbol_reference 180, both 163; kind mentions 397)
+target modules missing     : 0
+legacy modules present     : 0
+legacy modules unregistered: 0 []
+mutual (reverse) edges     : 0
+self-including headers     : 0
+cross-aggregate includes   : 0
+module cycles (SCC size>1) : 0
+
+OK: layering matches the recorded baseline
+uv run --no-sync python packages/suspension_multibody/scripts/check_composable_release.py --skip-isolation
+release probe: E:\�Ӽ�\open-kinematics
+scratch      : C:\Users\zzy11\AppData\Local\Temp\suspension-release-0yt3citj
+
+[PASS] migration list: 0 retained legacy imports (0 production, 0 test) and 6 retired packages gone
+[PASS] documentation roots: 16 documented modules present, 6 retired ones absent
+[PASS] documentation examples: 5 example(s) executed: E-1, E-2, E-3, E-4, E-5
+
+OK: 3 release checks passed
+git diff --check
+warning: in the working copy of 'packages/suspension_contracts/src/suspension_contracts/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_contracts/src/suspension_contracts/contracts/assembly.schema.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_contracts/src/suspension_contracts/contracts/element_properties.schema.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_contracts/src/suspension_contracts/contracts/multibody_case.schema.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_contracts/src/suspension_contracts/contracts/multibody_model.schema.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_contracts/src/suspension_contracts/contracts/multibody_result.schema.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_contracts/src/suspension_contracts/contracts/template.schema.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_contracts/src/suspension_contracts/multibody.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_contracts/tests/test_multibody_contract.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/CMakeLists.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/include/mb_cases/functions.hpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/include/mb_config/element_wrench.hpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/include/mb_element/functions.hpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/include/mb_joint/functions.hpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/include/mb_model/types.hpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/abi/kernel_contract_run.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/assembly/registration.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/cases/axle_dynamic.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/cases/case_dispatch.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/cases/contract_model.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/cases/vehicle_dynamic.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/config/kernel_config.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/contract/contract_registry.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/element/directional.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/force/external_vector.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/joint/kernel_directional_constraint.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/joint/kernel_model_constraint.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/src/output/kernel_output.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/cpp/tests/contract_selftest.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/layering_baseline.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_kernel/src/suspension_kernel/binding/build.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/CONTEXT.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/docs/composable_extension_examples.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/accept_composable_architecture.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/case_parity_check.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/check_composable_release.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/diagnose_native_initial_pac_moments.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/diagnose_native_pac2002_contact_frame.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/kc_native_c_probe.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/kc_native_probe.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/kc_perf_gate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/measure_native_fiala_solver_time.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/plot_tire_handling_comparison.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/run_axle_dynamics_acceptance.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/run_dynamic_kc_correlation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/run_full_native_three_model_comparison.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/run_native_tire_rig.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/scripts/run_real_adams_car_benchmark.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/axle_channels.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/axle_dynamic_history.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/axle_equivalence.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/axle_equivalence_audit.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/full_vehicle_correlation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/full_vehicle_mbd_comparison.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/full_vehicle_model.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/reference.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/strict_c.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/strict_k.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/time_domain.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/time_domain_gate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adams/vehicle_kc_time_domain.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/adapters/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/api.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/authoring/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/authoring/documents.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/authoring/properties.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/authoring/vehicle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/axle_dynamics/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/axle_dynamics/io.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/axle_dynamics/schema.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/cases/handling.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/cases/kc_quasi_static/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/cases/ride_four_post.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/cases/ride_random_road.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/cli.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/compilation/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/compilation/element_blocks.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/connections/links.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/connections/matcher.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/connections/policy.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/fmi/export.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/io/artifacts.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/kernel/capabilities.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/modeling/instance.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/modeling/ports.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/outputs/builtin.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/report/metrics/axle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/report/metrics/case_specific.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/report/metrics/common.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/report/metrics/vehicle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/results/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/results/element_wrench.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/rigs/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/rigs/rig.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/schema/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/schema/loader.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/schema/vehicle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/signal_bus.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/simulation/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/simulation/request.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/simulation/runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/templates/builtin.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/templates/model.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/templates/roles.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/vehicle/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/vehicle/roll_centers.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/src/suspension_multibody/vehicle/static_loads.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/adams/test_axle_dynamics_equivalence.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/adams/test_car_sla_correlation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/adams/test_full_vehicle_correlation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/adams/test_full_vehicle_model.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/adams/test_time_domain_axle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/adams/test_time_domain_vehicle_kc.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/adapters/test_geometry_contract.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/analysis/test_axle_dynamic.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/analysis/test_k_metrics.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/analysis/test_vehicle_dynamic.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/api/test_api.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/api/test_decoding_belongs_to_results.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/api/test_fmu_export.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/api/test_no_steering_shrinks_rack.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/api/test_signal_bus.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/api/test_simulate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/architecture/legacy_surface_gate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/architecture/test_legacy_surface_gate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/architecture/test_module_layering_gate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/architecture/test_no_legacy_kc_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/architecture/test_unified_simulation_boundaries.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/authoring/test_provenance_and_bench.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/authoring/test_solver_integration.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/authoring/test_symmetry_declaration.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/authoring/test_vehicle_assembly_documents.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/authoring/test_wheel_file_chain.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_acceptance_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_api.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_contact.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_cpp_physics.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_driven_coordinate.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_energy.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_integrator.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_limit_cases.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_performance_metrics.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_physics_consistency.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_solver_invariants.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/axle_dynamics/test_three_laws_match_the_fused_record.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/kc_quasi_static/test_c_loads_and_sides.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/kc_quasi_static/test_contract_boundary.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/kc_quasi_static/test_contract_documents.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/kc_quasi_static/test_drives_come_from_the_rig.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/kc_quasi_static/test_k_axes_grid.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/kc_quasi_static/test_k_body_wrench.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/test_abs_closed_loop.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/test_axle_dynamic_contract.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/test_handling.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/test_ride_four_post.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/test_ride_random_road.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/test_rotational_torque_document.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/test_vehicle_dynamic_contract.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cases/test_vehicle_kc.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/cli/test_cli.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/composable/test_extension_proof.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/connections/test_links.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/connections/test_policy.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/connections/test_policy_is_wired_into_production.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/data/composable/synthetic_load_bench.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/e2e/test_e2e.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/instantiation/test_kc_activation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/io/test_artifacts_unified.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/io/test_results.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/joints/test_any_joint_encodes.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/metrics/test_metrics.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/metrics/test_outputs_match_legacy.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/metrics/test_placement_channels.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/model/test_axle_road_surface.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/model/test_dynamic_mass.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/model/test_force_assembly.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/model/test_front_axle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/model/test_vehicle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/outputs/test_bypass.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/physics/test_roll_centres_by_topology.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/physics/test_static_loads.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/physics/test_vehicle_physics.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/preparation/test_steering_channels.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/properties/test_properties.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/results/test_adapters.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/results/test_element_wrench.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/results/test_neutral_results.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/results/test_pad_outputs.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/rigs/test_bench_template.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/rigs/test_k_grid_shrinks.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/rigs/test_rig_composition.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/rigs/test_the_rig_reaches_the_product.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/simulation/test_compilers.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/simulation/test_no_production_bridge.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/simulation/test_orthogonal_requests.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/simulation/test_preparation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/simulation/test_quasi_static_tire.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/simulation/test_replay.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/simulation/test_runtime.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/simulation/test_wheel_centre_selection.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/studies/test_one_assembly_two_studies.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/studies/test_tire_mass_reaches_the_axle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_anti_roll_bar_subsystem.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_arb_mount_ports.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_articulated_tow.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_assembly_matches_snapshot.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_availability_matrix.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_bench_in_composition.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_brake_subsystem.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_capabilities_report_absence.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_drive_subsystem.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_explicit_in_composition.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_optional_symmetry.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_rig_link.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_rotational_torque_element.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_runtime_face.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_si_composition.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_steering_can_be_absent.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_the_rig_is_not_invasive.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_three_axle_assembly.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_torque_element_wiring.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_torque_role_is_replaceable.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_vehicle_assembler.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_vehicle_composition.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/subsystems/test_wheel_lifecycle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/templates/test_builtin_against_assembly.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/templates/test_template_drives_the_subsystem.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/tire_mass/test_mass_conservation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/vehicle/test_native_vehicle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/vehicle/test_pac2002_contact_mass.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/vehicle/test_screw_kinematics.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/vehicle/test_service_contract.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/vehicle_assembly/test_tire_mass_reaches_the_vehicle.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'packages/suspension_multibody/tests/vehicle_assembly/test_vehicle_assembly.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/acceptance_composable_flow.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/acceptance_pad_driven_kc.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/acceptance_pad_kc_fixture.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/acceptance_probe_model.py', LF will be replaced by CRLF the next time Git touches it
+PASS: closeout; 6 declared checks

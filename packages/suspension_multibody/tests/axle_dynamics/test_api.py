@@ -17,20 +17,19 @@ from suspension_multibody.axle_dynamics import (
     AxleBushing,
     AxleDamper,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
     AxleSpring,
     AxleTire,
     load_axle_dynamics_case,
-    load_axle_dynamics_model,
-    run_axle_dynamics,
 )
 from suspension_multibody.axle_dynamics.schema import (
     PAC2002_PARAMETER_DEFAULTS,
     PAC2002_PARAMETER_NAMES,
+    AxleDynamicsModel,
 )
 from suspension_multibody.io import write_artifact
+from tests.axle_dynamics._unified_entry import solve_axle
 
 
 def test_pac2002_parameter_abi_matches_native_header() -> None:
@@ -145,7 +144,7 @@ def test_native_solver_preserves_static_equilibrium() -> None:
         solver=AxleSolverSettings(internal_step_s=0.00025),
     )
 
-    result = run_axle_dynamics(model, case)
+    result = solve_axle(model, case)
     slider = result.body_state("slider")
 
     expected_z = 0.25 - 10.0 * 9.80665 / 10_000.0
@@ -224,7 +223,7 @@ def test_tire_contact_is_at_patch_and_reports_physical_loads() -> None:
             ),
         ),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="tire-static",
@@ -287,7 +286,7 @@ def test_bushing_reference_and_static_force_balance() -> None:
             ),
         ),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="bushing-static",
@@ -361,7 +360,7 @@ def test_anti_roll_bar_reports_physical_angle_rate_and_torque() -> None:
             ),
         ),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="anti-roll-output",
@@ -403,11 +402,15 @@ def test_axle_schema_loader_and_result_artifact_are_self_describing(
         yaml.safe_dump(case.model_dump(mode="json")),
         encoding="utf-8",
     )
-    loaded_model = load_axle_dynamics_model(model_path)
+    # The SI model loader is retired with the modelling route (G7), so the file
+    # round trip goes through the schema itself; the case loader stays public.
+    loaded_model = AxleDynamicsModel.model_validate(
+        json.loads(model_path.read_text(encoding="utf-8"))
+    )
     loaded_case = load_axle_dynamics_case(case_path)
-    result = run_axle_dynamics(loaded_model, loaded_case)
+    result = solve_axle(loaded_model, loaded_case)
     manifest_path = write_artifact(
-        result,
+        result.envelope,
         tmp_path / "artifact",
         model=loaded_model,
         case=loaded_case,
@@ -417,10 +420,15 @@ def test_axle_schema_loader_and_result_artifact_are_self_describing(
     assert manifest["status"] == "success"
     assert len(manifest["model_sha256"]) == 64
     assert len(manifest["case_sha256"]) == 64
-    assert manifest["layouts"]["body_state"] == list(BODY_STATE_COLUMNS)
-    assert manifest["layouts"]["diagnostics"] == list(DIAGNOSTIC_COLUMNS)
-    assert manifest["layouts"]["energy"] == list(ENERGY_COLUMNS)
-    assert manifest["layouts"]["tire_output"] == list(TIRE_OUTPUT_COLUMNS)
+    for name, columns in (
+        ("body_state", BODY_STATE_COLUMNS), ("diagnostics", DIAGNOSTIC_COLUMNS),
+        ("energy", ENERGY_COLUMNS),
+    ):
+        values = result.envelope.named_blocks[name]
+        assert values.shape[-1] == len(columns)
+        assert manifest["layouts"][name] == {"shape": list(values.shape), "dtype": str(values.dtype)}
+    assert not result.envelope.tire_ids
+    assert "tire_output" not in manifest["layouts"]
     # The layout is a published contract, so it is pinned here rather than only
     # derived: the first fifteen columns are the forces, moments and contact
     # kinematics Adams can also report, and the last six are the contact-body states
@@ -471,5 +479,5 @@ def test_axle_schema_loader_and_result_artifact_are_self_describing(
     )
     assert len(TIRE_OUTPUT_COLUMNS) == 41
     with np.load(manifest_path.parent / "arrays.npz") as arrays:
-        np.testing.assert_allclose(arrays["states"], result.states)
+        np.testing.assert_allclose(arrays["body_state"], result.states)
         np.testing.assert_allclose(arrays["energy"], result.energy)

@@ -22,14 +22,12 @@ from suspension_multibody.authoring import (
     AuthoringError,
     Project,
     SimulationAssembly,
+    assemble_generic,
+    migrate_v1_vehicle,
+    vehicle_declaration_from,
     vehicle_document_from,
-    vehicle_model_from,
 )
-from suspension_multibody.authoring.solver import (
-    assembly_request_for,
-    file_axles_from,
-)
-from suspension_multibody.subsystems.entry import compose_vehicle
+from suspension_multibody.authoring.bridge import axle_declaration_from
 
 from .fixtures import COORDINATES, write_vehicle_project
 
@@ -102,42 +100,38 @@ def test_the_vehicle_document_decides_the_composed_vehicle_roles(
     constraint names are the file template's rather than the built-in's.
     """
     paths = write_vehicle_project(tmp_path)
-    request = assembly_request_for(SimulationAssembly.load(paths["vehicle_assembly"]))
-    assert request.subsystems == frozenset(
+    document = AssemblyDocument.load(paths["vehicle_assembly"])
+    assert frozenset(entry.functional_role for entry in document.entries) == frozenset(
         {"suspension", "chassis", "steering", "wheel", "brake", "drive"}
     )
-    assert request.steering_template is not None
-
-    from_file = compose_vehicle(full_vehicle_model, "K", request)
-    default = compose_vehicle(full_vehicle_model, "K")
-    assert from_file.capabilities.subsystems == default.capabilities.subsystems
-
-    from_file_names = {c.name for c in from_file.constraints}
-    default_names = {c.name for c in default.constraints}
+    from_file = assemble_generic(migrate_v1_vehicle(vehicle_declaration_from(document)))
+    default = assemble_generic(migrate_v1_vehicle(full_vehicle_model))
+    from_file_names = {row["name"].rsplit(".", 1)[-1] for row in from_file.joints}
+    default_names = {row["name"].rsplit(".", 1)[-1] for row in default.joints}
     # The document's own subsystems are the ones the composition reads, by name.
-    assert request.steering_template.template.name == "file_steering"
-    assert request.chassis_template.template.name == "file_chassis"
+    assert next(entry for entry in document.entries if entry.functional_role == "steering").subsystem.template.name == "file_steering"
+    assert next(entry for entry in document.entries if entry.functional_role == "chassis").subsystem.template.name == "file_chassis"
     # And the steering topology is the one that is built: the file declares a
     # `support` body for its rack to slide in, and that body is what the composed
     # vehicle carries.  The tie rod names are the *suspension* template's now
     # (requirement 1 -- the suspension owns the tie rods), so they appear on both
     # axles whichever steering template is read.
-    assert "front_rack_guide" in from_file_names
-    assert "front_rack_tie_joint_L" in from_file_names
-    assert "front_rack_tie_joint_L" in default_names
+    assert "rack_guide" in from_file_names
+    assert "rack_tie_joint_L" in from_file_names
+    assert "rack_tie_joint_L" in default_names
     # The file's steering subsystem declares a support body, and it is built.
-    assert "front_support" in from_file.bodies
+    assert any(name.startswith("front_") and name.endswith(".rack") for name in from_file.bodies)
     # Both axles of *this* model have a free rack, so both steer and both read the
     # document's template; an axle the model bolts down keeps the built-in fixed
-    # template instead, which `vehicle_model_from` states for a file vehicle.
-    assert "rear_support" in from_file.bodies
+    # template instead, which `vehicle_declaration_from` states for a file vehicle.
+    assert any(name.startswith("rear_") and name.endswith(".rack") for name in from_file.bodies)
 
 
 def test_a_vehicle_model_can_take_its_axles_from_files(
     tmp_path: Path, full_vehicle_model
 ) -> None:
     """
-    Phase 8: the compatibility conversion for the existing `VehicleModel`.
+    Phase 8: the compatibility conversion for the existing `VehicleDeclaration`.
 
     The two axles come from the document's suspension files -- every hardpoint and
     every constitutive law -- while the wheels, the steering ratio and the
@@ -145,13 +139,13 @@ def test_a_vehicle_model_can_take_its_axles_from_files(
     does not describe.  The composed result is a vehicle whose axles were authored
     in files, which is what the conversion exists for.
     """
-    from suspension_multibody.authoring.solver import vehicle_model_with_file_axles
-
     from .fixtures import COORDINATES
 
     paths = write_vehicle_project(tmp_path)
-    simulation = SimulationAssembly.load(paths["vehicle_assembly"])
-    model = vehicle_model_with_file_axles(full_vehicle_model, simulation)
+    document = AssemblyDocument.load(paths["vehicle_assembly"])
+    axles = {entry.placement_role: axle_declaration_from(entry.effective(), name=entry.placement_role+"_full_vehicle")
+        for entry in document.entries if entry.functional_role == "suspension"}
+    model = full_vehicle_model.model_copy(update={"front_axle": axles["front"], "rear_axle": axles["rear"]})
 
     assert model.front_axle.name == "front_full_vehicle"
     assert model.rear_axle.name == "rear_full_vehicle"
@@ -163,11 +157,8 @@ def test_a_vehicle_model_can_take_its_axles_from_files(
     assert model.steering == full_vehicle_model.steering
     assert model.driveline == full_vehicle_model.driveline
 
-    runtime = compose_vehicle(model, "K", assembly_request_for(simulation))
-    assert runtime.capabilities.subsystems == frozenset(
-        {"suspension", "chassis", "steering", "wheel", "brake", "drive"}
-    )
-    assert any(name.startswith("front_upper_arm") for name in runtime.bodies)
+    runtime = assemble_generic(migrate_v1_vehicle(model))
+    assert any(name.startswith("front_") and name.endswith(".upper_arm_L") for name in runtime.bodies)
 
 
 def test_a_vehicle_document_builds_a_vehicle_model_from_its_own_numbers(
@@ -183,7 +174,7 @@ def test_a_vehicle_document_builds_a_vehicle_model_from_its_own_numbers(
     """
     paths = write_vehicle_project(tmp_path)
     document = AssemblyDocument.load(paths["vehicle_assembly"])
-    model = vehicle_model_from(document)
+    model = vehicle_declaration_from(document)
 
     assert model.name == "full_vehicle"
     assert model.chassis.mass == pytest.approx(1400.0)
@@ -223,7 +214,8 @@ def test_a_vehicle_document_builds_a_vehicle_model_from_its_own_numbers(
     # files leave it free, and the reader returns what they state.
     assert model.front_axle.rack_fixed_to_chassis is False
     assert model.rear_axle.rack_fixed_to_chassis is (
-        file_axles_from(document)["rear"].rack_fixed_to_chassis
+        axle_declaration_from(next(entry for entry in document.entries
+            if entry.functional_role == "suspension" and entry.placement_role == "rear").effective()).rack_fixed_to_chassis
     )
 
 
@@ -236,14 +228,14 @@ def test_the_vehicle_numbers_survive_a_trip_through_the_file(tmp_path: Path) -> 
     itself, is what rules that out.
     """
     paths = write_vehicle_project(tmp_path)
-    model = vehicle_model_from(AssemblyDocument.load(paths["vehicle_assembly"]))
+    model = vehicle_declaration_from(AssemblyDocument.load(paths["vehicle_assembly"]))
 
     section = vehicle_document_from(model)
     payload = json.loads(paths["vehicle_assembly"].read_text(encoding="utf-8"))
     payload["vehicle"] = section
     paths["vehicle_assembly"].write_text(json.dumps(payload), encoding="utf-8")
 
-    again = vehicle_model_from(AssemblyDocument.load(paths["vehicle_assembly"]))
+    again = vehicle_declaration_from(AssemblyDocument.load(paths["vehicle_assembly"]))
     assert again == model
     assert vehicle_document_from(again) == section
     # The section is where the *vehicle* numbers live, and the axles are not in it:
@@ -262,12 +254,12 @@ def test_a_full_vehicle_without_vehicle_numbers_is_refused(tmp_path: Path) -> No
     paths["vehicle_assembly"].write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(AuthoringError, match="'vehicle' section"):
-        vehicle_model_from(AssemblyDocument.load(paths["vehicle_assembly"]))
+        vehicle_declaration_from(AssemblyDocument.load(paths["vehicle_assembly"]))
 
     # And an axle document is not a vehicle, however complete its subsystems are.
     axle = AssemblyDocument.load(paths["assembly"])
     with pytest.raises(AuthoringError, match="full_vehicle"):
-        vehicle_model_from(axle)
+        vehicle_declaration_from(axle)
 
 
 def test_a_vehicle_whose_numbers_are_invalid_names_the_field(tmp_path: Path) -> None:
@@ -278,7 +270,7 @@ def test_a_vehicle_whose_numbers_are_invalid_names_the_field(tmp_path: Path) -> 
     paths["vehicle_assembly"].write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(AuthoringError, match="steering"):
-        vehicle_model_from(AssemblyDocument.load(paths["vehicle_assembly"]))
+        vehicle_declaration_from(AssemblyDocument.load(paths["vehicle_assembly"]))
 
 
 def test_a_file_vehicle_runs_the_vehicle_kc_reading(tmp_path: Path) -> None:
@@ -290,12 +282,9 @@ def test_a_file_vehicle_runs_the_vehicle_kc_reading(tmp_path: Path) -> None:
     built-in double wishbone's names -- so what ran is the document's vehicle
     rather than a template wearing its numbers.
     """
+    from suspension_multibody.api import simulate
+    from suspension_multibody.authoring.migration import migrate_v1_vehicle_kc_case
     from suspension_multibody.axle_dynamics.schema import AxleSolverSettings
-    from suspension_multibody.cases import (
-        vehicle_kc_case_document,
-        vehicle_kc_model_document,
-    )
-    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
     from suspension_multibody.schema import (
         DynamicSolverSettings,
         RoadSurfaceSpec,
@@ -303,10 +292,9 @@ def test_a_file_vehicle_runs_the_vehicle_kc_reading(tmp_path: Path) -> None:
         Vec3,
         VehicleDynamicCase,
     )
-    from suspension_multibody.simulation import SimulationRequest, run_request
 
     paths = write_vehicle_project(tmp_path)
-    model = vehicle_model_from(AssemblyDocument.load(paths["vehicle_assembly"]))
+    model = vehicle_declaration_from(AssemblyDocument.load(paths["vehicle_assembly"]))
     solver = DynamicSolverSettings(
         end_time=0.001,
         step_size=0.001,
@@ -316,18 +304,16 @@ def test_a_file_vehicle_runs_the_vehicle_kc_reading(tmp_path: Path) -> None:
         integrator="generalized_alpha",
         gravity=Vec3(x=0.0, y=0.0, z=0.0),
     )
-    base = prepare_vehicle_run(
-        model,
-        VehicleDynamicCase(
+    base = VehicleDynamicCase(
             name="file-vehicle",
             vehicle=model,
             solver=solver,
             road=RoadSurfaceSpec(kind="plane"),
             steering_input=TimeSignal(constant=0.0),
             brake_input=TimeSignal(constant=0.0),
-        ),
     )
-    document = vehicle_kc_case_document(
+    source, document = migrate_v1_vehicle_kc_case(
+        base,
         name="file-vehicle",
         wheel_values_mm=(0.0,),
         rack_values_mm=(0.0,),
@@ -335,25 +321,12 @@ def test_a_file_vehicle_runs_the_vehicle_kc_reading(tmp_path: Path) -> None:
         settings=AxleSolverSettings(),
         left_right_mode="single",
     )
-    model_document = vehicle_kc_model_document(model, base)
-    run = run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="vehicle_kc",
-            model=model_document,
-            case=document,
-            context={
-                "model_document_pair": model_document,
-                "wheels": (),
-                "vehicle_assembly": base.assembly,
-            },
-        )
-    ).raw
+    run = simulate(source, document).raw
 
     assert run.status == "success", dict(run.failure_evidence)
     bodies = run.document["manifest"]["bodies"]
-    assert "front_upper_arm_L" in bodies
-    assert "wheel_front_left" in bodies
+    assert any(name.startswith("front_") and name.endswith(".upper_arm_L") for name in bodies)
+    assert "wheel_front_left.wheel_front_left" in bodies
 
 
 def test_the_project_loads_the_vehicle_and_its_numbers(tmp_path: Path) -> None:
@@ -362,7 +335,7 @@ def test_the_project_loads_the_vehicle_and_its_numbers(tmp_path: Path) -> None:
     project = Project.load(tmp_path)
     assert sorted(project.sets["assembly"].documents) == ["front_axle", "full_vehicle"]
     assert project.sets["assembly"].path("full_vehicle") == paths["vehicle_assembly"]
-    model = vehicle_model_from(AssemblyDocument.load(paths["vehicle_assembly"]))
+    model = vehicle_declaration_from(AssemblyDocument.load(paths["vehicle_assembly"]))
     assert model.chassis.mass == pytest.approx(1400.0)
 
 
@@ -372,7 +345,7 @@ def test_the_rack_branch_follows_the_subsystem_files(tmp_path: Path) -> None:
 
     This test used to be `test_a_bolted_rack_keeps_the_built_in_fixed_template`
     and asserted `"rear_rack_fixed_to_chassis" in names`, because
-    `vehicle_model_from` bolted the rear axle's rack down on the ground that a
+    `vehicle_declaration_from` bolted the rear axle's rack down on the ground that a
     document declaring one steering system declares one *steered* axle.  Subtask
     p2-06 removed that override: a vehicle declares its steering channels
     explicitly, so bolting a rack the file left free would silently refuse the
@@ -392,16 +365,11 @@ def test_the_rack_branch_follows_the_subsystem_files(tmp_path: Path) -> None:
     """
     paths = write_vehicle_project(tmp_path)
     document = AssemblyDocument.load(paths["vehicle_assembly"])
-    model = vehicle_model_from(document)
-    names = {
-        constraint.name
-        for constraint in compose_vehicle(
-            model, "K", assembly_request_for(document)
-        ).constraints
-    }
-    assert "front_rack_guide" in names
-    assert "rear_rack_guide" in names
-    assert "front_rack_tie_joint_L" in names and "rear_rack_tie_joint_L" in names
-    assert not [name for name in names if name.endswith("rack_tie")]
+    model = vehicle_declaration_from(document)
+    names = {row["name"] for row in assemble_generic(migrate_v1_vehicle(model)).joints}
+    assert any(name.startswith("front_") and name.endswith(".rack_guide") for name in names)
+    assert any(name.startswith("rear_") and name.endswith(".rack_guide") for name in names)
+    assert sum(name.endswith(".rack_tie_joint_L") for name in names) == 2
+    assert not [name for name in names if name.endswith(".rack_tie")]
     # The branch is the *file's*: nothing bolts a rack the file left free.
-    assert not [name for name in names if name == "rear_rack_fixed_to_chassis"]
+    assert not [name for name in names if name.startswith("rear_") and name.endswith(".rack_fixed_to_chassis")]

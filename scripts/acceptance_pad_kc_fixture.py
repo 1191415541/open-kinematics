@@ -20,19 +20,19 @@ records; briefly:
 * no tires, because the contract emits them unconditionally, so a tire would make
   mode A differ from the frozen snapshot by the tire alone.
 
-Neither model declares `road`: that field is added to `FrontAxleModel` by another task.
+Neither model declares `road`: that field is added to `AxleDeclaration` by another task.
 """
 
 from __future__ import annotations
 
 from suspension_multibody.schema import (
     Bushing6x6,
-    FrontAxleModel,
     LinearSpring,
     MassSpec,
     Pose,
     Vec3,
 )
+from suspension_multibody.schema.model import AxleDeclaration
 
 __all__ = [
     "HARDPOINTS",
@@ -95,9 +95,9 @@ def _spring() -> LinearSpring:
     )
 
 
-def rigid_model() -> FrontAxleModel:
+def rigid_model() -> AxleDeclaration:
     """The K model: ideal constraints at the arm mounts, plus one spring."""
-    return FrontAxleModel(
+    return AxleDeclaration(
         name=fixture_name,
         hardpoints=dict(HARDPOINTS),
         mass=MassSpec(sprung_mass=1000),
@@ -105,7 +105,7 @@ def rigid_model() -> FrontAxleModel:
     )
 
 
-def compliant_model() -> FrontAxleModel:
+def compliant_model() -> AxleDeclaration:
     """
     The C model: the same axle with bushing-carried arm mounts.
 
@@ -141,7 +141,7 @@ def compliant_model() -> FrontAxleModel:
         for body, hardpoints in _MOUNTS
         for index, hardpoint in enumerate(hardpoints)
     )
-    return FrontAxleModel(
+    return AxleDeclaration(
         name=f"{fixture_name}_compliant",
         hardpoints=dict(HARDPOINTS),
         mass=MassSpec(sprung_mass=1000),
@@ -150,6 +150,6 @@ def compliant_model() -> FrontAxleModel:
     )
 
 
-def fixture_model(mode: str = "K") -> FrontAxleModel:
+def fixture_model(mode: str = "K") -> AxleDeclaration:
     """Return the model the given reading needs: rigid for K, compliant for C."""
     return rigid_model() if mode.upper() == "K" else compliant_model()

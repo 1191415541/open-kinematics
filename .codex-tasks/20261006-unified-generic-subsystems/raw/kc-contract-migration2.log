@@ -1,0 +1,87 @@
+.........FF........................                                      [100%]
+================================== FAILURES ===================================
+______________ test_result_document_satisfies_the_result_schema _______________
+
+    def test_result_document_satisfies_the_result_schema() -> None:
+        run = simulate(*_documents(name="schema-k", wheel_values_mm=(0.,), rack_values_mm=(0.,))).raw
+>       validate_result(_plain_document(run.document))
+
+packages\suspension_multibody\tests\cases\kc_quasi_static\test_contract_boundary.py:112: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_contracts\src\suspension_contracts\multibody.py:369: in validate_result
+    validate(document, "result")
+packages\suspension_contracts\src\suspension_contracts\multibody.py:253: in validate
+    _check(document, schema, "$", schema)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+value = 2, schema = {'const': 1}, path = '$/contract_version'
+root = {'$id': 'https://open-kinematics.dev/contracts/multibody_result_v1.json', '$schema': 'https://json-schema.org/draft/20...diagnostics live in JSON; every numeric array lives in the blob section and is described by a named block entry.', ...}
+
+    def _check(
+        value: Any, schema: Mapping[str, Any], path: str, root: Mapping[str, Any]
+    ) -> None:
+        ref = schema.get("$ref")
+        if isinstance(ref, str):
+            if not ref.startswith("#/"):
+                raise ContractError(f"{path}: unsupported $ref {ref!r}")
+            target: Any = root
+            for token in ref[2:].split("/"):
+                target = target[token]
+            _check(value, target, path, root)
+            return
+    
+        if "const" in schema and value != schema["const"]:
+>           raise ContractError(f"{path}: expected {schema['const']!r}, got {value!r}")
+E           suspension_contracts.multibody.ContractError: $/contract_version: expected 1, got 2
+
+packages\suspension_contracts\src\suspension_contracts\multibody.py:205: ContractError
+__________________ test_an_unimplemented_family_fails_closed __________________
+
+    def test_an_unimplemented_family_fails_closed() -> None:
+        assembly, case = _documents(name="closed", wheel_values_mm=(0.,))
+        wrong = case.to_payload()
+        wrong["protocol"] = "comparison"
+        with pytest.raises(Exception, match="comparison"):
+>           validate(assembly, wrong)
+
+packages\suspension_multibody\tests\cases\kc_quasi_static\test_contract_boundary.py:126: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model = ResolvedModel(_document=b'{"bodies":[{"fixed":true,"inertia":[[9.9999999999999995e-07,0.0,0.0],[0.0,9.9999999999999995...plate","source":"memory","version":1}],"schema_version":1,"signals":[],"tires":[],"units":"SI"}', resource_payload=b'')
+plan = ResolvedSolvePlan(_document=b'{"boundaries":[{"coordinate":"wheel.sub.json.spin_L","mode":"locked","name":"hold:wheel....":0.80000000000000004,"velocity_tolerance_m_per_s":9.9999999999999995e-08},"study":"quasi_static"}', input_payload=b'')
+
+    def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: SimulationRequest | None = None) -> CompiledSimulation:
+        """Emit one native submission from the resolved model and run plan."""
+        if not isinstance(model, ResolvedModel) or not isinstance(plan, ResolvedSolvePlan):
+            raise TypeError("compiler requires ResolvedModel and ResolvedSolvePlan")
+        run = plan.to_document()
+        family = run.get("protocol", "vehicle_dynamic" if run["study"] == "dynamic" else "kc_quasi_static")
+        if family in _GRID_PROTOCOLS and run["study"] == "dynamic":
+            raise ValueError("grid protocol cannot perform a dynamic study")
+        if family not in _GRID_PROTOCOLS and run["study"] != "dynamic":
+>           raise ValueError("time-history protocol requires a dynamic study")
+E           ValueError: time-history protocol requires a dynamic study
+
+packages\suspension_multibody\src\suspension_multibody\compilation\resolved.py:123: ValueError
+
+During handling of the above exception, another exception occurred:
+
+    def test_an_unimplemented_family_fails_closed() -> None:
+        assembly, case = _documents(name="closed", wheel_values_mm=(0.,))
+        wrong = case.to_payload()
+        wrong["protocol"] = "comparison"
+>       with pytest.raises(Exception, match="comparison"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'comparison'
+E        Input: 'time-history protocol requires a dynamic study'
+
+packages\suspension_multibody\tests\cases\kc_quasi_static\test_contract_boundary.py:125: AssertionError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\cases\kc_quasi_static\test_contract_boundary.py::test_result_document_satisfies_the_result_schema
+FAILED packages\suspension_multibody\tests\cases\kc_quasi_static\test_contract_boundary.py::test_an_unimplemented_family_fails_closed
+2 failed, 33 passed in 335.92s (0:05:35)

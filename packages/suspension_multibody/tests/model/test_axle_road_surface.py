@@ -20,11 +20,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from suspension_multibody.schema import FrontAxleModel, MassSpec, RoadSurfaceSpec, Vec3
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.authoring import assemble_generic, migrate_v1_axle
+from suspension_multibody.schema import MassSpec, RoadSurfaceSpec, Vec3
+from suspension_multibody.schema.model import AxleDeclaration
 
 
-def _axle(**overrides) -> FrontAxleModel:
+def _axle(**overrides) -> AxleDeclaration:
     """
     Return a complete symmetric-proxy axle.
 
@@ -47,7 +48,7 @@ def _axle(**overrides) -> FrontAxleModel:
         "mass": MassSpec(sprung_mass=1000),
     }
     payload.update(overrides)
-    return FrontAxleModel(**payload)
+    return AxleDeclaration(**payload)
 
 
 def test_a_model_without_a_road_still_constructs():
@@ -94,12 +95,11 @@ def test_the_road_reaches_the_runtime():
     model = _axle(
         road=RoadSurfaceSpec(kind="plane", origin=Vec3(x=0.0, y=0.0, z=-20.0))
     )
-    runtime = compose_axle(model, "K")
-    assert runtime.road is not None
-    assert runtime.road.kind == "plane"
-    assert runtime.road.origin.z == -20.0
+    graph = assemble_generic(migrate_v1_axle(model)).resolved_model().to_document()
+    assert graph["road"]["kind"] == "plane"
+    assert graph["road"]["parameters"]["origin"][2] == -.02
 
 
 def test_a_model_without_a_road_gives_a_runtime_without_one():
-    runtime = compose_axle(_axle(), "K")
-    assert runtime.road is None
+    graph = assemble_generic(migrate_v1_axle(_axle())).resolved_model().to_document()
+    assert graph.get("road") is None

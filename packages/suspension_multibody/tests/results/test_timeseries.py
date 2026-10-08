@@ -6,7 +6,7 @@ from types import MappingProxyType
 import numpy as np
 import pytest
 
-from suspension_multibody.results import TimeSeriesResult, TimeSeriesSample
+from suspension_multibody.results.timeseries import TimeSeriesResult, TimeSeriesSample
 
 
 def _samples() -> tuple[TimeSeriesSample, ...]:

@@ -20,7 +20,10 @@ from suspension_multibody.adams import (
 from suspension_multibody.adams.full_vehicle_model import (
     build_adams_source_vehicle_model,
 )
-from suspension_multibody.vehicle.service import run_vehicle_dynamics
+from suspension_multibody.api import validate
+from suspension_multibody.authoring.migration import migrate_v1_vehicle_case
+from suspension_multibody.results.envelope import ResultEnvelope
+from suspension_multibody.simulation import run_compiled
 
 MOMENT_PREFIXES = ("QSX", "QSY", "QDZ", "SSZ")
 
@@ -57,13 +60,17 @@ def _run_variant(data: Any, model: Any, result_path: Path, road_z: float) -> dic
         road_origin_z_m=road_z,
         source_drive_brake_result_path=result_path,
     )
-    result = run_vehicle_dynamics(model, case)
-    chassis = result.body_state("chassis")
+    assembly, declared_case = migrate_v1_vehicle_case(case)
+    result = run_compiled(validate(assembly, declared_case)).result
+    if not isinstance(result, ResultEnvelope):
+        raise TypeError("ordinary documents must return a ResultEnvelope")
+    chassis = result.body_state("body.chassis")
+    tires = [result.tire_state("wheel_"+wheel.name+"."+wheel.name)[0] for wheel in model.wheels]
     return {
         "linear_acceleration_m_per_s2": chassis[0, 13:16].tolist(),
         "angular_acceleration_rad_per_s2": chassis[0, 16:19].tolist(),
-        "tire_force_n": result.axle.tire_output[0, :, 4:7].tolist(),
-        "tire_moment_n_m": result.axle.tire_output[0, :, 12:15].tolist(),
+        "tire_force_n": [tire[4:7].tolist() for tire in tires],
+        "tire_moment_n_m": [tire[12:15].tolist() for tire in tires],
     }
 
 

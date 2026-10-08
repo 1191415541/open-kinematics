@@ -1,0 +1,8 @@
+{
+  "schema_version": 1, "name": "wheel_rolling", "study": "dynamic",
+  "samples": [0, 0.001, 0.002],
+  "solver": {"initialization_mode": "provided_consistent_state", "internal_step_s": 0.00025},
+  "initial_state": {"tire.sub.json.wheel": {"omega": [0, 2, 0]}},
+  "boundaries": [{"name": "spin_free", "coordinate": "tire.sub.json.spin", "mode": "free", "units": "rad"}],
+  "inputs": [], "outputs": []
+}

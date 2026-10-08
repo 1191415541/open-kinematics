@@ -1,327 +1,131 @@
-"""
-The request is orthogonal: assembly, rig, study, case and outputs, independently.
+"""Study and protocol are explicit run facts over one immutable physical graph."""
 
-The defect these tests exist for is that a run used to be a `(assembly, family)`
-pair with a `rig` that had to spell the family again.  Three questions were
-answered by one name, and the consequences were all silent:
-
-* a newly authored bench could not run an existing reading unless it was *renamed*
-  to match a family, which makes "extend the bench" a naming exercise;
-* naming a study was not possible at all -- the family decided it -- so "the same
-  assembly, two readings" could only be expressed by naming two families and
-  hoping the two paths had not drifted;
-* the family name was the routing key *and* the bench identity, so a caller could
-  not say which of the two it meant.
-
-Every test here drives the resolved value rather than reading a declaration, and
-each one asserts the refusal as well as the acceptance, because a mechanism that
-cannot reject is not checking anything.
-"""
-
-from __future__ import annotations
-
-import json
+from copy import deepcopy
 
 import pytest
+from suspension_contracts import ContractError
 
-from suspension_multibody.axle_dynamics.schema import (
-    AxleDynamicsCase,
-    AxleSolverSettings,
-)
-from suspension_multibody.compilation import (
-    CompilationError,
-    KcStudyInputs,
-    compile_plan,
-    default_emitters,
-    plan_for,
-    view_of,
-)
-from suspension_multibody.schema import FrontAxleModel
+from suspension_multibody import api
+from suspension_multibody.authoring.loader import DocumentLoader
+from suspension_multibody.compilation.resolved import compile_resolved, plan_from_case
+from suspension_multibody.modeling.resolved import ResolvedModel, ResolvedSolvePlan
 from suspension_multibody.simulation import SimulationRequest
-from suspension_multibody.studies import (
-    DYNAMIC,
-    QUASI_STATIC,
-    StudyError,
-    axle_dynamics_model,
-    build_study_assembly,
-)
-from suspension_multibody.subsystems.entry import compose_axle
 
-FIXTURE = (
-    "packages/suspension_multibody/tests/data/benchmark_axle.json"
-)
+from ._documents import PROTOCOLS, documents
 
 
-#: The bodies a massed axle declares.  The shared fixture is kinematic -- it
-#: declares no body inertia -- so a test that needs the model to be *readable as
-#: a dynamic model* has to give it masses; the bridge refuses a free body with no
-#: mass rather than inventing one, and that refusal is a separate test below.
-_MASSED_BODIES = (
-    "rack",
-    "upper_arm_L",
-    "lower_arm_L",
-    "upright_L",
-    "tie_rod_L",
-    "upper_arm_R",
-    "lower_arm_R",
-    "upright_R",
-    "tie_rod_R",
-)
-
-
-def _model(*, massed: bool = False) -> FrontAxleModel:
-    """Return the shared benchmark axle, optionally with body inertia."""
-    payload = json.loads(open(FIXTURE, encoding="utf-8").read())
-    if not massed:
-        return FrontAxleModel.model_validate(payload["model"])
-    raw = dict(payload["model"])
-    raw["bodies"] = [
-        {
-            "name": name,
-            "mass": 100.0,
-            "inertia": [[100.0, 0, 0], [0, 100.0, 0], [0, 0, 100.0]],
-        }
-        for name in _MASSED_BODIES
-    ]
-    return FrontAxleModel.model_validate(raw)
-
-
-def _dynamic_case() -> AxleDynamicsCase:
-    """Return a minimal time history for the dynamic reading of one plan."""
-    return AxleDynamicsCase(
-        name="probe",
-        times_s=(0.0, 1e-3),
-        solver=AxleSolverSettings(),
-    )
-
-
-# --- the axes are independent ----------------------------------------------
-
-
-def test_naming_only_the_rig_resolves_the_family_and_the_study() -> None:
-    """The bench is the dimension a caller chooses; the rest follows from it."""
-    plan = plan_for("kc_quasi_static")
-    assert plan.rig == "kc_quasi_static"
-    assert plan.family == "kc_quasi_static"
-    assert plan.study == QUASI_STATIC
-    assert plan.tire_activation == "vertical_only"
-
-
-def test_a_named_rig_and_a_named_family_need_not_spell_the_same() -> None:
-    """
-    The G4 statement, as a value.
-
-    A bench is what drives and measures; a family is which compiler and
-    preparation the run goes through.  Requiring the names to match is what made
-    a bench unable to route an existing reading without being renamed, and it is
-    exactly what the EPIC's DESIGN names as the defect (`request.py:61`: "rig 与
-    family 相互补值并强制相等 -> 07 独立 rig/study").
-    """
-    request = SimulationRequest(
-        assembly="axle", rig="kc_quasi_static", family="axle_dynamic"
-    )
-    assert request.rig == "kc_quasi_static"
+def test_a_named_rig_and_a_named_protocol_need_not_spell_the_same():
+    request = SimulationRequest(assembly="generic", rig="custom_bench", family="axle_dynamic", study="dynamic")
+    assert request.rig == "custom_bench"
     assert request.family == "axle_dynamic"
+    assert request.study == "dynamic"
 
 
-def test_a_study_the_bench_does_not_take_is_refused_by_name() -> None:
-    """Separating the axes must not make the pair unfalsifiable."""
-    with pytest.raises(StudyError, match="reads the model"):
-        plan_for("kc_quasi_static", study=DYNAMIC)
+def test_naming_only_a_rig_does_not_infer_a_protocol():
+    with pytest.raises(ValueError, match="explicit protocol"):
+        SimulationRequest(assembly="generic", rig="kc_quasi_static")
 
 
-def test_a_bench_that_declares_no_study_needs_the_caller_to_say() -> None:
-    """A bench usable for either reading cannot silently pick one."""
-    from suspension_multibody.rigs.rig import RIGS
-
-    original = RIGS["kc_quasi_static"]
-    RIGS["probe_bench"] = type(original)(
-        name="probe_bench", study=None, supplies_wheels=True
-    )
-    try:
-        with pytest.raises(StudyError, match="declares no study"):
-            plan_for("probe_bench")
-        assert plan_for("probe_bench", study=QUASI_STATIC).study == QUASI_STATIC
-    finally:
-        del RIGS["probe_bench"]
+def test_an_unknown_study_is_refused_before_submission():
+    _, case = documents()
+    plan = plan_from_case(case).to_document()
+    plan["study"] = "implicit_study"
+    with pytest.raises(ContractError):
+        ResolvedSolvePlan(plan)
 
 
-def test_a_request_that_contradicts_its_bench_is_refused() -> None:
-    """Two answers to "how is this read" would make the run a coin toss."""
-    request = SimulationRequest(
-        assembly="axle", rig="kc_quasi_static", study=DYNAMIC
-    )
-    with pytest.raises(ValueError, match="declares"):
-        request.resolved_study(QUASI_STATIC)
+def test_a_plan_needs_an_explicit_study():
+    _, case = documents()
+    plan = plan_from_case(case).to_document()
+    del plan["study"]
+    with pytest.raises(ContractError):
+        ResolvedSolvePlan(plan)
 
 
-# --- one assembly, two studies ---------------------------------------------
+@pytest.mark.parametrize("protocol", PROTOCOLS)
+def test_every_protocol_compiles_the_same_loaded_model(protocol):
+    source, case = documents(protocol)
+    loaded = DocumentLoader().load(source, case)
+    model = loaded.resolve()
+    compiled = compile_resolved(model, plan_from_case(case))
+    assert compiled.request.model is model
+    assert compiled.metadata["compiler"] == "ResolvedModelCompiler"
+    assert compiled.metadata["model_fingerprint"] == model.fingerprint
+    assert compiled.case_document["family"] == protocol
+    assert compiled.model_document["units"]["length"] == "m"
 
 
-def test_one_assembly_reports_the_same_fingerprint_under_two_studies() -> None:
-    """
-    A6: the *same* composition read by two studies is the same model.
-
-    The composition carries the fingerprint and the two plans carry the study, so
-    the checkable claim is that the fingerprint a compiled quasi-static run
-    reports is the one a compiled dynamic run reports -- for one assembly object.
-    That is what makes "the study changes the reading, not the model" a property
-    of the pipeline rather than a promise about two assembly functions not having
-    drifted.
-    """
-    from suspension_multibody.subsystems import AssemblyRequest
-    from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
-
-    model = _model(massed=True)
-    composed = si_assembly_for_axle(model, request=AssemblyRequest(mode="K"))
-    inputs = KcStudyInputs(name="probe", wheel_values_mm=(0.0,), rack_values_mm=(0.0,))
-    # The dynamic reading needs inertias and a time history, so its plan carries
-    # the SI model and case explicitly rather than having a family name imply
-    # them.  Both plans are read off the *same* composition.
-    dynamic_model = axle_dynamics_model(
-        build_study_assembly(composed.assembly.physical, study=DYNAMIC, mode="K"),
-        name="probe",
-    )
-
-    quasi = plan_for("kc_quasi_static", mode="K", inputs=inputs)
-    dynamic = plan_for(
-        "axle_dynamic",
-        mode="K",
-        inputs=inputs,
-        dynamic_model=dynamic_model,
-        dynamic_case=_dynamic_case(),
-    )
-
-    quasi_model, _, _, _, quasi_meta = compile_plan(quasi, composed)
-    dynamic_model, _, _, _, dynamic_meta = compile_plan(dynamic, composed)
-
-    assert quasi_meta["study"] == QUASI_STATIC
-    assert dynamic_meta["study"] == DYNAMIC
-    assert quasi_meta["tire_activation"] == "vertical_only"
-    assert dynamic_meta["tire_activation"] == "full"
-    # One object, one fingerprint: the study is metadata and nothing else.
-    assert quasi_meta["fingerprint"] == dynamic_meta["fingerprint"] == composed.fingerprint
-    # Two emitters, one model: the model document is authored from the same build.
-    assert quasi_model["contract"] == "multibody-model"
-    assert quasi_model["units"]["length"] == "mm"
+def test_one_model_has_the_same_fingerprint_under_two_studies():
+    source, quasi_case = documents("kc_quasi_static")
+    _, dynamic_case = documents("axle_dynamic")
+    model = DocumentLoader().load(source, dynamic_case).resolve()
+    quasi = compile_resolved(model, plan_from_case(quasi_case))
+    dynamic = compile_resolved(model, plan_from_case(dynamic_case))
+    assert quasi.request.model is dynamic.request.model is model
+    assert quasi.metadata["study"] == "quasi_static"
+    assert dynamic.metadata["study"] == "dynamic"
+    assert quasi.metadata["model_fingerprint"] == dynamic.metadata["model_fingerprint"]
+    for key in ("bodies", "frames", "joints", "elements", "tires", "coordinates"):
+        assert quasi.model_document.get(key, []) == dynamic.model_document.get(key, [])
 
 
-def test_the_plan_is_what_selects_the_reading_not_the_family_class() -> None:
-    """Two plans over one assembly reach two emitters from one registry."""
-    emitters = default_emitters()
-    assert emitters.resolve("kc_quasi_static") is emitters.resolve("kc_quasi_static")
-    assert type(emitters.resolve("kc_quasi_static")) is not type(
-        emitters.resolve("axle_dynamic")
-    )
+def test_a_request_that_contradicts_its_protocol_is_refused():
+    source, case = documents()
+    model = DocumentLoader().load(source, case).resolve()
+    request = SimulationRequest(assembly="generic", family="vehicle_kc", model=model)
+    with pytest.raises(ValueError, match="disagrees"):
+        compile_resolved(model, plan_from_case(case), request=request)
 
 
-def test_an_unknown_family_is_refused_by_the_emitter_registry() -> None:
-    """A family nobody registered must say so rather than fall back."""
-    with pytest.raises(CompilationError, match="no emitter is registered"):
-        default_emitters().resolve("no_such_family")
+def test_an_unknown_protocol_is_refused_before_submission():
+    source, case = documents()
+    model = DocumentLoader().load(source, case).resolve()
+    plan = plan_from_case(case).to_document()
+    plan["protocol"] = "unregistered_protocol"
+    with pytest.raises((ValueError, ContractError), match="protocol|family"):
+        compile_resolved(model, ResolvedSolvePlan(plan))
 
 
-# --- the view normalises both shapes ----------------------------------------
+def test_memory_and_saved_documents_resolve_to_one_graph(tmp_path):
+    from suspension_multibody.authoring.migration import save_migrated_assembly
+
+    source, case = documents()
+    saved = save_migrated_assembly(source, tmp_path)
+    memory = api.validate(source, case)
+    file = api.validate(saved, case)
+    assert isinstance(memory.request.model, ResolvedModel)
+    assert isinstance(file.request.model, ResolvedModel)
+    assert memory.request.model.fingerprint == file.request.model.fingerprint
+    assert memory.model_payload == file.model_payload
+    assert memory.case_payload == file.case_payload
 
 
-def test_the_view_of_an_assembly_and_of_its_composition_agree() -> None:
-    """
-    One set of facts, one spelling of the assembly that carries them.
-
-    The composed SI assembly carries identity and ports; the view normalises it into
-    the same shape a bare runtime has.  A document must not depend on which one the
-    caller happened to hold, so the view is where the two are made to agree -- and
-    this is the assertion that keeps them agreeing.
-
-    The two used to be *different types* (a composition and a hand-built assembly),
-    and the assertion here was that the view of a composition did not reach back for
-    the historical type.  That check is now stronger rather than weaker: the
-    historical type is gone, both sides are :class:`SubsystemRuntime`, and the
-    remaining distinction is the composition's fingerprint, which an assembly the
-    caller assembled bare does not have.
-    """
-    from suspension_multibody.subsystems import AssemblyRequest
-    from suspension_multibody.subsystems.runtime import SubsystemRuntime
-    from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
-
-    model = _model()
-    historical = compose_axle(model, "K")
-    composed = si_assembly_for_axle(model, request=AssemblyRequest(mode="K"))
-
-    from_assembly = view_of(historical)
-    from_composition = view_of(composed)
-
-    assert list(from_assembly.bodies) == list(from_composition.bodies)
-    assert set(from_assembly.points) == set(from_composition.points)
-    assert from_assembly.joint_types() == from_composition.joint_types()
-    # Both sides are the one runtime type: there is no second assembly shape left
-    # for a view to reach back for.
-    assert isinstance(from_composition.physical, SubsystemRuntime)
-    assert isinstance(from_assembly.physical, SubsystemRuntime)
-    assert type(from_composition.physical) is type(from_assembly.physical)
-    # The fingerprint is the composition's own; an assembly built bare has none, and
-    # says so rather than reporting an empty string that could be mistaken for one.
-    assert from_composition.fingerprint == composed.fingerprint
-    assert from_assembly.fingerprint == ""
+def test_compilation_requires_the_resolved_graph():
+    source, case = documents()
+    with pytest.raises(TypeError, match="ResolvedModel"):
+        compile_resolved(source, plan_from_case(case))
 
 
-def test_the_view_refuses_a_composition_that_kept_no_runtime() -> None:
-    """A composition without its runtime cannot be authored into a document."""
-    from dataclasses import replace
-
-    from suspension_multibody.modeling.assembly import SimulationAssembly
-    from suspension_multibody.subsystems import AssemblyRequest
-    from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
-
-    composed = si_assembly_for_axle(
-        _model(), request=AssemblyRequest(mode="K")
-    )
-    stripped = SimulationAssembly(
-        name=composed.name,
-        assembly=replace(composed.assembly, physical=None),
-        rig=composed.rig,
-        fingerprint=composed.fingerprint,
-    )
-    from suspension_multibody.compilation import ViewError
-
-    with pytest.raises(ViewError, match="runtime"):
-        view_of(stripped)
+def test_the_compiled_metadata_describes_the_actual_plan():
+    source, case = documents("kc_quasi_static")
+    before = deepcopy(case)
+    result = api.validate(source, case)
+    assert case == before
+    assert result.metadata["solve_plan"]["protocol"] == "kc_quasi_static"
+    assert result.metadata["study"] == "quasi_static"
+    assert result.metadata["solve_plan"]["excitation"]["c"] == case["c"]
 
 
-def test_a_plan_names_the_bench_and_the_family_it_routes_through() -> None:
-    """The compiled metadata is where a caller reads back what was run."""
-    plan = plan_for("kc_quasi_static", mode="C")
-    described = plan.describe()
-    assert described["rig"] == "kc_quasi_static"
-    assert described["family"] == "kc_quasi_static"
-    assert described["mode"] == "C"
-    assert described["study"] == QUASI_STATIC
-
-
-def test_drive_wheels_follows_the_inputs_then_the_bench_not_the_family() -> None:
-    """
-    The driven coordinates are a consequence of the case and the bench.
-
-    Reading them off the family name is what made a new bench unable to route an
-    existing reading: the family would have had to be the bench's own name.  Two
-    benches are compared here, and their capabilities differ, which is the whole
-    point -- the answer comes from the bench, not from which family was named.
-    """
-    # A wheel-travel sweep *is* driving the wheel centres, on either bench.
-    swept = plan_for(
-        "kc_quasi_static",
-        inputs=KcStudyInputs(wheel_values_mm=(-10.0, 0.0)),
-    )
-    assert swept.drive_wheels is True
-    road_bench_swept = plan_for(
-        "ride_random_road",
-        family="ride_random_road",
-        study=DYNAMIC,
-        inputs=KcStudyInputs(wheel_values_mm=(-10.0,)),
-    )
-    assert road_bench_swept.drive_wheels is True
-
-    # With no sweep, the bench's own capability decides: a bench that owns the
-    # wheels drives them, and a loading bench loads the body instead.
-    assert plan_for("kc_quasi_static").drive_wheels is True
-    assert plan_for("ride_random_road", study=DYNAMIC).drive_wheels is False
+def test_driven_coordinates_follow_the_explicit_boundary():
+    source, case = documents()
+    model = DocumentLoader().load(source, case).resolve()
+    original = model.to_document()
+    free_plan = plan_from_case(case).to_document()
+    locked_plan = deepcopy(free_plan)
+    locked_plan["boundaries"] = [{"name": "hold", "coordinate": "wheel.spin", "mode": "locked", "units": "rad", "value": 0}]
+    free = compile_resolved(model, ResolvedSolvePlan(free_plan))
+    locked = compile_resolved(model, ResolvedSolvePlan(locked_plan))
+    assert not any(row["type"] == "driven_rotation" for row in free.model_document["joints"])
+    assert sum(row["type"] == "driven_rotation" for row in locked.model_document["joints"]) == 1
+    assert model.to_document() == original
+    assert locked.request.model is free.request.model is model

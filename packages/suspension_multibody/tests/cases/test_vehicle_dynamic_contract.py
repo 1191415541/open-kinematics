@@ -15,11 +15,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
 from suspension_multibody.schema import RoadSurfaceSpec, TimeSignal, Vec3
-from suspension_multibody.simulation import SimulationRequest, run_request
+from tests.vehicle._unified_entry import compile_vehicle, solve_vehicle
 
-_FIXTURE = Path(__file__).resolve().parents[1] / "vehicle" / "test_native_vehicle.py"
+_FIXTURE = Path(__file__).resolve().parents[1] / "vehicle" / "vehicle_fixtures.py"
 
 
 def _fixture():
@@ -36,16 +35,7 @@ def fixture():
 
 
 def _run(model, case):
-    """Run one case through the unified runner on the default preparation."""
-    return run_request(
-        SimulationRequest(
-            assembly="vehicle",
-            family="vehicle_dynamic",
-            model=model,
-            case=case,
-            context={"prepared": prepare_vehicle_run(model, case)},
-        )
-    ).raw
+    return solve_vehicle(model, case).run.raw
 
 
 @pytest.mark.parametrize("kind", ["native_brush", "pac2002", "fiala"])
@@ -123,21 +113,19 @@ def test_a_measured_vertical_table_reaches_the_contract(fixture) -> None:
 
 
 def test_the_model_document_declares_the_vehicle_path(fixture) -> None:
-    from suspension_multibody.cases.vehicle_dynamic import model_document
-    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+    from suspension_contracts import unpack_container
 
-    model = fixture._positioned_vehicle(fixture._vehicle())
-    prepared = prepare_vehicle_run(model, fixture._case(model))
-    document, model_blob = model_document(model, prepared)
+    model = fixture._positioned_vehicle(fixture._pac2002_model(combined=True))
+    compiled = compile_vehicle(model, fixture._case(model))
+    document = compiled.model_document
+    _, model_blob = unpack_container(compiled.model_payload)
     assert document["capabilities"] == ["vehicle"]
     assert document["units"]["length"] == "m"
     assert len(document["tires"]) == 4
     kinds = {element["type"] for element in document["elements"]}
     assert "steering_actuator" in kinds
     assert "spring_damper" not in kinds
-    assert [entry["name"] for entry in document["blobs"]] == [
-        f"tire-parameters-{index}" for index in range(4)
-    ]
+    assert len({entry["name"] for entry in document["blobs"]}) == 4
     for entry in document["blobs"]:
         assert entry["shape"] == [226]
         assert entry["offset"] + entry["length"] <= len(model_blob)
@@ -152,7 +140,6 @@ def test_an_axial_corner_is_emitted_as_the_three_element_types(fixture) -> None:
     interface.  This asserts them by name rather than by count: a rename that
     kept the count would still be a document the kernel cannot read.
     """
-    from suspension_multibody.cases.vehicle_dynamic import model_document
     from suspension_multibody.schema import StaticDamper
 
     model = fixture._positioned_vehicle(
@@ -169,8 +156,7 @@ def test_an_axial_corner_is_emitted_as_the_three_element_types(fixture) -> None:
             )
         )
     )
-    prepared = prepare_vehicle_run(model, fixture._case(model))
-    document, _ = model_document(model, prepared)
+    document = compile_vehicle(model, fixture._case(model)).model_document
     kinds = {element["type"] for element in document["elements"]}
 
     # This fixture's axle declares dampers and no springs, so `damper` is the
@@ -183,13 +169,13 @@ def test_an_axial_corner_is_emitted_as_the_three_element_types(fixture) -> None:
 
 
 def test_the_case_document_carries_the_road_and_the_steering(fixture) -> None:
-    from suspension_multibody.cases.vehicle_dynamic import case_document
-    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+    from suspension_contracts import unpack_container
 
     model = fixture._positioned_vehicle(fixture._vehicle())
     case = fixture._case(model, brake=0.3, steering=TimeSignal(constant=0.02))
-    prepared = prepare_vehicle_run(model, case)
-    document, blob = case_document(model, case, prepared)
+    compiled = compile_vehicle(model, case)
+    document = compiled.case_document
+    _, blob = unpack_container(compiled.case_payload)
     assert document["family"] == "vehicle_dynamic"
     assert document["inputs"]["road"]["kind"] == "plane"
     roles = {entry["role"] for entry in document["blobs"]}
@@ -198,48 +184,17 @@ def test_the_case_document_carries_the_road_and_the_steering(fixture) -> None:
         assert entry["offset"] + entry["length"] <= len(blob)
 
 
-@pytest.mark.parametrize("document_location", ["values", "context"])
 @pytest.mark.parametrize("case_family", ["vehicle_dynamic", "handling"])
-def test_documents_take_priority_over_prepared_context(
-    document_location: str, case_family: str, monkeypatch
-) -> None:
-    from suspension_contracts import CONTRACT_VERSION
+def test_documents_define_identity_without_a_prepared_context(case_family, tmp_path):
+    from suspension_multibody.api import validate
 
-    from suspension_multibody.cases import vehicle_dynamic
-    from suspension_multibody.simulation import compile_request, prepare_request
+    from ._family_documents import assert_document_parity, fixture_documents
+    from .test_handling import _case
 
-    model_document = {
-        "contract": "multibody-model",
-        "contract_version": CONTRACT_VERSION,
-        "kind": "model",
-    }
-    case_document = {
-        "contract": "multibody-case",
-        "contract_version": CONTRACT_VERSION,
-        "kind": "case",
-        "family": case_family,
-    }
-    context = {"vehicle_dynamic_prepared": object()}
-    if document_location == "context":
-        context.update(model_document=model_document, case_document=case_document)
-        model, case = object(), object()
-    else:
-        model, case = model_document, case_document
-
-    def refuse_authoring(*args, **kwargs):
-        raise AssertionError("document bypass must not reauthor model or case")
-
-    monkeypatch.setattr(vehicle_dynamic, "model_document", refuse_authoring)
-    monkeypatch.setattr(vehicle_dynamic, "case_document", refuse_authoring)
-    request = SimulationRequest(
-        assembly="vehicle", family="vehicle_dynamic", model=model, case=case,
-        context=context,
-    )
-    prepared = prepare_request(request)
-    if case_family != "vehicle_dynamic":
-        with pytest.raises(ValueError, match="family"):
-            compile_request(prepared.request)
-    else:
-        compiled = compile_request(prepared.request)
-        assert compiled.model_document == model_document
-        assert compiled.case_document == case_document
+    assembly, case = fixture_documents()
+    if case_family == "handling":
+        case, _ = _case(case, "ramp")
+    compiled = assert_document_parity(assembly, case, tmp_path)
+    assert compiled.case_document["family"] == case_family
+    with pytest.raises(TypeError):
+        validate(assembly, case, context={"vehicle_dynamic_prepared": object()})

@@ -1,0 +1,17 @@
+.........F.........                                                      [100%]
+================================== FAILURES ===================================
+____________________ test_an_unknown_blob_role_is_rejected ____________________
+
+acceptance = <module 'axle_acceptance_fixture' from 'E:\\тс╪Ч\\open-kinematics\\packages\\suspension_multibody\\scripts\\run_axle_dynamics_acceptance.py'>
+
+    def test_an_unknown_blob_role_is_rejected(acceptance):
+        assembly, case = migrate_v1_dynamic_axle(acceptance.build_axle_model(), acceptance.build_case("road_pulse"))
+        wrong = case.to_payload()
+        wrong["inputs"][0]["role"] = "road_curvature"
+>       with pytest.raises(Exception, match="road_curvature"):
+E       Failed: DID NOT RAISE <class 'Exception'>
+
+packages\suspension_multibody\tests\cases\test_axle_dynamic_contract.py:84: Failed
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\cases\test_axle_dynamic_contract.py::test_an_unknown_blob_role_is_rejected
+1 failed, 18 passed in 9.14s

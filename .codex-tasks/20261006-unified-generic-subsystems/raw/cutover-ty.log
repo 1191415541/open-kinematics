@@ -1,0 +1,26 @@
+WARN ty is pre-release software and not ready for production use. Expect to encounter bugs, missing features, and fatal errors.
+error[unresolved-import]: Cannot resolve imported module `..axle_dynamics.contract_run`
+  --> packages\suspension_multibody\src\suspension_multibody\results\axle.py:22:12
+   |
+20 |     if isinstance(run, AxleDynamicsResult):
+21 |         return run
+22 |     from ..axle_dynamics.contract_run import build_result
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+23 |
+24 |     return build_result(model, case, run, stop=stop)
+   |
+info: rule `unresolved-import` is enabled by default
+
+error[unresolved-import]: Cannot resolve imported module `..axle_dynamics.contract_run`
+   --> packages\suspension_multibody\src\suspension_multibody\results\vehicle.py:127:12
+    |
+125 |     # constraint row, so reuse the adapter and replace that one name list rather
+126 |     # than maintaining a second, subtly different decoder here.
+127 |     from ..axle_dynamics.contract_run import build_result
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+128 |
+129 |     result = build_result(
+    |
+info: rule `unresolved-import` is enabled by default
+
+Found 2 diagnostics

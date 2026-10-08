@@ -1,0 +1,19 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/architecture/test_unified_model_cutover.py",
+    "packages/suspension_multibody/tests/architecture/test_public_api_boundary_gate.py",
+    "packages/suspension_multibody/tests/architecture/test_generic_builder_retirement.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-07T16:29:17.044419+00:00",
+  "finished_at": "2026-10-07T16:29:27.482669+00:00",
+  "log": "raw\\validation\\child-9-step-3.log",
+  "log_sha256": "62e547aadaf5ac70ef155998449d4cec4ff10c97a0c6d5bb78d58115ccc25a24"
+}

@@ -1,0 +1,1191 @@
+{
+  "producer": ".codex-tasks\\20261006-unified-generic-subsystems\\raw\\vehicle-document-evidence-probe.py",
+  "status": "PHYSICAL_DIFFERENCE",
+  "cases": [
+    {
+      "name": "default",
+      "producer": "ResolvedModelCompiler",
+      "model_fingerprint": "2e7bff420abc3a63fe9a82fd50e1be347be66089887f651d39f1c964bd0730be",
+      "historical_frame_restores_states": true,
+      "historical_frame_max_error": 0.0,
+      "historical_matches_baseline": true,
+      "model_differences": [
+        {
+          "field": "bodies[11].name",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[4].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[11].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[14].body_b",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "tires[0].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[0].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_L",
+          "new": "front_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[1].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[1].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_R",
+          "new": "front_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[2].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[2].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_L",
+          "new": "rear_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[3].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[3].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_R",
+          "new": "rear_model.sub.json.upright_R"
+        }
+      ],
+      "position_max_m": 0.0,
+      "quaternion_max": 0.0,
+      "velocity_max_m_per_s": 0.0,
+      "omega_max_rad_per_s": 0.0,
+      "acceleration_max_m_per_s2": 0.0,
+      "alpha_max_rad_per_s2": 0.0,
+      "different_values": 0,
+      "examples": [],
+      "diagnostic_shape": [
+        2,
+        16
+      ],
+      "old_diagnostic_shape": [
+        2,
+        16
+      ],
+      "diagnostic_max_errors": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "braking",
+      "producer": "ResolvedModelCompiler",
+      "model_fingerprint": "2e7bff420abc3a63fe9a82fd50e1be347be66089887f651d39f1c964bd0730be",
+      "historical_frame_restores_states": true,
+      "historical_frame_max_error": 0.0,
+      "historical_matches_baseline": true,
+      "model_differences": [
+        {
+          "field": "bodies[11].name",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[4].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[11].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[14].body_b",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "tires[0].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[0].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_L",
+          "new": "front_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[1].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[1].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_R",
+          "new": "front_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[2].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[2].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_L",
+          "new": "rear_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[3].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[3].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_R",
+          "new": "rear_model.sub.json.upright_R"
+        }
+      ],
+      "position_max_m": 0.0,
+      "quaternion_max": 0.0,
+      "velocity_max_m_per_s": 0.0,
+      "omega_max_rad_per_s": 0.0,
+      "acceleration_max_m_per_s2": 0.0,
+      "alpha_max_rad_per_s2": 0.0,
+      "different_values": 0,
+      "examples": [],
+      "diagnostic_shape": [
+        2,
+        16
+      ],
+      "old_diagnostic_shape": [
+        2,
+        16
+      ],
+      "diagnostic_max_errors": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "steering",
+      "producer": "ResolvedModelCompiler",
+      "model_fingerprint": "2e7bff420abc3a63fe9a82fd50e1be347be66089887f651d39f1c964bd0730be",
+      "historical_frame_restores_states": true,
+      "historical_frame_max_error": 0.0,
+      "historical_matches_baseline": true,
+      "model_differences": [
+        {
+          "field": "bodies[11].name",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[4].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[11].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[14].body_b",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "tires[0].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[0].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_L",
+          "new": "front_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[1].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[1].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_R",
+          "new": "front_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[2].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[2].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_L",
+          "new": "rear_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[3].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[3].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_R",
+          "new": "rear_model.sub.json.upright_R"
+        }
+      ],
+      "position_max_m": 6.38378239159465e-16,
+      "quaternion_max": 1.5991431472745475e-15,
+      "velocity_max_m_per_s": 1.377431588928113e-12,
+      "omega_max_rad_per_s": 4.254858618213397e-12,
+      "acceleration_max_m_per_s2": 2.2516583042531124e-09,
+      "alpha_max_rad_per_s2": 1.0682738249556678e-08,
+      "different_values": 478,
+      "examples": [
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 0,
+          "new": 4.404133881862151e-11,
+          "old": 4.404135401819255e-11,
+          "new_bits": 4451867899303092684,
+          "old_bits": 4451867901655112380
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 1,
+          "new": -9.252559368054452e-08,
+          "old": -9.252559364847583e-08,
+          "new_bits": 13724955501169004718,
+          "old_bits": 13724955501166581677
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 2,
+          "new": 5.649626287891452e-10,
+          "old": 5.649627125563708e-10,
+          "new_bits": 4468531213996645959,
+          "old_bits": 4468531214806792854
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 4,
+          "new": -1.2741630304131408e-07,
+          "old": -1.2741630302107158e-07,
+          "new_bits": 13727281716428729018,
+          "old_bits": 13727281716427964278
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 5,
+          "new": -1.369386214915918e-10,
+          "old": -1.369386597612994e-10,
+          "new_bits": 13682729624651352195,
+          "old_bits": 13682729626131839799
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 6,
+          "new": -2.5728806290742384e-08,
+          "old": -2.572880626109643e-08,
+          "new_bits": 13716733320273975265,
+          "old_bits": 13716733320265015325
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 7,
+          "new": 8.722150808913583e-08,
+          "old": 8.72215308673348e-08,
+          "new_bits": 4501182698937922667,
+          "old_bits": 4501182700658994721
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 8,
+          "new": -0.0001850632132671939,
+          "old": -0.00018506321318112497,
+          "new_bits": 13774331688336802784,
+          "old_bits": 13774331688333627401
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 9,
+          "new": 1.1194386679986072e-06,
+          "old": 1.1194387961429514e-06,
+          "new_bits": 4517893226270621855,
+          "old_bits": 4517893226875766411
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 10,
+          "new": -0.0005096904779322742,
+          "old": -0.0005096904779068436,
+          "new_bits": 13781212325027958948,
+          "old_bits": 13781212325027724392
+        }
+      ],
+      "diagnostic_shape": [
+        2,
+        16
+      ],
+      "old_diagnostic_shape": [
+        2,
+        16
+      ],
+      "diagnostic_max_errors": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        7.958627715068811e-23,
+        3.161008155337571e-19,
+        1.9098921651850332e-18,
+        0.0,
+        0.0,
+        0.0,
+        2.9015006204418346e-13,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "pac2002",
+      "producer": "ResolvedModelCompiler",
+      "model_fingerprint": "03e2e3eb2e539b8877be733c8038e1c3c154e3b64d114f1fcb48f4488db5973e",
+      "historical_frame_restores_states": true,
+      "historical_frame_max_error": 0.0,
+      "historical_matches_baseline": true,
+      "model_differences": [
+        {
+          "field": "bodies[11].name",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[4].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[11].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[14].body_b",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "tires[0].parameters.blob",
+          "old": "tire-parameters-0",
+          "new": "generic-tire-array-0"
+        },
+        {
+          "field": "tires[0].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_L",
+          "new": "front_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[0].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[1].parameters.blob",
+          "old": "tire-parameters-1",
+          "new": "generic-tire-array-1"
+        },
+        {
+          "field": "tires[1].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_R",
+          "new": "front_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[1].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[2].parameters.blob",
+          "old": "tire-parameters-2",
+          "new": "generic-tire-array-2"
+        },
+        {
+          "field": "tires[2].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_L",
+          "new": "rear_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[2].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[3].parameters.blob",
+          "old": "tire-parameters-3",
+          "new": "generic-tire-array-3"
+        },
+        {
+          "field": "tires[3].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_R",
+          "new": "rear_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[3].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        }
+      ],
+      "position_max_m": 0.0,
+      "quaternion_max": 0.0,
+      "velocity_max_m_per_s": 0.0,
+      "omega_max_rad_per_s": 0.0,
+      "acceleration_max_m_per_s2": 0.0,
+      "alpha_max_rad_per_s2": 0.0,
+      "different_values": 0,
+      "examples": [],
+      "diagnostic_shape": [
+        2,
+        16
+      ],
+      "old_diagnostic_shape": [
+        2,
+        16
+      ],
+      "diagnostic_max_errors": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "pac2002 adams",
+      "producer": "ResolvedModelCompiler",
+      "model_fingerprint": "3e3dc8269a00005cb79fc27b410d3925e298815605c91e94229d0e49b1b6a081",
+      "historical_frame_restores_states": true,
+      "historical_frame_max_error": 0.0,
+      "historical_matches_baseline": true,
+      "model_differences": [
+        {
+          "field": "bodies[11].name",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[4].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[11].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[14].body_b",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "tires[0].parameters.blob",
+          "old": "tire-parameters-0",
+          "new": "generic-tire-array-0"
+        },
+        {
+          "field": "tires[0].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_L",
+          "new": "front_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[0].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[1].parameters.blob",
+          "old": "tire-parameters-1",
+          "new": "generic-tire-array-1"
+        },
+        {
+          "field": "tires[1].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_R",
+          "new": "front_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[1].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[2].parameters.blob",
+          "old": "tire-parameters-2",
+          "new": "generic-tire-array-2"
+        },
+        {
+          "field": "tires[2].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_L",
+          "new": "rear_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[2].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[3].parameters.blob",
+          "old": "tire-parameters-3",
+          "new": "generic-tire-array-3"
+        },
+        {
+          "field": "tires[3].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_R",
+          "new": "rear_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[3].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        }
+      ],
+      "position_max_m": 0.0,
+      "quaternion_max": 0.0,
+      "velocity_max_m_per_s": 0.0,
+      "omega_max_rad_per_s": 0.0,
+      "acceleration_max_m_per_s2": 0.0,
+      "alpha_max_rad_per_s2": 0.0,
+      "different_values": 0,
+      "examples": [],
+      "diagnostic_shape": [
+        2,
+        16
+      ],
+      "old_diagnostic_shape": [
+        2,
+        16
+      ],
+      "diagnostic_max_errors": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "nondefault road and initial state",
+      "producer": "ResolvedModelCompiler",
+      "model_fingerprint": "2e7bff420abc3a63fe9a82fd50e1be347be66089887f651d39f1c964bd0730be",
+      "historical_frame_restores_states": true,
+      "historical_frame_max_error": 0.0,
+      "historical_matches_baseline": true,
+      "model_differences": [
+        {
+          "field": "bodies[11].name",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[4].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[11].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[14].body_b",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "tires[0].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[0].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_L",
+          "new": "front_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[1].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[1].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_R",
+          "new": "front_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[2].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[2].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_L",
+          "new": "rear_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[3].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[3].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_R",
+          "new": "rear_model.sub.json.upright_R"
+        }
+      ],
+      "position_max_m": 2.220446049250313e-16,
+      "quaternion_max": 2.4892241046181596e-13,
+      "velocity_max_m_per_s": 2.2269817554713273e-15,
+      "omega_max_rad_per_s": 9.857679117430962e-10,
+      "acceleration_max_m_per_s2": 3.6441474837722865e-12,
+      "alpha_max_rad_per_s2": 1.6130725271068513e-06,
+      "different_values": 453,
+      "examples": [
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 0,
+          "new": 0.009999995060674083,
+          "old": 0.009999995060674092,
+          "new_bits": 4576918226456760141,
+          "old_bits": 4576918226456760146
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 1,
+          "new": 0.0049999951241864364,
+          "old": 0.004999995124186407,
+          "new_bits": 4572414624055286869,
+          "old_bits": 4572414624055286835
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 2,
+          "new": 6.439129994116931e-09,
+          "old": 6.439129995792253e-09,
+          "new_bits": 4484362460112015977,
+          "old_bits": 4484362460114041317
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 4,
+          "new": -2.8545303535505704e-09,
+          "old": -2.85453034545714e-09,
+          "new_bits": 13702348297728240257,
+          "old_bits": 13702348297708671543
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 5,
+          "new": -2.4983783946745107e-10,
+          "old": -2.498378416791205e-10,
+          "new_bits": 13686768234589149831,
+          "old_bits": 13686768234631929739
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 6,
+          "new": -3.511922088960457e-10,
+          "old": -3.511922234710188e-10,
+          "new_bits": 13688728713215277634,
+          "old_bits": 13688728713497198615
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 8,
+          "new": 4.999990345889075,
+          "old": 4.999990345889076,
+          "new_bits": 4617315507092038433,
+          "old_bits": 4617315507092038434
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 9,
+          "new": 1.2878843913977465e-05,
+          "old": 1.2878843914422587e-05,
+          "new_bits": 4533719953112033092,
+          "old_bits": 4533719953112295846
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 10,
+          "new": -1.1303940227049306e-05,
+          "old": -1.1303940225490104e-05,
+          "new_bits": 13756162330918696729,
+          "old_bits": 13756162330917776339
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 11,
+          "new": -9.879915461956135e-07,
+          "old": -9.879915463517795e-07,
+          "new_bits": 13740644521643125522,
+          "old_bits": 13740644521643862995
+        }
+      ],
+      "diagnostic_shape": [
+        2,
+        16
+      ],
+      "old_diagnostic_shape": [
+        2,
+        16
+      ],
+      "diagnostic_max_errors": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.2873529663681997e-15,
+        1.0373350307298083e-13,
+        0.0,
+        0.0,
+        0.0,
+        2.220446049250313e-16,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "measured tire table",
+      "producer": "ResolvedModelCompiler",
+      "model_fingerprint": "2091b149387e1c14871f746f624bb087326c9c43aab6b652f7bb787d1ac8c273",
+      "historical_frame_restores_states": true,
+      "historical_frame_max_error": 0.0,
+      "historical_matches_baseline": true,
+      "model_differences": [
+        {
+          "field": "bodies[11].name",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[4].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[11].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[14].body_b",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "tires[0].parameters.blob",
+          "old": "tire-parameters-0",
+          "new": "generic-tire-array-0"
+        },
+        {
+          "field": "tires[0].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_L",
+          "new": "front_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[0].parameters.deflection_curve",
+          "old": "tire-deflection-curve-0",
+          "new": "generic-tire-array-1"
+        },
+        {
+          "field": "tires[0].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[1].parameters.blob",
+          "old": "tire-parameters-1",
+          "new": "generic-tire-array-2"
+        },
+        {
+          "field": "tires[1].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_R",
+          "new": "front_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[1].parameters.deflection_curve",
+          "old": "tire-deflection-curve-1",
+          "new": "generic-tire-array-3"
+        },
+        {
+          "field": "tires[1].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[2].parameters.blob",
+          "old": "tire-parameters-2",
+          "new": "generic-tire-array-4"
+        },
+        {
+          "field": "tires[2].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_L",
+          "new": "rear_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[2].parameters.deflection_curve",
+          "old": "tire-deflection-curve-2",
+          "new": "generic-tire-array-5"
+        },
+        {
+          "field": "tires[2].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[3].parameters.blob",
+          "old": "tire-parameters-3",
+          "new": "generic-tire-array-6"
+        },
+        {
+          "field": "tires[3].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_R",
+          "new": "rear_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[3].parameters.deflection_curve",
+          "old": "tire-deflection-curve-3",
+          "new": "generic-tire-array-7"
+        },
+        {
+          "field": "tires[3].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        }
+      ],
+      "position_max_m": 0.0,
+      "quaternion_max": 0.0,
+      "velocity_max_m_per_s": 0.0,
+      "omega_max_rad_per_s": 0.0,
+      "acceleration_max_m_per_s2": 0.0,
+      "alpha_max_rad_per_s2": 0.0,
+      "different_values": 0,
+      "examples": [],
+      "diagnostic_shape": [
+        2,
+        16
+      ],
+      "old_diagnostic_shape": [
+        2,
+        16
+      ],
+      "diagnostic_max_errors": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "bushing force curves",
+      "producer": "ResolvedModelCompiler",
+      "model_fingerprint": "18c8d19ac106e7be8f9f368493471df1b53b17d153c6c2e708777d619b912ab5",
+      "historical_frame_restores_states": true,
+      "historical_frame_max_error": 0.0,
+      "historical_matches_baseline": true,
+      "model_differences": [
+        {
+          "field": "bodies[11].name",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[2].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[7].body_a",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "joints[10].body_b",
+          "old": "steering_front_rack.front_rack",
+          "new": "front_model.sub.json.rack"
+        },
+        {
+          "field": "tires[0].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[0].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_L",
+          "new": "front_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[1].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[1].parameters.frame_body",
+          "old": "front_wheel.sub.json.wheel_hub_R",
+          "new": "front_model.sub.json.upright_R"
+        },
+        {
+          "field": "tires[2].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[2].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_L",
+          "new": "rear_model.sub.json.upright_L"
+        },
+        {
+          "field": "tires[3].parameters.frame_center_local[2]",
+          "old": 0.0,
+          "new": 0.04999999999999999
+        },
+        {
+          "field": "tires[3].parameters.frame_body",
+          "old": "rear_wheel.sub.json.wheel_hub_R",
+          "new": "rear_model.sub.json.upright_R"
+        }
+      ],
+      "position_max_m": 3.290701044988964e-13,
+      "quaternion_max": 6.127374043493679e-12,
+      "velocity_max_m_per_s": 6.518236737038455e-10,
+      "omega_max_rad_per_s": 2.4288120078954506e-08,
+      "acceleration_max_m_per_s2": 1.0676655649577427e-06,
+      "alpha_max_rad_per_s2": 3.978304712415337e-05,
+      "different_values": 510,
+      "examples": [
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 0,
+          "new": 7.805098576909286e-09,
+          "old": 7.805096715890894e-09,
+          "new_bits": 4485799521830775037,
+          "old_bits": 4485799520705858445
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 1,
+          "new": 1.6737371851287781e-18,
+          "old": -1.5825673998521526e-19,
+          "new_bits": 4341153381858774232,
+          "old_bits": 13548897807294019042
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 2,
+          "new": 3.236988508951705e-08,
+          "old": 3.236988455697612e-08,
+          "new_bits": 4494980427221218982,
+          "old_bits": 4494980427140743672
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 4,
+          "new": 8.628244404094062e-19,
+          "old": -7.847353770492285e-18,
+          "new_bits": 4336919323165856317,
+          "old_bits": 13574438901058596764
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 5,
+          "new": -5.674354157463671e-08,
+          "old": -5.6743541093893825e-08,
+          "new_bits": 13722035706906404629,
+          "old_bits": 13722035706833756818
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 6,
+          "new": -8.745381042656932e-18,
+          "old": -3.645992684105582e-18,
+          "new_bits": 13575021754081614151,
+          "old_bits": 13569574846729914546
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 7,
+          "new": 1.561147274572917e-05,
+          "old": 1.5611469011034098e-05,
+          "new_bits": 4535228918612385500,
+          "old_bits": 4535228917510098073
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 8,
+          "new": 4.966461549816602e-16,
+          "old": -1.0096499245398418e-15,
+          "new_bits": 4378031828548459966,
+          "old_bits": 13605990407990351188
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 9,
+          "new": 6.474567256421193e-05,
+          "old": 6.47456715078484e-05,
+          "new_bits": 4544405811796148830,
+          "old_bits": 4544405811718202959
+        },
+        {
+          "sample": 1,
+          "body": "chassis",
+          "column": 10,
+          "new": -7.962065377628724e-15,
+          "old": 1.6029460273525523e-14,
+          "new_bits": 13619428232018513136,
+          "old_bits": 4400593175047871393
+        }
+      ],
+      "diagnostic_shape": [
+        2,
+        16
+      ],
+      "old_diagnostic_shape": [
+        2,
+        16
+      ],
+      "diagnostic_max_errors": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.220446049250313e-16,
+        1.42169715636306e-17,
+        1.468127636194993e-10,
+        0.0,
+        0.0,
+        0.0,
+        1.646786851425031e-11,
+        0.0,
+        0.0
+      ]
+    }
+  ]
+}

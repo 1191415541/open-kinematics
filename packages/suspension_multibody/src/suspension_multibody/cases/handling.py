@@ -27,8 +27,8 @@ from typing import Any, Literal
 
 import numpy as np
 
-from ..axle_dynamics.schema import AxleSolverSettings
-from .vehicle_dynamic import _solver_block
+from ..kernel.solver import solver_settings_document as _solver_block
+from ..schema.solver import AxleSolverSettings
 
 __all__ = ["SteeringShape", "case_document", "steering_signals"]
 

@@ -16,8 +16,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from suspension_multibody.subsystems import DEFAULT_AXLE_SUBSYSTEMS, AssemblyRequest
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.authoring import (
+    AssemblyDocument,
+    SubsystemDocument,
+    TemplateDocument,
+    assemble_generic,
+)
 from suspension_multibody.templates import (
     ACTIVATED_MODES,
     DEFAULT_MOUNT_STIFFNESS,
@@ -28,7 +32,7 @@ from suspension_multibody.templates import (
     get,
     instantiate,
 )
-from tests.benchmark_fixture import benchmark_model
+from tests.subsystems._generic import axle_source
 
 #: The slots the built-in template has no default for: the model owns them.
 _MODEL_OWNED = {"spring": 0.0, "damper": 0.0}
@@ -164,9 +168,9 @@ def test_with_mode_is_idempotent() -> None:
 
 def test_k_activation_reproduces_the_k_assembly() -> None:
     """K is the frozen `k_states.json` baseline's mode, so it must not move."""
-    assembly = compose_axle(benchmark_model(), "K")
+    assembly = assemble_generic(axle_source("K"))
     instance = _instance("K")
-    assembly_names = [c.name for c in assembly.constraints]
+    assembly_names = [row["name"].rsplit(".", 1)[-1] for row in assembly.joints]
     # The assembly carries the suspension template's own activated joints plus the
     # steering template's two -- its rack guide and the housing mount -- and nothing
     # else: no row is invented, and none is dropped.
@@ -174,21 +178,22 @@ def test_k_activation_reproduces_the_k_assembly() -> None:
     assert set(instance.joints) <= set(assembly_names)
     # The document records the suspension's rows per side, in the template's own
     # sequence: left, then right.
-    assert [n for n in assembly_names if n in set(instance.joints)] == [
+    assert [n for n in assembly_names if n in set(instance.joints) and not n.startswith("wheel_spin_joint_")] == [
         n
         for side in ("L", "R")
         for n in instance.joints
-        if f"_{side}_" in n or n.endswith(f"_{side}")
+        if (f"_{side}_" in n or n.endswith(f"_{side}")) and not n.startswith("wheel_spin_joint_")
     ]
-    assert assembly.element_ids == ()
+    assert [n for n in assembly_names if n.startswith("wheel_spin_joint_")] == ["wheel_spin_joint_L", "wheel_spin_joint_R"]
+    assert assembly.elements == ()
 
 
 def test_c_activation_keeps_the_joints_the_assembly_has() -> None:
-    assembly = compose_axle(benchmark_model(), "C")
+    assembly = assemble_generic(axle_source("C"))
     instance = _instance("C")
     # The suspension template's ten C-mode joints plus the steering template's two.
-    assert len(assembly.constraints) == 12
-    assert {c.name for c in assembly.constraints} == set(instance.joints) | {
+    assert len(assembly.joints) == 12
+    assert {row["name"].rsplit(".", 1)[-1] for row in assembly.joints} == set(instance.joints) | {
         "rack_guide",
         "housing_mount",
     }
@@ -196,9 +201,10 @@ def test_c_activation_keeps_the_joints_the_assembly_has() -> None:
 
 @pytest.mark.parametrize("mode", ["K", "C"])
 def test_capabilities_agree_with_the_template_activation(mode: str) -> None:
-    assembly = compose_axle(benchmark_model(), mode)
-    assert assembly.capabilities is not None
-    assert assembly.capabilities.subsystems == DEFAULT_AXLE_SUBSYSTEMS
+    document = axle_source(mode)
+    assembly = assemble_generic(document)
+    assert {row["name"].rsplit(".", 1)[-1] for row in assembly.joints} >= set(_instance(mode).joints)
+    assert {entry.ref for entry in document.entries} == {"model.sub.json", "wheel.sub.json"}
 
 
 def test_mount_stiffness_comes_from_the_template_not_a_constant() -> None:
@@ -211,16 +217,16 @@ def test_mount_stiffness_comes_from_the_template_not_a_constant() -> None:
     the slot would still be a hard-coded constant wearing a template's name.
     """
     assert DEFAULT_MOUNT_STIFFNESS == 0.0
-    model = benchmark_model()
+    document = axle_source("C")
 
     def slot_stiffness_norms(assembly) -> set[float]:
         return {
-            float(np.linalg.norm(element.stiffness))
+            float(np.linalg.norm(element["parameters"]["stiffness"]))
             for element in assembly.elements
-            if element.name.endswith(("inner_front", "inner_rear"))
+            if element["type"] == "bushing" and element["name"].endswith(("inner_front", "inner_rear"))
         }
 
-    default = compose_axle(model, "C")
+    default = assemble_generic(document)
     assert slot_stiffness_norms(default) == {0.0}
 
     supplied = instantiate(
@@ -228,15 +234,15 @@ def test_mount_stiffness_comes_from_the_template_not_a_constant() -> None:
         mode="C",
         properties={**_MODEL_OWNED, "bushing": 25_000.0},
     )
-    stiffened = compose_axle(
-        model,
-        "C",
-        AssemblyRequest(
-            mode="C",
-            subsystems=DEFAULT_AXLE_SUBSYSTEMS,
-            suspension_template=supplied,
-        ),
-    )
+    documents = {}
+    for entry in document.entries:
+        payload = entry.subsystem.template.to_payload()
+        for row in payload["elements"]:
+            if row["type"] == "bushing" and row["name"].endswith(("inner_front", "inner_rear")):
+                row["parameters"]["stiffness"] = np.diag([25, 25, 25, 0, 0, 0]).tolist()
+        documents[entry.ref] = SubsystemDocument.from_payload(entry.subsystem.to_payload(),
+            template=TemplateDocument.from_payload(payload), properties=entry.subsystem.properties)
+    stiffened = assemble_generic(AssemblyDocument.from_payload(document.to_payload(), subsystems=documents))
     # Three translational diagonals, so the norm of a 25000 N/m slot is sqrt(3)*25000.
     norms = slot_stiffness_norms(stiffened)
     assert len(norms) == 1

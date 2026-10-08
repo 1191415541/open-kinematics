@@ -585,6 +585,10 @@
   ],
   "header_edges": [
     [
+      "mb_cases",
+      "mb_model"
+    ],
+    [
       "abi",
       "mb_config"
     ],

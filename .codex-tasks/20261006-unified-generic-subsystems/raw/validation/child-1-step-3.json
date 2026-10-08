@@ -1,0 +1,19 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/modeling/test_resolved_model.py",
+    "packages/suspension_multibody/tests/authoring/test_generic_markers.py",
+    "packages/suspension_multibody/tests/authoring/test_generic_multibody.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T13:18:18.401797+00:00",
+  "finished_at": "2026-10-06T13:18:21.035243+00:00",
+  "log": "raw\\validation\\child-1-step-3.log",
+  "log_sha256": "4f34e14cb7f58110c56c8d9840867366169947ff37701bc82f85b27d236d6b54"
+}

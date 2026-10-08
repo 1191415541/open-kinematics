@@ -23,7 +23,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, Literal
+
+import numpy as np
 
 from .identity import EntityId
 from .ports import PortRequirement, PortSpec
@@ -32,11 +34,40 @@ __all__ = [
     "EntityConflictError",
     "FragmentProvenance",
     "ModelFragment",
+    "Connection",
+    "ResolvedElement",
 ]
 
 
 class EntityConflictError(ValueError):
     """Two contributions claim the same entity identity."""
+
+
+@dataclass(frozen=True)
+class Connection:
+    """Stable physical connection identifier."""
+
+    name: str
+    kind: Literal["ideal", "bushing"]
+    body_a: str
+    body_b: str
+    point_a: str
+    point_b: str
+
+
+@dataclass(frozen=True)
+class ResolvedElement:
+    """A force element declaration with resolved attachment geometry."""
+
+    kind: str
+    name: str
+    spec: object
+    body_a: str | None = None
+    point_a: np.ndarray | None = None
+    body_b: str | None = None
+    point_b: np.ndarray | None = None
+    local_pose_a: object | None = None
+    local_pose_b: object | None = None
 
 
 @dataclass(frozen=True)

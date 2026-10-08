@@ -20,7 +20,7 @@ import pytest
 import yaml
 
 from suspension_multibody.adams.time_domain import history_from_dynamic_bundle
-from suspension_multibody.results import TimeSeriesResult, TimeSeriesSample
+from suspension_multibody.results.timeseries import TimeSeriesResult, TimeSeriesSample
 from suspension_multibody.schema import (
     CaseSpec,
     DynamicCaseSpec,
@@ -28,25 +28,26 @@ from suspension_multibody.schema import (
     DynamicResultBundle,
     DynamicSolverSettings,
     DynamicTimeSample,
-    FrontAxleModel,
     MassSpec,
     Provenance,
     Vec3,
     VehicleDynamicCase,
-    VehicleModel,
     load_case,
     load_dynamic_case,
     load_dynamic_result,
-    load_model,
     load_vehicle_dynamic_case,
-    load_vehicle_model,
 )
+from suspension_multibody.schema.model import AxleDeclaration
+from suspension_multibody.schema.vehicle import VehicleDeclaration
 
+#: The versioned *input* loaders that survive.  ``load_axle_declaration`` and
+#: ``load_vehicle_declaration`` were retired with the v1 modelling route, so the
+#: root ``schema_version`` check is pinned through the loaders still published --
+#: the two model loaders now read through their schema types directly (they are
+#: internal emission products, not a user door), so they are not in this map.
 _INPUT_LOADERS: dict[str, Callable[[Path], object]] = {
-    "model": load_model,
     "case": load_case,
     "dynamic_case": load_dynamic_case,
-    "vehicle_model": load_vehicle_model,
     "vehicle_dynamic_case": load_vehicle_dynamic_case,
 }
 
@@ -96,18 +97,13 @@ def _write(path: Path, payload: dict[str, Any], *, as_yaml: bool = False) -> Pat
     return path
 
 
-def _input_documents(vehicle_model: VehicleModel) -> dict[str, dict[str, Any]]:
+def _input_documents(vehicle_model: VehicleDeclaration) -> dict[str, dict[str, Any]]:
     return {
-        "model": FrontAxleModel(
-            hardpoints={"LOWER_FRONT_LEFT": Vec3(x=100.0, y=-700.0, z=200.0)},
-            mass=MassSpec(sprung_mass=1200.0),
-        ).model_dump(mode="json"),
         "case": CaseSpec(mode="K").model_dump(mode="json"),
         "dynamic_case": DynamicCaseSpec(
             mode="axle_dynamic",
             solver=DynamicSolverSettings(end_time=0.02, step_size=0.01),
         ).model_dump(mode="json"),
-        "vehicle_model": vehicle_model.model_dump(mode="json"),
         "vehicle_dynamic_case": VehicleDynamicCase(
             solver=DynamicSolverSettings(end_time=0.02, step_size=0.01),
             vehicle=vehicle_model,
@@ -184,7 +180,7 @@ def test_load_dynamic_result_still_forbids_root_schema_version(tmp_path: Path) -
 
 @pytest.mark.parametrize("kind", sorted(_INPUT_LOADERS))
 def test_input_loaders_keep_requiring_top_level_schema_version(
-    tmp_path: Path, full_vehicle_model: VehicleModel, kind: str
+    tmp_path: Path, full_vehicle_model: VehicleDeclaration, kind: str
 ) -> None:
     document = _input_documents(full_vehicle_model)[kind]
     loader = _INPUT_LOADERS[kind]
@@ -197,6 +193,41 @@ def test_input_loaders_keep_requiring_top_level_schema_version(
     with pytest.raises(ValueError, match="unsupported schema_version 2"):
         loader(_write(tmp_path / f"{kind}-v2.json", {**document, "schema_version": 2}))
 
+
+def test_the_axle_declaration_keeps_rejecting_a_foreign_schema_version() -> None:
+    """
+    The axle's version rule survives the retired loader.
+
+    ``load_axle_declaration`` carried a root ``schema_version == 1`` check.  The
+    loader is gone with the modelling route, but the type it loaded still pins
+    ``Literal[1]``, so the same v1 document is still refused when its version is
+    anything else -- pinned here on the type rather than on the loader.
+    """
+    document = AxleDeclaration(
+        hardpoints={"A": Vec3(x=1.0, y=-2.0, z=3.0)},
+        mass=MassSpec(sprung_mass=1000.0),
+    ).model_dump(mode="json")
+    assert AxleDeclaration.model_validate(document).schema_version == 1
+    with pytest.raises(ValueError, match="schema_version"):
+        AxleDeclaration.model_validate({**document, "schema_version": 2})
+
+
+def test_the_vehicle_declaration_rejects_an_impossible_schema_version(
+    full_vehicle_model: VehicleDeclaration,
+) -> None:
+    """
+    The vehicle declaration's own rule, which is *not* the axle's.
+
+    ``VehicleDeclaration.schema_version`` is ``int >= 1`` rather than
+    ``Literal[1]``; the retired ``load_vehicle_declaration`` was what forced the
+    root value to 1.  With the loader gone, what the type itself guarantees is a
+    floor, and that is what this pins -- stating the difference rather than
+    asserting a rule the type does not carry.
+    """
+    document = full_vehicle_model.model_dump(mode="json")
+    assert VehicleDeclaration.model_validate(document).schema_version == 1
+    with pytest.raises(ValueError, match="schema_version"):
+        VehicleDeclaration.model_validate({**document, "schema_version": 0})
 
 def test_history_adapter_filters_body_and_sorts_samples(tmp_path: Path) -> None:
     bundle = load_dynamic_result(_write(tmp_path / "bundle.json", _bundle_payload()))

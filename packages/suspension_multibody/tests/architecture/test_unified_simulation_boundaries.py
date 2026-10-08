@@ -7,10 +7,6 @@ from pathlib import Path
 import pytest
 
 from suspension_multibody.axle_dynamics.schema import AxleSolverSettings
-from suspension_multibody.cases.kc_quasi_static.contract import (
-    solver_settings_document as legacy_solver_settings_document,
-)
-from suspension_multibody.cases.vehicle_dynamic import _solver_block
 from suspension_multibody.kernel import native as kernel_native
 from suspension_multibody.kernel.solver import solver_settings_document
 
@@ -61,7 +57,8 @@ def test_kernel_sources_do_not_import_axle_dynamics() -> None:
     assert all("axle_dynamics" not in module for module in imported)
 
 
-def test_shared_solver_serializer_matches_legacy_paths() -> None:
+def test_shared_solver_serializer_reaches_the_single_compiler() -> None:
+    from suspension_multibody.api import validate
     settings = AxleSolverSettings(
         integrator="hht",
         rho_inf=0.7,
@@ -71,8 +68,10 @@ def test_shared_solver_serializer_matches_legacy_paths() -> None:
     )
 
     expected = solver_settings_document(settings)
-    assert expected == _solver_block(settings)
-    assert expected == legacy_solver_settings_document(settings, times_s=(0.0, 0.1))
+    source = ROOT / "packages/suspension_multibody/examples/generic_multibody/assembly.json"
+    compiled = validate(source, {"schema_version": 1, "name": "settings", "study": "dynamic",
+        "samples": [0, .001], "solver": expected, "boundaries": [], "inputs": [], "outputs": []})
+    assert compiled.case_document["solver"] == expected
     assert len(expected) == 21
 
 

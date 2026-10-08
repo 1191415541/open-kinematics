@@ -63,6 +63,15 @@ from pathlib import Path
 
 PACKAGE = "suspension_multibody"
 LEGACY_PACKAGES = ("core", "elements", "model", "analysis", "metrics")
+RETIRED_MODULES = ("preparation", "subsystems", "authoring.solver", "rigs.compose",
+    "rigs.bench", "studies.bridge", "studies.assembly", "simulation.compiler",
+    "simulation.preparation", "simulation.dispatch", "results.decoder", "results.axle", "results.vehicle",
+    "axle_dynamics.contract_run", "vehicle.service", "cases.axle_dynamic", "cases.vehicle_dynamic",
+    "cases.vehicle_kc", "cases.kc_quasi_static.contract", "cases.kc_quasi_static.workflow")
+RETIRED_SUBSYSTEMS = (
+    "suspension", "steering", "wheel", "chassis", "brake", "drive",
+    "anti_roll_bar", "capabilities",
+)
 REPORT_DIRECTORY = "report"
 #: A name that means native/solver code: the report boundary must not cross it.
 NATIVE_TOKENS = ("native", "kernel", "solver", "axle_dynamics")
@@ -74,7 +83,7 @@ SOLVE_NAMES = (
     "run_solver",
 )
 #: A name that means authoring/preparation code: the report must not run it.
-PREPARATION_TOKENS = ("preparation",)
+PREPARATION_TOKENS = ("preparation", "authoring")
 #: The authoring entry points a report module must not call.
 PREPARE_NAMES = (
     "prepare",
@@ -88,6 +97,9 @@ PREPARE_NAMES = (
     "time_grid",
     "loads_at_time",
     "wrenches_at_time",
+    "assemble_generic",
+    "migrate_v1_axle",
+    "migrate_v1_vehicle",
 )
 #: Element force laws: evaluating one recomputes constitutive behaviour the
 #: kernel already answered, so it is not the report's job.
@@ -172,6 +184,14 @@ def _legacy_of(module: str | None) -> str | None:
     if parts[0] != PACKAGE or len(parts) < 2:
         return None
     return parts[1] if parts[1] in LEGACY_PACKAGES else None
+
+
+def _retired_subsystem(module: str | None) -> str | None:
+    for relative in RETIRED_MODULES:
+        full = PACKAGE+"."+relative
+        if module == full or (module or "").startswith(full+"."):
+            return full
+    return None
 
 def own_legacy_package(relative: str) -> str | None:
     """Return the retired package a file itself belongs to, if any."""
@@ -272,6 +292,11 @@ def scan_file(path: Path, *, root: Path) -> list[SurfaceFinding]:
     findings: list[SurfaceFinding] = []
 
     constants = _module_constants(tree)
+    dynamic_names = {"import_module", "__import__"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module in {"importlib", "builtins"}:
+            dynamic_names.update(alias.asname or alias.name for alias in node.names
+                                 if alias.name in {"import_module", "__import__"})
     def add(rule: str, symbol: str, node: ast.AST) -> None:
         finding = SurfaceFinding(
             path=relative,
@@ -284,6 +309,9 @@ def scan_file(path: Path, *, root: Path) -> list[SurfaceFinding]:
             findings.append(finding)
 
     def check_import(module: str | None, node: ast.AST, *, dynamic: bool) -> None:
+        subsystem = _retired_subsystem(module)
+        if subsystem is not None:
+            add("retired_subsystem_import", subsystem, node)
         legacy = None if retired else _legacy_of(module)
         if legacy is not None:
             add(
@@ -310,9 +338,20 @@ def scan_file(path: Path, *, root: Path) -> list[SurfaceFinding]:
                     check_import(f"{resolved}.{alias.name}", node, dynamic=False)
         elif isinstance(node, ast.Call):
             name = _called_name(node.func)
-            if name in {"import_module", "__import__"}:
+            if name in dynamic_names:
                 literal = _literal_import(node.args, constants)
                 if literal is not None:
+                    if literal.startswith("."):
+                        level = len(literal) - len(literal.lstrip("."))
+                        package = _literal_import(node.args[1:2], constants)
+                        for keyword in node.keywords:
+                            if keyword.arg == "package":
+                                package = _literal_import([keyword.value], constants)
+                        if package:
+                            parts = package.split(".")
+                            literal = ".".join(parts[:len(parts) - level + 1] + [literal.lstrip(".")])
+                        else:
+                            literal = resolve_import(path, literal.lstrip("."), level)
                     check_import(literal, node, dynamic=True)
                 continue
             if not report_scope:
@@ -426,6 +465,18 @@ def present_legacy_packages(root: Path | str) -> list[str]:
     ]
 
 
+def present_retired_subsystems(root: Path | str) -> list[str]:
+    source = Path(root) / "src" / PACKAGE
+    files = set()
+    for module in RETIRED_MODULES:
+        path = source.joinpath(*module.split("."))
+        if path.with_suffix(".py").is_file():
+            files.add(str(path.with_suffix(".py")))
+        if path.is_dir():
+            files.update(str(file) for file in path.rglob("*.py"))
+    return sorted(files)
+
+
 # --------------------------------------------------------------------------- #
 # evaluation
 # --------------------------------------------------------------------------- #
@@ -450,6 +501,9 @@ def evaluate(
     registered_keys = {_entry_key(entry) for entry in registered or []}
     fatal: list[SurfaceFinding] = []
     for finding in findings:
+        if finding.rule == "retired_subsystem_import":
+            fatal.append(finding)
+            continue
         if mode == MODE_FINAL:
             fatal.append(finding)
             continue
@@ -542,6 +596,8 @@ def main(argv: list[str] | None = None) -> int:
     report(findings, mode=mode)
     fatal = evaluate(findings, mode=mode, registered=registered)
     failures = [finding.describe() for finding in fatal]
+    failures.extend(f"retired subsystem still present: {path}"
+                    for path in present_retired_subsystems(package_root))
     if mode == MODE_MIGRATION:
         failures.extend(
             f"stale registry entry: {finding.path} [{finding.rule}/{finding.symbol}]"

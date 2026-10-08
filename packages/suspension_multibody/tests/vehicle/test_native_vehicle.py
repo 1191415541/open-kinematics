@@ -1,33 +1,21 @@
 from __future__ import annotations
 
-import os
-
 import numpy as np
 import pytest
 
-from suspension_multibody.preparation.vehicle_dynamic import (
-    _build_elements,
-    _build_joints,
-    _build_road,
-    _build_wheel_torque_signals,
-    _initial_body_state,
-    _shift_point,
-)
+from suspension_multibody.authoring import assemble_generic, migrate_v1_vehicle
+from suspension_multibody.authoring.migration import migrate_v1_vehicle_case
+from suspension_multibody.modeling.primitives import SE3
 from suspension_multibody.schema import (
     AerodynamicDragSpec,
     BumpStop,
     Bushing6x6,
     DrivelineSpec,
     DynamicSolverSettings,
-    FrontAxleModel,
-    InitialBodyState,
     LinearSpring,
-    MassSpec,
     Pose,
     Quaternion,
-    RigidBodySpec,
     RoadSurfaceSpec,
-    SixVector,
     StaticDamper,
     SteeringSystemSpec,
     TimeSignal,
@@ -35,291 +23,44 @@ from suspension_multibody.schema import (
     UnitSystem,
     Vec3,
     VehicleDynamicCase,
-    VehicleModel,
-    WheelSpec,
 )
-from suspension_multibody.subsystems.entry import compose_vehicle
-from suspension_multibody.vehicle.service import run_vehicle_dynamics
-
-_BODY_NAMES = (
-    "rack",
-    "upper_arm_L",
-    "upper_arm_R",
-    "lower_arm_L",
-    "lower_arm_R",
-    "upright_L",
-    "upright_R",
-    "tie_rod_L",
-    "tie_rod_R",
+from suspension_multibody.schema.vehicle import VehicleDeclaration
+from tests.vehicle._unified_entry import compile_vehicle
+from tests.vehicle._unified_entry import solve_vehicle as vehicle_dynamics_run
+from tests.vehicle.vehicle_fixtures import (
+    _case as _case,
+)
+from tests.vehicle.vehicle_fixtures import (
+    _pac2002_model as _pac2002_model,
+)
+from tests.vehicle.vehicle_fixtures import (
+    _positioned_vehicle as _positioned_vehicle,
+)
+from tests.vehicle.vehicle_fixtures import (
+    _tire as _tire,
+)
+from tests.vehicle.vehicle_fixtures import (
+    _uniform_velocity_initial_states as _uniform_velocity_initial_states,
+)
+from tests.vehicle.vehicle_fixtures import (
+    _vehicle as _vehicle,
+)
+from tests.vehicle.vehicle_fixtures import (
+    _with_ride_springs as _with_ride_springs,
 )
 
 
-def _axle(name: str, x: float, dampers: tuple[StaticDamper, ...] = ()) -> FrontAxleModel:
-    return FrontAxleModel(
-        name=name,
-        hardpoints={
-            "UPPER_INBOARD_FRONT": Vec3(x=x, y=-500, z=500),
-            "UPPER_INBOARD_REAR": Vec3(x=x + 150, y=-500, z=500),
-            "UPPER_OUTBOARD": Vec3(x=x, y=-750, z=350),
-            "LOWER_INBOARD_FRONT": Vec3(x=x, y=-500, z=100),
-            "LOWER_INBOARD_REAR": Vec3(x=x + 150, y=-500, z=100),
-            "LOWER_OUTBOARD": Vec3(x=x, y=-750, z=100),
-            "TIE_ROD_INBOARD": Vec3(x=x, y=-450, z=250),
-            "TIE_ROD_OUTBOARD": Vec3(x=x, y=-750, z=250),
-            "WHEEL_CENTER": Vec3(x=x, y=-750, z=300),
-            "RACK_CENTER": Vec3(x=x, y=0, z=250),
-        },
-        mass=MassSpec(sprung_mass=600),
-        bodies=tuple(
-            RigidBodySpec(
-                name=body,
-                mass=100,
-                inertia=((100, 0, 0), (0, 100, 0), (0, 0, 100)),
-            )
-            for body in _BODY_NAMES
-        ),
-        dampers=dampers,
-    )
-
-
-def _tire() -> TireModelSpec:
-    return TireModelSpec(
-        kind="native_brush",
-        unloaded_radius=300,
-        maximum_compression=250,
-        vertical_stiffness=200,
-        cornering_stiffness=80_000,
-        longitudinal_stiffness=120_000,
-        relaxation_length=300,
-    )
-
-
-def _vehicle(
-    *,
-    front_dampers: tuple[StaticDamper, ...] = (),
-    rear_dampers: tuple[StaticDamper, ...] = (),
-) -> VehicleModel:
-    rear_axle = _axle("rear", -1400, rear_dampers).model_copy(
-        update={"rack_fixed_to_chassis": True}
-    )
-    return VehicleModel(
-        chassis=RigidBodySpec(
-            name="chassis",
-            mass=1200,
-            inertia=((1_000_000, 0, 0), (0, 1_200_000, 0), (0, 0, 1_500_000)),
-        ),
-        front_axle=_axle("front", 1400, front_dampers),
-        rear_axle=rear_axle,
-        wheels=tuple(
-            WheelSpec(
-                name=name,
-                body=f"wheel_{name}",
-                center_local=Vec3(),
-                mass=20,
-                axial_inertia=2,
-                tire=_tire(),
-            )
-            for name in ("front_left", "front_right", "rear_left", "rear_right")
-        ),
-        steering=SteeringSystemSpec(ratio=16, rack_damping=0),
-    )
-
-
-def _positioned_axle(axle: FrontAxleModel) -> FrontAxleModel:
-    def point(name: str, side: str) -> Vec3:
-        value = axle.hardpoints[name]
-        return value if side == "L" else value.mirrored_y()
-
-    def mean(names: tuple[str, ...], side: str = "L") -> np.ndarray:
-        return np.mean(
-            np.asarray([point(name, side).as_array() for name in names]), axis=0
-        )
-
-    origins: dict[str, np.ndarray] = {"rack": mean(("RACK_CENTER",))}
-    for side in ("L", "R"):
-        origins.update(
-            {
-                f"upper_arm_{side}": mean(
-                    ("UPPER_INBOARD_FRONT", "UPPER_INBOARD_REAR", "UPPER_OUTBOARD"),
-                    side,
-                ),
-                f"lower_arm_{side}": mean(
-                    ("LOWER_INBOARD_FRONT", "LOWER_INBOARD_REAR", "LOWER_OUTBOARD"),
-                    side,
-                ),
-                f"upright_{side}": mean(
-                    ("UPPER_OUTBOARD", "LOWER_OUTBOARD", "WHEEL_CENTER"), side
-                ),
-                f"tie_rod_{side}": mean(
-                    ("TIE_ROD_INBOARD", "TIE_ROD_OUTBOARD"), side
-                ),
-            }
-        )
-
-    bodies = tuple(
-        body.model_copy(
-            update={
-                "pose": body.pose.model_copy(
-                    update={
-                        "translation": Vec3(
-                            x=float(origins[body.name][0]),
-                            y=float(origins[body.name][1]),
-                            z=float(origins[body.name][2]),
-                        )
-                    }
-                )
-            }
-        )
-        for body in axle.bodies
-    )
-    return axle.model_copy(update={"bodies": bodies})
-
-
-def _positioned_vehicle(model: VehicleModel) -> VehicleModel:
-    return model.model_copy(
-        update={
-            "front_axle": _positioned_axle(model.front_axle),
-            "rear_axle": _positioned_axle(model.rear_axle),
-        }
-    )
-
-
-def _with_ride_springs(model: VehicleModel) -> VehicleModel:
-    front = model.front_axle
-    rear = model.rear_axle
-    front_spring = LinearSpring(
-        name="ride_spring",
-        body_a="chassis",
-        body_b="lower_arm",
-        point_a=front.hardpoints["LOWER_INBOARD_FRONT"],
-        point_b=front.hardpoints["LOWER_OUTBOARD"],
-        stiffness=100.0,
-        free_length=450.0,
-    )
-    rear_spring = front_spring.model_copy(
-        update={
-            "point_a": rear.hardpoints["LOWER_INBOARD_FRONT"],
-            "point_b": rear.hardpoints["LOWER_OUTBOARD"],
-        }
-    )
-    return model.model_copy(
-        update={
-            "front_axle": front.model_copy(update={"springs": (front_spring,)}),
-            "rear_axle": rear.model_copy(update={"springs": (rear_spring,)}),
-        }
-    )
-
-
-def _case(
-    model: VehicleModel,
-    *,
-    name: str = "native-vehicle",
-    brake: float = 0.0,
-    wheel_speeds: tuple[tuple[str, float], ...] = (),
-    steering: TimeSignal | None = None,
-) -> VehicleDynamicCase:
-    return VehicleDynamicCase(
-        name=name,
-        vehicle=model,
-        solver=DynamicSolverSettings(
-            end_time=0.001,
-            step_size=0.001,
-            internal_step_size=0.001,
-            min_internal_step_size=0.001,
-            adaptive_substepping=False,
-            integrator="generalized_alpha",
-            gravity=Vec3(x=0, y=0, z=0),
-        ),
-        road=RoadSurfaceSpec(kind="plane"),
-        steering_input=steering or TimeSignal(constant=0.0),
-        brake_input=TimeSignal(constant=brake),
-        initial_wheel_speeds=wheel_speeds,
-    )
-
-
-def _pac2002_model(
-    *,
-    combined: bool,
-    parameter_source: str = "user",
-    extra_coefficients: dict[str, float] | None = None,
-) -> VehicleModel:
-    base = _positioned_vehicle(_vehicle())
-    coefficients = {
-        "FNOMIN": 4_850.0,
-        "PCX1": 1.65,
-        "PDX1": 1.0,
-        "PKX1": 22.3,
-        "PCY1": 1.3,
-        "PDY1": 1.0,
-        "PKY1": -21.9,
-        "RBX1": 10.0,
-        "RBX2": 0.0,
-        "RCX1": 1.2,
-        "REX1": 0.2,
-        "RBY1": 8.0,
-        "RBY2": 0.0,
-        "RBY3": 0.0,
-        "RCY1": 1.1,
-        "REY1": 0.1,
-    }
-    if not combined:
-        coefficients.update(RBX1=0.0, RBY1=0.0)
-    if extra_coefficients:
-        coefficients.update(extra_coefficients)
-    tire = _tire().model_copy(
-        update={
-            "kind": "pac2002",
-            "parameter_source": parameter_source,
-            "pac2002_coefficients": coefficients,
-        }
-    )
-    return base.model_copy(
-        update={
-            "wheels": tuple(
-                wheel.model_copy(update={"tire": tire})
-                for wheel in base.wheels
-            )
-        }
-    )
-
-
-def _uniform_velocity_initial_states(
-    model: VehicleModel,
-    *,
-    vx_mm_s: float = 10_000.0,
-    vy_mm_s: float = 5_000.0,
-) -> tuple[InitialBodyState, ...]:
-    assembly = compose_vehicle(model, mode="K")
-    states: list[InitialBodyState] = []
-    for name, body in assembly.bodies.items():
-        quaternion = body.pose.quaternion
-        states.append(
-            InitialBodyState(
-                body=name,
-                pose=Pose(
-                    translation=Vec3(
-                        x=float(body.pose.translation[0]),
-                        y=float(body.pose.translation[1]),
-                        z=float(body.pose.translation[2]),
-                    ),
-                    rotation=Quaternion(
-                        w=float(quaternion[0]),
-                        x=float(quaternion[1]),
-                        y=float(quaternion[2]),
-                        z=float(quaternion[3]),
-                    ),
-                ),
-                # 工程单位为 mm/s；同时施加纵向和侧向速度以激活联合滑移。
-                velocity=SixVector(fx=vx_mm_s, fy=vy_mm_s),
-            )
-        )
-    return tuple(states)
+def _torque_tables(model, case):
+    _, plan = migrate_v1_vehicle_case(case.model_copy(update={"vehicle": model}))
+    return tuple({row["tire"].rsplit(".", 1)[-1]: tuple(row["values"])
+        for row in plan.to_payload()["inputs"] if row["role"] == role}
+        for role in ("wheel_torque", "brake_torque"))
 
 
 def test_native_vehicle_runs_two_suspensions_and_four_wheels() -> None:
     model = _vehicle()
 
-    result = run_vehicle_dynamics(model, _case(model))
+    result = vehicle_dynamics_run(model, _case(model))
 
     # chassis + per axle (rack, rack housing, 8 links, 2 wheel hubs, 2 wheels):
     # the welded rear rack is its own body, and 方式 A's hub is one too -- the weld
@@ -334,30 +75,8 @@ def test_native_vehicle_runs_two_suspensions_and_four_wheels() -> None:
 
 
 
-def _frames_for(assembly, model) -> dict[str, object]:
-    """Return the body frames `_build_joints` needs, from the real path."""
-    from suspension_multibody.preparation.vehicle_dynamic import _initial_body_state
-
-    _state, body_frames = _initial_body_state(assembly, _case(model), 1.0)
-    return body_frames
-
-
 def test_native_fixed_joint_is_what_carries_a_weld() -> None:
-    """
-    The native ``kind="fixed"`` joint carries the weld; Python no longer fuses.
-
-    This is the target state of the A1 decision (2026-09-22): the authoring layer
-    stopped answering a *solving* question, so ``compose_vehicle`` hands the kernel
-    the welded pair as two bodies plus a six-row ``fixed`` joint
-    (``mb_joint/types.hpp``: the coincident point plus the full relative
-    rotation) instead of fusing them itself.
-
-    Both routes are the same physics and agree in the world frame -- same total
-    mass, same centre of mass -- so the production default is the one that keeps
-    the constraint visible to the kernel.  The fused form is still reachable with
-    ``SUSPENSION_MULTIBODY_CONDENSE_WELDS=1``; this test pins both, so the
-    rollback switch is real rather than assumed.
-    """
+    """A fixed mount remains an explicit native joint and preserves its body."""
     model = _vehicle()
     mount = model.wheels[0].model_copy(
         update={
@@ -369,33 +88,16 @@ def test_native_fixed_joint_is_what_carries_a_weld() -> None:
     )
     model = model.model_copy(update={"wheels": (mount, *model.wheels[1:])})
 
-    # 1. The default path: separate bodies, the weld sent as a fixed joint.
-    os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
-    assembly = compose_vehicle(model)
-    joints = _build_joints(assembly, _frames_for(assembly, model), 1.0)
-    fixed = [joint for joint in joints if joint.kind == "fixed"]
-    assert fixed, "the weld has to reach the kernel as a fixed joint"
-    assert not assembly.body_aliases, "nothing is fused, so nothing is aliased"
-    for joint in fixed:
-        assert (joint.body_a, joint.body_b) in {
-            (item.body_a, item.body_b) for item in assembly.constraints
-        }
-
-    # 2. The rollback: the fused form still works and still carries the pair's mass.
-    os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = "1"
-    try:
-        fused = compose_vehicle(model)
-        assert fused.bodies["front_upright_L"].mass == 120.0  # 100 kg upright + 20 kg
-        assert not any(
-            joint.kind == "fixed"
-            for joint in _build_joints(fused, _frames_for(fused, model), 1.0)
-        ), "the fused form must not also send the weld"
-        assert fused.body_aliases, "fusion must record where the bodies went"
-    finally:
-        os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
+    graph = assemble_generic(migrate_v1_vehicle(model))
+    compiled = compile_vehicle(model, _case(model))
+    fixed = [joint for joint in compiled.model_document["joints"] if joint["type"] == "fixed"]
+    assert fixed
+    assert "wheel_front_left.wheel_front_left" in graph.bodies
+    assert graph.bodies["wheel_front_left.wheel_front_left"].mass == 20
+    assert all((joint["body_a"], joint["body_b"]) in {(row["body_a"], row["body_b"]) for row in graph.joints} for joint in fixed)
 
 
-def test_the_two_weld_routes_agree_on_the_world_mass_properties() -> None:
+def test_the_weld_switch_cannot_change_world_mass_properties(monkeypatch) -> None:
     """
     Fusing a weld and sending it to the kernel describe the same vehicle.
 
@@ -412,18 +114,13 @@ def test_the_two_weld_routes_agree_on_the_world_mass_properties() -> None:
         for name, body in assembly.bodies.items():
             if body.mass > 0.0:
                 total += body.mass
-                moment += body.mass * assembly.state.point_world(
-                    name, body.center_of_mass
-                )
+                moment += body.mass * body.pose.transform_point(body.center_of_mass)
         return total, moment / total
 
-    os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
-    separate = compose_vehicle(model)
-    os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = "1"
-    try:
-        fused = compose_vehicle(model)
-    finally:
-        os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
+    source = migrate_v1_vehicle(model)
+    separate = assemble_generic(source)
+    monkeypatch.setenv("SUSPENSION_MULTIBODY_CONDENSE_WELDS", "1")
+    fused = assemble_generic(source)
 
     separate_mass, separate_com = world_mass(separate)
     fused_mass, fused_com = world_mass(fused)
@@ -439,7 +136,6 @@ def test_native_fixed_joint_shape_matches_the_registry() -> None:
     reads constraint rows can rely on it.
     """
     from suspension_multibody.modeling.primitives import WeldJoint
-    from suspension_multibody.preparation.vehicle_dynamic import _build_joints
 
     model = _vehicle()
     mount = model.wheels[0].model_copy(
@@ -447,31 +143,18 @@ def test_native_fixed_joint_shape_matches_the_registry() -> None:
     )
     model = model.model_copy(update={"wheels": (mount, *model.wheels[1:])})
 
-    # Build the *uncondensed* pair so the weld survives into the joint list.
-    import os
-
-    previous = os.environ.get("SUSPENSION_MULTIBODY_CONDENSE_WELDS")
-    os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = "0"
-    try:
-        uncondensed = compose_vehicle(model)
-    finally:
-        if previous is None:
-            os.environ.pop("SUSPENSION_MULTIBODY_CONDENSE_WELDS", None)
-        else:
-            os.environ["SUSPENSION_MULTIBODY_CONDENSE_WELDS"] = previous
-
-    welds = [
-        item for item in uncondensed.constraints if isinstance(item, WeldJoint)
-    ]
+    from suspension_multibody.authoring import GenericSubsystemAssembler
+    uncondensed = assemble_generic(migrate_v1_vehicle(model))
+    welds = [GenericSubsystemAssembler.materialize_joint(row) for row in uncondensed.joints if row["type"] == "fixed"]
+    assert all(isinstance(row, WeldJoint) for row in welds)
     assert welds, "the uncondensed assembly must still carry its weld"
-    joints = _build_joints(uncondensed, _frames_for(uncondensed, model), 1.0)
-    fixed = [joint for joint in joints if joint.kind == "fixed"]
+    fixed = [joint for joint in compile_vehicle(model, _case(model)).model_document["joints"] if joint["type"] == "fixed"]
     assert len(fixed) == len(welds)
     # The body pair is preserved, not fused: that is the whole point of the
     # native path this test pins.
     for weld, joint in zip(welds, fixed):
-        assert joint.body_a == weld.body_a
-        assert joint.body_b == weld.body_b
+        assert joint["body_a"] == weld.body_a
+        assert joint["body_b"] == weld.body_b
 
 def test_pac2002_selected_combined_slip_changes_force() -> None:
     def run(combined: bool):
@@ -484,7 +167,7 @@ def test_pac2002_selected_combined_slip_changes_force() -> None:
                 "initial_states": _uniform_velocity_initial_states(model),
             }
         )
-        return run_vehicle_dynamics(model, case)
+        return vehicle_dynamics_run(model, case)
 
     pure = run(False)
     combined = run(True)
@@ -509,7 +192,7 @@ def test_pac2002_use_mode_gates_native_force_axes() -> None:
                 "initial_states": _uniform_velocity_initial_states(model),
             }
         )
-        result = run_vehicle_dynamics(model, case)
+        result = vehicle_dynamics_run(model, case)
         assert np.all(result.diagnostics.accepted)
         return result.axle.tire_output[-1]
 
@@ -547,7 +230,7 @@ def test_pac2002_use_mode_zero_is_vertical_spring_only() -> None:
                 "initial_states": _uniform_velocity_initial_states(model),
             }
         )
-        result = run_vehicle_dynamics(model, case)
+        result = vehicle_dynamics_run(model, case)
         assert np.all(result.diagnostics.accepted)
         return result.axle.tire_output[-1]
 
@@ -611,7 +294,7 @@ def test_pac2002_validity_ranges_clamp_the_magic_formula_inputs() -> None:
                 "initial_states": _uniform_velocity_initial_states(model),
             }
         )
-        result = run_vehicle_dynamics(model, case)
+        result = vehicle_dynamics_run(model, case)
         assert np.all(result.diagnostics.accepted)
         return result.axle.tire_output[-1]
 
@@ -687,7 +370,7 @@ def test_pac2002_deflection_load_curve_replaces_the_stiffness_polynomial() -> No
                 "initial_states": _uniform_velocity_initial_states(model),
             }
         )
-        result = run_vehicle_dynamics(model, case)
+        result = vehicle_dynamics_run(model, case)
         assert np.all(result.diagnostics.accepted)
         tire = result.axle.tire_output[-1]
         return (
@@ -756,7 +439,7 @@ def test_pac2002_bottoming_curve_adds_the_rim_force() -> None:
                 "initial_states": _uniform_velocity_initial_states(model),
             }
         )
-        result = run_vehicle_dynamics(model, case)
+        result = vehicle_dynamics_run(model, case)
         assert np.all(result.diagnostics.accepted)
         tire = result.axle.tire_output[-1]
         return (
@@ -843,7 +526,7 @@ def test_pac2002_vxlow_does_not_floor_the_slip_denominator() -> None:
                 ),
             }
         )
-        result = run_vehicle_dynamics(model, case)
+        result = vehicle_dynamics_run(model, case)
         assert np.all(result.diagnostics.accepted)
         return np.max(np.abs(result.axle.tire_output[-1, :, 10]))
 
@@ -870,7 +553,7 @@ def test_pac2002_vertical_force_uses_speed_and_force_coupling_terms() -> None:
                 (wheel.name, 100.0) for wheel in model.wheels
             )
         case = _case(model).model_copy(update=case_updates)
-        result = run_vehicle_dynamics(model, case)
+        result = vehicle_dynamics_run(model, case)
         assert np.all(result.diagnostics.accepted)
         return float(np.mean(result.axle.tire_output[-1, :, 4]))
 
@@ -922,7 +605,7 @@ def test_pac2002_initial_relaxation_state_matches_current_slip() -> None:
         }
     )
 
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
     initial_tire = result.axle.tire_output[0]
 
     assert np.all(result.diagnostics.accepted)
@@ -947,7 +630,7 @@ def test_adams_pac2002_source_uses_local_relaxation_state() -> None:
         }
     )
 
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
     current = result.axle.tire_output[-1]
 
     assert np.all(result.diagnostics.accepted)
@@ -1004,8 +687,8 @@ def test_adams_pac2002_preserves_source_static_offset() -> None:
         update={"road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0))}
     )
 
-    user_result = run_vehicle_dynamics(user_model, user_case)
-    source_result = run_vehicle_dynamics(source_model, source_case)
+    user_result = vehicle_dynamics_run(user_model, user_case)
+    source_result = vehicle_dynamics_run(source_model, source_case)
 
     assert np.all(user_result.diagnostics.accepted)
     assert np.all(source_result.diagnostics.accepted)
@@ -1016,7 +699,7 @@ def test_adams_pac2002_preserves_source_static_offset() -> None:
 def test_adams_pac2002_negative_use_mode_mirrors_left_side_coefficients() -> None:
     base = _pac2002_model(combined=False, parameter_source="adams_builtin")
 
-    def with_use_mode(use_mode: float) -> VehicleModel:
+    def with_use_mode(use_mode: float) -> VehicleDeclaration:
         return base.model_copy(
             update={
                 "wheels": tuple(
@@ -1040,8 +723,8 @@ def test_adams_pac2002_negative_use_mode_mirrors_left_side_coefficients() -> Non
             }
         )
 
-    def lateral_force(model: VehicleModel) -> float:
-        result = run_vehicle_dynamics(
+    def lateral_force(model: VehicleDeclaration) -> float:
+        result = vehicle_dynamics_run(
             model,
             _case(model).model_copy(
                 update={"road": RoadSurfaceSpec(kind="plane", origin=Vec3(z=1.0))}
@@ -1059,7 +742,7 @@ def test_adams_pac2002_negative_use_mode_mirrors_left_side_coefficients() -> Non
 def test_adams_pac2002_uses_source_gyroscopic_moment_parameters() -> None:
     base = _pac2002_model(combined=False, parameter_source="adams_builtin")
 
-    def with_gyro(qtz1: float, mbelt: float) -> VehicleModel:
+    def with_gyro(qtz1: float, mbelt: float) -> VehicleDeclaration:
         return base.model_copy(
             update={
                 "wheels": tuple(
@@ -1085,7 +768,7 @@ def test_adams_pac2002_uses_source_gyroscopic_moment_parameters() -> None:
     disabled = with_gyro(0.0, 0.0)
     enabled = with_gyro(0.2, 5.4)
 
-    def run(model: VehicleModel):
+    def run(model: VehicleDeclaration):
         case = _case(model).model_copy(
             update={
                 "solver": _case(model).solver.model_copy(
@@ -1100,7 +783,7 @@ def test_adams_pac2002_uses_source_gyroscopic_moment_parameters() -> None:
                 "initial_states": _uniform_velocity_initial_states(model),
             }
         )
-        return run_vehicle_dynamics(model, case)
+        return vehicle_dynamics_run(model, case)
 
     disabled_result = run(disabled)
     enabled_result = run(enabled)
@@ -1151,8 +834,8 @@ def test_pac2002_aligning_moment_changes_single_wheel_response() -> None:
         }
     )
 
-    baseline_result = run_vehicle_dynamics(baseline, baseline_case)
-    aligning_result = run_vehicle_dynamics(aligning, aligning_case)
+    baseline_result = vehicle_dynamics_run(baseline, baseline_case)
+    aligning_result = vehicle_dynamics_run(aligning, aligning_case)
 
     assert np.all(baseline_result.diagnostics.accepted)
     assert np.all(aligning_result.diagnostics.accepted)
@@ -1209,8 +892,8 @@ def test_pac2002_chrono_overturning_and_rolling_moments_change_response() -> Non
         }
     )
 
-    baseline_result = run_vehicle_dynamics(baseline, baseline_case)
-    chrono_result = run_vehicle_dynamics(chrono_terms, chrono_case)
+    baseline_result = vehicle_dynamics_run(baseline, baseline_case)
+    chrono_result = vehicle_dynamics_run(chrono_terms, chrono_case)
 
     assert np.all(baseline_result.diagnostics.accepted)
     assert np.all(chrono_result.diagnostics.accepted)
@@ -1224,9 +907,9 @@ def test_reduced_kkt_matches_dense_fallback(monkeypatch: pytest.MonkeyPatch) -> 
     case = _case(model)
 
     monkeypatch.setenv("SUSPENSION_AXLE_DISABLE_REDUCED_KKT", "1")
-    dense = run_vehicle_dynamics(model, case)
+    dense = vehicle_dynamics_run(model, case)
     monkeypatch.delenv("SUSPENSION_AXLE_DISABLE_REDUCED_KKT")
-    reduced = run_vehicle_dynamics(model, case)
+    reduced = vehicle_dynamics_run(model, case)
 
     np.testing.assert_allclose(
         reduced.states, dense.states, rtol=2.0e-6, atol=2.0e-8
@@ -1258,7 +941,7 @@ def test_native_vehicle_snaps_internal_time_roundoff_at_output_end() -> None:
         }
     )
 
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
 
     assert result.times_s[-1] == pytest.approx(0.37)
     assert np.all(result.diagnostics.accepted)
@@ -1291,37 +974,18 @@ def test_native_attachment_points_respect_body_origin_and_orientation() -> None:
             )
         }
     )
-    assembly = compose_vehicle(model, mode="K")
-    case = _case(model)
-    bodies, body_frames = _initial_body_state(assembly, case, 1.0e-3)
-
-    body_name = "front_upper_arm_L"
-    local_point = assembly.points[(body_name, "inner_front")]
-    local_point = np.asarray(
-        _shift_point(body_name, local_point, body_frames, 1.0e-3)
-    )
-    runtime_body = assembly.bodies[body_name]
-    native_body = next(body for body in bodies if body.name == body_name)
-    rotation = body_frames[body_name].rotation
-    reconstructed = np.asarray(native_body.position_m) + rotation @ local_point
-    expected = runtime_body.pose.transform_point(
-        assembly.points[(body_name, "inner_front")]
-    ) * 1.0e-3
-
-    np.testing.assert_allclose(reconstructed, expected, atol=1.0e-12)
-    np.testing.assert_allclose(
-        np.asarray(native_body.position_m),
-        runtime_body.pose.translation * 1.0e-3
-        + rotation @ (runtime_body.center_of_mass * 1.0e-3),
-        atol=1.0e-12,
-    )
-
-    native_joint = next(
-        joint
-        for joint in _build_joints(assembly, body_frames, 1.0e-3)
-        if joint.name == "front_uca_mount_L_inner_front"
-    )
-    np.testing.assert_allclose(native_joint.point_b_m, local_point, atol=1.0e-12)
+    compiled = compile_vehicle(model, _case(model))
+    native_body = next(row for row in compiled.model_document["bodies"]
+        if row["name"].endswith(".upper_arm_L"))
+    native_joint = next(row for row in compiled.model_document["joints"]
+        if row["name"].endswith(".uca_mount_L_inner_front"))
+    rotation = SE3(np.zeros(3), np.asarray(upper_arm.pose.rotation.as_tuple())).rotation
+    expected_position = (upper_arm.pose.translation.as_array()
+        + rotation @ upper_arm.center_of_mass.as_array()) * 1e-3
+    np.testing.assert_allclose(native_body["position"], expected_position, atol=1e-12)
+    expected = model.front_axle.hardpoints["UPPER_INBOARD_FRONT"].as_array()*1e-3
+    reconstructed = np.asarray(native_body["position"]) + rotation @ native_joint["point_b"]
+    np.testing.assert_allclose(reconstructed, expected, atol=1e-12)
 
 
 def test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi() -> None:
@@ -1355,31 +1019,28 @@ def test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi() -> None:
             )
         }
     )
-    assembly = compose_vehicle(model, mode="K")
-    _bodies, body_frames = _initial_body_state(assembly, _case(model), 1.0e-3)
-    springs, _dampers, bump_stops, _bushings = _build_elements(
-        assembly, body_frames, 1.0e-3
-    )
+    elements = compile_vehicle(model, _case(model)).model_document["elements"]
     mapped_spring = next(
-        item for item in springs if item.name == "front_curve_spring_L"
+        item for item in elements if item["name"].endswith(".curve_spring_L")
     )
-    mapped_stop = next(item for item in bump_stops if item.name == "front_curve_stop_L")
+    mapped_stop = next(item["parameters"] for item in elements if item["name"].endswith(".curve_stop_L"))
+    mapped_spring = mapped_spring["parameters"]
 
     np.testing.assert_allclose(
-        mapped_spring.elastic_curve_deflection_m,
+        np.asarray(mapped_spring["elastic_curve"])[:, 0],
         (-0.2, -0.1, 0.0),
     )
-    np.testing.assert_allclose(mapped_spring.elastic_curve_force_n, (-350.0, -100.0, 0.0))
+    np.testing.assert_allclose(np.asarray(mapped_spring["elastic_curve"])[:, 1], (-350.0, -100.0, 0.0))
     np.testing.assert_allclose(
-        mapped_stop.stop_curve_penetration_m,
+        np.asarray(mapped_stop["stop_curve"])[:, 0],
         (0.0, 0.01, 0.02),
     )
     np.testing.assert_allclose(
-        mapped_stop.stop_curve_force_n,
+        np.asarray(mapped_stop["stop_curve"])[:, 1],
         (0.0, 100.0, 500.0),
     )
 
-    result = run_vehicle_dynamics(model, _case(model))
+    result = vehicle_dynamics_run(model, _case(model))
 
     assert np.all(result.diagnostics.accepted)
     # The elastic and unilateral ledgers are separate now, and each is as wide as
@@ -1418,7 +1079,7 @@ def test_native_vehicle_passes_bushing_curves_and_coordinates_to_vehicle_abi() -
         }
     )
 
-    result = run_vehicle_dynamics(model, _case(model))
+    result = vehicle_dynamics_run(model, _case(model))
 
     assert np.all(result.diagnostics.accepted)
     bushing_state = result.bushing_state("front_curve_bushing_L")
@@ -1443,7 +1104,7 @@ def test_native_vehicle_static_trim_balances_gravity_with_four_tire_contacts() -
         }
     )
 
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
 
     assert np.all(result.diagnostics.accepted)
     assert np.all(result.diagnostics.active_contacts == 4)
@@ -1491,7 +1152,7 @@ def test_static_trim_accepts_zero_speed_drag_and_roundoff_brake_torque() -> None
         }
     )
 
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
 
     assert np.all(result.diagnostics.accepted)
     assert np.all(result.diagnostics.active_contacts == 4)
@@ -1536,7 +1197,7 @@ def test_native_vehicle_combines_trim_road_steering_and_drive() -> None:
         }
     )
 
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
 
     assert np.all(result.diagnostics.accepted)
     assert np.all(result.diagnostics.active_contacts == 4)
@@ -1559,12 +1220,12 @@ def test_four_post_sampled_signals_do_not_duplicate_analytic_profile() -> None:
         corner_height_signals=signals,  # type: ignore[arg-type]
     )
 
-    buffers, height, _velocity = _build_road(
-        road, np.asarray((0.0, 0.001)), 1.0e-3
-    )
-
-    assert buffers.kind == 0
-    assert height["front_left"] == (0.002, 0.012)
+    _, plan = migrate_v1_vehicle_case(_case(_vehicle()).model_copy(update={"road": road}))
+    payload = plan.to_payload()
+    assert payload["excitation"]["inputs"]["road"]["kind"] == "plane"
+    height = next(row for row in payload["inputs"] if row["role"] == "road_height"
+        and row["tire"] == "wheel_front_left.front_left")
+    assert tuple(height["values"]) == (0.002, 0.012)
 
 
 def test_engineering_damper_preload_is_converted_before_si_scaling() -> None:
@@ -1581,25 +1242,22 @@ def test_engineering_damper_preload_is_converted_before_si_scaling() -> None:
         friction=5.0,
     )
     model = _vehicle(front_dampers=(damper,))
-    assembly = compose_vehicle(model, mode="C")
-    bodies, shifts = _initial_body_state(assembly, _case(model), 1.0e-3)
-    del bodies
-    _springs, dampers, _stops, _bushings = _build_elements(assembly, shifts, 1.0e-3)
+    dampers = compile_vehicle(model, _case(model)).model_document["elements"]
 
     # The gas law, the preload and the friction are their own fields on the
     # damper record now, so the record states the source model's declarations
     # rather than an equivalent free length derived from them.  The old fold was
     # `free_length = reference - offset/gas_k`; this asserts the record can be
     # folded back to exactly that, which is what "no physics was lost" means.
-    mapped = next(damper for damper in dampers if damper.name == "front_gas_damper_L")
-    assert mapped.gas_reference_length_m == pytest.approx(0.1, abs=1e-12)
-    assert mapped.gas_stiffness_n_per_m == pytest.approx(10.0 * 1000.0)
-    assert mapped.gas_reference_force_n == pytest.approx(50.0)
-    assert mapped.preload_n == pytest.approx(20.0)
-    assert mapped.friction_n == pytest.approx(5.0)
-    offset = mapped.gas_reference_force_n + mapped.preload_n + mapped.friction_n
+    mapped = next(row["parameters"] for row in dampers if row["name"].endswith(".gas_damper_L"))
+    assert mapped["gas_reference_length"] == pytest.approx(0.1, abs=1e-12)
+    assert mapped["gas_stiffness"] == pytest.approx(10.0 * 1000.0)
+    assert mapped["gas_reference_force"] == pytest.approx(50.0)
+    assert mapped["preload"] == pytest.approx(20.0)
+    assert mapped["friction"] == pytest.approx(5.0)
+    offset = mapped["gas_reference_force"] + mapped["preload"] + mapped["friction"]
     folded_free_length = (
-        mapped.gas_reference_length_m - offset / mapped.gas_stiffness_n_per_m
+        mapped["gas_reference_length"] - offset / mapped["gas_stiffness"]
     )
     assert folded_free_length == pytest.approx(0.0925, abs=1e-12)
 
@@ -1619,9 +1277,7 @@ def test_brake_signal_is_a_nonnegative_magnitude() -> None:
         wheel_speeds=(("front_left", -10.0),),
     )
 
-    drive, brake = _build_wheel_torque_signals(
-        model, case, np.asarray((0.0, 0.001)), 1.0e-3
-    )
+    drive, brake = _torque_tables(model, case)
 
     assert drive["front_left"] == (0.0, 0.0)
     assert brake["front_left"] == (0.3, 0.3)
@@ -1650,9 +1306,7 @@ def test_direct_wheel_torque_signals_override_global_distribution() -> None:
         }
     )
 
-    drive, brake = _build_wheel_torque_signals(
-        model, case, np.asarray((0.0, 0.001)), 1.0e-3
-    )
+    drive, brake = _torque_tables(model, case)
 
     assert drive == {
         "front_left": (0.0, 0.0),
@@ -1674,9 +1328,7 @@ def test_direct_wheel_torque_signals_override_global_distribution() -> None:
             )
         }
     )
-    drive, brake = _build_wheel_torque_signals(
-        model, mixed_drive, np.asarray((0.0, 0.001)), 1.0e-3
-    )
+    drive, brake = _torque_tables(model, mixed_drive)
     assert drive["rear_left"] == (0.25, 0.25)
     assert brake["front_left"] == (0.3, 0.3)
 
@@ -1688,9 +1340,7 @@ def test_direct_wheel_torque_signals_override_global_distribution() -> None:
             ),
         }
     )
-    drive, brake = _build_wheel_torque_signals(
-        model, mixed_brake, np.asarray((0.0, 0.001)), 1.0e-3
-    )
+    drive, brake = _torque_tables(model, mixed_brake)
     assert drive["front_left"] == (0.25, 0.25)
     assert brake["rear_right"] == (0.04, 0.04)
 
@@ -1727,11 +1377,11 @@ def test_native_brake_opposes_the_instantaneous_wheel_spin() -> None:
             )
         }
     )
-    positive = run_vehicle_dynamics(
+    positive = vehicle_dynamics_run(
         model,
         _case(model, brake=1.0, wheel_speeds=(("front_left", 10.0),)),
     )
-    negative = run_vehicle_dynamics(
+    negative = vehicle_dynamics_run(
         model,
         _case(model, brake=1.0, wheel_speeds=(("front_left", -10.0),)),
     )
@@ -1742,7 +1392,7 @@ def test_native_brake_opposes_the_instantaneous_wheel_spin() -> None:
 
 def test_native_vehicle_applies_a_rack_displacement_target() -> None:
     model = _vehicle()
-    result = run_vehicle_dynamics(
+    result = vehicle_dynamics_run(
         model,
         _case(
             model,
@@ -1780,7 +1430,7 @@ def test_si_vehicle_requires_explicit_gravity() -> None:
         vehicle=model,
     )
     with pytest.raises(ValueError, match="gravity.*explicitly"):
-        run_vehicle_dynamics(model, case)
+        vehicle_dynamics_run(model, case)
 
 
 def test_analytic_jacobian_stays_consistent_across_steps(
@@ -1820,6 +1470,6 @@ def test_analytic_jacobian_stays_consistent_across_steps(
             ),
         }
     )
-    result = run_vehicle_dynamics(model, case)
+    result = vehicle_dynamics_run(model, case)
     assert np.all(result.diagnostics.accepted)
     assert result.axle.tire_output.shape[0] >= 3

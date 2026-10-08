@@ -1,0 +1,8 @@
+# 任务1：IR与现有native能力交集
+
+- ResolvedModel严格SI；稳定name字段承担实体ID，与显示名称和声明顺序分离；frames保留body-local完整SE3，ports/coordinates显式引用实体。
+- Body的COM和关于COM的完整惯量在IR可表达；现有generic作者层已在generic.py的body展开中将native body frame移到COM。native当前不接收center_of_mass字段，因此后续统一emitter必须继续进行通用COM坐标转换，不能遗漏位移或只搬质量。
+- 现有native支持8种理想运动副及driven translation/rotation、现有force/torque/wrench程序、Fiala/PAC2002/native_brush。新joint-coordinate边界尚未实现，留给任务5的reader/residual/Jacobian/反力验证；不能仅凭新IR声明就宣布支持。
+- frames的四元数作为IR事实保留；native marker通道当前只包含point，完整旋转主要由函数程序和tire参数承载，统一emitter需要维护这条显式映射。
+- 新ResolvedSolvePlan不拥有动态模型；原compilation.plan.SolvePlan/ModelView在任务7/9切换前仍属于旧生产路径。任务1不给统一IR开放第二套公开生产运行入口，旧emitter收到新IR时明确拒绝。
+- 阶段1验证只证明IR数据和通用图的归一化；完整汽车消费者迁移、各台架spin和统一编译/解码仍由后续任务验收。

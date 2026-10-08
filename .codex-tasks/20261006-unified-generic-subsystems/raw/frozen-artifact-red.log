@@ -1,0 +1,26 @@
+F                                                                        [100%]
+================================== FAILURES ===================================
+________ test_unified_runner_preserves_the_frozen_comparison_artifact _________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3351/test_unified_runner_preserves_0')
+
+    def test_unified_runner_preserves_the_frozen_comparison_artifact(tmp_path):
+        producer = runpy.run_path(str(PACKAGE / "scripts/run_axle_dynamics_acceptance.py"))
+        producer["_run_case"]("static_equilibrium", tmp_path, producer["load_axle_acceptance_contract"](),
+            measure_performance=False)
+        destination = tmp_path / "static_equilibrium/native"
+        sentinel = runpy.run_path(str(PACKAGE / "scripts/dynamic_hash_sentinel.py"))
+        baseline = json.loads((PACKAGE / "tests/data/dynamic_hash_baseline.json").read_text(encoding="utf-8"))
+        for variant in ("native_result", "native_refined_result"):
+            expected = next(row for row in baseline["entries"] if row["artifact"] == f"static_equilibrium/native/{variant}")
+            saved = destination / variant
+>           assert hashlib.sha256((saved / "arrays.npz").read_bytes()).hexdigest() == expected["arrays_npz_sha256"]
+E           AssertionError: assert '98656e98d91d...1c4745bfd53ed' == '12bdd4cc863e...36beeb1a0914b'
+E             
+E             - 12bdd4cc863ee0220fabc952c376603d773d711af6c2cae15e736beeb1a0914b
+E             + 98656e98d91d4b43486382bb9ff74e6e8c53e547b120a642c071c4745bfd53ed
+
+packages\suspension_multibody\tests\adams\test_frozen_evidence_artifact.py:22: AssertionError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\adams\test_frozen_evidence_artifact.py::test_unified_runner_preserves_the_frozen_comparison_artifact
+1 failed in 2.59s

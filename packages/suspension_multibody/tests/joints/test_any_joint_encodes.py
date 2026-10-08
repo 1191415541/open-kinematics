@@ -12,7 +12,11 @@ from __future__ import annotations
 
 import pytest
 
-from suspension_multibody.cases.kc_quasi_static.contract import model_document
+from suspension_multibody.authoring import (
+    GenericSubsystemAssembler,
+    assemble_generic,
+    migrate_v1_axle,
+)
 from suspension_multibody.joints import JointAvailabilityError, validate_joint_axes
 from suspension_multibody.modeling.primitives import (
     ConstantVelocityJoint,
@@ -22,13 +26,12 @@ from suspension_multibody.modeling.primitives import (
     WeldJoint,
 )
 from suspension_multibody.schema import (
-    FrontAxleModel,
     IdealJointSpec,
     MassSpec,
     RigidBodySpec,
     Vec3,
 )
-from suspension_multibody.subsystems.entry import compose_axle
+from suspension_multibody.schema.model import AxleDeclaration
 
 #: The five joint kinds the kc authoring layer used to reject outright.
 PREVIOUSLY_REJECTED = (
@@ -49,14 +52,14 @@ _HARDPOINTS = {
 }
 
 
-def _explicit_model(kind: str) -> FrontAxleModel:
+def _explicit_model(kind: str) -> AxleDeclaration:
     """
     Build a model whose only joint is of `kind`.
 
     The topology is `explicit`, so the assembly carries exactly the joint the
     model declares and nothing the symmetric proxy would add.
     """
-    return FrontAxleModel(
+    return AxleDeclaration(
         name=f"explicit-{kind}",
         topology="explicit",
         hardpoints=dict(_HARDPOINTS),
@@ -86,8 +89,8 @@ def _explicit_model(kind: str) -> FrontAxleModel:
 @pytest.mark.parametrize(("kind", "constraint_type"), PREVIOUSLY_REJECTED)
 def test_the_assembly_builds_the_declared_joint(kind: str, constraint_type: type) -> None:
     """The assembly layer already supported all eight; this is the precondition."""
-    assembly = compose_axle(_explicit_model(kind), "K")
-    assert any(isinstance(c, constraint_type) for c in assembly.ideal_constraints)
+    assembly = assemble_generic(migrate_v1_axle(_explicit_model(kind)))
+    assert any(isinstance(GenericSubsystemAssembler.materialize_joint(c), constraint_type) for c in assembly.joints)
 
 
 @pytest.mark.parametrize(("kind", "constraint_type"), PREVIOUSLY_REJECTED)
@@ -99,8 +102,8 @@ def test_the_document_encodes_the_declared_joint(kind: str, constraint_type: typ
     entries, so the encoding loop raised for every kind here except those three.
     """
     del constraint_type
-    assembly = compose_axle(_explicit_model(kind), "K")
-    document = model_document(assembly, name=f"doc-{kind}", drive_wheels=True)
+    assembly = assemble_generic(migrate_v1_axle(_explicit_model(kind)))
+    document = assembly.model_document()
     types = {entry["type"] for entry in document["joints"]}
     expected = "convel" if kind == "constant_velocity" else kind
     assert expected in types, f"{kind} did not reach the document; types were {types}"
@@ -113,8 +116,8 @@ def test_secondary_axes_and_angle_target_ride_along_for_convel() -> None:
     The kernel treats every axis as optional and substitutes a default, so an
     omission would produce a plausible model that answers a different question.
     """
-    assembly = compose_axle(_explicit_model("constant_velocity"), "K")
-    document = model_document(assembly, name="convel-doc", drive_wheels=True)
+    assembly = assemble_generic(migrate_v1_axle(_explicit_model("constant_velocity")))
+    document = assembly.model_document()
     entry = next(e for e in document["joints"] if e["type"] == "convel")
     for field in ("axis_a", "axis_b", "axis_a_secondary", "axis_b_secondary"):
         assert field in entry, f"convel entry is missing {field}"
@@ -129,8 +132,8 @@ def test_the_in_plane_joint_carries_only_the_plane_normal() -> None:
     A spurious `axis_b` would be silently accepted by the kernel and would change
     what the row means.
     """
-    assembly = compose_axle(_explicit_model("inplane"), "K")
-    document = model_document(assembly, name="inplane-doc", drive_wheels=True)
+    assembly = assemble_generic(migrate_v1_axle(_explicit_model("inplane")))
+    document = assembly.model_document()
     entry = next(e for e in document["joints"] if e["type"] == "inplane")
     assert "axis_a" in entry
     assert "axis_b" not in entry

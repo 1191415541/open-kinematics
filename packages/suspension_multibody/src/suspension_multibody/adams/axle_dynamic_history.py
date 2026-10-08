@@ -9,7 +9,8 @@ from pathlib import Path
 
 import numpy as np
 
-from ..axle_dynamics import AxleDynamicsCase, AxleDynamicsModel
+from ..axle_dynamics import AxleDynamicsCase
+from ..axle_dynamics.schema import AxleDynamicsModel
 from .axle_adams_model import AxleAdamsDataset
 from .axle_channels import axle_history_from_result
 from .axle_contract import AxleChannelBindings

@@ -41,7 +41,7 @@ _FORBIDDEN_MODULES = (
 _FORBIDDEN_CALLS = (
     "run_case",
     "run_dynamic_case",
-    "run_vehicle_dynamics",
+    "vehicle_dynamics_run",
     "solve",
     "submit",
     # The composition entries: they *build* a model, which is authoring rather than

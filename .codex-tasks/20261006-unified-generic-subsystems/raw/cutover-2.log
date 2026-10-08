@@ -1,0 +1,62 @@
+uv run --no-sync ruff check .
+All checks passed!
+uv run --no-sync ty check .
+warning[possibly-unbound-attribute]: Attribute `reconfigure` on type `TextIO | @Todo` is possibly unbound
+   --> packages\suspension_multibody\scripts\check_unified_model_migration.py:505:5
+    |
+503 | def main() -> None:
+504 |     """Run capture or the explicit pre-delete gate."""
+505 |     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+506 |     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+507 |     parser = argparse.ArgumentParser()
+    |
+info: rule `possibly-unbound-attribute` is enabled by default
+
+warning[possibly-unbound-attribute]: Attribute `reconfigure` on type `TextIO | @Todo` is possibly unbound
+   --> packages\suspension_multibody\scripts\check_unified_model_migration.py:506:5
+    |
+504 |     """Run capture or the explicit pre-delete gate."""
+505 |     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+506 |     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+507 |     parser = argparse.ArgumentParser()
+508 |     parser.add_argument("--inventory", nargs="?", const="capture")
+    |
+info: rule `possibly-unbound-attribute` is enabled by default
+
+Found 2 diagnostics
+WARN ty is pre-release software and not ready for production use. Expect to encounter bugs, missing features, and fatal errors.
+uv run --no-sync python packages/suspension_multibody/tests/architecture/legacy_surface_gate.py --check
+mode      : migration
+findings  : 0
+
+OK: no unregistered Python boundary violation
+uv run --no-sync python packages/suspension_kernel/scripts/check_module_layering.py --strict --final
+kernel root                : E:\杂件\open-kinematics\packages\suspension_kernel
+mode                       : final
+headers                    : 58
+cpp translation units      : 76
+modules present            : 23
+header edges               : 119
+source edges               : 107
+source edge evidence       : 234 records (tu_include 217, symbol_reference 180, both 163; kind mentions 397)
+target modules missing     : 0
+legacy modules present     : 0
+legacy modules unregistered: 0 []
+mutual (reverse) edges     : 0
+self-including headers     : 0
+cross-aggregate includes   : 0
+module cycles (SCC size>1) : 0
+
+OK: layering matches the recorded baseline
+uv run --no-sync python packages/suspension_multibody/scripts/check_composable_release.py --skip-isolation
+release probe: E:\杂件\open-kinematics
+scratch      : C:\Users\zzy11\AppData\Local\Temp\suspension-release-klahzlo2
+
+[PASS] migration list: 0 retained legacy imports (0 production, 0 test) and 4 retired packages gone
+[PASS] documentation roots: 16 documented modules present, 4 retired ones absent
+[PASS] documentation examples: 4 example(s) executed: E-1, E-2, E-3, E-4
+
+OK: 3 release checks passed
+PASS: structural; 5 declared checks

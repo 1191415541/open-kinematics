@@ -160,6 +160,9 @@ def _mount(
         far_owner="chassis",
         far_label=f"{stem}_{side}_{label}",
         axis_reference_role=axis_reference_role,
+        first_body="far",
+        far_fallbacks=("ground",),
+        ideal_joint="spherical",
     )
 
 
@@ -233,6 +236,8 @@ _CONNECTIONS: tuple[ConnectionDefinition, ...] = (
         label="inner",
         far_owner="rack",
         far_label="tie_L",
+        first_body="far",
+        far_fallbacks=("chassis", "ground"),
     ),
     ConnectionDefinition(
         "tie_upright_joint_L",
@@ -310,6 +315,8 @@ _CONNECTIONS: tuple[ConnectionDefinition, ...] = (
         label="inner",
         far_owner="rack",
         far_label="tie_R",
+        first_body="far",
+        far_fallbacks=("chassis", "ground"),
     ),
     ConnectionDefinition(
         "tie_upright_joint_R",
@@ -335,6 +342,8 @@ _CONNECTIONS: tuple[ConnectionDefinition, ...] = (
         label="center",
         far_owner="upright_L",
         far_label="spindle",
+        first_body="far",
+        axis=(0.0, 1.0, 0.0),
     ),
     ConnectionDefinition(
         "wheel_spin_joint_R",
@@ -344,6 +353,8 @@ _CONNECTIONS: tuple[ConnectionDefinition, ...] = (
         label="center",
         far_owner="upright_R",
         far_label="spindle",
+        first_body="far",
+        axis=(0.0, 1.0, 0.0),
     ),
     ConnectionDefinition(
         "wheel_center_L", "wheel_center", owner="wheel_hub_L", label="wheel_center"
@@ -418,6 +429,7 @@ _OUTPUTS: tuple[OutputDeclaration, ...] = (
 DOUBLE_WISHBONE = Template(
     name=DOUBLE_WISHBONE_NAME,
     role="suspension",
+    symmetry="mirrored_xz",
     parts=_PARTS,
     connections=_CONNECTIONS,
     elastic_slots=("spring", "damper", "bushing"),
@@ -467,6 +479,11 @@ _STEERING_CONNECTIONS: tuple[ConnectionDefinition, ...] = (
         label="center",
         far_owner="rack_housing",
         far_label="rack_center",
+        first_body="far",
+        far_fallbacks=("chassis", "ground"),
+        axis=(0.0, 1.0, 0.0),
+        record_connection=False,
+        record_far_point=False,
     ),
     ConnectionDefinition(
         "housing_mount",
@@ -476,6 +493,10 @@ _STEERING_CONNECTIONS: tuple[ConnectionDefinition, ...] = (
         label="mount",
         far_owner="chassis",
         far_label="rack_center",
+        first_body="far",
+        far_fallbacks=("ground",),
+        record_connection=False,
+        record_owner_point=False,
     ),
     ConnectionDefinition(
         "rack_tie_L",
@@ -682,6 +703,23 @@ DRIVE = Template(
         "The simplified torque-element powertrain template under the drive role."
     ),
 )
+
+# Compatibility recipes retain the source model's arithmetic order and resistance
+# convention. New signed drives use a generic torque expression instead.
+TORQUE_PARAMETER_RECIPES = {
+    "brake": {
+        "expression": "2.0 * piston_area * share * input * demand_scale * friction_coeff * effective_radius",
+        "constants": {"demand_scale": 0.1},
+        "input_name": "brake_input", "range": (0.0, 1.0),
+        "absolute_gain": False,
+    },
+    "drive": {
+        "expression": "max_torque * gear_ratio * efficiency * share * input",
+        "constants": {},
+        "input_name": "drive_input", "range": (-1.0, 1.0),
+        "absolute_gain": True,
+    },
+}
 
 #: side.  The bar is a real body rather than a bare element because the bar itself
 #: is what twists, and the droplink is what carries the wheel end's travel into

@@ -1,0 +1,2941 @@
+...F........FF.FFFF............................FFFF.FEEEEEE........FF.FF [  4%]
+FFFFFFFFFFFFFF....FFFFF.......F......................................... [  9%]
+.........................FFF..F...............FF........................ [ 13%]
+......F............FF...........................................FF...... [ 18%]
+...F...............F......F............................................. [ 23%]
+........................................................................ [ 27%]
+........................................................................ [ 32%]
+..............................................F......................... [ 37%]
+........................................................................ [ 41%]
+........................................F............................... [ 46%]
+........................................................................ [ 51%]
+.......................................F................................ [ 55%]
+.......................................................................F [ 60%]
+F.FFFFFF....F.FF........................................................ [ 64%]
+................................................................FFFF.... [ 69%]
+....F................................................................... [ 74%]
+........................................................................ [ 78%]
+........................................................................ [ 83%]
+............................F.FFFF...................................... [ 88%]
+........................................................................ [ 92%]
+.........................................................x.............. [ 97%]
+........................................                                 [100%]
+=================================== ERRORS ====================================
+____________ ERROR collecting tests/analysis/test_axle_dynamic.py _____________
+ImportError while importing test module 'E:\�Ӽ�\open-kinematics\packages\suspension_multibody\tests\analysis\test_axle_dynamic.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+packages\suspension_multibody\tests\analysis\test_axle_dynamic.py:7: in <module>
+    from suspension_multibody.api import replay_case
+E   ImportError: cannot import name 'replay_case' from 'suspension_multibody.api' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\api.py)
+___________ ERROR collecting tests/analysis/test_vehicle_dynamic.py ___________
+ImportError while importing test module 'E:\�Ӽ�\open-kinematics\packages\suspension_multibody\tests\analysis\test_vehicle_dynamic.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+packages\suspension_multibody\tests\analysis\test_vehicle_dynamic.py:7: in <module>
+    from suspension_multibody.api import replay_case
+E   ImportError: cannot import name 'replay_case' from 'suspension_multibody.api' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\api.py)
+_________ ERROR collecting tests/authoring/test_solver_integration.py _________
+ImportError while importing test module 'E:\�Ӽ�\open-kinematics\packages\suspension_multibody\tests\authoring\test_solver_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+packages\suspension_multibody\tests\authoring\test_solver_integration.py:38: in <module>
+    from suspension_multibody.simulation import SimulationRequest, run_request
+E   ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+__________ ERROR collecting tests/composable/test_extension_proof.py __________
+ImportError while importing test module 'E:\�Ӽ�\open-kinematics\packages\suspension_multibody\tests\composable\test_extension_proof.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+packages\suspension_multibody\tests\composable\test_extension_proof.py:35: in <module>
+    from suspension_multibody.compilation import KcStudyInputs, compile_plan, plan_for
+E   ImportError: cannot import name 'KcStudyInputs' from 'suspension_multibody.compilation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\compilation\__init__.py)
+______________ ERROR collecting tests/simulation/test_replay.py _______________
+ImportError while importing test module 'E:\�Ӽ�\open-kinematics\packages\suspension_multibody\tests\simulation\test_replay.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+packages\suspension_multibody\tests\simulation\test_replay.py:22: in <module>
+    from suspension_multibody.results import TimeSeriesResult, TimeSeriesSample
+E   ImportError: cannot import name 'TimeSeriesResult' from 'suspension_multibody.results' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\results\__init__.py)
+__________ ERROR collecting tests/subsystems/test_articulated_tow.py __________
+ImportError while importing test module 'E:\�Ӽ�\open-kinematics\packages\suspension_multibody\tests\subsystems\test_articulated_tow.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+packages\suspension_multibody\tests\subsystems\test_articulated_tow.py:29: in <module>
+    from suspension_multibody.axle_dynamics.contract_run import run_axle
+E   ModuleNotFoundError: No module named 'suspension_multibody.axle_dynamics.contract_run'
+_________ ERROR collecting tests/subsystems/test_optional_symmetry.py _________
+ImportError while importing test module 'E:\�Ӽ�\open-kinematics\packages\suspension_multibody\tests\subsystems\test_optional_symmetry.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+packages\suspension_multibody\tests\subsystems\test_optional_symmetry.py:28: in <module>
+    from suspension_multibody.simulation import SimulationRequest, run_request
+E   ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+________ ERROR collecting tests/subsystems/test_three_axle_assembly.py ________
+ImportError while importing test module 'E:\�Ӽ�\open-kinematics\packages\suspension_multibody\tests\subsystems\test_three_axle_assembly.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+packages\suspension_multibody\tests\subsystems\test_three_axle_assembly.py:21: in <module>
+    from suspension_multibody.axle_dynamics.contract_run import run_axle
+E   ModuleNotFoundError: No module named 'suspension_multibody.axle_dynamics.contract_run'
+_______ ERROR collecting tests/subsystems/test_torque_element_wiring.py _______
+ImportError while importing test module 'E:\�Ӽ�\open-kinematics\packages\suspension_multibody\tests\subsystems\test_torque_element_wiring.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+packages\suspension_multibody\tests\subsystems\test_torque_element_wiring.py:48: in <module>
+    from suspension_multibody.simulation import SimulationRequest, run_request
+E   ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+________ ERROR at setup of test_the_read_channels_exist_and_are_named _________
+
+    @pytest.fixture(scope="module")
+    def run_document():
+        """Produce a real run with the wheels spinning, so the reads are not vacuous."""
+>       contract = _contract_module()
+
+packages\suspension_multibody\tests\api\test_signal_bus.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\api\test_signal_bus.py:38: in _contract_module
+    spec.loader.exec_module(module)
+<frozen importlib._bootstrap_external>:999: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """
+    Full-vehicle dynamic authoring and contract-boundary tests.
+    
+    The bit-exact reference is the frozen ctypes snapshot checked by
+    ``scripts/case_parity_check.py``; these tests stay independent of the retired
+    flat Python boundary and pin the case-document behavior that snapshot cannot
+    explain by itself.
+    """
+    
+    from __future__ import annotations
+    
+    import importlib.util
+    from pathlib import Path
+    
+    import numpy as np
+    import pytest
+    
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+    from suspension_multibody.schema import RoadSurfaceSpec, TimeSignal, Vec3
+>   from suspension_multibody.simulation import SimulationRequest, run_request
+E   ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\cases\test_vehicle_dynamic_contract.py:20: ImportError
+_ ERROR at setup of test_a_wheel_speed_read_is_the_result_documents_own_number _
+
+    @pytest.fixture(scope="module")
+    def run_document():
+        """Produce a real run with the wheels spinning, so the reads are not vacuous."""
+>       contract = _contract_module()
+
+packages\suspension_multibody\tests\api\test_signal_bus.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\api\test_signal_bus.py:38: in _contract_module
+    spec.loader.exec_module(module)
+<frozen importlib._bootstrap_external>:999: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """
+    Full-vehicle dynamic authoring and contract-boundary tests.
+    
+    The bit-exact reference is the frozen ctypes snapshot checked by
+    ``scripts/case_parity_check.py``; these tests stay independent of the retired
+    flat Python boundary and pin the case-document behavior that snapshot cannot
+    explain by itself.
+    """
+    
+    from __future__ import annotations
+    
+    import importlib.util
+    from pathlib import Path
+    
+    import numpy as np
+    import pytest
+    
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+    from suspension_multibody.schema import RoadSurfaceSpec, TimeSignal, Vec3
+>   from suspension_multibody.simulation import SimulationRequest, run_request
+E   ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\cases\test_vehicle_dynamic_contract.py:20: ImportError
+_ ERROR at setup of test_a_body_acceleration_read_is_the_result_documents_own_number _
+
+    @pytest.fixture(scope="module")
+    def run_document():
+        """Produce a real run with the wheels spinning, so the reads are not vacuous."""
+>       contract = _contract_module()
+
+packages\suspension_multibody\tests\api\test_signal_bus.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\api\test_signal_bus.py:38: in _contract_module
+    spec.loader.exec_module(module)
+<frozen importlib._bootstrap_external>:999: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """
+    Full-vehicle dynamic authoring and contract-boundary tests.
+    
+    The bit-exact reference is the frozen ctypes snapshot checked by
+    ``scripts/case_parity_check.py``; these tests stay independent of the retired
+    flat Python boundary and pin the case-document behavior that snapshot cannot
+    explain by itself.
+    """
+    
+    from __future__ import annotations
+    
+    import importlib.util
+    from pathlib import Path
+    
+    import numpy as np
+    import pytest
+    
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+    from suspension_multibody.schema import RoadSurfaceSpec, TimeSignal, Vec3
+>   from suspension_multibody.simulation import SimulationRequest, run_request
+E   ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\cases\test_vehicle_dynamic_contract.py:20: ImportError
+_______ ERROR at setup of test_a_tire_load_read_is_the_tires_own_column _______
+
+    @pytest.fixture(scope="module")
+    def run_document():
+        """Produce a real run with the wheels spinning, so the reads are not vacuous."""
+>       contract = _contract_module()
+
+packages\suspension_multibody\tests\api\test_signal_bus.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\api\test_signal_bus.py:38: in _contract_module
+    spec.loader.exec_module(module)
+<frozen importlib._bootstrap_external>:999: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """
+    Full-vehicle dynamic authoring and contract-boundary tests.
+    
+    The bit-exact reference is the frozen ctypes snapshot checked by
+    ``scripts/case_parity_check.py``; these tests stay independent of the retired
+    flat Python boundary and pin the case-document behavior that snapshot cannot
+    explain by itself.
+    """
+    
+    from __future__ import annotations
+    
+    import importlib.util
+    from pathlib import Path
+    
+    import numpy as np
+    import pytest
+    
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+    from suspension_multibody.schema import RoadSurfaceSpec, TimeSignal, Vec3
+>   from suspension_multibody.simulation import SimulationRequest, run_request
+E   ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\cases\test_vehicle_dynamic_contract.py:20: ImportError
+___ ERROR at setup of test_naming_no_entity_is_refused_rather_than_guessed ____
+
+    @pytest.fixture(scope="module")
+    def run_document():
+        """Produce a real run with the wheels spinning, so the reads are not vacuous."""
+>       contract = _contract_module()
+
+packages\suspension_multibody\tests\api\test_signal_bus.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\api\test_signal_bus.py:38: in _contract_module
+    spec.loader.exec_module(module)
+<frozen importlib._bootstrap_external>:999: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """
+    Full-vehicle dynamic authoring and contract-boundary tests.
+    
+    The bit-exact reference is the frozen ctypes snapshot checked by
+    ``scripts/case_parity_check.py``; these tests stay independent of the retired
+    flat Python boundary and pin the case-document behavior that snapshot cannot
+    explain by itself.
+    """
+    
+    from __future__ import annotations
+    
+    import importlib.util
+    from pathlib import Path
+    
+    import numpy as np
+    import pytest
+    
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+    from suspension_multibody.schema import RoadSurfaceSpec, TimeSignal, Vec3
+>   from suspension_multibody.simulation import SimulationRequest, run_request
+E   ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\cases\test_vehicle_dynamic_contract.py:20: ImportError
+________ ERROR at setup of test_an_unknown_channel_is_refused_by_name _________
+
+    @pytest.fixture(scope="module")
+    def run_document():
+        """Produce a real run with the wheels spinning, so the reads are not vacuous."""
+>       contract = _contract_module()
+
+packages\suspension_multibody\tests\api\test_signal_bus.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\tests\api\test_signal_bus.py:38: in _contract_module
+    spec.loader.exec_module(module)
+<frozen importlib._bootstrap_external>:999: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """
+    Full-vehicle dynamic authoring and contract-boundary tests.
+    
+    The bit-exact reference is the frozen ctypes snapshot checked by
+    ``scripts/case_parity_check.py``; these tests stay independent of the retired
+    flat Python boundary and pin the case-document behavior that snapshot cannot
+    explain by itself.
+    """
+    
+    from __future__ import annotations
+    
+    import importlib.util
+    from pathlib import Path
+    
+    import numpy as np
+    import pytest
+    
+    from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+    from suspension_multibody.schema import RoadSurfaceSpec, TimeSignal, Vec3
+>   from suspension_multibody.simulation import SimulationRequest, run_request
+E   ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\cases\test_vehicle_dynamic_contract.py:20: ImportError
+================================== FAILURES ===================================
+_____________ test_a_contract_derived_model_assembles_and_solves ______________
+
+    def test_a_contract_derived_model_assembles_and_solves() -> None:
+        """
+        A contract-derived model builds an assembly and converges, not just resolves.
+    
+        Resolving the hardpoints is necessary but not sufficient: the model also has
+        to build a front-axle assembly and reach a converged native solve.  That is
+        what the four missing aliases broke, and it is what this test would catch
+        again.
+        """
+>       from suspension_multibody.api import kc_case_run
+E       ImportError: cannot import name 'kc_case_run' from 'suspension_multibody.api' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\api.py)
+
+packages\suspension_multibody\tests\adapters\test_geometry_contract.py:124: ImportError
+_______________ test_api_decodes_the_kc_sample_through_results ________________
+
+    def test_api_decodes_the_kc_sample_through_results() -> None:
+        """
+        `api` reads a contract row by calling `results`, not by slicing it.
+    
+        A grep for `row[`/`entry[:3]`/`entry[3:7]` inside `api` is what would find a
+        re-introduced decode; this checks the call sites instead, so a rename of the
+        helper is caught by the import test below rather than by a stale pattern.
+        """
+        tree = _module_tree("api.py")
+        called: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute):
+                called.add(node.attr)
+            elif isinstance(node, ast.Name):
+                called.add(node.id)
+>       assert "rigid_state_from_row" in called
+E       AssertionError: assert 'rigid_state_from_row' in {'Any', 'AssemblyDocument', 'CaseDocument', 'CompiledSimulation', 'DocumentLoader', 'Mapping', ...}
+
+packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py:84: AssertionError
+_________________ test_the_kc_decode_helpers_live_in_results __________________
+
+    def test_the_kc_decode_helpers_live_in_results() -> None:
+        """The other half: the module that owns the layout is where they are defined."""
+        from suspension_multibody.results import kc_state
+    
+        assert hasattr(kc_state, "rigid_state_from_row")
+        assert hasattr(kc_state, "tire_compression_from_run")
+        assert hasattr(kc_state, "MM")
+        # `api` keeps `_rigid_state` and `_tire_compression` as the entry points its
+        # own call sites use, so both names stay reachable -- but neither computes.
+>       assert callable(api._rigid_state)
+E       AttributeError: module 'suspension_multibody.api' has no attribute '_rigid_state'
+
+packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py:97: AttributeError
+________ test_the_reported_tire_compression_is_the_kernel_s_own_number ________
+
+    def test_the_reported_tire_compression_is_the_kernel_s_own_number() -> None:
+        """
+        One number, read from where it was solved.
+    
+        The channel used to be a constant `{left: 0.0, right: 0.0}`; it now reads the
+        kernel's `tire_output`, and this pins that the two agree exactly rather than
+        approximately -- a decode that went through a second conversion would show up
+        here.
+        """
+        import json
+    
+        from suspension_multibody.cases.kc_quasi_static import model_document
+        from suspension_multibody.results.kc_state import tire_compression_from_run
+        from suspension_multibody.schema.model import AxleDeclaration
+>       from suspension_multibody.simulation import SimulationRequest, run_request
+E       ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py:133: ImportError
+_____________ test_a_run_with_no_tire_reports_no_compression_key ______________
+
+    def test_a_run_with_no_tire_reports_no_compression_key() -> None:
+        """
+        Absent, not zero -- the same distinction the rack channel is built on.
+    
+        A model that declares no tire has no compression, and `{"left": 0.0}` would
+        be a measured value that does not exist.
+        """
+>       bundle = api.kc_case_run(
+            benchmark_model(),
+            CaseSpec(
+                mode="K",
+                controls=(
+                    DisplacementControl(target="wheel_travel_left", values=(-10.0,)),
+                ),
+            ),
+        )
+E       AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py:195: AttributeError
+___________ test_both_modes_decode_their_state_from_the_contract[K] ___________
+
+mode = 'K'
+
+    @pytest.mark.parametrize("mode", ["K", "C"])
+    def test_both_modes_decode_their_state_from_the_contract(mode: str) -> None:
+        """The decode is one path for both columns, so both are exercised."""
+>       bundle = api.kc_case_run(
+            benchmark_model(),
+            CaseSpec(
+                mode=mode,
+                controls=(
+                    (DisplacementControl(target="wheel_travel_left", values=(-10.0,)),)
+                    if mode == "K"
+                    else ()
+                ),
+            ),
+        )
+E       AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py:210: AttributeError
+___________ test_both_modes_decode_their_state_from_the_contract[C] ___________
+
+mode = 'C'
+
+    @pytest.mark.parametrize("mode", ["K", "C"])
+    def test_both_modes_decode_their_state_from_the_contract(mode: str) -> None:
+        """The decode is one path for both columns, so both are exercised."""
+>       bundle = api.kc_case_run(
+            benchmark_model(),
+            CaseSpec(
+                mode=mode,
+                controls=(
+                    (DisplacementControl(target="wheel_travel_left", values=(-10.0,)),)
+                    if mode == "K"
+                    else ()
+                ),
+            ),
+        )
+E       AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py:210: AttributeError
+____________ test_a_no_steering_axle_runs_through_the_public_entry ____________
+
+    def test_a_no_steering_axle_runs_through_the_public_entry() -> None:
+        """
+        GAP-2's first acceptance: the run exists and converges.
+    
+        Before the case carried the subsystem set there was no way to reach this
+        through `run_case` at all, so "the run works" was not checkable.
+        """
+>       bundle = api.kc_case_run(_model_without_rack_center(), _k_case(_WITHOUT_STEERING))
+E       AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\api\test_no_steering_shrinks_rack.py:116: AttributeError
+_________ test_the_rack_channel_disappears_rather_than_reporting_zero _________
+
+    def test_the_rack_channel_disappears_rather_than_reporting_zero() -> None:
+        """
+        GAP-2's real acceptance: absent, not zeroed.
+    
+        A `{"rack_displacement": 0.0}` channel would claim the run steered and the
+        rack sat at neutral.  There is no rack, so there is no channel -- the same
+        rule the rig's shrink is built on.
+        """
+>       bundle = api.kc_case_run(_model_without_rack_center(), _k_case(_WITHOUT_STEERING))
+E       AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\api\test_no_steering_shrinks_rack.py:132: AttributeError
+____________ test_the_steering_run_still_reports_the_rack_channel _____________
+
+    def test_the_steering_run_still_reports_the_rack_channel() -> None:
+        """The other side of the same assertion, so the omission means something."""
+>       bundle = api.kc_case_run(benchmark_model(), _k_case())
+E       AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\api\test_no_steering_shrinks_rack.py:142: AttributeError
+_______ test_a_run_naming_steering_the_case_does_not_ask_for_is_refused _______
+
+    def test_a_run_naming_steering_the_case_does_not_ask_for_is_refused() -> None:
+        """
+        The subsystem set is checked, not ignored.
+    
+        A case that excludes `steering` while the model declares a rack coordinate is
+        a caller asking for two different assemblies; the assembly builder owns that
+        refusal, and it has to be reachable from the public entry.
+        """
+        # The benchmark model has a rack_center hardpoint, and excludes steering:
+        # this is legal -- the hardpoint is simply unused -- so the run succeeds.
+>       bundle = api.kc_case_run(benchmark_model(), _k_case(_WITHOUT_STEERING))
+E       AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\api\test_no_steering_shrinks_rack.py:156: AttributeError
+____________ test_a_case_spec_defaults_to_the_full_single_axle_set ____________
+
+    def test_a_case_spec_defaults_to_the_full_single_axle_set() -> None:
+        """`None` means the default set, so every existing caller is unchanged."""
+        assert CaseSpec(mode="K").subsystems is None
+>       bundle = api.kc_case_run(benchmark_model(), _k_case())
+E       AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\api\test_no_steering_shrinks_rack.py:188: AttributeError
+_____________ test_a_damping_write_changes_the_solved_trajectory ______________
+
+    def test_a_damping_write_changes_the_solved_trajectory() -> None:
+        """
+        Writing the damper coefficient moves the state the solver produces.
+    
+        The model is submitted twice: once as authored, once with the coefficient the
+        bus wrote into its element's ``parameters``.  A write that landed outside the
+        element -- or outside the ``elements`` array -- would leave the two runs
+        identical, which is the failure this asserts against.
+        """
+        from suspension_contracts import pack_container
+    
+>       from suspension_multibody.simulation import (
+            SimulationRequest,
+            compile_document_pair,
+            run_request,
+        )
+E       ImportError: cannot import name 'compile_document_pair' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\api\test_signal_bus.py:392: ImportError
+___________ test_a_motor_torque_write_changes_the_solved_trajectory ___________
+
+    def test_a_motor_torque_write_changes_the_solved_trajectory() -> None:
+        """
+        Writing the wheel moment moves the state the solver produces.
+    
+        The moment is a payload table, so the write has to land in the bytes the
+        descriptor points at.  This is the counterpart of the damping test for the
+        case side of the bus: the document is unchanged and the *blob* is what moved.
+        """
+        from suspension_contracts import pack_container
+    
+>       from suspension_multibody.simulation import (
+            SimulationRequest,
+            compile_document_pair,
+            run_request,
+        )
+E       ImportError: cannot import name 'compile_document_pair' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\api\test_signal_bus.py:431: ImportError
+___________ test_simulate_has_a_signature_and_a_documented_contract ___________
+
+    def test_simulate_has_a_signature_and_a_documented_contract() -> None:
+        """The signature names the two documents, and the docstring says what they are."""
+        signature = inspect.signature(api.simulate)
+        assert list(signature.parameters) == ["assembly_document", "case_document"]
+        # No hidden mode/family parameter: the reading follows from the documents.
+        assert all(
+            parameter.default is inspect.Parameter.empty
+            for parameter in signature.parameters.values()
+        )
+        docstring = inspect.getdoc(api.simulate) or ""
+>       assert docstring.startswith(
+            "Run one assembly document against one case document."
+        )
+E       AssertionError: assert False
+E        +  where False = <built-in method startswith of str object at 0x000001DCFF7EB360>('Run one assembly document against one case document.')
+E        +    where <built-in method startswith of str object at 0x000001DCFF7EB360> = 'Submit one resolved assembly and case through the native backend.'.startswith
+
+packages\suspension_multibody\tests\api\test_simulate.py:116: AssertionError
+___________________ test_simulate_only_compiles_and_submits ___________________
+
+    def test_simulate_only_compiles_and_submits() -> None:
+        """
+        The entry is a wrapper, and the source says which existing layers it uses.
+    
+        A second assembly path is the failure mode this entry exists to avoid, so the
+        check is that it names the authoring conversion, the family preparation and
+        the shared runner rather than re-implementing any of them.
+        """
+        source = inspect.getsource(api.simulate)
+>       assert "assembly_request_for" in source
+E       assert 'assembly_request_for' in 'def simulate(\n    assembly_document: str | Path | AssemblyDocument | SimulationAssembly,\n    case_document: str | P...ssembly and case through the native backend."""\n    return run_compiled(validate(assembly_document, case_document))\n'
+
+packages\suspension_multibody\tests\api\test_simulate.py:132: AssertionError
+___________________ test_a_k_document_pair_runs_end_to_end ____________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_k_document_pair_runs_en0')
+
+    def test_a_k_document_pair_runs_end_to_end(tmp_path: Path) -> None:
+        """One K case document over one assembly file reaches the kernel and solves."""
+        paths = _project(tmp_path, write_builtin_axle_project)
+>       run = api.simulate(paths["assembly"], _case_document("k-run", _K_SECTION))
+
+packages\suspension_multibody\tests\api\test_simulate.py:149: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+_____________ test_the_document_pair_reaches_the_same_submission ______________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_the_document_pair_reaches0')
+
+    def test_the_document_pair_reaches_the_same_submission(tmp_path: Path) -> None:
+        """
+        The compiled submission carries the bench, family and reading the documents state.
+    
+        This is what "the documents say what the run is" means concretely: the request
+        the runner was handed names the rig the assembly is bound to and the family the
+        case declares, and the model document the compiled pair carries is authored
+        from the assembly the family preparation built.
+        """
+        paths = _project(tmp_path, write_builtin_axle_project)
+>       run = api.simulate(paths["assembly"], _case_document("k-run", _K_SECTION))
+
+packages\suspension_multibody\tests\api\test_simulate.py:169: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+___________________ test_a_c_document_pair_runs_end_to_end ____________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_c_document_pair_runs_en0')
+
+    def test_a_c_document_pair_runs_end_to_end(tmp_path: Path) -> None:
+        """The same entry, and the reading is the one the `c` section names."""
+        paths = _project(tmp_path, write_c_ready_axle_project)
+>       run = api.simulate(paths["assembly"], _case_document("c-run", _C_SECTION))
+
+packages\suspension_multibody\tests\api\test_simulate.py:186: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'front_axle', 'assembly_kind...], 'required_ports': ['wheel_centre'], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+___________ test_the_assembly_document_s_override_reaches_the_model ___________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_the_assembly_document_s_o0')
+
+    def test_the_assembly_document_s_override_reaches_the_model(tmp_path: Path) -> None:
+        """
+        An assembly file's own override is what the run reads.
+    
+        The override is copy-on-write over the subsystem file, so a run that ignored
+        it would still solve -- against the un-overridden coordinate.  Moving the wheel
+        centre through the assembly file is the cheapest way to show that the
+        difference is the document's.
+        """
+        paths = _project(tmp_path, write_builtin_axle_project)
+>       before = api.simulate(paths["assembly"], _case_document("k-run", _K_SECTION))
+
+packages\suspension_multibody\tests\api\test_simulate.py:203: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+_____________ test_the_three_assembly_spellings_are_one_run[path] _____________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_the_three_assembly_spelli0')
+spelling = 'path'
+
+    @pytest.mark.parametrize("spelling", ["path", "document", "simulation"])
+    def test_the_three_assembly_spellings_are_one_run(tmp_path: Path, spelling: str) -> None:
+        """A path, a loaded document and a rig-bound one all describe the same run."""
+        paths = _project(tmp_path, write_builtin_axle_project)
+        target: Any
+        if spelling == "path":
+            target = paths["assembly"]
+        elif spelling == "document":
+            target = AssemblyDocument.load(paths["assembly"])
+        else:
+            target = SimulationAssembly.load(paths["assembly"])
+    
+>       run = api.simulate(target, _case_document("k-run", _K_SECTION))
+
+packages\suspension_multibody\tests\api\test_simulate.py:237: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+___________ test_the_three_assembly_spellings_are_one_run[document] ___________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_the_three_assembly_spelli1')
+spelling = 'document'
+
+    @pytest.mark.parametrize("spelling", ["path", "document", "simulation"])
+    def test_the_three_assembly_spellings_are_one_run(tmp_path: Path, spelling: str) -> None:
+        """A path, a loaded document and a rig-bound one all describe the same run."""
+        paths = _project(tmp_path, write_builtin_axle_project)
+        target: Any
+        if spelling == "path":
+            target = paths["assembly"]
+        elif spelling == "document":
+            target = AssemblyDocument.load(paths["assembly"])
+        else:
+            target = SimulationAssembly.load(paths["assembly"])
+    
+>       run = api.simulate(target, _case_document("k-run", _K_SECTION))
+
+packages\suspension_multibody\tests\api\test_simulate.py:237: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+__________ test_the_three_assembly_spellings_are_one_run[simulation] __________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_the_three_assembly_spelli2')
+spelling = 'simulation'
+
+    @pytest.mark.parametrize("spelling", ["path", "document", "simulation"])
+    def test_the_three_assembly_spellings_are_one_run(tmp_path: Path, spelling: str) -> None:
+        """A path, a loaded document and a rig-bound one all describe the same run."""
+        paths = _project(tmp_path, write_builtin_axle_project)
+        target: Any
+        if spelling == "path":
+            target = paths["assembly"]
+        elif spelling == "document":
+            target = AssemblyDocument.load(paths["assembly"])
+        else:
+            target = SimulationAssembly.load(paths["assembly"])
+    
+>       run = api.simulate(target, _case_document("k-run", _K_SECTION))
+
+packages\suspension_multibody\tests\api\test_simulate.py:237: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+______________ test_a_document_carrying_both_readings_is_refused ______________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_document_carrying_both_0')
+
+    def test_a_document_carrying_both_readings_is_refused(tmp_path: Path) -> None:
+        """`k` and `c` together describe two runs, so neither is chosen silently."""
+        paths = _project(tmp_path, write_builtin_axle_project)
+        both = _case_document("both", {**_K_SECTION, **_C_SECTION})
+        with pytest.raises(ValueError, match="exactly one of"):
+>           api.simulate(paths["assembly"], both)
+
+packages\suspension_multibody\tests\api\test_simulate.py:250: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_document_carrying_both_0')
+
+    def test_a_document_carrying_both_readings_is_refused(tmp_path: Path) -> None:
+        """`k` and `c` together describe two runs, so neither is chosen silently."""
+        paths = _project(tmp_path, write_builtin_axle_project)
+        both = _case_document("both", {**_K_SECTION, **_C_SECTION})
+>       with pytest.raises(ValueError, match="exactly one of"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'exactly one of'
+E        Input: 'assemble_generic requires a generic_multibody assembly'
+
+packages\suspension_multibody\tests\api\test_simulate.py:249: AssertionError
+_______________ test_a_document_carrying_no_reading_is_refused ________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_document_carrying_no_re0')
+
+    def test_a_document_carrying_no_reading_is_refused(tmp_path: Path) -> None:
+        """A case with nothing to solve says so rather than running an empty grid."""
+        paths = _project(tmp_path, write_builtin_axle_project)
+        with pytest.raises(ValueError, match="neither"):
+>           api.simulate(paths["assembly"], _case_document("none", {}))
+
+packages\suspension_multibody\tests\api\test_simulate.py:257: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_document_carrying_no_re0')
+
+    def test_a_document_carrying_no_reading_is_refused(tmp_path: Path) -> None:
+        """A case with nothing to solve says so rather than running an empty grid."""
+        paths = _project(tmp_path, write_builtin_axle_project)
+>       with pytest.raises(ValueError, match="neither"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'neither'
+E        Input: 'assemble_generic requires a generic_multibody assembly'
+
+packages\suspension_multibody\tests\api\test_simulate.py:256: AssertionError
+__________________ test_a_case_for_another_family_is_refused __________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_case_for_another_family0')
+
+    def test_a_case_for_another_family_is_refused(tmp_path: Path) -> None:
+        paths = _project(tmp_path, write_builtin_axle_project)
+        document = _case_document("handling", _K_SECTION)
+        document["family"] = "handling"
+        with pytest.raises(ValueError, match="kc_quasi_static"):
+>           api.simulate(paths["assembly"], document)
+
+packages\suspension_multibody\tests\api\test_simulate.py:265: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_case_for_another_family0')
+
+    def test_a_case_for_another_family_is_refused(tmp_path: Path) -> None:
+        paths = _project(tmp_path, write_builtin_axle_project)
+        document = _case_document("handling", _K_SECTION)
+        document["family"] = "handling"
+>       with pytest.raises(ValueError, match="kc_quasi_static"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'kc_quasi_static'
+E        Input: 'assemble_generic requires a generic_multibody assembly'
+
+packages\suspension_multibody\tests\api\test_simulate.py:264: AssertionError
+________________ test_a_rig_without_a_bench_is_refused_by_name ________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_rig_without_a_bench_is_0')
+
+    def test_a_rig_without_a_bench_is_refused_by_name(tmp_path: Path) -> None:
+        """
+        A rig that names no bench has nothing to drive with.
+    
+        The fixtures' rigs predate the field, which makes them the natural negative
+        control: the refusal names the registered benches rather than defaulting to
+        one, because a default would decide the bench for the caller.
+        """
+        paths = _project(tmp_path, write_builtin_axle_project, bench=None)
+        with pytest.raises(ValueError, match="declares no 'bench'"):
+>           api.simulate(paths["assembly"], _case_document("k-run", _K_SECTION))
+
+packages\suspension_multibody\tests\api\test_simulate.py:278: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...ported_assembly_kinds': ['suspension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe']}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_rig_without_a_bench_is_0')
+
+    def test_a_rig_without_a_bench_is_refused_by_name(tmp_path: Path) -> None:
+        """
+        A rig that names no bench has nothing to drive with.
+    
+        The fixtures' rigs predate the field, which makes them the natural negative
+        control: the refusal names the registered benches rather than defaulting to
+        one, because a default would decide the bench for the caller.
+        """
+        paths = _project(tmp_path, write_builtin_axle_project, bench=None)
+>       with pytest.raises(ValueError, match="declares no 'bench'"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: "declares no 'bench'"
+E        Input: 'assemble_generic requires a generic_multibody assembly'
+
+packages\suspension_multibody\tests\api\test_simulate.py:277: AssertionError
+_____________ test_a_rig_whose_bench_routes_elsewhere_is_refused ______________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_rig_whose_bench_routes_0')
+
+    def test_a_rig_whose_bench_routes_elsewhere_is_refused(tmp_path: Path) -> None:
+        """The bench and the case have to agree about which family reads the model."""
+        paths = _project(tmp_path, write_builtin_axle_project, bench="vehicle_kc")
+        with pytest.raises(ValueError, match="routes to family"):
+>           api.simulate(paths["assembly"], _case_document("k-run", _K_SECTION))
+
+packages\suspension_multibody\tests\api\test_simulate.py:285: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki... ['suspension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'vehicle_kc'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_rig_whose_bench_routes_0')
+
+    def test_a_rig_whose_bench_routes_elsewhere_is_refused(tmp_path: Path) -> None:
+        """The bench and the case have to agree about which family reads the model."""
+        paths = _project(tmp_path, write_builtin_axle_project, bench="vehicle_kc")
+>       with pytest.raises(ValueError, match="routes to family"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'routes to family'
+E        Input: 'assemble_generic requires a generic_multibody assembly'
+
+packages\suspension_multibody\tests\api\test_simulate.py:284: AssertionError
+_________ test_a_contract_model_document_is_not_an_assembly_document __________
+
+    def test_a_contract_model_document_is_not_an_assembly_document() -> None:
+        """
+        The entry takes an *assembly* document, and a model document is not one.
+    
+        A contract model document does not say which assembly it belongs to, so
+        accepting it here would mean guessing the device under test; the pair of
+        already-authored contract documents goes to `run_request` instead.
+        """
+        with pytest.raises(TypeError, match="assembly document"):
+>           api.simulate(
+                {"contract": "multibody-model", "contract_version": 1, "kind": "model"},
+                _case_document("k-run", _K_SECTION),
+            )
+
+packages\suspension_multibody\tests\api\test_simulate.py:297: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:24: in validate
+    bundle = DocumentLoader().load(source, case_document)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <suspension_multibody.authoring.loader.DocumentLoader object at 0x000001DCBE487D10>
+assembly = {'contract': 'multibody-model', 'contract_version': 1, 'kind': 'model'}
+case = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'kc_quasi_static', 'k': {'axis_map': {'wheel': ['wheel_drive_L', 'wheel_drive_R']}, 'drive': 'wheel_center', 'left_right_mode': 'symmetric', 'rack_values_mm': [], ...}, ...}
+
+    def load(
+        self,
+        assembly: str | Path | AssemblyDocument,
+        case: str | Path | Mapping[str, Any] | CaseDocument,
+    ) -> LoadedDocuments:
+        """Validate both sources once and retain all effective reference bindings."""
+        file_input = isinstance(assembly, (str, Path))
+        source = AssemblyDocument.load(self._path(assembly)) if file_input else assembly
+        if not isinstance(source, AssemblyDocument):
+>           raise AuthoringError("assembly input must be a path or AssemblyDocument")
+E           suspension_multibody.authoring.errors.AuthoringError: assembly input must be a path or AssemblyDocument
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:138: AuthoringError
+_____________________ test_a_non_document_case_is_refused _____________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_non_document_case_is_re0')
+
+    def test_a_non_document_case_is_refused(tmp_path: Path) -> None:
+        paths = _project(tmp_path, write_builtin_axle_project)
+        with pytest.raises(TypeError, match="case contract document"):
+>           api.simulate(paths["assembly"], ["not-a-document"])
+
+packages\suspension_multibody\tests\api\test_simulate.py:306: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:24: in validate
+    bundle = DocumentLoader().load(source, case_document)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:201: in load
+    loaded_case = case if isinstance(case, CaseDocument) else CaseDocument(case)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1dcbe4fb530>
+payload = ['not-a-document']
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+>           if declared.get("contract") == "multibody-case":
+E           AttributeError: 'list' object has no attribute 'get'
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:41: AttributeError
+________ test_simulate_accepts_a_path_a_document_and_a_bound_assembly _________
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1dcbe45d700>
+payload = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'kc_quasi_static', 'k': {'axis_map': {'wheel': ['wheel_drive_L', 'wheel_drive_R']}, 'drive': 'wheel_center', 'left_right_mode': 'symmetric', 'rack_values_mm': [], ...}, ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+>               validate_case(declared)
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:42: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_contracts\src\suspension_contracts\multibody.py:364: in validate_case
+    validate(document, "case")
+packages\suspension_contracts\src\suspension_contracts\multibody.py:253: in validate
+    _check(document, schema, "$", schema)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+value = {'end_time': 0.001, 'step_size': 0.001}
+schema = {'additionalProperties': False, 'properties': {'adaptive_step': {'type': 'boolean'}, 'contact_event_tolerance_s': {'mi...ber'}, 'dynamics_tolerance': {'minimum': 0, 'type': 'number'}, 'hht_alpha': {'type': 'number'}, ...}, 'type': 'object'}
+path = '$/solver'
+root = {'$id': 'https://open-kinematics.dev/contracts/multibody_case_v1.json', '$schema': 'https://json-schema.org/draft/2020...l rules below are enforced by the case layer, and the expanded identity is reported back in the result manifest.', ...}
+
+    def _check(
+        value: Any, schema: Mapping[str, Any], path: str, root: Mapping[str, Any]
+    ) -> None:
+        ref = schema.get("$ref")
+        if isinstance(ref, str):
+            if not ref.startswith("#/"):
+                raise ContractError(f"{path}: unsupported $ref {ref!r}")
+            target: Any = root
+            for token in ref[2:].split("/"):
+                target = target[token]
+            _check(value, target, path, root)
+            return
+    
+        if "const" in schema and value != schema["const"]:
+            raise ContractError(f"{path}: expected {schema['const']!r}, got {value!r}")
+        if "enum" in schema and value not in schema["enum"]:
+            raise ContractError(f"{path}: {value!r} is not one of {schema['enum']}")
+    
+        declared = schema.get("type")
+        if isinstance(declared, str) and not _type_matches(value, declared):
+            raise ContractError(f"{path}: expected {declared}, got {type(value).__name__}")
+    
+        if isinstance(value, dict):
+            for key in schema.get("required", []):
+                if key not in value:
+                    raise ContractError(f"{path}: missing required field {key!r}")
+            properties = schema.get("properties", {})
+            if schema.get("additionalProperties") is False:
+                extra = sorted(set(value) - set(properties))
+                if extra:
+>                   raise ContractError(f"{path}: unexpected fields {extra}")
+E                   suspension_contracts.multibody.ContractError: $/solver: unexpected fields ['end_time', 'step_size']
+
+packages\suspension_contracts\src\suspension_contracts\multibody.py:221: ContractError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_simulate_accepts_a_path_a0')
+
+    def test_simulate_accepts_a_path_a_document_and_a_bound_assembly(
+        tmp_path: Path,
+    ) -> None:
+        """
+        C41/C42/C43: all three assembly origins reach one run.
+    
+        The spellings differ only in when the rig is read; the *compiled documents*
+        are what has to match, because two runs could both succeed while disagreeing
+        about a body set or a marker value.
+        """
+        paths = _project(tmp_path)
+        case = _case()
+>       from_path = api.simulate(paths["assembly"], case)
+
+packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py:186: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:24: in validate
+    bundle = DocumentLoader().load(source, case_document)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:201: in load
+    loaded_case = case if isinstance(case, CaseDocument) else CaseDocument(case)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1dcbe45d700>
+payload = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'kc_quasi_static', 'k': {'axis_map': {'wheel': ['wheel_drive_L', 'wheel_drive_R']}, 'drive': 'wheel_center', 'left_right_mode': 'symmetric', 'rack_values_mm': [], ...}, ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+                validate_case(declared)
+            else:
+                validate_solve_plan(declared)
+        except ContractError as error:
+>           raise AuthoringError(f"case {declared.get('name', '?')!r}: {error}") from error
+E           suspension_multibody.authoring.errors.AuthoringError: case 'parity-k': $/solver: unexpected fields ['end_time', 'step_size']
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:46: AuthoringError
+____________ test_simulate_refuses_a_bare_contract_model_document _____________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_simulate_refuses_a_bare_c0')
+
+    def test_simulate_refuses_a_bare_contract_model_document(tmp_path: Path) -> None:
+        """
+        C43: the *contract model* document is not an assembly, and is refused by name.
+    
+        It does not say which assembly it belongs to, so filling that in would be
+        guessing the device under test -- the thing the document route exists to stop
+        being necessary.  The refusal has to name where a pair of contract documents
+        goes instead, or the caller has no next step.
+        """
+        paths = _project(tmp_path)
+        with pytest.raises(TypeError, match="run_request"):
+>           api.simulate(_read_json(paths["template"]), _case())
+
+packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py:210: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:24: in validate
+    bundle = DocumentLoader().load(source, case_document)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <suspension_multibody.authoring.loader.DocumentLoader object at 0x000001DCBE479D00>
+assembly = {'allowed_placement_roles': ['any', 'front', 'rear'], 'bodies': [{'fixed': False, 'mass': 0.0, 'name': 'upper_arm_L'},...joints in both modes, and wheel hubs are connected to uprights via revolute spin joints.', 'document': 'template', ...}
+case = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'kc_quasi_static', 'k': {'axis_map': {'wheel': ['wheel_drive_L', 'wheel_drive_R']}, 'drive': 'wheel_center', 'left_right_mode': 'symmetric', 'rack_values_mm': [], ...}, ...}
+
+    def load(
+        self,
+        assembly: str | Path | AssemblyDocument,
+        case: str | Path | Mapping[str, Any] | CaseDocument,
+    ) -> LoadedDocuments:
+        """Validate both sources once and retain all effective reference bindings."""
+        file_input = isinstance(assembly, (str, Path))
+        source = AssemblyDocument.load(self._path(assembly)) if file_input else assembly
+        if not isinstance(source, AssemblyDocument):
+>           raise AuthoringError("assembly input must be a path or AssemblyDocument")
+E           suspension_multibody.authoring.errors.AuthoringError: assembly input must be a path or AssemblyDocument
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:138: AuthoringError
+________ test_the_memory_route_reads_the_project_without_the_directory ________
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1dcbe49ec00>
+payload = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'kc_quasi_static', 'k': {'axis_map': {'wheel': ['wheel_drive_L', 'wheel_drive_R']}, 'drive': 'wheel_center', 'left_right_mode': 'symmetric', 'rack_values_mm': [], ...}, ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+>               validate_case(declared)
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:42: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_contracts\src\suspension_contracts\multibody.py:364: in validate_case
+    validate(document, "case")
+packages\suspension_contracts\src\suspension_contracts\multibody.py:253: in validate
+    _check(document, schema, "$", schema)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+value = {'end_time': 0.001, 'step_size': 0.001}
+schema = {'additionalProperties': False, 'properties': {'adaptive_step': {'type': 'boolean'}, 'contact_event_tolerance_s': {'mi...ber'}, 'dynamics_tolerance': {'minimum': 0, 'type': 'number'}, 'hht_alpha': {'type': 'number'}, ...}, 'type': 'object'}
+path = '$/solver'
+root = {'$id': 'https://open-kinematics.dev/contracts/multibody_case_v1.json', '$schema': 'https://json-schema.org/draft/2020...l rules below are enforced by the case layer, and the expanded identity is reported back in the result manifest.', ...}
+
+    def _check(
+        value: Any, schema: Mapping[str, Any], path: str, root: Mapping[str, Any]
+    ) -> None:
+        ref = schema.get("$ref")
+        if isinstance(ref, str):
+            if not ref.startswith("#/"):
+                raise ContractError(f"{path}: unsupported $ref {ref!r}")
+            target: Any = root
+            for token in ref[2:].split("/"):
+                target = target[token]
+            _check(value, target, path, root)
+            return
+    
+        if "const" in schema and value != schema["const"]:
+            raise ContractError(f"{path}: expected {schema['const']!r}, got {value!r}")
+        if "enum" in schema and value not in schema["enum"]:
+            raise ContractError(f"{path}: {value!r} is not one of {schema['enum']}")
+    
+        declared = schema.get("type")
+        if isinstance(declared, str) and not _type_matches(value, declared):
+            raise ContractError(f"{path}: expected {declared}, got {type(value).__name__}")
+    
+        if isinstance(value, dict):
+            for key in schema.get("required", []):
+                if key not in value:
+                    raise ContractError(f"{path}: missing required field {key!r}")
+            properties = schema.get("properties", {})
+            if schema.get("additionalProperties") is False:
+                extra = sorted(set(value) - set(properties))
+                if extra:
+>                   raise ContractError(f"{path}: unexpected fields {extra}")
+E                   suspension_contracts.multibody.ContractError: $/solver: unexpected fields ['end_time', 'step_size']
+
+packages\suspension_contracts\src\suspension_contracts\multibody.py:221: ContractError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_the_memory_route_reads_th0')
+
+    def test_the_memory_route_reads_the_project_without_the_directory(
+        tmp_path: Path,
+    ) -> None:
+        """
+        C59: once the documents exist, no modelling file is read again.
+    
+        The project tree is removed *before* the run, so a lazy read fails rather
+        than passing quietly -- which is the only way this property can be observed
+        from outside.
+        """
+        import shutil
+    
+        from suspension_multibody.authoring import load_rig
+        from suspension_multibody.authoring.documents import load_assembly, load_subsystem
+    
+        paths = _project(tmp_path)
+        template = TemplateDocument.load(paths["template"])
+        chassis_template = TemplateDocument.load(paths["chassis_template"])
+        subsystems = {
+            "front.sub.json": load_subsystem(paths["subsystem"], template=template),
+            "chassis.sub.json": load_subsystem(
+                paths["chassis_subsystem"], template=chassis_template
+            ),
+        }
+        laws = {
+            "front.sub.json": {
+                "spring": ElementPropertyDocument.load(paths["spring"]),
+                "damper": ElementPropertyDocument.load(paths["damper"]),
+            }
+        }
+        assembly = load_assembly(
+            _read_json(paths["assembly"]),
+            subsystems=subsystems,
+            properties=laws,
+            rig=load_rig(paths["rig"]),
+        )
+        bound = SimulationAssembly.bind(assembly)
+        shutil.rmtree(paths["assembly"].parent)
+    
+>       run = api.simulate(bound, _case())
+
+packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py:252: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:24: in validate
+    bundle = DocumentLoader().load(source, case_document)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:201: in load
+    loaded_case = case if isinstance(case, CaseDocument) else CaseDocument(case)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1dcbe49ec00>
+payload = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'kc_quasi_static', 'k': {'axis_map': {'wheel': ['wheel_drive_L', 'wheel_drive_R']}, 'drive': 'wheel_center', 'left_right_mode': 'symmetric', 'rack_values_mm': [], ...}, ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+                validate_case(declared)
+            else:
+                validate_solve_plan(declared)
+        except ContractError as error:
+>           raise AuthoringError(f"case {declared.get('name', '?')!r}: {error}") from error
+E           suspension_multibody.authoring.errors.AuthoringError: case 'parity-k': $/solver: unexpected fields ['end_time', 'step_size']
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:46: AuthoringError
+________ test_the_reading_comes_from_the_case_document_not_a_parameter ________
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1dcbe47a810>
+payload = {'c': {'paths': [{'levels_mm': [0.0], 'name': 'fx'}]}, 'contract': 'multibody-case', 'contract_version': 1, 'family': 'kc_quasi_static', ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+>               validate_case(declared)
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:42: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_contracts\src\suspension_contracts\multibody.py:364: in validate_case
+    validate(document, "case")
+packages\suspension_contracts\src\suspension_contracts\multibody.py:253: in validate
+    _check(document, schema, "$", schema)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+value = {'end_time': 0.001, 'step_size': 0.001}
+schema = {'additionalProperties': False, 'properties': {'adaptive_step': {'type': 'boolean'}, 'contact_event_tolerance_s': {'mi...ber'}, 'dynamics_tolerance': {'minimum': 0, 'type': 'number'}, 'hht_alpha': {'type': 'number'}, ...}, 'type': 'object'}
+path = '$/solver'
+root = {'$id': 'https://open-kinematics.dev/contracts/multibody_case_v1.json', '$schema': 'https://json-schema.org/draft/2020...l rules below are enforced by the case layer, and the expanded identity is reported back in the result manifest.', ...}
+
+    def _check(
+        value: Any, schema: Mapping[str, Any], path: str, root: Mapping[str, Any]
+    ) -> None:
+        ref = schema.get("$ref")
+        if isinstance(ref, str):
+            if not ref.startswith("#/"):
+                raise ContractError(f"{path}: unsupported $ref {ref!r}")
+            target: Any = root
+            for token in ref[2:].split("/"):
+                target = target[token]
+            _check(value, target, path, root)
+            return
+    
+        if "const" in schema and value != schema["const"]:
+            raise ContractError(f"{path}: expected {schema['const']!r}, got {value!r}")
+        if "enum" in schema and value not in schema["enum"]:
+            raise ContractError(f"{path}: {value!r} is not one of {schema['enum']}")
+    
+        declared = schema.get("type")
+        if isinstance(declared, str) and not _type_matches(value, declared):
+            raise ContractError(f"{path}: expected {declared}, got {type(value).__name__}")
+    
+        if isinstance(value, dict):
+            for key in schema.get("required", []):
+                if key not in value:
+                    raise ContractError(f"{path}: missing required field {key!r}")
+            properties = schema.get("properties", {})
+            if schema.get("additionalProperties") is False:
+                extra = sorted(set(value) - set(properties))
+                if extra:
+>                   raise ContractError(f"{path}: unexpected fields {extra}")
+E                   suspension_contracts.multibody.ContractError: $/solver: unexpected fields ['end_time', 'step_size']
+
+packages\suspension_contracts\src\suspension_contracts\multibody.py:221: ContractError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_the_reading_comes_from_th0')
+
+    def test_the_reading_comes_from_the_case_document_not_a_parameter(
+        tmp_path: Path,
+    ) -> None:
+        """
+        C44: a K section is a K run, and a document carrying both is refused.
+    
+        The mode could have been a parameter; taking it from the document is what
+        makes a memory caller unable to ask for a different reading than the one the
+        document states.  Both sections present describes two runs, so it is refused
+        rather than resolved by precedence.
+        """
+        paths = _project(tmp_path)
+        assembly = AssemblyDocument.load(paths["assembly"])
+        both = dict(_case(), c={"paths": [{"name": "fx", "levels_mm": [0.0]}]})
+        with pytest.raises(ValueError, match="exactly one of"):
+>           api.simulate(assembly, both)
+
+packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py:274: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:24: in validate
+    bundle = DocumentLoader().load(source, case_document)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:201: in load
+    loaded_case = case if isinstance(case, CaseDocument) else CaseDocument(case)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1dcbe47a810>
+payload = {'c': {'paths': [{'levels_mm': [0.0], 'name': 'fx'}]}, 'contract': 'multibody-case', 'contract_version': 1, 'family': 'kc_quasi_static', ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+                validate_case(declared)
+            else:
+                validate_solve_plan(declared)
+        except ContractError as error:
+>           raise AuthoringError(f"case {declared.get('name', '?')!r}: {error}") from error
+E           suspension_multibody.authoring.errors.AuthoringError: case 'parity-k': $/solver: unexpected fields ['end_time', 'step_size']
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:46: AuthoringError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_the_reading_comes_from_th0')
+
+    def test_the_reading_comes_from_the_case_document_not_a_parameter(
+        tmp_path: Path,
+    ) -> None:
+        """
+        C44: a K section is a K run, and a document carrying both is refused.
+    
+        The mode could have been a parameter; taking it from the document is what
+        makes a memory caller unable to ask for a different reading than the one the
+        document states.  Both sections present describes two runs, so it is refused
+        rather than resolved by precedence.
+        """
+        paths = _project(tmp_path)
+        assembly = AssemblyDocument.load(paths["assembly"])
+        both = dict(_case(), c={"paths": [{"name": "fx", "levels_mm": [0.0]}]})
+>       with pytest.raises(ValueError, match="exactly one of"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'exactly one of'
+E        Input: "case 'parity-k': $/solver: unexpected fields ['end_time', 'step_size']"
+
+packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py:273: AssertionError
+_________________ test_a_case_with_neither_reading_is_refused _________________
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1dcbec404d0>
+payload = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'kc_quasi_static', 'kind': 'case', ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+>               validate_case(declared)
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:42: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_contracts\src\suspension_contracts\multibody.py:364: in validate_case
+    validate(document, "case")
+packages\suspension_contracts\src\suspension_contracts\multibody.py:253: in validate
+    _check(document, schema, "$", schema)
+packages\suspension_contracts\src\suspension_contracts\multibody.py:224: in _check
+    _check(value[key], sub, f"{path}/{key}", root)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+value = {'end_time': 0.001, 'step_size': 0.001}
+schema = {'additionalProperties': False, 'properties': {'adaptive_step': {'type': 'boolean'}, 'contact_event_tolerance_s': {'mi...ber'}, 'dynamics_tolerance': {'minimum': 0, 'type': 'number'}, 'hht_alpha': {'type': 'number'}, ...}, 'type': 'object'}
+path = '$/solver'
+root = {'$id': 'https://open-kinematics.dev/contracts/multibody_case_v1.json', '$schema': 'https://json-schema.org/draft/2020...l rules below are enforced by the case layer, and the expanded identity is reported back in the result manifest.', ...}
+
+    def _check(
+        value: Any, schema: Mapping[str, Any], path: str, root: Mapping[str, Any]
+    ) -> None:
+        ref = schema.get("$ref")
+        if isinstance(ref, str):
+            if not ref.startswith("#/"):
+                raise ContractError(f"{path}: unsupported $ref {ref!r}")
+            target: Any = root
+            for token in ref[2:].split("/"):
+                target = target[token]
+            _check(value, target, path, root)
+            return
+    
+        if "const" in schema and value != schema["const"]:
+            raise ContractError(f"{path}: expected {schema['const']!r}, got {value!r}")
+        if "enum" in schema and value not in schema["enum"]:
+            raise ContractError(f"{path}: {value!r} is not one of {schema['enum']}")
+    
+        declared = schema.get("type")
+        if isinstance(declared, str) and not _type_matches(value, declared):
+            raise ContractError(f"{path}: expected {declared}, got {type(value).__name__}")
+    
+        if isinstance(value, dict):
+            for key in schema.get("required", []):
+                if key not in value:
+                    raise ContractError(f"{path}: missing required field {key!r}")
+            properties = schema.get("properties", {})
+            if schema.get("additionalProperties") is False:
+                extra = sorted(set(value) - set(properties))
+                if extra:
+>                   raise ContractError(f"{path}: unexpected fields {extra}")
+E                   suspension_contracts.multibody.ContractError: $/solver: unexpected fields ['end_time', 'step_size']
+
+packages\suspension_contracts\src\suspension_contracts\multibody.py:221: ContractError
+
+The above exception was the direct cause of the following exception:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_case_with_neither_readi0')
+
+    def test_a_case_with_neither_reading_is_refused(tmp_path: Path) -> None:
+        """C44: neither section means nothing to solve, and it says so."""
+        paths = _project(tmp_path)
+        assembly = AssemblyDocument.load(paths["assembly"])
+        empty = {key: value for key, value in _case().items() if key != "k"}
+        with pytest.raises(ValueError, match="neither"):
+>           api.simulate(assembly, empty)
+
+packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py:283: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:24: in validate
+    bundle = DocumentLoader().load(source, case_document)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:201: in load
+    loaded_case = case if isinstance(case, CaseDocument) else CaseDocument(case)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <[AttributeError("'CaseDocument' object has no attribute '_payload'") raised in repr()] CaseDocument object at 0x1dcbec404d0>
+payload = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'kc_quasi_static', 'kind': 'case', ...}
+
+    def __init__(self, payload: Mapping[str, Any]) -> None:
+        declared = parse_json(canonical_json_bytes(payload))
+        try:
+            if declared.get("contract") == "multibody-case":
+                validate_case(declared)
+            else:
+                validate_solve_plan(declared)
+        except ContractError as error:
+>           raise AuthoringError(f"case {declared.get('name', '?')!r}: {error}") from error
+E           suspension_multibody.authoring.errors.AuthoringError: case 'parity-k': $/solver: unexpected fields ['end_time', 'step_size']
+
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:46: AuthoringError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_case_with_neither_readi0')
+
+    def test_a_case_with_neither_reading_is_refused(tmp_path: Path) -> None:
+        """C44: neither section means nothing to solve, and it says so."""
+        paths = _project(tmp_path)
+        assembly = AssemblyDocument.load(paths["assembly"])
+        empty = {key: value for key, value in _case().items() if key != "k"}
+>       with pytest.raises(ValueError, match="neither"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: 'neither'
+E        Input: "case 'parity-k': $/solver: unexpected fields ['end_time', 'step_size']"
+
+packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py:282: AssertionError
+_________________ test_a_historical_result_bundle_still_reads _________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_historical_result_bundl0')
+
+    def test_a_historical_result_bundle_still_reads(tmp_path: Path) -> None:
+        """
+        C56: reading recorded results survived the retirement.
+    
+        The result types were never model types, so retiring the two classes must not
+        have touched them.  The bundle is round tripped through the loader here,
+        which is the same door historical artifacts come in by.
+        """
+>       from suspension_multibody.results import TimeSeriesResult, TimeSeriesSample
+E       ImportError: cannot import name 'TimeSeriesResult' from 'suspension_multibody.results' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\results\__init__.py)
+
+packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py:462: ImportError
+__________ test_generic_tir_unit_reaches_native_with_parameter_blob ___________
+
+    def test_generic_tir_unit_reaches_native_with_parameter_blob() -> None:
+        assembly = _assembly({"unit": _tire_subsystem()})
+        compiled = validate(assembly, _case())
+>       run = run_compiled(compiled)
+
+packages\suspension_multibody\tests\authoring\test_generic_tire.py:189: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\simulation\runner.py:43: in run_compiled
+    native = active_backend.run(compiled)
+packages\suspension_multibody\src\suspension_multibody\simulation\backend.py:24: in run
+    return run_contract(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model_document = {'blobs': [{'dtype': 'float64', 'length': 1808, 'name': 'generic-tire-array-0', 'offset': 0, ...}, {'dtype': 'float64'...0.0, 2.0]], 'mass': 20.0, 'name': 'unit.wheel', ...}], 'capabilities': ['vehicle'], 'contract': 'multibody-model', ...}
+case_document = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'axle_dynamic', 'kind': 'case', ...}
+
+    def run_contract(
+        model_document: dict[str, Any],
+        case_document: dict[str, Any],
+        *,
+        model_payload: bytes | None = None,
+        case_payload: bytes | None = None,
+    ) -> ContractRun:
+        """
+        Run one model document against one case document.
+    
+        The parsed result keeps the source documents and recovered output times so
+        neutral result adapters can expose model/case metadata without re-authoring
+        the contract boundary.
+        """
+        model_bytes = model_payload if model_payload is not None else pack_container(model_document)
+        case_bytes = case_payload if case_payload is not None else pack_container(case_document)
+        payload = _invoke(_library(), model_bytes, case_bytes)
+        document, blob = unpack_container(payload)
+        parsed = ContractRun(
+            document=document,
+            blocks=_read_blocks(document, blob),
+            model_document=model_document,
+            case_document=case_document,
+            times_s=_case_times(case_document, case_bytes),
+        )
+        if document.get("status") != "success":
+            manifest = document.get("manifest", {})
+            message = str(
+                manifest.get("failure_message")
+                or f"kernel reported {document.get('status')}"
+            )
+>           raise KernelContractError(message, partial_run=parsed)
+E           suspension_multibody.kernel.KernelContractError: case equilibrium failed with status 6: static equilibrium initialization failed; iterations=36, force_residual=0.031250, position_residual=0.000000, pinned_null_directions=0, worst_force_coordinate=2, worst_force_value=-25.120994
+
+packages\suspension_multibody\src\suspension_multibody\kernel\__init__.py:217: KernelContractError
+_______________ test_rotated_contact_frame_retains_native_axes ________________
+
+    def test_rotated_contact_frame_retains_native_axes() -> None:
+        payload = _tire_payload()
+        quaternion = [2**-0.5, 0, 0, 2**-0.5]
+        for marker in payload["markers"]:
+            marker["quaternion"] = quaternion
+        payload["joints"][0]["axis"] = [-1, 0, 0]
+        assembled = GenericSubsystemAssembler().assemble(_tire_subsystem(payload))
+        parameters = assembled.model_document()["tires"][0]["parameters"]
+        np.testing.assert_allclose(parameters["forward_axis_local"], [0, 1, 0], atol=1e-15)
+        np.testing.assert_allclose(parameters["spin_axis_local"], [-1, 0, 0], atol=1e-15)
+        assert (
+>           run_compiled(
+                validate(_assembly({"unit": _tire_subsystem(payload)}), _case())
+            ).status
+            == "success"
+        )
+
+packages\suspension_multibody\tests\authoring\test_generic_tire.py:208: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\simulation\runner.py:43: in run_compiled
+    native = active_backend.run(compiled)
+packages\suspension_multibody\src\suspension_multibody\simulation\backend.py:24: in run
+    return run_contract(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model_document = {'blobs': [{'dtype': 'float64', 'length': 1808, 'name': 'generic-tire-array-0', 'offset': 0, ...}, {'dtype': 'float64'...0.0, 2.0]], 'mass': 20.0, 'name': 'unit.wheel', ...}], 'capabilities': ['vehicle'], 'contract': 'multibody-model', ...}
+case_document = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'axle_dynamic', 'kind': 'case', ...}
+
+    def run_contract(
+        model_document: dict[str, Any],
+        case_document: dict[str, Any],
+        *,
+        model_payload: bytes | None = None,
+        case_payload: bytes | None = None,
+    ) -> ContractRun:
+        """
+        Run one model document against one case document.
+    
+        The parsed result keeps the source documents and recovered output times so
+        neutral result adapters can expose model/case metadata without re-authoring
+        the contract boundary.
+        """
+        model_bytes = model_payload if model_payload is not None else pack_container(model_document)
+        case_bytes = case_payload if case_payload is not None else pack_container(case_document)
+        payload = _invoke(_library(), model_bytes, case_bytes)
+        document, blob = unpack_container(payload)
+        parsed = ContractRun(
+            document=document,
+            blocks=_read_blocks(document, blob),
+            model_document=model_document,
+            case_document=case_document,
+            times_s=_case_times(case_document, case_bytes),
+        )
+        if document.get("status") != "success":
+            manifest = document.get("manifest", {})
+            message = str(
+                manifest.get("failure_message")
+                or f"kernel reported {document.get('status')}"
+            )
+>           raise KernelContractError(message, partial_run=parsed)
+E           suspension_multibody.kernel.KernelContractError: case equilibrium failed with status 6: static equilibrium initialization failed; iterations=26, force_residual=0.062500, position_residual=0.000000, pinned_null_directions=0, worst_force_coordinate=2, worst_force_value=-25.120995
+
+packages\suspension_multibody\src\suspension_multibody\kernel\__init__.py:217: KernelContractError
+_____ test_tire_file_and_memory_have_identical_native_payload_and_states ______
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_tire_file_and_memory_have0')
+
+    def test_tire_file_and_memory_have_identical_native_payload_and_states(
+        tmp_path,
+    ) -> None:
+        subsystem = _tire_subsystem()
+        assembly = _assembly({"unit": subsystem})
+        subsystem.template.save(tmp_path / "wheel.tpl.json")
+        for key, law in subsystem.properties.items():
+            law.save(tmp_path / key)
+        payload = subsystem.to_payload()
+        payload["template"] = "wheel.tpl.json"
+        import json
+    
+        (tmp_path / "unit").write_text(json.dumps(payload), encoding="utf-8")
+        loaded = type(assembly).load(assembly.save(tmp_path / "assembly.json"))
+        memory = validate(assembly, _case())
+        file = validate(loaded, _case())
+        assert memory.model_payload == file.model_payload
+        np.testing.assert_array_equal(
+>           run_compiled(memory).raw.states, run_compiled(file).raw.states
+        )
+
+packages\suspension_multibody\tests\authoring\test_generic_tire.py:233: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\simulation\runner.py:43: in run_compiled
+    native = active_backend.run(compiled)
+packages\suspension_multibody\src\suspension_multibody\simulation\backend.py:24: in run
+    return run_contract(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model_document = {'blobs': [{'dtype': 'float64', 'length': 1808, 'name': 'generic-tire-array-0', 'offset': 0, ...}, {'dtype': 'float64'...0.0, 2.0]], 'mass': 20.0, 'name': 'unit.wheel', ...}], 'capabilities': ['vehicle'], 'contract': 'multibody-model', ...}
+case_document = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'axle_dynamic', 'kind': 'case', ...}
+
+    def run_contract(
+        model_document: dict[str, Any],
+        case_document: dict[str, Any],
+        *,
+        model_payload: bytes | None = None,
+        case_payload: bytes | None = None,
+    ) -> ContractRun:
+        """
+        Run one model document against one case document.
+    
+        The parsed result keeps the source documents and recovered output times so
+        neutral result adapters can expose model/case metadata without re-authoring
+        the contract boundary.
+        """
+        model_bytes = model_payload if model_payload is not None else pack_container(model_document)
+        case_bytes = case_payload if case_payload is not None else pack_container(case_document)
+        payload = _invoke(_library(), model_bytes, case_bytes)
+        document, blob = unpack_container(payload)
+        parsed = ContractRun(
+            document=document,
+            blocks=_read_blocks(document, blob),
+            model_document=model_document,
+            case_document=case_document,
+            times_s=_case_times(case_document, case_bytes),
+        )
+        if document.get("status") != "success":
+            manifest = document.get("manifest", {})
+            message = str(
+                manifest.get("failure_message")
+                or f"kernel reported {document.get('status')}"
+            )
+>           raise KernelContractError(message, partial_run=parsed)
+E           suspension_multibody.kernel.KernelContractError: case equilibrium failed with status 6: static equilibrium initialization failed; iterations=36, force_residual=0.031250, position_residual=0.000000, pinned_null_directions=0, worst_force_coordinate=2, worst_force_value=-25.120994
+
+packages\suspension_multibody\src\suspension_multibody\kernel\__init__.py:217: KernelContractError
+_________ test_single_tire_static_normal_load_balances_total_inertia __________
+
+    def test_single_tire_static_normal_load_balances_total_inertia() -> None:
+        payload = _tire_payload()
+        height = .344 - 21*9.80665/200000
+        payload["bodies"][0].update(fixed=False, mass=1, position=[0, 0, height])
+        payload["bodies"].append({"name": "ground", "fixed": True})
+        payload["hardpoints"].append({"name": "origin", "owner": "ground"})
+        payload["joints"].append({"name": "slide", "type": "prismatic", "body_a": "ground", "body_b": "carrier", "point_a": "origin", "point_b": "carrier_center", "axis": [0, 0, 1]})
+        coordinates = {"center": [0, 0, height], "carrier_center": [0, 0, height], "origin": [0, 0, 0]}
+        compiled = validate(_assembly({"unit": _tire_subsystem(payload, coordinates=coordinates)}), _case())
+>       result = run_compiled(compiled)
+
+packages\suspension_multibody\tests\authoring\test_generic_tire.py:273: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\simulation\runner.py:43: in run_compiled
+    native = active_backend.run(compiled)
+packages\suspension_multibody\src\suspension_multibody\simulation\backend.py:24: in run
+    return run_contract(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model_document = {'blobs': [{'dtype': 'float64', 'length': 1808, 'name': 'generic-tire-array-0', 'offset': 0, ...}, {'dtype': 'float64'...0.0, 2.0]], 'mass': 20.0, 'name': 'unit.wheel', ...}], 'capabilities': ['vehicle'], 'contract': 'multibody-model', ...}
+case_document = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'axle_dynamic', 'kind': 'case', ...}
+
+    def run_contract(
+        model_document: dict[str, Any],
+        case_document: dict[str, Any],
+        *,
+        model_payload: bytes | None = None,
+        case_payload: bytes | None = None,
+    ) -> ContractRun:
+        """
+        Run one model document against one case document.
+    
+        The parsed result keeps the source documents and recovered output times so
+        neutral result adapters can expose model/case metadata without re-authoring
+        the contract boundary.
+        """
+        model_bytes = model_payload if model_payload is not None else pack_container(model_document)
+        case_bytes = case_payload if case_payload is not None else pack_container(case_document)
+        payload = _invoke(_library(), model_bytes, case_bytes)
+        document, blob = unpack_container(payload)
+        parsed = ContractRun(
+            document=document,
+            blocks=_read_blocks(document, blob),
+            model_document=model_document,
+            case_document=case_document,
+            times_s=_case_times(case_document, case_bytes),
+        )
+        if document.get("status") != "success":
+            manifest = document.get("manifest", {})
+            message = str(
+                manifest.get("failure_message")
+                or f"kernel reported {document.get('status')}"
+            )
+>           raise KernelContractError(message, partial_run=parsed)
+E           suspension_multibody.kernel.KernelContractError: case equilibrium failed with status 6: static equilibrium initialization failed; iterations=20, force_residual=0.754561, position_residual=0.004659, pinned_null_directions=0, worst_force_coordinate=8, worst_force_value=18.499294
+
+packages\suspension_multibody\src\suspension_multibody\kernel\__init__.py:217: KernelContractError
+______ test_kc_migration_declares_rig_and_preserves_quasistatic_poses[K] ______
+
+mode = 'K'
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_kc_migration_declares_rig0')
+
+    @pytest.mark.parametrize("mode", ["K", "C"])
+    def test_kc_migration_declares_rig_and_preserves_quasistatic_poses(mode, tmp_path):
+        import runpy
+    
+        from suspension_multibody.api import validate
+        from suspension_multibody.cases.kc_quasi_static import case_document, model_document
+        from suspension_multibody.schema.model import AxleDeclaration
+>       from suspension_multibody.simulation import SimulationRequest, run_request
+E       ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:43: ImportError
+______ test_kc_migration_declares_rig_and_preserves_quasistatic_poses[C] ______
+
+mode = 'C'
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_kc_migration_declares_rig1')
+
+    @pytest.mark.parametrize("mode", ["K", "C"])
+    def test_kc_migration_declares_rig_and_preserves_quasistatic_poses(mode, tmp_path):
+        import runpy
+    
+        from suspension_multibody.api import validate
+        from suspension_multibody.cases.kc_quasi_static import case_document, model_document
+        from suspension_multibody.schema.model import AxleDeclaration
+>       from suspension_multibody.simulation import SimulationRequest, run_request
+E       ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:43: ImportError
+_ test_dynamic_si_axle_document_run_has_bit_identical_states_to_frozen_producer _
+
+    def test_dynamic_si_axle_document_run_has_bit_identical_states_to_frozen_producer():
+        import runpy
+    
+        from suspension_multibody import api
+        from suspension_multibody.authoring.migration import migrate_v1_dynamic_axle
+>       from suspension_multibody.axle_dynamics.contract_run import run_axle
+E       ModuleNotFoundError: No module named 'suspension_multibody.axle_dynamics.contract_run'
+
+packages\suspension_multibody\tests\authoring\test_offline_model_migration.py:552: ModuleNotFoundError
+___________ test_a_file_driven_run_records_the_hashes_of_its_inputs ___________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_file_driven_run_records0')
+
+    def test_a_file_driven_run_records_the_hashes_of_its_inputs(tmp_path: Path) -> None:
+        """
+        Acceptance 11: the result carries the hashes of the files that produced it.
+    
+        The record goes in a sidecar, so a run that read no documents still writes
+        exactly the artifact it always wrote -- which is what keeps every recorded
+        baseline byte-for-byte unchanged.
+        """
+        paths = write_axle_project(tmp_path)
+        project = Project.load(tmp_path)
+        model = axle_declaration_for(SubsystemDocument.load(paths["subsystem"]))
+        out = tmp_path / "run"
+    
+>       api.kc_case_run(model, _case(), out, inputs=project.provenance("front_axle"))
+E       AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\authoring\test_provenance_and_bench.py:56: AttributeError
+_____________ test_a_python_authored_run_writes_no_inputs_record ______________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_python_authored_run_wri0')
+
+    def test_a_python_authored_run_writes_no_inputs_record(tmp_path: Path) -> None:
+        """No documents were read, so nothing claims otherwise."""
+        paths = write_axle_project(tmp_path)
+        model = axle_declaration_for(SubsystemDocument.load(paths["subsystem"]))
+        out = tmp_path / "run"
+>       api.kc_case_run(model, _case(), out)
+E       AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\authoring\test_provenance_and_bench.py:70: AttributeError
+_____________ test_peer_force_subsystems_reach_real_native[brake] _____________
+
+role = 'brake'
+
+    @pytest.mark.parametrize("role", ["brake", "drive"])
+    def test_peer_force_subsystems_reach_real_native(role):
+        from suspension_multibody.api import validate
+        from suspension_multibody.simulation.runner import run_compiled
+    
+        declaration = assembly({"support": carrier_subsystem(),
+            "wheel": subsystem(generic_template("wheel"), {"center": [0, 0, .334]}),
+            "actuator": subsystem(generic_template(role), signals={"drive_input": [[0, 1], [1, 1]]})})
+>       run = run_compiled(validate(declaration, _case()))
+
+packages\suspension_multibody\tests\authoring\test_unified_subsystem_templates.py:216: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\simulation\runner.py:43: in run_compiled
+    native = active_backend.run(compiled)
+packages\suspension_multibody\src\suspension_multibody\simulation\backend.py:24: in run
+    return run_contract(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model_document = {'blobs': [{'dtype': 'float64', 'length': 1808, 'name': 'generic-tire-array-0', 'offset': 0, ...}, {'dtype': 'float64'....0, 1.0]], 'mass': 20.0, 'name': 'wheel.wheel', ...}], 'capabilities': ['vehicle'], 'contract': 'multibody-model', ...}
+case_document = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'axle_dynamic', 'kind': 'case', ...}
+
+    def run_contract(
+        model_document: dict[str, Any],
+        case_document: dict[str, Any],
+        *,
+        model_payload: bytes | None = None,
+        case_payload: bytes | None = None,
+    ) -> ContractRun:
+        """
+        Run one model document against one case document.
+    
+        The parsed result keeps the source documents and recovered output times so
+        neutral result adapters can expose model/case metadata without re-authoring
+        the contract boundary.
+        """
+        model_bytes = model_payload if model_payload is not None else pack_container(model_document)
+        case_bytes = case_payload if case_payload is not None else pack_container(case_document)
+        payload = _invoke(_library(), model_bytes, case_bytes)
+        document, blob = unpack_container(payload)
+        parsed = ContractRun(
+            document=document,
+            blocks=_read_blocks(document, blob),
+            model_document=model_document,
+            case_document=case_document,
+            times_s=_case_times(case_document, case_bytes),
+        )
+        if document.get("status") != "success":
+            manifest = document.get("manifest", {})
+            message = str(
+                manifest.get("failure_message")
+                or f"kernel reported {document.get('status')}"
+            )
+>           raise KernelContractError(message, partial_run=parsed)
+E           suspension_multibody.kernel.KernelContractError: case equilibrium failed with status 6: static equilibrium initialization failed; iterations=36, force_residual=0.031250, position_residual=0.000000, pinned_null_directions=0, worst_force_coordinate=2, worst_force_value=-25.120994
+
+packages\suspension_multibody\src\suspension_multibody\kernel\__init__.py:217: KernelContractError
+_____________ test_peer_force_subsystems_reach_real_native[drive] _____________
+
+role = 'drive'
+
+    @pytest.mark.parametrize("role", ["brake", "drive"])
+    def test_peer_force_subsystems_reach_real_native(role):
+        from suspension_multibody.api import validate
+        from suspension_multibody.simulation.runner import run_compiled
+    
+        declaration = assembly({"support": carrier_subsystem(),
+            "wheel": subsystem(generic_template("wheel"), {"center": [0, 0, .334]}),
+            "actuator": subsystem(generic_template(role), signals={"drive_input": [[0, 1], [1, 1]]})})
+>       run = run_compiled(validate(declaration, _case()))
+
+packages\suspension_multibody\tests\authoring\test_unified_subsystem_templates.py:216: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\simulation\runner.py:43: in run_compiled
+    native = active_backend.run(compiled)
+packages\suspension_multibody\src\suspension_multibody\simulation\backend.py:24: in run
+    return run_contract(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+model_document = {'blobs': [{'dtype': 'float64', 'length': 1808, 'name': 'generic-tire-array-0', 'offset': 0, ...}, {'dtype': 'float64'....0, 1.0]], 'mass': 20.0, 'name': 'wheel.wheel', ...}], 'capabilities': ['vehicle'], 'contract': 'multibody-model', ...}
+case_document = {'contract': 'multibody-case', 'contract_version': 1, 'family': 'axle_dynamic', 'kind': 'case', ...}
+
+    def run_contract(
+        model_document: dict[str, Any],
+        case_document: dict[str, Any],
+        *,
+        model_payload: bytes | None = None,
+        case_payload: bytes | None = None,
+    ) -> ContractRun:
+        """
+        Run one model document against one case document.
+    
+        The parsed result keeps the source documents and recovered output times so
+        neutral result adapters can expose model/case metadata without re-authoring
+        the contract boundary.
+        """
+        model_bytes = model_payload if model_payload is not None else pack_container(model_document)
+        case_bytes = case_payload if case_payload is not None else pack_container(case_document)
+        payload = _invoke(_library(), model_bytes, case_bytes)
+        document, blob = unpack_container(payload)
+        parsed = ContractRun(
+            document=document,
+            blocks=_read_blocks(document, blob),
+            model_document=model_document,
+            case_document=case_document,
+            times_s=_case_times(case_document, case_bytes),
+        )
+        if document.get("status") != "success":
+            manifest = document.get("manifest", {})
+            message = str(
+                manifest.get("failure_message")
+                or f"kernel reported {document.get('status')}"
+            )
+>           raise KernelContractError(message, partial_run=parsed)
+E           suspension_multibody.kernel.KernelContractError: case equilibrium failed with status 6: static equilibrium initialization failed; iterations=36, force_residual=0.031250, position_residual=0.000000, pinned_null_directions=0, worst_force_coordinate=2, worst_force_value=-25.120994
+
+packages\suspension_multibody\src\suspension_multibody\kernel\__init__.py:217: KernelContractError
+_______________ test_a_file_vehicle_runs_the_vehicle_kc_reading _______________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_file_vehicle_runs_the_v0')
+
+    def test_a_file_vehicle_runs_the_vehicle_kc_reading(tmp_path: Path) -> None:
+        """
+        Plan step 2, end to end: a vehicle whose every number is a file solves.
+    
+        The reading is the package's own vehicle K/C family, unchanged, and the bodies
+        it reports are the *file template's* parts -- `front_upper_arm_L`, not the
+        built-in double wishbone's names -- so what ran is the document's vehicle
+        rather than a template wearing its numbers.
+        """
+        from suspension_multibody.axle_dynamics.schema import AxleSolverSettings
+        from suspension_multibody.cases import (
+            vehicle_kc_case_document,
+            vehicle_kc_model_document,
+        )
+        from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+        from suspension_multibody.schema import (
+            DynamicSolverSettings,
+            RoadSurfaceSpec,
+            TimeSignal,
+            Vec3,
+            VehicleDynamicCase,
+        )
+>       from suspension_multibody.simulation import SimulationRequest, run_request
+E       ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\authoring\test_vehicle_assembly_documents.py:306: ImportError
+_______ test_missing_adams_evidence_blocks_the_accuracy_and_speed_claim _______
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_missing_adams_evidence_bl0')
+
+    def test_missing_adams_evidence_blocks_the_accuracy_and_speed_claim(
+        tmp_path: Path,
+    ) -> None:
+        """Without real Adams evidence both Adams gates must report BLOCKED."""
+        module = _script()
+>       status = module.main(
+            [
+                "--output",
+                str(tmp_path),
+                "--case",
+                "static_equilibrium",
+            ]
+        )
+
+packages\suspension_multibody\tests\axle_dynamics\test_acceptance_runner.py:80: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\scripts\run_axle_dynamics_acceptance.py:639: in main
+    _run_case(
+packages\suspension_multibody\scripts\run_axle_dynamics_acceptance.py:562: in _run_case
+    evidence_path = run_native_axle_manifest(
+packages\suspension_multibody\src\suspension_multibody\adams\axle_equivalence.py:458: in run_native_axle_manifest
+    primary_manifest = write_artifact(
+packages\suspension_multibody\src\suspension_multibody\io\artifacts.py:44: in write_artifact
+    artifact_type = _artifact_type(storage_result, partial)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+result = <suspension_multibody.adams.axle_evidence_view.FrozenAxleEvidence object at 0x000001DCBE500B30>
+partial = None
+
+    def _artifact_type(result: Any, partial: Any | None) -> str:
+        value = result if result is not None else partial
+        if value is None:
+            return "unknown_result"
+        from ..results.envelope import ResultEnvelope
+    
+        if isinstance(value, ResultEnvelope):
+            return "multibody_result"
+>       raise TypeError("artifact writer requires ResultEnvelope")
+E       TypeError: artifact writer requires ResultEnvelope
+
+packages\suspension_multibody\src\suspension_multibody\io\artifacts.py:164: TypeError
+_______ test_axle_schema_loader_and_result_artifact_are_self_describing _______
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_axle_schema_loader_and_re0')
+
+    def test_axle_schema_loader_and_result_artifact_are_self_describing(
+        tmp_path: Path,
+    ) -> None:
+        model = _vertical_slider_model()
+        case = AxleDynamicsCase(
+            name="artifact",
+            times_s=(0.0, 0.001),
+            solver=AxleSolverSettings(internal_step_s=0.00025),
+        )
+        model_path = tmp_path / "model.json"
+        case_path = tmp_path / "case.yaml"
+        model_path.write_text(
+            json.dumps(model.model_dump(mode="json")),
+            encoding="utf-8",
+        )
+        import yaml
+    
+        case_path.write_text(
+            yaml.safe_dump(case.model_dump(mode="json")),
+            encoding="utf-8",
+        )
+        # The SI model loader is retired with the modelling route (G7), so the file
+        # round trip goes through the schema itself; the case loader stays public.
+        loaded_model = AxleDynamicsModel.model_validate(
+            json.loads(model_path.read_text(encoding="utf-8"))
+        )
+        loaded_case = load_axle_dynamics_case(case_path)
+        result = solve_axle(loaded_model, loaded_case)
+>       manifest_path = write_artifact(
+            result,
+            tmp_path / "artifact",
+            model=loaded_model,
+            case=loaded_case,
+        )
+
+packages\suspension_multibody\tests\axle_dynamics\test_api.py:412: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\io\artifacts.py:44: in write_artifact
+    artifact_type = _artifact_type(storage_result, partial)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+result = _TestRun(compiled=CompiledSimulation(request=SimulationRequest(assembly='generic', rig='', family='axle_dynamic', stud...ory","version":1}],"schema_version":1,"signals":[],"tires":[],"units":"SI"}', resource_payload=b''), schema_version=1))
+partial = None
+
+    def _artifact_type(result: Any, partial: Any | None) -> str:
+        value = result if result is not None else partial
+        if value is None:
+            return "unknown_result"
+        from ..results.envelope import ResultEnvelope
+    
+        if isinstance(value, ResultEnvelope):
+            return "multibody_result"
+>       raise TypeError("artifact writer requires ResultEnvelope")
+E       TypeError: artifact writer requires ResultEnvelope
+
+packages\suspension_multibody\src\suspension_multibody\io\artifacts.py:164: TypeError
+____________________ test_write_and_read_json_parquet_csv _____________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_write_and_read_json_parqu0')
+
+    def test_write_and_read_json_parquet_csv(tmp_path: Path) -> None:
+>       write_artifact(_bundle(), tmp_path)
+
+packages\suspension_multibody\tests\io\test_results.py:29: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\io\artifacts.py:44: in write_artifact
+    artifact_type = _artifact_type(storage_result, partial)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+result = ResultBundle(manifest=Manifest(schema_version=1, format_version='1.0', run_id='run-1', mode='K', state_count=1, proven..._residual=0.0, moment_residual=0.0, converged=True, diagnostics=()),), component_loads=(), bushings=(), diagnostics=())
+partial = None
+
+    def _artifact_type(result: Any, partial: Any | None) -> str:
+        value = result if result is not None else partial
+        if value is None:
+            return "unknown_result"
+        from ..results.envelope import ResultEnvelope
+    
+        if isinstance(value, ResultEnvelope):
+            return "multibody_result"
+>       raise TypeError("artifact writer requires ResultEnvelope")
+E       TypeError: artifact writer requires ResultEnvelope
+
+packages\suspension_multibody\src\suspension_multibody\io\artifacts.py:164: TypeError
+____________ test_generic_file_and_memory_build_the_same_si_graph _____________
+
+    def test_generic_file_and_memory_build_the_same_si_graph():
+        from pathlib import Path
+    
+        from suspension_multibody.authoring import AssemblyDocument, assemble_generic
+>       from suspension_multibody.compilation.model_view import view_of
+E       ModuleNotFoundError: No module named 'suspension_multibody.compilation.model_view'
+
+packages\suspension_multibody\tests\modeling\test_resolved_model.py:87: ModuleNotFoundError
+________________ test_direct_two_channel_run_drives_both_racks ________________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_direct_two_channel_run_dr0')
+
+    def test_direct_two_channel_run_drives_both_racks(tmp_path: Path) -> None:
+        """
+        The whole way through: both channels are driven, and both report a travel.
+    
+        The vehicles are run through the unified runner on the default preparation,
+        which is the path the recorded full-vehicle results take.
+        """
+        from suspension_multibody.preparation.vehicle_dynamic import prepare_vehicle_run
+>       from suspension_multibody.simulation import SimulationRequest, run_request
+E       ImportError: cannot import name 'run_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\preparation\test_steering_channels.py:150: ImportError
+________________ test_naming_only_the_rig_fills_in_the_family _________________
+
+    def test_naming_only_the_rig_fills_in_the_family() -> None:
+        """The rig is the routing dimension, so it alone must resolve a request."""
+>       request = SimulationRequest(assembly="axle", rig="kc_quasi_static")
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:97: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+<string>:13: in __init__
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = SimulationRequest(assembly='axle', rig='kc_quasi_static', family='', study='', model=None, case=None, outputs=(), name=None, request_kind=None, context={})
+
+    def __post_init__(self) -> None:
+        for key in ("assembly", "rig", "family", "study"):
+            object.__setattr__(self, key, str(getattr(self, key)).strip().lower())
+        if not self.assembly:
+            raise ValueError("simulation request assembly must not be empty")
+        if not self.family:
+>           raise ValueError("simulation request requires an explicit protocol family")
+E           ValueError: simulation request requires an explicit protocol family
+
+packages\suspension_multibody\src\suspension_multibody\simulation\request.py:32: ValueError
+_________________ test_naming_only_the_family_still_resolves __________________
+
+    def test_naming_only_the_family_still_resolves() -> None:
+        """Every existing caller passes a family, and must keep working."""
+        request = SimulationRequest(assembly="axle", family="axle_dynamic")
+>       assert request.rig == "axle_dynamic"
+E       AssertionError: assert '' == 'axle_dynamic'
+E         
+E         - axle_dynamic
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:106: AssertionError
+_______ test_a_bench_that_does_not_route_to_the_named_family_is_refused _______
+
+    def test_a_bench_that_does_not_route_to_the_named_family_is_refused() -> None:
+        """
+        Separating the axes does not make the pair unfalsifiable.
+    
+        A bench declares the family it runs through, so a caller that names a
+        different one is asking for a bench that takes another reading.  The refusal
+        names both, because "name the bench you mean" is the fix.
+        """
+>       from suspension_multibody.compilation import plan_for
+E       ImportError: cannot import name 'plan_for' from 'suspension_multibody.compilation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\compilation\__init__.py)
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:135: ImportError
+_________ test_a_registered_elsewhere_family_is_left_to_its_registry __________
+
+    def test_a_registered_elsewhere_family_is_left_to_its_registry() -> None:
+        """
+        The request does not police the registries.
+    
+        A compiler or preparation may be registered by a caller -- a test, or a
+        downstream product -- so refusing an unknown family here would make the
+        registries unextendable.  Its own lookup is where the error belongs.
+        """
+        request = SimulationRequest(assembly="axle", family="probe")
+>       assert request.rig == "probe"
+E       AssertionError: assert '' == 'probe'
+E         
+E         - probe
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:150: AssertionError
+__________ test_a_family_typo_is_caught_by_the_registry_that_owns_it __________
+
+    def test_a_family_typo_is_caught_by_the_registry_that_owns_it() -> None:
+        """
+        A misspelled family must be discoverable, not silently accepted.
+    
+        The request deliberately does not police family names -- the registries are
+        extensible -- so the error surfaces one layer down, at the lookup.  What
+        matters is that it *does* surface and names what is available; a fallback
+        added there later would turn this back into a silent wrong run.
+        """
+>       from suspension_multibody.simulation import compile_request, prepare_request
+E       ImportError: cannot import name 'compile_request' from 'suspension_multibody.simulation' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\simulation\__init__.py)
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:162: ImportError
+______________ test_the_drivable_set_is_what_the_bench_asks_for _______________
+
+    def test_the_drivable_set_is_what_the_bench_asks_for() -> None:
+        """
+        The set is the bench's declaration shrunk to the assembly, `rack_drive`
+        included.
+    
+        `rack_neutral` is deliberately absent: it is a coordinate the case layer can
+        hold, not one this way of running the bench drives, and the old reading that
+        returned it also returned a coordinate nothing downstream consulted.
+        """
+>       from suspension_multibody.api import _k_drivable_coordinates
+E       ImportError: cannot import name '_k_drivable_coordinates' from 'suspension_multibody.api' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\api.py)
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:192: ImportError
+____________ test_an_assembly_without_steering_loses_only_the_rack ____________
+
+    def test_an_assembly_without_steering_loses_only_the_rack() -> None:
+>       from suspension_multibody.api import _k_drivable_coordinates
+E       ImportError: cannot import name '_k_drivable_coordinates' from 'suspension_multibody.api' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\api.py)
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:201: ImportError
+__________________ test_the_bench_and_the_drivable_set_agree __________________
+
+    def test_the_bench_and_the_drivable_set_agree() -> None:
+        """
+        One decision, read twice: the bench drops a coordinate exactly when the
+        drivable set does not carry it.
+    
+        The two are computed by different code paths -- `rigs.compose` and the api's
+        reading of it -- so this is the assertion that keeps them one answer.
+        """
+>       from suspension_multibody.api import _k_drivable_coordinates
+E       ImportError: cannot import name '_k_drivable_coordinates' from 'suspension_multibody.api' (E:\�Ӽ�\open-kinematics\packages\suspension_multibody\src\suspension_multibody\api.py)
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:226: ImportError
+____________________ test_a_public_run_resolves_its_bench _____________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000001DCC2235490>
+
+    def test_a_public_run_resolves_its_bench(monkeypatch) -> None:
+        """
+        A K/C run through the public entry point must consult the rig.
+    
+        Before this, `api` built the assembly itself and handed the documents it
+        authored straight to the runner, so the family preparation -- and with it the
+        rig check and the study layer -- was never reached.  The run still succeeded;
+        the missing step was invisible in the result, which is why it needs a test
+        rather than a review.
+        """
+        import suspension_multibody.rigs as rigs
+        from tests.benchmark_fixture import benchmark_model
+    
+        seen: list[tuple[str, str]] = []
+        original = rigs.check_assembly
+    
+        def record(assembly: str, rig: str, capabilities) -> None:
+            seen.append((assembly, rig))
+            original(assembly, rig, capabilities)
+    
+        monkeypatch.setattr(rigs, "check_assembly", record)
+    
+        import suspension_multibody.api as api
+        from suspension_multibody.schema import CaseSpec
+    
+        with tempfile.TemporaryDirectory() as directory:
+>           api.kc_case_run(benchmark_model(), CaseSpec(mode="K"), Path(directory))
+E           AttributeError: module 'suspension_multibody.api' has no attribute 'kc_case_run'
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:339: AttributeError
+_______________ test_the_axle_family_accepts_an_assembled_axle ________________
+
+name = ''
+
+    def get_rig(name: str) -> RigSpec:
+        """Return a rig by name, naming the unknown one if it is not registered."""
+        try:
+>           return RIGS[str(name).strip().lower()]
+E           KeyError: ''
+
+packages\suspension_multibody\src\suspension_multibody\rigs\rig.py:203: KeyError
+
+The above exception was the direct cause of the following exception:
+
+    def test_the_axle_family_accepts_an_assembled_axle() -> None:
+        """
+        The dynamic family takes either an SI model or an assembled K/C axle.
+    
+        This is the route the study merge adds: without it, "the same assembly, two
+        readings" would hold inside `studies/` and nowhere a caller could reach.
+        """
+        from suspension_multibody.preparation.axle_dynamic import _dynamic_model
+        from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
+        from suspension_multibody.subsystems.types import AssemblyRequest
+    
+        assembly = si_assembly_for_axle(
+            _model(), request=AssemblyRequest(mode="K")
+        ).assembly.physical
+        request = SimulationRequest(
+            assembly="axle", family="axle_dynamic", model=assembly, name="wired"
+        )
+>       model = _dynamic_model(assembly, request)
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:377: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\preparation\axle_dynamic.py:237: in _dynamic_model
+    check_assembly(
+packages\suspension_multibody\src\suspension_multibody\rigs\compose.py:181: in check_assembly
+    resolve_combination(assembly, rig, capabilities)
+packages\suspension_multibody\src\suspension_multibody\rigs\compose.py:153: in resolve_combination
+    rig_spec = get_rig(rig)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+name = ''
+
+    def get_rig(name: str) -> RigSpec:
+        """Return a rig by name, naming the unknown one if it is not registered."""
+        try:
+            return RIGS[str(name).strip().lower()]
+        except KeyError as error:
+            known = ", ".join(RIG_NAMES)
+>           raise RigError(f"unknown rig {name!r}; the registered rigs are {known}") from error
+E           suspension_multibody.rigs.rig.RigError: unknown rig ''; the registered rigs are kc_quasi_static, axle_dynamic, vehicle_kc, vehicle_dynamic, handling, ride_four_post, ride_random_road
+
+packages\suspension_multibody\src\suspension_multibody\rigs\rig.py:206: RigError
+_______________ test_an_si_model_still_passes_straight_through ________________
+
+name = ''
+
+    def get_rig(name: str) -> RigSpec:
+        """Return a rig by name, naming the unknown one if it is not registered."""
+        try:
+>           return RIGS[str(name).strip().lower()]
+E           KeyError: ''
+
+packages\suspension_multibody\src\suspension_multibody\rigs\rig.py:203: KeyError
+
+The above exception was the direct cause of the following exception:
+
+    def test_an_si_model_still_passes_straight_through() -> None:
+        """The original input stays the original input."""
+        from suspension_multibody.preparation.axle_dynamic import _dynamic_model
+        from suspension_multibody.subsystems.si_assembly import si_assembly_for_axle
+        from suspension_multibody.subsystems.types import AssemblyRequest
+    
+        assembly = si_assembly_for_axle(
+            _model(), request=AssemblyRequest(mode="K")
+        ).assembly.physical
+        request = SimulationRequest(
+            assembly="axle", family="axle_dynamic", model=assembly, name="wired"
+        )
+>       model = _dynamic_model(assembly, request)
+
+packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py:394: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\preparation\axle_dynamic.py:237: in _dynamic_model
+    check_assembly(
+packages\suspension_multibody\src\suspension_multibody\rigs\compose.py:181: in check_assembly
+    resolve_combination(assembly, rig, capabilities)
+packages\suspension_multibody\src\suspension_multibody\rigs\compose.py:153: in resolve_combination
+    rig_spec = get_rig(rig)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+name = ''
+
+    def get_rig(name: str) -> RigSpec:
+        """Return a rig by name, naming the unknown one if it is not registered."""
+        try:
+            return RIGS[str(name).strip().lower()]
+        except KeyError as error:
+            known = ", ".join(RIG_NAMES)
+>           raise RigError(f"unknown rig {name!r}; the registered rigs are {known}") from error
+E           suspension_multibody.rigs.rig.RigError: unknown rig ''; the registered rigs are kc_quasi_static, axle_dynamic, vehicle_kc, vehicle_dynamic, handling, ride_four_post, ride_random_road
+
+packages\suspension_multibody\src\suspension_multibody\rigs\rig.py:206: RigError
+______________ test_an_in_memory_assembly_runs_through_simulate _______________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_an_in_memory_assembly_run0')
+
+    def test_an_in_memory_assembly_runs_through_simulate(tmp_path: Path) -> None:
+        paths = _project(tmp_path)
+>       run = api.simulate(_in_memory_assembly(paths), _case_document("memory", _K_SECTION))
+
+packages\suspension_multibody\tests\simulation\test_memory_simulate.py:116: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+____________ test_the_memory_assembly_is_the_same_run_as_the_file _____________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_the_memory_assembly_is_th0')
+
+    def test_the_memory_assembly_is_the_same_run_as_the_file(tmp_path: Path) -> None:
+        """
+        The file and the in-memory assembly submit the same document.
+    
+        Comparing the compiled model document is what makes "the same run" checkable:
+        two runs could both succeed while the memory route emitted a model with a
+        different body set or different marker values.
+        """
+        paths = _project(tmp_path)
+        case = _case_document("same", _K_SECTION)
+    
+>       from_file = api.simulate(paths["assembly"], case)
+
+packages\suspension_multibody\tests\simulation\test_memory_simulate.py:132: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+__________ test_the_memory_assembly_runs_with_the_project_files_gone __________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_the_memory_assembly_runs_0')
+
+    def test_the_memory_assembly_runs_with_the_project_files_gone(tmp_path: Path) -> None:
+        """
+        Nothing under the project directory is read once the documents exist.
+    
+        This is the difference the object route exists to make: a caller holding the
+        model does not need the files to run it.  The compiled artefacts are written
+        outside the project, and the kernel library is loaded by the package, so
+        removing the project tree is a fair test of "no modelling file was read".
+        """
+        paths = _project(tmp_path)
+        assembly = _in_memory_assembly(paths)
+        shutil.rmtree(paths["assembly"].parent)
+    
+>       run = api.simulate(assembly, _case_document("gone", _K_SECTION))
+
+packages\suspension_multibody\tests\simulation\test_memory_simulate.py:154: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+______________ test_a_memory_assembly_is_not_rebound_from_a_path ______________
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3263/test_a_memory_assembly_is_not_0')
+
+    def test_a_memory_assembly_is_not_rebound_from_a_path(tmp_path: Path) -> None:
+        """
+        Binding uses the rig the assembly carries, not a path it no longer has.
+    
+        A loaded ``AssemblyDocument`` used to be re-bound from its own path; for an
+        in-memory assembly that path does not exist, so the binding has to come from
+        the object.  The check is the run succeeds with the rig the document names.
+        """
+        paths = _project(tmp_path)
+        assembly = _in_memory_documents(paths)["assembly"]
+        assert isinstance(assembly, AssemblyDocument)
+        assert assembly.path is None
+    
+        bound = SimulationAssembly.bind(assembly)
+        assert bound.rig.name == assembly.rig.name
+>       run = api.simulate(bound, _case_document("bound", _K_SECTION))
+
+packages\suspension_multibody\tests\simulation\test_memory_simulate.py:173: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+packages\suspension_multibody\src\suspension_multibody\api.py:36: in simulate
+    return run_compiled(validate(assembly_document, case_document))
+packages\suspension_multibody\src\suspension_multibody\api.py:28: in validate
+    return compile_resolved(bundle.resolve(), plan)
+packages\suspension_multibody\src\suspension_multibody\authoring\loader.py:101: in resolve
+    model = assemble_generic(self.assembly).resolved_model()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+document = AssemblyDocument(path=None, payload={'document': 'assembly', 'schema_version': 1, 'name': 'builtin_axle', 'assembly_ki...spension_axle'], 'required_ports': [], 'measurements': ['wheel_travel', 'camber', 'toe'], 'bench': 'kc_quasi_static'}))
+
+    def assemble_generic(document: AssemblyDocument) -> GenericMultibodyAssembly:
+        """Compose subsystem graphs using explicit, typed port connections."""
+        if document.assembly_kind != "generic_multibody":
+>           raise AuthoringError("assemble_generic requires a generic_multibody assembly")
+E           suspension_multibody.authoring.errors.AuthoringError: assemble_generic requires a generic_multibody assembly
+
+packages\suspension_multibody\src\suspension_multibody\authoring\generic.py:1075: AuthoringError
+___________ test_no_run_entry_reaches_the_kc_to_dynamic_conversion ____________
+
+    def test_no_run_entry_reaches_the_kc_to_dynamic_conversion() -> None:
+        """
+        Removing the production bridge dependency, as a property of the tree.
+    
+        Every module a run goes through is checked, so the guarantee does not depend
+        on which entry a future caller happens to use.  The conversion stays reachable
+        from the input adapter -- that is an input route -- but no *run* module names
+        it.
+        """
+        offenders: list[str] = []
+        for relative in _ENTRY_MODULES:
+            path = SOURCE / relative
+>           assert path.is_file(), f"the entry module list is stale: {relative} is gone"
+E           AssertionError: the entry module list is stale: axle_dynamics/contract_run.py is gone
+E           assert False
+E            +  where False = is_file()
+E            +    where is_file = WindowsPath('E:/�Ӽ�/open-kinematics/packages/suspension_multibody/src/suspension_multibody/axle_dynamics/contract_run.py').is_file
+
+packages\suspension_multibody\tests\simulation\test_no_production_bridge.py:66: AssertionError
+____________ test_the_dispatch_branch_builds_the_declared_element _____________
+
+    def test_the_dispatch_branch_builds_the_declared_element() -> None:
+        """
+        ``build_element`` has the branch, and it builds the declared class.
+    
+        The two ends reach the element in the row's order -- ``body_a`` is the
+        reaction side and ``body_b`` the driven one -- because the kernel's fields are
+        those two and swapping them reverses every couple it applies.
+        """
+>       element = _built_element()
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:316: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    def _built_element() -> RotationalTorqueElement:
+        """Build the element the way a composition does: pairing, row, build."""
+        row = torque_element_row(_pairing(), _parameters())
+>       assert isinstance(row, ResolvedElement)
+E       AssertionError: assert False
+E        +  where False = isinstance(ResolvedElement(kind='rotational_torque', name='torque', spec=RotationalTorqueParameters(stiffness=1.0, max_torque=1.0...demand_tire=-1), body_a='subframe', point_a=None, body_b='spinner', point_b=None, local_pose_a=None, local_pose_b=None), ResolvedElement)
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:302: AssertionError
+________ test_the_block_carries_the_familys_own_slots_and_nothing_else ________
+
+    def test_the_block_carries_the_familys_own_slots_and_nothing_else() -> None:
+        """
+        The block is a whole ABI block, and only the family's own run is written.
+    
+        The padding staying zero is asserted rather than assumed: the families' runs
+        are adjacent, so a writer that went past its own run would land in another
+        family's slots and the reader would pick up a number that means something else.
+        """
+        block = rotational_torque_block(
+>           _built_element(), body_index={FRAME: 0, SPINNER: 1}
+        )
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:339: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    def _built_element() -> RotationalTorqueElement:
+        """Build the element the way a composition does: pairing, row, build."""
+        row = torque_element_row(_pairing(), _parameters())
+>       assert isinstance(row, ResolvedElement)
+E       AssertionError: assert False
+E        +  where False = isinstance(ResolvedElement(kind='rotational_torque', name='torque', spec=RotationalTorqueParameters(stiffness=1.0, max_torque=1.0...demand_tire=-1), body_a='subframe', point_a=None, body_b='spinner', point_b=None, local_pose_a=None, local_pose_b=None), ResolvedElement)
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:302: AssertionError
+____________ test_the_block_refuses_a_body_the_model_does_not_have ____________
+
+    def test_the_block_refuses_a_body_the_model_does_not_have() -> None:
+        """A name the index does not carry is an error, not body zero."""
+        with pytest.raises(ElementBlockError, match=SPINNER):
+>           rotational_torque_block(_built_element(), body_index={FRAME: 0})
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:367: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    def _built_element() -> RotationalTorqueElement:
+        """Build the element the way a composition does: pairing, row, build."""
+        row = torque_element_row(_pairing(), _parameters())
+>       assert isinstance(row, ResolvedElement)
+E       AssertionError: assert False
+E        +  where False = isinstance(ResolvedElement(kind='rotational_torque', name='torque', spec=RotationalTorqueParameters(stiffness=1.0, max_torque=1.0...demand_tire=-1), body_a='subframe', point_a=None, body_b='spinner', point_b=None, local_pose_a=None, local_pose_b=None), ResolvedElement)
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:302: AssertionError
+_______________ test_one_torque_element_changes_the_pairs_spin ________________
+
+    def test_one_torque_element_changes_the_pairs_spin() -> None:
+        """
+        The minimal assembly, run twice: with the element and without it.
+    
+        What is measured is the pair's angular velocity and the energy ledger -- not
+        "the call succeeded".  The control is the same model with the element removed,
+        so the difference between the two readings is the element's contribution.
+    
+        The block's ``body_a`` is body 0 (the reaction end) and ``body_b`` is body 1
+        (the driven one), so the readings below are statements about those two roles:
+        a couple drives *both* ends, one by ``+tau`` and one by ``-tau``.
+        """
+        block = rotational_torque_block(
+>           _built_element(), body_index={FRAME: 0, SPINNER: 1}
+        )
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:547: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    def _built_element() -> RotationalTorqueElement:
+        """Build the element the way a composition does: pairing, row, build."""
+        row = torque_element_row(_pairing(), _parameters())
+>       assert isinstance(row, ResolvedElement)
+E       AssertionError: assert False
+E        +  where False = isinstance(ResolvedElement(kind='rotational_torque', name='torque', spec=RotationalTorqueParameters(stiffness=1.0, max_torque=1.0...demand_tire=-1), body_a='subframe', point_a=None, body_b='spinner', point_b=None, local_pose_a=None, local_pose_b=None), ResolvedElement)
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:302: AssertionError
+_______________________ test_a_still_pair_is_left_alone _______________________
+
+    def test_a_still_pair_is_left_alone() -> None:
+        """
+        No relative rate, no couple, and no work: the model does not move at all.
+    
+        This is the branch that keeps a parked pair parked.  It is asserted through the
+        run rather than on the law alone, and the ledger is what makes it sharp: an
+        element that produced a couple here would show up as drive work and as a state
+        that changed, and neither happens.
+        """
+        block = rotational_torque_block(
+>           _built_element(), body_index={FRAME: 0, SPINNER: 1}
+        )
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:601: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    def _built_element() -> RotationalTorqueElement:
+        """Build the element the way a composition does: pairing, row, build."""
+        row = torque_element_row(_pairing(), _parameters())
+>       assert isinstance(row, ResolvedElement)
+E       AssertionError: assert False
+E        +  where False = isinstance(ResolvedElement(kind='rotational_torque', name='torque', spec=RotationalTorqueParameters(stiffness=1.0, max_torque=1.0...demand_tire=-1), body_a='subframe', point_a=None, body_b='spinner', point_b=None, local_pose_a=None, local_pose_b=None), ResolvedElement)
+
+packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py:302: AssertionError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\adapters\test_geometry_contract.py::test_a_contract_derived_model_assembles_and_solves
+FAILED packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py::test_api_decodes_the_kc_sample_through_results
+FAILED packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py::test_the_kc_decode_helpers_live_in_results
+FAILED packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py::test_the_reported_tire_compression_is_the_kernel_s_own_number
+FAILED packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py::test_a_run_with_no_tire_reports_no_compression_key
+FAILED packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py::test_both_modes_decode_their_state_from_the_contract[K]
+FAILED packages\suspension_multibody\tests\api\test_decoding_belongs_to_results.py::test_both_modes_decode_their_state_from_the_contract[C]
+FAILED packages\suspension_multibody\tests\api\test_no_steering_shrinks_rack.py::test_a_no_steering_axle_runs_through_the_public_entry
+FAILED packages\suspension_multibody\tests\api\test_no_steering_shrinks_rack.py::test_the_rack_channel_disappears_rather_than_reporting_zero
+FAILED packages\suspension_multibody\tests\api\test_no_steering_shrinks_rack.py::test_the_steering_run_still_reports_the_rack_channel
+FAILED packages\suspension_multibody\tests\api\test_no_steering_shrinks_rack.py::test_a_run_naming_steering_the_case_does_not_ask_for_is_refused
+FAILED packages\suspension_multibody\tests\api\test_no_steering_shrinks_rack.py::test_a_case_spec_defaults_to_the_full_single_axle_set
+FAILED packages\suspension_multibody\tests\api\test_signal_bus.py::test_a_damping_write_changes_the_solved_trajectory
+FAILED packages\suspension_multibody\tests\api\test_signal_bus.py::test_a_motor_torque_write_changes_the_solved_trajectory
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_simulate_has_a_signature_and_a_documented_contract
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_simulate_only_compiles_and_submits
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_a_k_document_pair_runs_end_to_end
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_the_document_pair_reaches_the_same_submission
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_a_c_document_pair_runs_end_to_end
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_the_assembly_document_s_override_reaches_the_model
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_the_three_assembly_spellings_are_one_run[path]
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_the_three_assembly_spellings_are_one_run[document]
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_the_three_assembly_spellings_are_one_run[simulation]
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_a_document_carrying_both_readings_is_refused
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_a_document_carrying_no_reading_is_refused
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_a_case_for_another_family_is_refused
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_a_rig_without_a_bench_is_refused_by_name
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_a_rig_whose_bench_routes_elsewhere_is_refused
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_a_contract_model_document_is_not_an_assembly_document
+FAILED packages\suspension_multibody\tests\api\test_simulate.py::test_a_non_document_case_is_refused
+FAILED packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py::test_simulate_accepts_a_path_a_document_and_a_bound_assembly
+FAILED packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py::test_simulate_refuses_a_bare_contract_model_document
+FAILED packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py::test_the_memory_route_reads_the_project_without_the_directory
+FAILED packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py::test_the_reading_comes_from_the_case_document_not_a_parameter
+FAILED packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py::test_a_case_with_neither_reading_is_refused
+FAILED packages\suspension_multibody\tests\authoring\test_api_file_feature_parity.py::test_a_historical_result_bundle_still_reads
+FAILED packages\suspension_multibody\tests\authoring\test_generic_tire.py::test_generic_tir_unit_reaches_native_with_parameter_blob
+FAILED packages\suspension_multibody\tests\authoring\test_generic_tire.py::test_rotated_contact_frame_retains_native_axes
+FAILED packages\suspension_multibody\tests\authoring\test_generic_tire.py::test_tire_file_and_memory_have_identical_native_payload_and_states
+FAILED packages\suspension_multibody\tests\authoring\test_generic_tire.py::test_single_tire_static_normal_load_balances_total_inertia
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_kc_migration_declares_rig_and_preserves_quasistatic_poses[K]
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_kc_migration_declares_rig_and_preserves_quasistatic_poses[C]
+FAILED packages\suspension_multibody\tests\authoring\test_offline_model_migration.py::test_dynamic_si_axle_document_run_has_bit_identical_states_to_frozen_producer
+FAILED packages\suspension_multibody\tests\authoring\test_provenance_and_bench.py::test_a_file_driven_run_records_the_hashes_of_its_inputs
+FAILED packages\suspension_multibody\tests\authoring\test_provenance_and_bench.py::test_a_python_authored_run_writes_no_inputs_record
+FAILED packages\suspension_multibody\tests\authoring\test_unified_subsystem_templates.py::test_peer_force_subsystems_reach_real_native[brake]
+FAILED packages\suspension_multibody\tests\authoring\test_unified_subsystem_templates.py::test_peer_force_subsystems_reach_real_native[drive]
+FAILED packages\suspension_multibody\tests\authoring\test_vehicle_assembly_documents.py::test_a_file_vehicle_runs_the_vehicle_kc_reading
+FAILED packages\suspension_multibody\tests\axle_dynamics\test_acceptance_runner.py::test_missing_adams_evidence_blocks_the_accuracy_and_speed_claim
+FAILED packages\suspension_multibody\tests\axle_dynamics\test_api.py::test_axle_schema_loader_and_result_artifact_are_self_describing
+FAILED packages\suspension_multibody\tests\io\test_results.py::test_write_and_read_json_parquet_csv
+FAILED packages\suspension_multibody\tests\modeling\test_resolved_model.py::test_generic_file_and_memory_build_the_same_si_graph
+FAILED packages\suspension_multibody\tests\preparation\test_steering_channels.py::test_direct_two_channel_run_drives_both_racks
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_naming_only_the_rig_fills_in_the_family
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_naming_only_the_family_still_resolves
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_a_bench_that_does_not_route_to_the_named_family_is_refused
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_a_registered_elsewhere_family_is_left_to_its_registry
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_a_family_typo_is_caught_by_the_registry_that_owns_it
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_the_drivable_set_is_what_the_bench_asks_for
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_an_assembly_without_steering_loses_only_the_rack
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_the_bench_and_the_drivable_set_agree
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_a_public_run_resolves_its_bench
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_the_axle_family_accepts_an_assembled_axle
+FAILED packages\suspension_multibody\tests\rigs\test_the_rig_reaches_the_product.py::test_an_si_model_still_passes_straight_through
+FAILED packages\suspension_multibody\tests\simulation\test_memory_simulate.py::test_an_in_memory_assembly_runs_through_simulate
+FAILED packages\suspension_multibody\tests\simulation\test_memory_simulate.py::test_the_memory_assembly_is_the_same_run_as_the_file
+FAILED packages\suspension_multibody\tests\simulation\test_memory_simulate.py::test_the_memory_assembly_runs_with_the_project_files_gone
+FAILED packages\suspension_multibody\tests\simulation\test_memory_simulate.py::test_a_memory_assembly_is_not_rebound_from_a_path
+FAILED packages\suspension_multibody\tests\simulation\test_no_production_bridge.py::test_no_run_entry_reaches_the_kc_to_dynamic_conversion
+FAILED packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py::test_the_dispatch_branch_builds_the_declared_element
+FAILED packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py::test_the_block_carries_the_familys_own_slots_and_nothing_else
+FAILED packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py::test_the_block_refuses_a_body_the_model_does_not_have
+FAILED packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py::test_one_torque_element_changes_the_pairs_spin
+FAILED packages\suspension_multibody\tests\subsystems\test_rotational_torque_element.py::test_a_still_pair_is_left_alone
+ERROR packages\suspension_multibody\tests\analysis\test_axle_dynamic.py
+ERROR packages\suspension_multibody\tests\analysis\test_vehicle_dynamic.py
+ERROR packages\suspension_multibody\tests\authoring\test_solver_integration.py
+ERROR packages\suspension_multibody\tests\composable\test_extension_proof.py
+ERROR packages\suspension_multibody\tests\simulation\test_replay.py
+ERROR packages\suspension_multibody\tests\subsystems\test_articulated_tow.py
+ERROR packages\suspension_multibody\tests\subsystems\test_optional_symmetry.py
+ERROR packages\suspension_multibody\tests\subsystems\test_three_axle_assembly.py
+ERROR packages\suspension_multibody\tests\subsystems\test_torque_element_wiring.py
+ERROR packages\suspension_multibody\tests\api\test_signal_bus.py::test_the_read_channels_exist_and_are_named
+ERROR packages\suspension_multibody\tests\api\test_signal_bus.py::test_a_wheel_speed_read_is_the_result_documents_own_number
+ERROR packages\suspension_multibody\tests\api\test_signal_bus.py::test_a_body_acceleration_read_is_the_result_documents_own_number
+ERROR packages\suspension_multibody\tests\api\test_signal_bus.py::test_a_tire_load_read_is_the_tires_own_column
+ERROR packages\suspension_multibody\tests\api\test_signal_bus.py::test_naming_no_entity_is_refused_rather_than_guessed
+ERROR packages\suspension_multibody\tests\api\test_signal_bus.py::test_an_unknown_channel_is_refused_by_name
+74 failed, 1471 passed, 1 xfailed, 15 errors in 128.11s (0:02:08)

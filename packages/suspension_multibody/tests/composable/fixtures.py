@@ -28,7 +28,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from suspension_multibody.schema import FrontAxleModel
+from suspension_multibody.schema.model import AxleDeclaration
 
 DIRECTORY = Path(__file__).resolve().parents[1] / "data" / "composable"
 
@@ -48,9 +48,9 @@ def trailing_arm_payload() -> dict[str, Any]:
     return _payload(TRAILING_ARM)
 
 
-def trailing_arm_model() -> FrontAxleModel:
+def trailing_arm_model() -> AxleDeclaration:
     """Return the synthetic trailing-arm axle as a model."""
-    return FrontAxleModel.model_validate(trailing_arm_payload()["model"])
+    return AxleDeclaration.model_validate(trailing_arm_payload()["model"])
 
 
 def trailing_arm_expected() -> dict[str, Any]:

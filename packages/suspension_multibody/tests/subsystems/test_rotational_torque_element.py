@@ -51,13 +51,12 @@ from suspension_multibody.connections.matcher import (
     match_requirements,
 )
 from suspension_multibody.modeling.identity import EntityId
+from suspension_multibody.modeling.instance import ResolvedElement
 from suspension_multibody.modeling.ports import GeometryPort, PortRequirement
 from suspension_multibody.modeling.primitives import (
     RotationalTorqueElement,
     RotationalTorqueParameters,
 )
-from suspension_multibody.subsystems.element_build import build_element
-from suspension_multibody.subsystems.types import ResolvedElement
 
 INSTANCE = ("axle",)
 #: The two bodies the fixture uses.  The reaction-side name is deliberately one no
@@ -300,7 +299,8 @@ def _built_element() -> RotationalTorqueElement:
     """Build the element the way a composition does: pairing, row, build."""
     row = torque_element_row(_pairing(), _parameters())
     assert isinstance(row, ResolvedElement)
-    element = build_element(row)
+    element = RotationalTorqueElement(name=row.name, body_a=row.body_a,
+        body_b=row.body_b, parameters=row.spec)
     assert isinstance(element, RotationalTorqueElement)
     return element
 
@@ -321,10 +321,13 @@ def test_the_dispatch_branch_builds_the_declared_element() -> None:
 
 def test_an_unknown_kind_is_still_refused() -> None:
     """The branch was added, not the refusal removed."""
-    with pytest.raises(ValueError, match="unsupported element kind"):
-        build_element(
-            ResolvedElement(kind="nothing_like_this", name="x", spec=None)
-        )
+    from suspension_multibody.authoring import TemplateDocument
+
+    with pytest.raises(ValueError, match="nothing_like_this"):
+        TemplateDocument.from_payload({"document": "template", "schema_version": 1,
+            "name": "unknown", "functional_role": "generic", "allowed_placement_roles": ["any"],
+            "bodies": [], "hardpoints": [], "joints": [], "property_slots": [],
+            "elements": [{"name": "x", "type": "nothing_like_this"}]})
 
 
 def test_the_block_carries_the_familys_own_slots_and_nothing_else() -> None:
@@ -619,7 +622,7 @@ def test_the_construction_path_reports_no_body_name_rule() -> None:
     source_root = Path(__file__).parents[2] / "src" / "suspension_multibody"
     for relative in (
         "compilation/element_blocks.py",
-        "subsystems/element_build.py",
+        "modeling/primitives/factory.py",
         "modeling/primitives/elements.py",
     ):
         text = (source_root / relative).read_text(encoding="utf-8").lower()

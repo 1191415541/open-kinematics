@@ -7,13 +7,15 @@ from pathlib import Path
 
 from suspension_multibody.adams import AdamsProfile
 from suspension_multibody.adams.time_domain import history_from_dynamic_bundle
-from suspension_multibody.adams.time_domain_gate import validate_axle_time_domain
-from suspension_multibody.api import run_dynamic_case
-from suspension_multibody.results import TimeSeriesResult, TimeSeriesSample
+from suspension_multibody.adams.time_domain_gate import (
+    AXLE_RESPONSE_CHANNELS,
+    _axle_time_history,
+    validate_axle_time_domain,
+)
+from suspension_multibody.results.timeseries import TimeSeriesResult, TimeSeriesSample
 from suspension_multibody.schema import (
     DynamicCaseSpec,
     DynamicSolverSettings,
-    FrontAxleModel,
     MassSpec,
     PrescribedMotion,
     TimeSignal,
@@ -21,6 +23,7 @@ from suspension_multibody.schema import (
     WrenchInput,
     WrenchSignal,
 )
+from suspension_multibody.schema.model import AxleDeclaration
 
 
 def _profile(tmp_path: Path) -> AdamsProfile:
@@ -41,8 +44,8 @@ def _profile(tmp_path: Path) -> AdamsProfile:
     )
 
 
-def _model() -> FrontAxleModel:
-    return FrontAxleModel(
+def _model() -> AxleDeclaration:
+    return AxleDeclaration(
         hardpoints={
             "UPPER_INBOARD_FRONT": Vec3(x=0, y=-300, z=300),
             "UPPER_INBOARD_REAR": Vec3(x=300, y=-300, z=300),
@@ -80,25 +83,22 @@ def _case() -> DynamicCaseSpec:
     )
 
 
-def test_axle_gate_serializes_inputs_without_reference_values(tmp_path: Path) -> None:
+def test_axle_gate_serializes_inputs_without_reference_values(tmp_path: Path, monkeypatch) -> None:
+    from suspension_multibody.adams import time_domain_gate
+
+    submitted = []
+    actual_run = time_domain_gate.run_compiled
+
+    def record_run(compiled):
+        submitted.append(compiled)
+        return actual_run(compiled)
+
+    monkeypatch.setattr(time_domain_gate, "run_compiled", record_run)
     model = _model()
     case = _case()
-    reference = history_from_dynamic_bundle(
-        run_dynamic_case(model, case),
-        body="axle",
-        channels=(
-            "left_wheel_center_x",
-            "left_wheel_center_y",
-            "left_wheel_center_z",
-            "left_camber_deg",
-            "left_toe_deg",
-            "right_wheel_center_x",
-            "right_wheel_center_y",
-            "right_wheel_center_z",
-            "right_camber_deg",
-            "right_toe_deg",
-        ),
-    )
+    reference = _axle_time_history(model, case, AXLE_RESPONSE_CHANNELS)
+    assert abs(reference.channels["left_wheel_center_z"][-1]-reference.channels["left_wheel_center_z"][0]-5) < 1e-5
+    assert abs(reference.channels["right_wheel_center_z"][-1]-reference.channels["right_wheel_center_z"][0]) < 1e-5
 
     def runner(_profile: AdamsProfile, request_path: Path, output_dir: Path) -> None:
         request = json.loads(request_path.read_text(encoding="utf-8"))
@@ -117,6 +117,12 @@ def test_axle_gate_serializes_inputs_without_reference_values(tmp_path: Path) ->
     report = json.loads(Path(result.output_path).read_text(encoding="utf-8"))
     assert report["runner_invoked"]
     assert report["comparison"]["passed"]
+    assert len(submitted) == 6
+    assert all(run.metadata["compiler"] == "ResolvedModelCompiler" for run in submitted)
+    inputs = submitted[-1].case_document["k"]
+    assert inputs["axes"][0]["values_mm"] == [5]
+    assert inputs["axes"][1]["values_mm"] == [0]
+    assert inputs["body_wrench"] == [{"body": "model.sub.json.upright_R", "wrench": [0, 0, 25, 0, 0, 0]}]
 
 
 def test_axle_gate_rejects_runner_without_result(tmp_path: Path) -> None:

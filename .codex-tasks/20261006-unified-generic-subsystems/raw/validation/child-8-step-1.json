@@ -1,0 +1,19 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/results/test_universal_result_channels.py",
+    "packages/suspension_multibody/tests/simulation/test_unified_result_envelope.py",
+    "packages/suspension_multibody/tests/results/test_neutral_results.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T17:11:24.432548+00:00",
+  "finished_at": "2026-10-06T17:11:27.319767+00:00",
+  "log": "raw\\validation\\child-8-step-1.log",
+  "log_sha256": "d7e7c872fed7459850c34a353c7ff0bf2654b924ea4cbaa7460471e27c49ebe9"
+}

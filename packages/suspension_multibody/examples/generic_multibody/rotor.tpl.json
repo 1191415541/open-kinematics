@@ -1,0 +1,24 @@
+{
+  "document": "template", "schema_version": 1, "name": "rotor",
+  "functional_role": "generic", "allowed_placement_roles": ["any"],
+  "symmetry": "asymmetric", "units": {"length": "m"},
+  "bodies": [
+    {"name": "support", "fixed": true},
+    {"name": "rotor", "mass": 10, "inertia": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}
+  ],
+  "hardpoints": [{"name": "base", "owner": "support"}, {"name": "center", "owner": "rotor"}],
+  "markers": [{"name": "action", "owner": "rotor", "point": "center"}, {"name": "reaction", "owner": "support", "point": "base"}],
+  "joints": [{"name": "bearing", "type": "revolute", "body_a": "support", "body_b": "rotor", "point_a": "base", "point_b": "center", "axis": [0, 0, 1]}],
+  "elements": [{
+    "name": "motor_and_brake", "type": "torque",
+    "action": "action", "reaction": "reaction", "reference": "reaction", "axis": [0, 0, 1],
+    "function": "demand-limit*tanh(spin/reference_speed)",
+    "bindings": {
+      "demand": {"unit": "Nm", "value": -3},
+      "limit": {"unit": "Nm", "value": 2},
+      "reference_speed": {"unit": "rad/s", "value": 1},
+      "spin": {"source": "measurement", "measurement": "relative_angular_velocity", "unit": "rad/s", "action": "action", "reaction": "reaction", "reference": "reaction", "axis": [0, 0, 1]}
+    }
+  }],
+  "property_slots": [], "ports": []
+}

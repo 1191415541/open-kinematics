@@ -9,16 +9,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import numpy as np
-import pyarrow as pa
 import pyarrow.parquet as pq
 
 from .. import __version__
-from .results import (
-    META_KEY,
-    _bushing_row,
-    _component_row,
-    _state_row,
-)
 
 ARTIFACT_SCHEMA_VERSION = 1
 ARTIFACT_FORMAT_VERSION = "1.0"
@@ -41,10 +34,8 @@ def write_artifact(
     """
     Write one success, partial, or failed result artifact.
 
-    The writer accepts the formal result objects used by the public services:
-    ``ResultBundle``, ``TimeSeriesResult``, ``AxleDynamicsResult`` and
-    ``VehicleDynamicsResult``.  Domain inputs are optional so historical and
-    failure-only artifacts can still be written with the evidence available.
+    Every solved or partial result is a ResultEnvelope. Failure-only artifacts
+    preserve the available diagnostics without inventing solved channels.
     """
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
@@ -56,7 +47,7 @@ def write_artifact(
     case_payload = _jsonable(_dump(case)) if case is not None else None
     request_payload = _jsonable(_dump(request)) if request is not None else None
     failure_payload = _failure_payload(failure)
-    if not failure_payload and result is not None:
+    if not failure_payload and result is not None and normalized_status in {"failed", "partial"}:
         failure_payload = _jsonable(dict(getattr(result, "failure_evidence", {}) or {}))
     partial_evidence = _partial_evidence(result, partial, failure)
     _validate_status_evidence(normalized_status, failure_payload, partial_evidence)
@@ -87,12 +78,8 @@ def write_artifact(
         "tables": [],
     }
 
-    if artifact_type == "result_bundle":
-        _write_result_bundle(storage_result, destination, manifest, formats)
-    elif artifact_type == "time_series_result":
-        _write_time_series(storage_result, destination, manifest, formats)
-    elif artifact_type in {"axle_dynamics_result", "vehicle_dynamics_result"}:
-        _write_native_result(storage_result, destination, manifest)
+    if artifact_type == "multibody_result":
+        _write_multibody_result(storage_result, destination, manifest)
     else:
         _write_generic_result(storage_result, destination, manifest)
 
@@ -170,18 +157,11 @@ def _artifact_type(result: Any, partial: Any | None) -> str:
     value = result if result is not None else partial
     if value is None:
         return "unknown_result"
-    from ..results import TimeSeriesResult
-    from ..schema import ResultBundle
+    from ..results.envelope import ResultEnvelope
 
-    if isinstance(value, ResultBundle):
-        return "result_bundle"
-    if isinstance(value, TimeSeriesResult):
-        return "time_series_result"
-    if hasattr(value, "axle") and hasattr(value, "steering_output"):
-        return "vehicle_dynamics_result"
-    if hasattr(value, "states") and hasattr(value, "constraint_wrench"):
-        return "axle_dynamics_result"
-    return "generic_result"
+    if isinstance(value, ResultEnvelope):
+        return "multibody_result"
+    raise TypeError("artifact writer requires ResultEnvelope")
 
 
 def _status(
@@ -209,6 +189,10 @@ def _dump(value: Any) -> Any:
         return None
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
+    if hasattr(value, "to_payload"):
+        return value.to_payload()
+    if hasattr(value, "to_document"):
+        return value.to_document()
     if hasattr(value, "as_dict"):
         return value.as_dict()
     if is_dataclass(value):
@@ -328,190 +312,21 @@ def _partial_evidence(
     return evidence
 
 
-def _write_result_bundle(
-    bundle: Any,
-    destination: Path,
-    manifest: dict[str, Any],
-    formats: tuple[str, ...],
-) -> None:
-    manifest.update(_jsonable(bundle.manifest.model_dump(mode="json")))
-    manifest["artifact_type"] = "result_bundle"
-    tables = {
-        "states": [_state_row(row) for row in bundle.states],
-        "component_loads": [_component_row(row) for row in bundle.component_loads],
-        "bushings": [_bushing_row(row) for row in bundle.bushings],
-        "diagnostics": [_jsonable(_dump(row)) for row in bundle.diagnostics],
-    }
-    for name, rows in tables.items():
-        _write_table_files(destination, name, rows, formats)
-    manifest["tables"] = list(tables)
-    manifest["layouts"] = {name: sorted({key for row in rows for key in row}) for name, rows in tables.items()}
-
-
-def _write_time_series(
-    result: Any,
-    destination: Path,
-    manifest: dict[str, Any],
-    formats: tuple[str, ...],
-) -> None:
-    payload = result.as_dict()
-    outer_status = manifest.get("status")
-    outer_failure = dict(manifest.get("failure_evidence") or {})
-    outer_partial = dict(manifest.get("partial_evidence") or {})
-    manifest.update(_jsonable(payload["manifest"]))
-    manifest.update(
-        {
-            "artifact_type": "time_series_result",
-            "arrays_file": "arrays.npz",
-            "samples_file": "time_samples.json",
-            "time_grid": {"count": len(result.times_s), "values": result.times_s.tolist()},
-            "channels": sorted(
-                {
-                    key
-                    for sample in result.samples
-                    for key in sample.metrics
-                }
-            ),
-        }
-    )
-    if outer_status is not None:
-        manifest["status"] = outer_status
-    if outer_failure:
-        manifest["failure_evidence"] = {
-            **dict(manifest.get("failure_evidence") or {}),
-            **outer_failure,
-        }
-    if outer_partial:
-        manifest["partial_evidence"] = {
-            **dict(manifest.get("partial_evidence") or {}),
-            **outer_partial,
-        }
-    np.savez_compressed(
-        destination / "arrays.npz",
-        times_s=np.asarray(result.times_s, dtype=np.float64),
-        sample_times_s=np.asarray([sample.time for sample in result.samples], dtype=np.float64),
-        sample_body=np.asarray([sample.body for sample in result.samples]),
-        sample_converged=np.asarray([sample.converged for sample in result.samples], dtype=bool),
-    )
-    rows = [sample.as_dict() for sample in result.samples]
-    (destination / "time_samples.json").write_text(
-        json.dumps(rows, indent=2, sort_keys=True, default=str), encoding="utf-8"
-    )
-    _write_table_files(destination, "time_samples", rows, formats)
-    diagnostics = _jsonable(result.diagnostics)
-    (destination / "diagnostics.json").write_text(
-        json.dumps(diagnostics, indent=2, sort_keys=True, default=str), encoding="utf-8"
-    )
-    manifest["tables"] = ["time_samples"]
-    manifest["layouts"] = {
-        "time_samples": sorted({key for row in rows for key in row}),
-        "diagnostics": sorted(diagnostics) if isinstance(diagnostics, Mapping) else [],
-    }
-
-
-def _write_native_result(
-    result: Any,
-    destination: Path,
-    manifest: dict[str, Any],
-) -> None:
-    from ..axle_dynamics.result import (
-        ANTI_ROLL_OUTPUT_COLUMNS,
-        BODY_STATE_COLUMNS,
-        BUMP_STOP_OUTPUT_COLUMNS,
-        BUSHING_OUTPUT_COLUMNS,
-        CONSTRAINT_WRENCH_COLUMNS,
-        DAMPER_OUTPUT_COLUMNS,
-        DIAGNOSTIC_COLUMNS,
-        ENERGY_COLUMNS,
-        PERFORMANCE_COLUMNS,
-        SPRING_OUTPUT_COLUMNS,
-        TIRE_OUTPUT_COLUMNS,
-    )
-
-    axle = getattr(result, "axle", result)
-    diagnostics = axle.diagnostics
-    arrays: dict[str, Any] = {
-        "times_s": axle.times_s,
-        "body_names": np.asarray(axle.body_names),
-        "constraint_names": np.asarray(axle.constraint_names),
-        "spring_names": np.asarray(axle.spring_names),
-        "damper_names": np.asarray(axle.damper_names),
-        "bump_stop_names": np.asarray(axle.bump_stop_names),
-        "bushing_names": np.asarray(axle.bushing_names),
-        "anti_roll_bar_names": np.asarray(axle.anti_roll_bar_names),
-        "tire_names": np.asarray(axle.tire_names),
-    }
-    if hasattr(result, "steering_output"):
-        arrays["steering_names"] = np.asarray(getattr(result, "steering_names", ()))
-    arrays.update(
-        {
-            "states": axle.states,
-            "constraint_wrench": axle.constraint_wrench,
-            "spring_output": axle.spring_output,
-            "damper_output": axle.damper_output,
-            "bump_stop_output": axle.bump_stop_output,
-            "bushing_output": axle.bushing_output,
-            "anti_roll_output": axle.anti_roll_output,
-            "diagnostics": _diagnostics_array(diagnostics),
-            "tire_output": axle.tire_output,
-            "energy": axle.energy,
-            "contact_event_time_s": np.asarray(
-                [event.time_s for event in axle.contact_events], dtype=np.float64
-            ),
-            "contact_event_tire": np.asarray([event.tire for event in axle.contact_events]),
-            "contact_event_transition": np.asarray(
-                [event.transition for event in axle.contact_events]
-            ),
-        }
-    )
-    if hasattr(result, "steering_output"):
-        arrays["steering_output"] = (
-            result.steering_output
-            if result.steering_output is not None
-            else np.empty((len(result.times_s), 0, 4), dtype=np.float64)
-        )
+def _write_multibody_result(result: Any, destination: Path, manifest: dict[str, Any]) -> None:
+    """Persist native channels and their stable identity manifest without dispatch."""
+    arrays = {"times_s": result.times_s, **result.named_blocks}
     np.savez_compressed(destination / "arrays.npz", **arrays)
-    manifest.update(
-        {
-            "artifact_type": (
-                "vehicle_dynamics_result"
-                if hasattr(result, "steering_output")
-                else "axle_dynamics_result"
-            ),
-            "arrays_file": "arrays.npz",
-            "time_grid": {"count": len(axle.times_s), "values": axle.times_s.tolist()},
-            "channels": {
-                "body": list(axle.body_names),
-                "constraint": list(axle.constraint_names),
-                "spring": list(axle.spring_names),
-                "damper": list(axle.damper_names),
-                "bump_stop": list(axle.bump_stop_names),
-                "bushing": list(axle.bushing_names),
-                "anti_roll_bar": list(axle.anti_roll_bar_names),
-                "tire": list(axle.tire_names),
-            },
-            "layouts": {
-                "body_state": list(BODY_STATE_COLUMNS),
-                "constraint_wrench": list(CONSTRAINT_WRENCH_COLUMNS),
-                "spring_output": list(SPRING_OUTPUT_COLUMNS),
-                "damper_output": list(DAMPER_OUTPUT_COLUMNS),
-                "bump_stop_output": list(BUMP_STOP_OUTPUT_COLUMNS),
-                "bushing_output": list(BUSHING_OUTPUT_COLUMNS),
-                "anti_roll_output": list(ANTI_ROLL_OUTPUT_COLUMNS),
-                "diagnostics": list(DIAGNOSTIC_COLUMNS),
-                "tire_output": list(TIRE_OUTPUT_COLUMNS),
-                "energy": list(ENERGY_COLUMNS),
-                "performance": list(PERFORMANCE_COLUMNS),
-            },
-        }
-    )
-    if hasattr(result, "steering_output"):
-        manifest["layouts"]["steering_output"] = [
-            "coordinate_m_or_angle_rad",
-            "rate_per_s",
-            "target_m_or_angle_rad",
-            "actuator_force_or_torque",
-        ]
+    native = _jsonable(result.raw.document)
+    (destination / "native_result.json").write_text(json.dumps(native, indent=2, sort_keys=True), encoding="utf-8")
+    model = result.model.to_document()
+    manifest.update({
+        "artifact_type": "multibody_result", "arrays_file": "arrays.npz", "result_file": "native_result.json",
+        "model_fingerprint": result.model_fingerprint,
+        "model": model, "model_hash": _hash_payload(model), "model_sha256": _hash_payload(model),
+        "time_grid": {"count": len(result.times_s), "values": result.times_s.tolist()},
+        "channels": _jsonable(result.raw.metadata),
+        "layouts": {name: {"shape": list(values.shape), "dtype": str(values.dtype)} for name, values in arrays.items()},
+    })
 
 
 def _write_generic_result(
@@ -524,68 +339,3 @@ def _write_generic_result(
         json.dumps(payload, indent=2, sort_keys=True, default=str), encoding="utf-8"
     )
     manifest["result_file"] = "result.json"
-
-
-def _diagnostics_array(diagnostics: Any) -> np.ndarray:
-    fields = (
-        "accepted",
-        "internal_steps",
-        "rejected_attempts",
-        "newton_iterations",
-        "minimum_accepted_step_s",
-        "maximum_accepted_step_s",
-        "last_accepted_step_s",
-        "position_residual",
-        "velocity_residual",
-        "dynamics_residual",
-        "active_contacts",
-        "contact_events",
-        "local_error_ratio",
-        "energy_residual",
-        "failure_code",
-        "pinned_null_directions",
-    )
-    return np.column_stack(tuple(np.asarray(getattr(diagnostics, field)) for field in fields))
-
-
-def _write_table_files(
-    destination: Path,
-    name: str,
-    rows: list[dict[str, Any]],
-    formats: tuple[str, ...],
-) -> None:
-    normalized_rows = [
-        {key: _table_value(value) for key, value in row.items()}
-        for row in rows
-    ]
-    metadata = {
-        "format_version": ARTIFACT_FORMAT_VERSION,
-        "schema_version": str(ARTIFACT_SCHEMA_VERSION),
-        "package_version": __version__,
-    }
-    if "parquet" in formats:
-        table = (
-            pa.Table.from_pylist(normalized_rows)
-            if normalized_rows
-            else pa.table({"_empty": pa.array([], type=pa.string())})
-        )
-        table = table.replace_schema_metadata({META_KEY.encode(): json.dumps(metadata).encode()})
-        pq.write_table(table, destination / f"{name}.parquet")
-    if "csv" in formats:
-        columns = sorted({key for row in normalized_rows for key in row})
-        with (destination / f"{name}.csv").open("w", newline="", encoding="utf-8") as stream:
-            if columns:
-                writer = csv.DictWriter(stream, fieldnames=columns)
-                writer.writeheader()
-                writer.writerows({key: row.get(key) for key in columns} for row in normalized_rows)
-            else:
-                stream.write("\n")
-
-
-def _table_value(value: Any) -> Any:
-    """Flatten nested values before writing Arrow/CSV table rows."""
-    if isinstance(value, (Mapping, list, tuple, np.ndarray)):
-        return json.dumps(_jsonable(value), sort_keys=True, default=str)
-    if isinstance(value, (np.floating, np.integer, np.bool_)):
-        return value.item()
-    return value

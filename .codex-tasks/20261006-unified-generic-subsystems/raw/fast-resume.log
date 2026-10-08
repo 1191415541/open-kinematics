@@ -1,0 +1,133 @@
+........................................................................ [  4%]
+........................................................................ [  9%]
+........................................................................ [ 13%]
+........................................................................ [ 18%]
+.............................................F.......................... [ 23%]
+........................................................................ [ 27%]
+........................................................................ [ 32%]
+........................................................................ [ 37%]
+........................................................................ [ 41%]
+........................................................................ [ 46%]
+...F.................................................................... [ 50%]
+........................................................................ [ 55%]
+........................................................................ [ 60%]
+........................................................................ [ 64%]
+........................................................................ [ 69%]
+........................................................................ [ 74%]
+........................................................................ [ 78%]
+........................................................................ [ 83%]
+........................................................................ [ 88%]
+........................................................................ [ 92%]
+..............................................................x......... [ 97%]
+.........................................                                [100%]
+================================== FAILURES ===================================
+_______ test_axle_schema_loader_and_result_artifact_are_self_describing _______
+
+tmp_path = WindowsPath('C:/Users/zzy11/AppData/Local/Temp/pytest-of-zzy11/pytest-3328/test_axle_schema_loader_and_re0')
+
+    def test_axle_schema_loader_and_result_artifact_are_self_describing(
+        tmp_path: Path,
+    ) -> None:
+        model = _vertical_slider_model()
+        case = AxleDynamicsCase(
+            name="artifact",
+            times_s=(0.0, 0.001),
+            solver=AxleSolverSettings(internal_step_s=0.00025),
+        )
+        model_path = tmp_path / "model.json"
+        case_path = tmp_path / "case.yaml"
+        model_path.write_text(
+            json.dumps(model.model_dump(mode="json")),
+            encoding="utf-8",
+        )
+        import yaml
+    
+        case_path.write_text(
+            yaml.safe_dump(case.model_dump(mode="json")),
+            encoding="utf-8",
+        )
+        # The SI model loader is retired with the modelling route (G7), so the file
+        # round trip goes through the schema itself; the case loader stays public.
+        loaded_model = AxleDynamicsModel.model_validate(
+            json.loads(model_path.read_text(encoding="utf-8"))
+        )
+        loaded_case = load_axle_dynamics_case(case_path)
+        result = solve_axle(loaded_model, loaded_case)
+        manifest_path = write_artifact(
+            result.envelope,
+            tmp_path / "artifact",
+            model=loaded_model,
+            case=loaded_case,
+        )
+    
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert manifest["status"] == "success"
+        assert len(manifest["model_sha256"]) == 64
+        assert len(manifest["case_sha256"]) == 64
+        for name, columns in (
+            ("body_state", BODY_STATE_COLUMNS), ("diagnostics", DIAGNOSTIC_COLUMNS),
+            ("energy", ENERGY_COLUMNS),
+        ):
+            values = result.envelope.named_blocks[name]
+            assert values.shape[-1] == len(columns)
+            assert manifest["layouts"][name] == {"shape": list(values.shape), "dtype": str(values.dtype)}
+>       assert not result.envelope.tire_names
+E       AttributeError: 'ResultEnvelope' object has no attribute 'tire_names'
+
+packages\suspension_multibody\tests\axle_dynamics\test_api.py:430: AttributeError
+__________________ test_the_legacy_surface_gate_stays_green ___________________
+
+    def test_the_legacy_surface_gate_stays_green() -> None:
+        """A new package must not become a legacy import site."""
+        gate = _ROOT / "packages/suspension_multibody/tests/architecture/legacy_surface_gate.py"
+        completed = subprocess.run(
+            [sys.executable, str(gate), "--check"],
+            capture_output=True,
+            text=True,
+            cwd=str(_ROOT),
+            check=False,
+        )
+>       assert completed.returncode == 0, completed.stdout + completed.stderr
+E       AssertionError: mode      : migration
+E         findings  : 29
+E           retired_subsystem_import: 29
+E         
+E         FAIL
+E           - tests/cases/kc_quasi_static/test_c_loads_and_sides.py:23 [test/retired_subsystem_import/suspension_multibody.subsystems]
+E           - tests/cases/kc_quasi_static/test_contract_boundary.py:34 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/kc_quasi_static/test_contract_boundary.py:47 [test/retired_subsystem_import/suspension_multibody.subsystems]
+E           - tests/cases/kc_quasi_static/test_contract_boundary.py:250 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/kc_quasi_static/test_contract_documents.py:28 [test/retired_subsystem_import/suspension_multibody.subsystems]
+E           - tests/cases/kc_quasi_static/test_drives_come_from_the_rig.py:31 [test/retired_subsystem_import/suspension_multibody.rigs.compose]
+E           - tests/cases/kc_quasi_static/test_drives_come_from_the_rig.py:34 [test/retired_subsystem_import/suspension_multibody.subsystems]
+E           - tests/cases/kc_quasi_static/test_drives_come_from_the_rig.py:35 [test/retired_subsystem_import/suspension_multibody.subsystems]
+E           - tests/cases/kc_quasi_static/test_drives_come_from_the_rig.py:243 [test/retired_subsystem_import/suspension_multibody.subsystems]
+E           - tests/cases/kc_quasi_static/test_k_axes_grid.py:26 [test/retired_subsystem_import/suspension_multibody.subsystems]
+E           - tests/cases/kc_quasi_static/test_k_body_wrench.py:22 [test/retired_subsystem_import/suspension_multibody.subsystems]
+E           - tests/cases/test_axle_dynamic_contract.py:248 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_axle_dynamic_contract.py:292 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_axle_dynamic_contract.py:401 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_handling.py:32 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_handling.py:36 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_handling.py:193 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_ride_four_post.py:32 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_ride_four_post.py:36 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_ride_four_post.py:161 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_ride_random_road.py:31 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_ride_random_road.py:35 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_ride_random_road.py:183 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_vehicle_dynamic_contract.py:18 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_vehicle_dynamic_contract.py:127 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_vehicle_dynamic_contract.py:187 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_vehicle_kc.py:55 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_vehicle_kc.py:56 [test/retired_subsystem_import/suspension_multibody.preparation]
+E           - tests/cases/test_vehicle_kc.py:329 [test/retired_subsystem_import/suspension_multibody.preparation]
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['E:\\тс╪Ч\\open-kinematics\\.venv\\Scripts\\python.exe', 'E:\\тс╪Ч\\open-kinematics\\packages\\susp...n  - tests/cases/test_vehicle_kc.py:329 [test/retired_subsystem_import/suspension_multibody.preparation]\n', stderr='').returncode
+
+packages\suspension_multibody\tests\outputs\test_bypass.py:137: AssertionError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\axle_dynamics\test_api.py::test_axle_schema_loader_and_result_artifact_are_self_describing
+FAILED packages\suspension_multibody\tests\outputs\test_bypass.py::test_the_legacy_surface_gate_stays_green
+2 failed, 1550 passed, 1 xfailed in 103.91s (0:01:43)

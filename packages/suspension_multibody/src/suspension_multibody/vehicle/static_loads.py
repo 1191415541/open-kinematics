@@ -10,9 +10,8 @@ answer: the native static solver factors a *square* system, while these N
 unknowns against three equations are usually underdetermined and need the
 minimum-norm convention chosen here.
 
-The contact points are the *assembly's*: every wheel end the vehicle declares
-contributes its wheel centre, brought onto the road plane, and N is however many
-wheel ends there are.  Nothing here reads a corner-name constant, so a two-axle
+The contacts are explicitly selected by frame ID in the SI ResolvedModel and
+projected onto the road plane. Nothing here reads a corner-name constant, so a two-axle
 car's four points, a three-axle truck's six and a corner bench's one are one code
 path with different data.
 
@@ -39,20 +38,19 @@ nothing about existence or uniqueness.  It is therefore not an error here: a
 single contact point has a rank-one matrix and is a perfectly good reading
 whenever the loads are compatible.
 
-It lives in ``vehicle/`` because that is the layer that owns whole-vehicle
-services and is already allowed to import ``subsystems`` -- the assembly is its
-only input.
+The input is the same resolved graph used by compilation and result queries.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import numpy as np
 
+from ..modeling.primitives.spatial import quaternion_to_matrix
+from ..modeling.resolved import ResolvedModel
 from ..report.wheel_loads import WheelLoadSummary, summarize_wheel_loads
-from ..schema import VehicleModel
-from ..subsystems.vehicle_assembly import VehicleRuntime, compose_vehicle_runtime
 
 #: How large a residual the three balance equations may leave, as a fraction of the
 #: vertical load they are balancing.  The equations are stated over force, so their
@@ -123,10 +121,11 @@ class StaticWheelLoadResult:
 
 
 def compute_static_wheel_loads(
-    vehicle: VehicleModel,
+    model: ResolvedModel,
     *,
+    contact_frames: Mapping[str, str],
     acceleration: np.ndarray | None = None,
-    gravity: float = 9810.0,
+    gravity: float = 9.80665,
     road_z: float = 0.0,
 ) -> StaticWheelLoadResult:
     """
@@ -137,20 +136,11 @@ def compute_static_wheel_loads(
     lateral tire forces are assumed to act at the road plane, which gives the
     textbook height-over-wheelbase and height-over-track transfer terms.
 
-    The vehicle is composed and its own contact points are read from the result;
-    this function is the ``VehicleModel``-shaped door onto
-    :func:`compute_static_wheel_loads_for_assembly`, which is where the general
-    N-contact-point solve lives.
+    Mass, center of mass and support frames are read directly from the SI graph.
     """
-    _validated_acceleration(acceleration, gravity)
-    # The vehicle is built through the composition layer, which is the same
-    # construction every other reading uses.  This module reads `total_mass`,
-    # `center_of_mass` and the wheel centres, and the composed runtime offers all
-    # three -- so there is no reason for it to reach for the historical builder and
-    # keep that path alive on its own.
-    assembly = compose_vehicle_runtime(vehicle, mode="K")
     return compute_static_wheel_loads_for_assembly(
-        assembly,
+        model,
+        contact_frames=contact_frames,
         acceleration=acceleration,
         gravity=gravity,
         road_z=road_z,
@@ -158,10 +148,11 @@ def compute_static_wheel_loads(
 
 
 def compute_static_wheel_loads_for_assembly(
-    assembly: VehicleRuntime,
+    model: ResolvedModel,
     *,
+    contact_frames: Mapping[str, str],
     acceleration: np.ndarray | None = None,
-    gravity: float = 9810.0,
+    gravity: float = 9.80665,
     road_z: float = 0.0,
 ) -> StaticWheelLoadResult:
     """
@@ -174,14 +165,17 @@ def compute_static_wheel_loads_for_assembly(
     :class:`IncompatibleStaticLoadsError` naming the measured residual, the
     tolerance and the contact-point count.
 
-    An assembly is taken rather than a model because that is the form which
-    carries contact points for *any* topology: a ``VehicleModel`` names two axles,
-    while an entry-built vehicle names as many as it declares.
+    The caller selects contacts explicitly; their count is independent of topology.
     """
     accel = _validated_acceleration(acceleration, gravity)
-    support_points = _support_points(assembly, road_z)
-    total_mass = assembly.total_mass
-    center_of_mass = _center_of_mass(assembly, total_mass)
+    if not isinstance(model, ResolvedModel):
+        raise TypeError("static loads require ResolvedModel and explicit contact frames")
+    graph = model.to_document()
+    support_points = _support_points(graph, contact_frames, road_z)
+    total_mass = sum(body["mass"] for body in graph["bodies"])
+    if total_mass <= 0:
+        raise ValueError("static loads require positive total mass")
+    center_of_mass = sum((body["mass"]*np.asarray(body["position"]) for body in graph["bodies"]), np.zeros(3))/total_mass
     names = tuple(support_points)
     count = len(names)
     height = center_of_mass[2] - road_z
@@ -253,30 +247,28 @@ def _residual_tolerance(total_mass: float, vertical_acceleration: float) -> floa
     return _RESIDUAL_RELATIVE_TOLERANCE * max(load_scale, _MINIMUM_LOAD_SCALE)
 
 
-def _center_of_mass(assembly: VehicleRuntime, total_mass: float) -> np.ndarray:
-    weighted = np.zeros(3)
-    for name, body in assembly.bodies.items():
-        if body.mass <= 0.0:
-            continue
-        weighted += body.mass * assembly.state.point_world(name, body.center_of_mass)
-    return weighted / total_mass
-
-
-def _support_points(assembly: VehicleRuntime, road_z: float) -> dict[str, np.ndarray]:
+def _support_points(graph: dict, contact_frames: Mapping[str, str], road_z: float) -> dict[str, np.ndarray]:
     """
     Return every contact point of the assembly, keyed by the wheel end it belongs to.
 
-    The set and its order are the assembly's own wheel table: each entry carries the
-    body that holds the wheel centre and the centre's body-local coordinates, and
-    the contact point is that point in the world, brought onto the road plane
-    because a vertical reaction acts there.  Reading the table rather than a tuple
-    of corner names is what makes the count -- four for a car, six for a three-axle
-    truck, one for a corner bench -- a property of the vehicle instead of a constant
-    here.
+    Frames carry their owning body and local pose. The explicit mapping controls
+    the set and order, and each world point is projected onto the road plane.
     """
     points: dict[str, np.ndarray] = {}
-    for wheel, (body, local_center) in assembly.wheel_centers.items():
-        center = assembly.state.point_world(body, local_center)
+    bodies = {row["name"]: row for row in graph["bodies"]}
+    frames = {row["name"]: row for row in graph["frames"]}
+    if not contact_frames:
+        raise ValueError("static loads require at least one contact frame")
+    if len(set(contact_frames.values())) != len(contact_frames):
+        raise ValueError("static contacts must name distinct frames")
+    for wheel, frame_id in contact_frames.items():
+        if frame_id not in frames:
+            raise ValueError(f"unknown contact frame {frame_id!r}")
+        frame = frames[frame_id]
+        center = np.asarray(frame["point"], dtype=float)
+        if frame["body"] != "ground":
+            body = bodies[frame["body"]]
+            center = np.asarray(body["position"]) + quaternion_to_matrix(np.asarray(body["quaternion"]))@center
         points[wheel] = np.array(
             [center[0], center[1], road_z],
             dtype=float,

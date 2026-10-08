@@ -147,6 +147,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "samples": {"type": "string", "minLength": 1},
         "start_s": {"type": "number"},
         "end_s": {"type": "number"},
         "step_s": {"type": "number"},
@@ -154,6 +155,15 @@
       }
     },
     "inputs": {"type": "object"},
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "constraint_reaction": {"type": "boolean"},
+        "constraint_jacobian": {"type": "boolean"},
+        "element_wrench": {"type": "boolean"}
+      }
+    },
     "vehicle": {"type": "object"},
     "four_post": {"type": "object"},
     "handling": {"type": "object"},

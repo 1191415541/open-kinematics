@@ -1,0 +1,9 @@
+{
+  "document": "template", "schema_version": 1, "name": "translation_bench",
+  "functional_role": "generic", "allowed_placement_roles": ["any"],
+  "symmetry": "asymmetric", "units": {"length": "m"},
+  "bodies": [{"name": "fixture", "fixed": true}],
+  "hardpoints": [{"name": "origin", "owner": "fixture"}],
+  "joints": [], "elements": [], "property_slots": [],
+  "ports": [{"name": "actuator", "role": "translation_input", "owner": "fixture", "point": "origin"}]
+}

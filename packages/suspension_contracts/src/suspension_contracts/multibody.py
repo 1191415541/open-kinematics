@@ -40,6 +40,8 @@ SCHEMA_FILES = {
     "subsystem": "subsystem.schema.json",
     "assembly": "assembly.schema.json",
     "rig": "rig.schema.json",
+    "resolved_model": "resolved_model.schema.json",
+    "solve_plan": "solve_plan.schema.json",
 }
 
 
@@ -254,6 +256,107 @@ def validate(document: Mapping[str, Any], kind: str) -> None:
 def validate_model(document: Mapping[str, Any]) -> None:
     """Validate a model document."""
     validate(document, "model")
+    arities = {"constant": 0, "binding": 0, "identity": 1, "neg": 1,
+               "add": 2, "sub": 2, "mul": 2, "div": 2, "pow": 2,
+               "sin": 1, "cos": 1, "tanh": 1, "exp": 1, "sqrt": 1,
+               "step": 5, "curve": 1, "surface": 2}
+    for pindex, program in enumerate(document.get("function_programs", ())):
+        nodes = program["nodes"]
+        for nindex, node in enumerate(nodes):
+            if node["op"] not in arities:
+                raise ContractError(f"$/function_programs[{pindex}]/nodes[{nindex}]/op: unsupported operation {node['op']!r}")
+            args = node.get("args", ())
+            if len(args) != arities[node["op"]]:
+                raise ContractError(f"function node {nindex}: invalid argument count")
+            for arg in args:
+                if arg >= nindex:
+                    raise ContractError(f"$/function_programs[{pindex}]/nodes[{nindex}]/args: program must be a DAG")
+            if node["op"] == "constant" and "value" not in node:
+                raise ContractError("function constant requires a finite value")
+            if node["op"] == "binding" and not 0 <= node.get("binding", -1) < len(program["bindings"]):
+                raise ContractError("function node names an unknown binding")
+            if node["op"] == "pow":
+                exponent = nodes[args[1]]
+                value = exponent.get("value", 0.5)
+                if exponent["op"] != "constant" or value != int(value):
+                    raise ContractError("function power exponent must be an integer constant")
+            if node["op"] in {"curve", "surface"}:
+                index = node.get("table", -1)
+                tables = program.get("tables", ())
+                if not 0 <= index < len(tables) or tables[index].get("dimension") != (1 if node["op"] == "curve" else 2):
+                    raise ContractError("function node names an incompatible table")
+        output = program["outputs"]["value"]
+        if output >= len(nodes):
+            raise ContractError(f"$/function_programs[{pindex}]/outputs/value: unknown node")
+        for binding in program["bindings"]:
+            source = binding.get("source", "constant")
+            if source not in {"time", "constant", "property", "signal", "channel", "measurement"}:
+                raise ContractError("unsupported function binding source")
+            if source in {"constant", "property"} and "value" not in binding:
+                raise ContractError("function constant/property binding requires a value")
+            for key in ("value", "scale"):
+                if key in binding and (not isinstance(binding[key], (int, float)) or not math.isfinite(binding[key])):
+                    raise ContractError("function binding must be finite")
+            if source in {"signal", "channel"}:
+                _function_points(binding.get("samples"), "signal")
+            if source == "measurement":
+                if binding.get("measurement") not in {"position", "relative_position", "relative_velocity", "relative_angular_velocity"}:
+                    raise ContractError("unsupported function measurement")
+                for key in ("action", "reaction", "reference"):
+                    marker = binding.get(key)
+                    if not isinstance(marker, dict) or marker.get("body") not in {body["name"] for body in document["bodies"]}:
+                        raise ContractError("function measurement requires explicit marker poses")
+        for table in program.get("tables", ()):
+            if table.get("extrapolation") not in {"clamp", "linear", "error"}:
+                raise ContractError("unsupported function table extrapolation")
+            if table.get("dimension") == 1:
+                if table.get("interpolation") not in {"piecewise_linear", "akima"}:
+                    raise ContractError("unsupported function curve interpolation")
+                _function_points(table.get("points"), "curve")
+            elif table.get("dimension") == 2:
+                if table.get("interpolation") != "bilinear":
+                    raise ContractError("unsupported function surface interpolation")
+                xs, ys, rows = (table.get(key, ()) for key in ("x_axis", "y_axis", "values"))
+                for axis in (xs, ys):
+                    if len(axis) < 2 or any(not isinstance(x, (int, float)) or not math.isfinite(x) for x in axis) or any(b <= a for a, b in zip(axis, axis[1:])):
+                        raise ContractError("function surface axes must strictly increase")
+                if len(rows) != len(xs) or any(not isinstance(row, list) or len(row) != len(ys) for row in rows):
+                    raise ContractError("function surface values must match its axes")
+                if any(not isinstance(value, (int, float)) or not math.isfinite(value) for row in rows for value in row):
+                    raise ContractError("function surface values must be finite")
+            else:
+                raise ContractError("unsupported function table dimension")
+    for index, tire in enumerate(document.get("tires", ())):
+        matrix = tire.get("inertia")
+        if matrix is None:
+            continue
+        scale = max(abs(value) for row in matrix for value in row)
+        if scale == 0:
+            continue
+        normalized = [[value / scale for value in row] for row in matrix]
+        if any(abs(normalized[i][j] - normalized[j][i]) > 1e-12 for i in range(3) for j in range(3)):
+            raise ContractError(f"$/tires[{index}]/inertia: must be symmetric")
+        # I = trace(C) identity - C, where C is the positive semidefinite
+        # second moment of mass. This includes the principal-inertia triangle
+        # inequalities and permits either sign of off-diagonal entries.
+        half_trace = sum(normalized[i][i] for i in range(3)) / 2
+        second_moment = [[(half_trace if i == j else 0.0) - normalized[i][j] for j in range(3)] for i in range(3)]
+        a, b, c = (second_moment[i][i] for i in range(3))
+        d, e, f = second_moment[0][1], second_moment[0][2], second_moment[1][2]
+        minors = (a, b, c, a*b-d*d, a*c-e*e, b*c-f*f, a*b*c+2*d*e*f-a*f*f-b*e*e-c*d*d)
+        if min(minors) < -1e-12:
+            raise ContractError(f"$/tires[{index}]/inertia: must be a physical positive semidefinite tensor")
+
+
+def _function_points(points: Any, label: str) -> None:
+    if not isinstance(points, list) or len(points) < 2 or any(
+        not isinstance(row, list) or len(row) != 2 or any(
+            not isinstance(x, (int, float)) or not math.isfinite(x) for x in row
+        ) for row in points
+    ):
+        raise ContractError(f"function {label} requires at least two finite pairs")
+    if any(b[0] <= a[0] for a, b in zip(points, points[1:])):
+        raise ContractError(f"function {label} abscissas must strictly increase")
 
 
 def validate_case(document: Mapping[str, Any]) -> None:
@@ -267,6 +370,17 @@ def validate_result(document: Mapping[str, Any]) -> None:
 def validate_template(document: Mapping[str, Any]) -> None:
     """Validate a declarative subsystem template document."""
     validate(document, "template")
+    for element in document["elements"]:
+        kind = element["type"]
+        if kind in {"force", "torque", "wrench"}:
+            fields = ("action", "reaction", "reference", "functions" if kind == "wrench" else "function")
+        elif kind in {"aerodynamic_drag", "point_wrench", "gravity", "steering_actuator"}:
+            fields = ("parameters",)
+        else:
+            fields = ("body_a", "body_b", "property_slot")
+        for key in fields:
+            if key not in element:
+                raise ContractError(f"element {element['name']!r}: missing required field {key!r}")
 
 
 def validate_element_properties(document: Mapping[str, Any]) -> None:

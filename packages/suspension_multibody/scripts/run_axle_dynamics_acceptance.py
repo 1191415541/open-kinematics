@@ -35,15 +35,14 @@ from suspension_multibody.axle_dynamics import (
     AxleBushing,
     AxleDamper,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleJoint,
     AxleSolverSettings,
     AxleSpring,
     AxleTire,
     NativeAxleError,
     native_build_metadata,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
 
 # Synthetic, clearly labelled parameters. SPEC forbids using these for any
 # formal Adams accuracy conclusion; they exist to exercise the solver.
@@ -492,12 +491,14 @@ def _measure_wall_times(
     """Time the solver exactly on the frozen performance boundary."""
     warmups = int(cast(int, performance["warmup_runs"]))
     measured = int(cast(int, performance["measured_runs"]))
+    from suspension_multibody.adams.axle_equivalence import _run_document_evidence
+
     for _ in range(warmups):
-        run_axle_dynamics(model, case)
+        _run_document_evidence(model, case)
     samples: list[float] = []
     for _ in range(measured):
         started = time.perf_counter()
-        run_axle_dynamics(model, case)
+        _run_document_evidence(model, case)
         samples.append(time.perf_counter() - started)
     duration_s = case.times_s[-1] - case.times_s[0]
     median = statistics.median(samples)

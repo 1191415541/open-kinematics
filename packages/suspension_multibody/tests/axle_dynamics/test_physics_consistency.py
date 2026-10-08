@@ -8,13 +8,13 @@ from suspension_multibody.axle_dynamics import (
     AxleBody,
     AxleDamper,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleDynamicsResult,
     AxleJoint,
     AxleSolverSettings,
     AxleSpring,
-    run_axle_dynamics,
 )
+from suspension_multibody.axle_dynamics.schema import AxleDynamicsModel
+from tests.axle_dynamics._unified_entry import solve_axle
 
 _ZERO_I = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
 _FIXTURE = AxleBody(
@@ -44,7 +44,7 @@ def _grid(duration_s: float, step_s: float = 0.001) -> tuple[float, ...]:
 
 def test_torque_free_asymmetric_body_conserves_momentum_and_energy() -> None:
     """A free asymmetric top must keep world angular momentum and energy."""
-    inertia = ((2.0, 0.0, 0.0), (0.0, 5.0, 0.0), (0.0, 0.0, 9.0))
+    inertia = ((4.0, 0.0, 0.0), (0.0, 5.0, 0.0), (0.0, 0.0, 9.0))
     model = AxleDynamicsModel(
         name="torque-free-top",
         gravity_m_per_s2=(0.0, 0.0, 0.0),
@@ -59,7 +59,7 @@ def test_torque_free_asymmetric_body_conserves_momentum_and_energy() -> None:
         ),
         joints=(),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="torque-free-top",
@@ -140,7 +140,7 @@ def test_internal_forces_conserve_total_linear_momentum() -> None:
         ),
         bump_stops=(),
     )
-    result = run_axle_dynamics(
+    result = solve_axle(
         model,
         AxleDynamicsCase(
             name="action-reaction",
@@ -192,7 +192,7 @@ def _pendulum(length_m: float = 0.4) -> AxleDynamicsModel:
 def _run_pendulum(
     internal_step_s: float, duration_s: float, rho_inf: float = 1.0
 ) -> AxleDynamicsResult:
-    return run_axle_dynamics(
+    return solve_axle(
         _pendulum(),
         AxleDynamicsCase(
             name="pendulum",

@@ -1,0 +1,18 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/authoring/test_api_file_feature_parity.py",
+    "packages/suspension_multibody/tests/simulation/test_memory_simulate.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T13:27:56.836313+00:00",
+  "finished_at": "2026-10-06T13:27:59.959351+00:00",
+  "log": "raw\\validation\\child-2-step-3.log",
+  "log_sha256": "d68d334daed8fb576e537a961cfefd9fba394d7f78a62aa49331fea853dda133"
+}

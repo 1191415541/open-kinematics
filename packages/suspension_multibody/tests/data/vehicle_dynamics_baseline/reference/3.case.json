@@ -1,0 +1,170 @@
+{
+  "contract": "multibody-case",
+  "contract_version": 1,
+  "kind": "case",
+  "family": "vehicle_dynamic",
+  "name": "native-vehicle",
+  "time": {
+    "start_s": 0.0,
+    "end_s": 0.001,
+    "step_s": 0.001
+  },
+  "solver": {
+    "integrator": "ggl_generalized_alpha",
+    "rho_inf": 0.8,
+    "hht_alpha": -0.3,
+    "initialization_mode": "provided_consistent_state",
+    "adaptive_step": false,
+    "internal_step_s": 0.001,
+    "minimum_step_s": 0.001,
+    "maximum_step_s": 0.001,
+    "local_relative_tolerance": 1e-07,
+    "local_position_tolerance_m": 1e-10,
+    "local_angle_tolerance_rad": 1e-07,
+    "local_velocity_tolerance_m_per_s": 1e-10,
+    "local_angular_velocity_tolerance_rad_per_s": 1e-07,
+    "local_brush_tolerance_m": 1e-10,
+    "contact_event_tolerance_s": 1e-06,
+    "max_newton_iterations": 30,
+    "max_line_search_iterations": 12,
+    "position_tolerance_m": 1e-10,
+    "velocity_tolerance_m_per_s": 1e-09,
+    "dynamics_tolerance": 1e-07,
+    "increment_tolerance": 1e-10
+  },
+  "inputs": {
+    "initial_state_angle_tolerance": 1e-07,
+    "road": {
+      "kind": "plane",
+      "parameters": {
+        "origin_x": 0.0,
+        "origin_z": 0.0,
+        "amplitude": 0.0,
+        "wavelength": 1.0,
+        "phase": 0.0,
+        "bump_start": 0.0,
+        "bump_length": 0.5,
+        "corner_scale": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
+    }
+  },
+  "blobs": [
+    {
+      "name": "wheel_torque",
+      "role": "wheel_torque",
+      "offset": 0,
+      "length": 16,
+      "dtype": "float64",
+      "shape": [
+        2
+      ],
+      "tire": "front_left"
+    },
+    {
+      "name": "brake_torque",
+      "role": "brake_torque",
+      "offset": 16,
+      "length": 16,
+      "dtype": "float64",
+      "shape": [
+        2
+      ],
+      "tire": "front_left"
+    },
+    {
+      "name": "wheel_torque",
+      "role": "wheel_torque",
+      "offset": 32,
+      "length": 16,
+      "dtype": "float64",
+      "shape": [
+        2
+      ],
+      "tire": "front_right"
+    },
+    {
+      "name": "brake_torque",
+      "role": "brake_torque",
+      "offset": 48,
+      "length": 16,
+      "dtype": "float64",
+      "shape": [
+        2
+      ],
+      "tire": "front_right"
+    },
+    {
+      "name": "wheel_torque",
+      "role": "wheel_torque",
+      "offset": 64,
+      "length": 16,
+      "dtype": "float64",
+      "shape": [
+        2
+      ],
+      "tire": "rear_left"
+    },
+    {
+      "name": "brake_torque",
+      "role": "brake_torque",
+      "offset": 80,
+      "length": 16,
+      "dtype": "float64",
+      "shape": [
+        2
+      ],
+      "tire": "rear_left"
+    },
+    {
+      "name": "wheel_torque",
+      "role": "wheel_torque",
+      "offset": 96,
+      "length": 16,
+      "dtype": "float64",
+      "shape": [
+        2
+      ],
+      "tire": "rear_right"
+    },
+    {
+      "name": "brake_torque",
+      "role": "brake_torque",
+      "offset": 112,
+      "length": 16,
+      "dtype": "float64",
+      "shape": [
+        2
+      ],
+      "tire": "rear_right"
+    },
+    {
+      "name": "steering_target",
+      "role": "steering_target",
+      "offset": 128,
+      "length": 16,
+      "dtype": "float64",
+      "shape": [
+        2
+      ],
+      "actuator": "front_rack",
+      "quantity": "translation"
+    },
+    {
+      "name": "steering_rate",
+      "role": "steering_rate",
+      "offset": 144,
+      "length": 16,
+      "dtype": "float64",
+      "shape": [
+        2
+      ],
+      "actuator": "front_rack",
+      "quantity": "translation"
+    }
+  ]
+}

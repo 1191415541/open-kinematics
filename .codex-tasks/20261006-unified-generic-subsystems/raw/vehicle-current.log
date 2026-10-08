@@ -1,0 +1,57 @@
+........................F........x...                                    [100%]
+================================== FAILURES ===================================
+______ test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi _______
+
+    def test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi() -> None:
+        base = _positioned_vehicle(_vehicle())
+        front = base.front_axle
+        spring = LinearSpring(
+            name="curve_spring",
+            body_a="chassis",
+            body_b="lower_arm",
+            point_a=front.hardpoints["LOWER_INBOARD_FRONT"],
+            point_b=front.hardpoints["LOWER_OUTBOARD"],
+            stiffness=100.0,
+            free_length=450.0,
+            force_curve=((0.0, 0.0), (100.0, 100.0), (200.0, 350.0)),
+        )
+        stop = BumpStop(
+            name="curve_stop",
+            body_a="chassis",
+            body_b="lower_arm",
+            point_a=front.hardpoints["LOWER_INBOARD_FRONT"],
+            point_b=front.hardpoints["LOWER_OUTBOARD"],
+            clearance=25.0,
+            stiffness=1_000.0,
+            direction="bump",
+            force_curve=((0.0, 0.0), (10.0, 100.0), (20.0, 500.0)),
+        )
+        model = base.model_copy(
+            update={
+                "front_axle": front.model_copy(
+                    update={"springs": (spring,), "stops": (stop,)}
+                )
+            }
+        )
+        elements = compile_vehicle(model, _case(model)).model_document["elements"]
+        mapped_spring = next(
+            item for item in elements if item["name"].endswith(".curve_spring_L")
+        )
+        mapped_stop = next(item["parameters"] for item in elements if item["name"].endswith(".curve_stop_L"))
+        mapped_spring = mapped_spring["parameters"]
+    
+        np.testing.assert_allclose(
+            np.asarray(mapped_spring["elastic_curve"])[:, 0],
+            (-0.2, -0.1, 0.0),
+        )
+        np.testing.assert_allclose(np.asarray(mapped_spring["elastic_curve"])[:, 1], (-350.0, -100.0, 0.0))
+        np.testing.assert_allclose(
+>           np.asarray(mapped_stop["force_curve"])[:, 0],
+            (0.0, 0.01, 0.02),
+        )
+E       KeyError: 'force_curve'
+
+packages\suspension_multibody\tests\vehicle\test_native_vehicle.py:1035: KeyError
+=========================== short test summary info ===========================
+FAILED packages\suspension_multibody\tests\vehicle\test_native_vehicle.py::test_native_vehicle_passes_spring_and_stop_curves_to_vehicle_abi
+1 failed, 35 passed, 1 xfailed in 20.14s

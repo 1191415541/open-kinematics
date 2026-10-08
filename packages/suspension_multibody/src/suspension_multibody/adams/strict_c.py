@@ -24,21 +24,23 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from ..cases.kc_quasi_static.contract import case_document, model_document
-from ..cases.kc_quasi_static.convert import MM, NativeKcError, quaternion_to_rotation
+from ..api import validate
+from ..authoring.geometry import side_hardpoints
+from ..authoring.migration import migrate_v1_kc_case
 from ..cases.kc_quasi_static.load_paths import LoadPath
-from ..modeling.primitives.spatial import (
-    quaternion_conjugate,
-    quaternion_multiply,
-    quaternion_to_rotation_vector,
+from ..report.kc_evidence import c_records
+from ..results.envelope import ResultEnvelope
+from ..schema import (
+    Bushing6x6,
+    MassSpec,
+    Pose,
+    Vec3,
 )
-from ..schema import Bushing6x6, FrontAxleModel, MassSpec, Pose, Vec3
-from ..simulation import SimulationRequest, run_request
-from ..subsystems.geometry import side_hardpoints
-from ..subsystems.runtime import wheel_centre_local
+from ..schema.model import AxleDeclaration
+from ..simulation import run_compiled
 from .adapter import SmokeResult, Tolerance
 from .probe import AdamsProfile, _adams_environment, producer_id
-from .reference import _KC_SETTINGS, _KC_TIMES_S, _side_fields
+from .reference import _KC_SETTINGS, _KC_TIMES_S
 from .strict_k import build_equivalence_manifest
 
 CONTRACT = "strict-adams-c-v1"
@@ -91,7 +93,7 @@ class RawAdamsModel:
     model_sha256: str
 
 
-def build_strict_c_model(profile: AdamsProfile) -> FrontAxleModel:
+def build_strict_c_model(profile: AdamsProfile) -> AxleDeclaration:
     """Build the physical C model shared verbatim with the raw Adams writer."""
     manifest = build_equivalence_manifest(profile)
     raw_points = manifest["physical_input"]["hardpoints_mm"]
@@ -113,7 +115,7 @@ def build_strict_c_model(profile: AdamsProfile) -> FrontAxleModel:
         )
         for body, hardpoint in INBOARD_BUSHINGS
     )
-    return FrontAxleModel(
+    return AxleDeclaration(
         name="strict_adams_c_equivalent",
         hardpoints=hardpoints,
         mass=MassSpec(sprung_mass=1.0),
@@ -150,12 +152,10 @@ def run_suspension_multibody_strict_c(
     force paths sweep to 100 N and the moment paths to 10 000 N*mm, and a case
     document declares one maximum.
     """
-    from ..preparation.kc_quasi_static import assembly_for
-
-    assembly = assembly_for(build_strict_c_model(profile), mode="C", rig="kc_quasi_static")
+    model = build_strict_c_model(profile)
     states: list[dict[str, float | str]] = []
     for path in LOAD_PATHS:
-        records = _c_path_records(assembly, path)
+        records = _c_path_records(model, path)
         for index, record in enumerate(records):
             left = [float(value) for value in record["deformation_left"]]
             right = [float(value) for value in record["deformation_right"]]
@@ -193,29 +193,11 @@ def run_suspension_multibody_strict_c(
     return states
 
 
-def _assembling_pose(model, side: str):
-    """Return the pose the model document declares for one upright."""
-    for body in model["bodies"]:
-        if body["name"] == f"upright_{side}":
-            position = np.asarray(body["position"], dtype=float) * MM
-            quaternion = np.asarray(body["quaternion"], dtype=float)
-            return position, quaternion
-    raise NativeKcError(f"the model document has no upright_{side}")
-
-
-def _wheel_center_world(assembly, side: str, position_m, quaternion):
-    """World position of the wheel-centre marker for one side (metres)."""
-    rotation = quaternion_to_rotation(quaternion)
-    local = np.asarray(wheel_centre_local(assembly, f"upright_{side}"), dtype=float) * MM
-    return np.asarray(position_m, dtype=float) + rotation @ local
-
-
-def _c_path_records(assembly, load_path: LoadPath) -> list[dict[str, object]]:
-    """Solve one C load path by authoring its documents and running the service."""
-    model = model_document(assembly, name="native-c", drive_wheels=False)
-    case = case_document(
-        assembly,
-        family="kc_quasi_static",
+def _c_path_records(model: AxleDeclaration, load_path: LoadPath) -> list[dict[str, object]]:
+    """Submit ordinary subsystem documents and query declared wheel frames."""
+    assembly, case = migrate_v1_kc_case(
+        model,
+        mode="C",
         name="kc-c",
         paths=(load_path.name,),
         levels=load_path.levels,
@@ -223,94 +205,16 @@ def _c_path_records(assembly, load_path: LoadPath) -> list[dict[str, object]]:
         side_mode="single",
         times_s=_KC_TIMES_S,
         settings=_KC_SETTINGS,
-        drive_wheels=False,
     )
-    run = run_request(
-        SimulationRequest(
-            assembly="axle",
-            family="kc_quasi_static",
-            model=model,
-            case=case,
-        )
-    ).raw
-    left_states = run.body_state("upright_L")
-    right_states = run.body_state("upright_R")
-    # The C deformation is measured against the neutral K pose, which is the
-    # assembling pose: at the design separation every driven target has zero
-    # residual, so the reference is the model document's own initial state.
-    reference = {side: _assembling_pose(model, side) for side in ("L", "R")}
-    # The K reference the C response is measured from.  The driven case's zero
-    # target resolves to the separation the model was assembled with, so the
-    # assembling pose *is* the K reference -- the same thing the Python solver's
-    # `KReferenceCache` solves for, reached without solving it again.
-    reference_metrics = {
-        ("left" if side == "L" else "right"): _side_fields(
-            assembly, side, reference[side][0], reference[side][1]
-        )
-        for side in ("L", "R")
-    }
-    axis_index = tuple(load.name for load in LOAD_PATHS).index(load_path.name)
-    records: list[dict[str, object]] = []
-    for index, entry in enumerate(run.cases):
-        position_in_path = index % load_path.levels
-        if position_in_path == 0:
-            level = -load_path.maximum
-        elif position_in_path == load_path.levels - 1:
-            level = load_path.maximum
-        else:
-            level = -load_path.maximum + position_in_path * (
-                2.0 * load_path.maximum / (load_path.levels - 1)
-            )
-        case_id = f"c-{load_path.name}-{level:+.2f}"
-        if str(entry["name"]) != case_id:
-            raise NativeKcError(
-                f"the kernel expanded {entry['name']!r} where {case_id!r} was expected"
-            )
-        load = [0.0] * 6
-        load[axis_index] = float(level)
-        record: dict[str, object] = {
-            "case_id": case_id,
-            "path": load_path.name,
-            "level": float(level),
-            "side_mode": "single",
-            "load_left": list(load),
-            "load_right": [0.0] * 6,
-        }
-        last = int(entry["sample_offset"]) + int(entry["sample_count"]) - 1
-        metrics: dict[str, dict[str, float]] = {}
-        for side, key, states in (
-            ("L", "deformation_left", left_states),
-            ("R", "deformation_right", right_states),
-        ):
-            state = states[last]
-            metrics["left" if side == "L" else "right"] = _side_fields(
-                assembly, side, state[:3], state[3:7]
-            )
-            ref_position, ref_quaternion = reference[side]
-            centre = _wheel_center_world(assembly, side, state[:3], state[3:7])
-            ref_centre = _wheel_center_world(assembly, side, ref_position, ref_quaternion)
-            relative = quaternion_multiply(
-                quaternion_conjugate(np.asarray(ref_quaternion, dtype=float)),
-                np.asarray(state[3:7], dtype=float),
-            )
-            rotation = quaternion_to_rotation(
-                ref_quaternion
-            ) @ quaternion_to_rotation_vector(relative)
-            record[key] = [
-                float(value)
-                for value in np.concatenate(((centre - ref_centre) / MM, rotation))
-            ]
-        record["metrics"] = metrics
-        record["c_minus_k"] = {
-            key: float(value - reference_metrics[side][key])
-            for side in ("left", "right")
-            for key, value in metrics[side].items()
-        }
-        records.append(record)
-    return records
+    wheel = next(entry for entry in assembly.entries if entry.functional_role == "wheel")
+    frames = {side: wheel.ref+".wheel_center_"+side for side in ("L", "R")}
+    result = run_compiled(validate(assembly, case)).result
+    if not isinstance(result, ResultEnvelope):
+        raise TypeError("ordinary documents must return a ResultEnvelope")
+    return c_records(result, frames=frames, paths=(load_path.name,), levels=load_path.levels, maximum=load_path.maximum)
 
 def write_raw_adams_models(
-    model: FrontAxleModel, runtime: str | Path
+    model: AxleDeclaration, runtime: str | Path
 ) -> tuple[RawAdamsModel, ...]:
     """Write one ten-step raw Adams static dataset for each strict C axis."""
     destination = Path(runtime)
@@ -480,7 +384,7 @@ def validate_strict_c(
 
 def run_adams_strict_c(
     profile: AdamsProfile,
-    model: FrontAxleModel,
+    model: AxleDeclaration,
     runtime: Path,
 ) -> tuple[list[dict[str, float | str]], dict[str, Any]]:
     """Execute the six raw native-Adams static paths and parse every step."""
@@ -938,7 +842,7 @@ def _pose_at(point: Vec3) -> Pose:
     return Pose(translation=point)
 
 
-def _raw_adams_text(model: FrontAxleModel, load_path: LoadPath) -> str:
+def _raw_adams_text(model: AxleDeclaration, load_path: LoadPath) -> str:
     """Render a native Adams model with only common strict-C entities."""
     points = {
         side: {

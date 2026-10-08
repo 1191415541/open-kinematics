@@ -1,23 +1,29 @@
 """
-The bridge from authoring documents to the model the solver reads.
+The bridge from authoring documents to the axle facts the composition reads.
 
-The file layer answers "what did the author write"; the solver reads a
-``FrontAxleModel``.  Keeping the conversion in one place is what stops the file
-format from becoming a second description of physics: every field the model needs
-is derived here from a declaration the documents already carry, and the
-properties the elements read are the *resolved* constitutive values of the bound
-property files rather than anything re-parsed from the file text.
+The file layer answers "what did the author write"; the composition reads an
+axle *declaration*.  Keeping the conversion in one place is what stops the file
+format from becoming a second description of physics: every field the
+declaration needs is derived here from a declaration the documents already
+carry, and the properties the elements read are the *resolved* constitutive
+values of the bound property files rather than anything re-parsed from the file
+text.
 
-Two rules this module holds:
+Three rules this module holds:
 
-* the model's hardpoint keys are chosen through ``HARDPOINT_ALIASES``, so a
-  template may name a point by its role (``tie_inner``) and still land on the
+* the declaration's hardpoint keys are chosen through ``HARDPOINT_ALIASES``, so
+  a template may name a point by its role (``tie_inner``) and still land on the
   spelling the existing lookup accepts (``TIE_ROD_INBOARD``).  Writing the role
   name straight through would make those lookups fail, and the failure would
   surface as "missing required hardpoint" three layers away;
-* the left side is the one the model describes.  ``FrontAxleModel`` is
-  left-hand and generates the right by mirroring, so the bridge resolves every
-  point against the left side and lets the model do the mirroring it already does.
+* the left side is the one the declaration describes.  A v1 axle is left-hand
+  and generates the right by mirroring, so the bridge resolves every point
+  against the left side and lets the composition do the mirroring it already
+  does;
+* there is exactly one conversion.  A function that produced a *different* value
+  type for the document route and the v1 route would be two descriptions of one
+  axle, and the two would drift the moment either was touched -- so both origins
+  end in :func:`axle_declaration_from` and the same helpers underneath it.
 """
 
 from __future__ import annotations
@@ -28,7 +34,6 @@ from typing import Any, Mapping, Sequence
 
 from ..schema import (
     BumpStop,
-    FrontAxleModel,
     LinearSpring,
     MassSpec,
     RigidBodySpec,
@@ -36,12 +41,13 @@ from ..schema import (
     Vec3,
     VerticalTire,
 )
-from ..subsystems.geometry import HARDPOINT_ALIASES
+from ..schema.model import AxleDeclaration
 from ..templates.model import PartDefinition
+from .geometry import HARDPOINT_ALIASES
 
 __all__ = [
     "BridgeError",
-    "front_axle_model_from",
+    "axle_declaration_from",
     "hardpoint_document",
     "resolve_hardpoint_keys",
 ]
@@ -106,40 +112,46 @@ def hardpoint_document(hardpoints: Mapping[str, Sequence[float]]) -> dict[str, V
     return document
 
 
-def front_axle_model_from(
+def axle_declaration_from(
     subsystem: Any,
     *,
     name: str = "file_driven_axle",
     bodies: Sequence[str] = (),
     sprung_mass: float = 600.0,
-) -> FrontAxleModel:
+) -> AxleDeclaration:
     """
-    Build the model a K/C run reads from one effective suspension subsystem.
+    Build the axle facts a K/C run reads from one effective suspension subsystem.
 
-    ``bodies`` names the dynamic bodies the model should carry.  It defaults to
-    the subsystem's template bodies minus the fixed ones, which is what the
-    composition expects: a fixed support is a property of the assembly, not a body
-    the equations of motion integrate.  Each body's mass is the template's own
-    declaration, so a template that states no mass yields a zero-mass body rather
-    than a number invented here.
+    ``bodies`` names the dynamic bodies the declaration should carry.  It
+    defaults to the subsystem's template bodies minus the fixed ones, which is
+    what the composition expects: a fixed support is a property of the assembly,
+    not a body the equations of motion integrate.  Each body's mass is the
+    template's own declaration, so a template that states no mass yields a
+    zero-mass body rather than a number invented here.
     A body's inertia and centre of mass are the template's declarations too, read
-    when the file states them; a file that states neither yields the model's own
-    defaults, which is the model every existing template produced.
+    when the file states them; a file that states neither yields the declaration's
+    own defaults, which is the axle every existing template produced.
 
     The elastic elements come from the template's element declarations and the
     *resolved* property bindings, so the constitutive data reaching the kernel is
     the one the property files describe.  Swapping a linear file for a curve file
     therefore changes these values and nothing else, which is the property the
     file format exists to provide.
+
+    This is the one conversion from documents to axle facts.  The document route
+    used to have a second function producing a second value type, which made the
+    file format and the value type two descriptions of one axle; both origins now
+    end here, so a change to how a file's elements are read reaches every caller
+    at once.
     """
     template = subsystem.template.payload
     hardpoints = hardpoint_document(subsystem.hardpoints)
     declared = {str(row["name"]): row for row in template["bodies"]}
     # The parts are the *mirrored* ones, because a file states one side and the
     # composition builds both: an axle whose body list stopped at the declared side
-    # would name half of itself, and a vehicle model asks an axle for every body it
-    # has -- so the missing half shows up as "requires positive mass specs for
-    # upper_arm_R" rather than as a missing body.
+    # would name half of itself, and a vehicle declaration asks an axle for every
+    # body it has -- so the missing half shows up as "requires positive mass specs
+    # for upper_arm_R" rather than as a missing body.
     parts = _mirrored_parts(template)
     dynamic = tuple(part.name for part in parts if not part.fixed)
     selected = tuple(bodies) if bodies else dynamic
@@ -147,7 +159,7 @@ def front_axle_model_from(
 
     elements = _element_rows(subsystem, hardpoints)
     try:
-        return FrontAxleModel(
+        return AxleDeclaration(
             name=name,
             hardpoints=hardpoints,
             bodies=tuple(
@@ -160,12 +172,10 @@ def front_axle_model_from(
             stops=tuple(elements["bump_stop"]),
             tires=_tire_rows(subsystem, hardpoints),
         )
-    except Exception as exc:  # noqa: BLE001 - the model's own message is the report
+    except Exception as exc:  # noqa: BLE001 - the declaration's own message is the report
         raise BridgeError(
             f"subsystem {subsystem.name!r} does not describe a solvable axle: {exc}"
         ) from exc
-
-
 def _body_spec(name: str, row: Mapping[str, Any], *, mass: float) -> RigidBodySpec:
     """
     Build one rigid body from a template's declaration of it.

@@ -1,0 +1,2454 @@
+{
+  "contract": "multibody-model",
+  "contract_version": 1,
+  "kind": "model",
+  "name": "full_vehicle",
+  "units": {
+    "length": "m",
+    "mass": "kg",
+    "time": "s",
+    "angle": "rad"
+  },
+  "gravity": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "capabilities": [
+    "vehicle"
+  ],
+  "bodies": [
+    {
+      "name": "chassis",
+      "mass": 1200.0,
+      "inertia": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.2,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.5
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_upper_arm_L",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.45,
+        -0.5833333333333334,
+        0.45
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_lower_arm_L",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.45,
+        -0.5833333333333334,
+        0.1
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_upright_L",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.4000000000000001,
+        -0.75,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_tie_rod_L",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.4000000000000001,
+        -0.6,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_wheel_hub_L",
+      "mass": 1.102840393,
+      "inertia": [
+        [
+          7.0581785152e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.0581785152e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          7.0581785152e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.4000000000000001,
+        -0.75,
+        0.3
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_upper_arm_R",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.45,
+        0.5833333333333334,
+        0.45
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_lower_arm_R",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.45,
+        0.5833333333333334,
+        0.1
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_upright_R",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.4000000000000001,
+        0.75,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_tie_rod_R",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.4000000000000001,
+        0.6,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_wheel_hub_R",
+      "mass": 1.102840393,
+      "inertia": [
+        [
+          7.0581785152e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.0581785152e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          7.0581785152e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.4000000000000001,
+        0.75,
+        0.3
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_rack",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.4000000000000001,
+        0.0,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_rack_housing",
+      "mass": 4.0,
+      "inertia": [
+        [
+          0.000256,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.000256,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.000256
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.4000000000000001,
+        0.0,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "wheel_front_left",
+      "mass": 20.0,
+      "inertia": [
+        [
+          2e-06,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          2e-06,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          2e-06
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.4000000000000001,
+        -0.75,
+        0.3
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "wheel_front_right",
+      "mass": 20.0,
+      "inertia": [
+        [
+          2e-06,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          2e-06,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          2e-06
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        1.4000000000000001,
+        0.75,
+        0.3
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_upper_arm_L",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.35,
+        -0.5833333333333334,
+        0.45
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_lower_arm_L",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.35,
+        -0.5833333333333334,
+        0.1
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_upright_L",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.4000000000000001,
+        -0.75,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_tie_rod_L",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.4000000000000001,
+        -0.6,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_wheel_hub_L",
+      "mass": 1.102840393,
+      "inertia": [
+        [
+          7.0581785152e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.0581785152e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          7.0581785152e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.4000000000000001,
+        -0.75,
+        0.3
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_upper_arm_R",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.35,
+        0.5833333333333334,
+        0.45
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_lower_arm_R",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.35,
+        0.5833333333333334,
+        0.1
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_upright_R",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.4000000000000001,
+        0.75,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_tie_rod_R",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.4000000000000001,
+        0.6,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_wheel_hub_R",
+      "mass": 1.102840393,
+      "inertia": [
+        [
+          7.0581785152e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.0581785152e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          7.0581785152e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.4000000000000001,
+        0.75,
+        0.3
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_rack",
+      "mass": 100.0,
+      "inertia": [
+        [
+          9.999999999999999e-05,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          9.999999999999999e-05,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          9.999999999999999e-05
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.4000000000000001,
+        0.0,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_rack_housing",
+      "mass": 4.0,
+      "inertia": [
+        [
+          0.000256,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.000256,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.000256
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.4000000000000001,
+        0.0,
+        0.25
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "wheel_rear_left",
+      "mass": 20.0,
+      "inertia": [
+        [
+          2e-06,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          2e-06,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          2e-06
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.4000000000000001,
+        -0.75,
+        0.3
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "wheel_rear_right",
+      "mass": 20.0,
+      "inertia": [
+        [
+          2e-06,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          2e-06,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          2e-06
+        ]
+      ],
+      "fixed": false,
+      "position": [
+        -1.4000000000000001,
+        0.75,
+        0.3
+      ],
+      "quaternion": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "omega": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "joints": [
+    {
+      "name": "front_uca_mount_L_inner_front",
+      "type": "revolute",
+      "body_a": "chassis",
+      "body_b": "front_upper_arm_L",
+      "point_a": [
+        1.4000000000000001,
+        -0.5,
+        0.5
+      ],
+      "point_b": [
+        -0.05,
+        0.08333333333333337,
+        0.05
+      ],
+      "axis_a": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "axis_b": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_lca_mount_L_inner_front",
+      "type": "revolute",
+      "body_a": "chassis",
+      "body_b": "front_lower_arm_L",
+      "point_a": [
+        1.4000000000000001,
+        -0.5,
+        0.1
+      ],
+      "point_b": [
+        -0.05,
+        0.08333333333333337,
+        0.0
+      ],
+      "axis_a": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "axis_b": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_upper_arm_L_outer_joint",
+      "type": "spherical",
+      "body_a": "front_upper_arm_L",
+      "body_b": "front_upright_L",
+      "point_a": [
+        -0.05,
+        -0.16666666666666663,
+        -0.1
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.1
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "front_lower_arm_L_outer_joint",
+      "type": "spherical",
+      "body_a": "front_lower_arm_L",
+      "body_b": "front_upright_L",
+      "point_a": [
+        -0.05,
+        -0.16666666666666663,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        -0.15
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "front_rack_tie_joint_L",
+      "type": "spherical",
+      "body_a": "front_rack",
+      "body_b": "front_tie_rod_L",
+      "point_a": [
+        0.0,
+        -0.45,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.15,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "front_tie_upright_joint_L",
+      "type": "spherical",
+      "body_a": "front_tie_rod_L",
+      "body_b": "front_upright_L",
+      "point_a": [
+        0.0,
+        -0.15,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "front_wheel_spin_joint_L",
+      "type": "revolute",
+      "body_a": "front_upright_L",
+      "body_b": "front_wheel_hub_L",
+      "point_a": [
+        0.0,
+        0.0,
+        0.05
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "axis_b": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_uca_mount_R_inner_front",
+      "type": "revolute",
+      "body_a": "chassis",
+      "body_b": "front_upper_arm_R",
+      "point_a": [
+        1.4000000000000001,
+        0.5,
+        0.5
+      ],
+      "point_b": [
+        -0.05,
+        -0.08333333333333337,
+        0.05
+      ],
+      "axis_a": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "axis_b": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_lca_mount_R_inner_front",
+      "type": "revolute",
+      "body_a": "chassis",
+      "body_b": "front_lower_arm_R",
+      "point_a": [
+        1.4000000000000001,
+        0.5,
+        0.1
+      ],
+      "point_b": [
+        -0.05,
+        -0.08333333333333337,
+        0.0
+      ],
+      "axis_a": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "axis_b": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_upper_arm_R_outer_joint",
+      "type": "spherical",
+      "body_a": "front_upper_arm_R",
+      "body_b": "front_upright_R",
+      "point_a": [
+        -0.05,
+        0.16666666666666663,
+        -0.1
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.1
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "front_lower_arm_R_outer_joint",
+      "type": "spherical",
+      "body_a": "front_lower_arm_R",
+      "body_b": "front_upright_R",
+      "point_a": [
+        -0.05,
+        0.16666666666666663,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        -0.15
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "front_rack_tie_joint_R",
+      "type": "spherical",
+      "body_a": "front_rack",
+      "body_b": "front_tie_rod_R",
+      "point_a": [
+        0.0,
+        0.45,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        -0.15,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "front_tie_upright_joint_R",
+      "type": "spherical",
+      "body_a": "front_tie_rod_R",
+      "body_b": "front_upright_R",
+      "point_a": [
+        0.0,
+        0.15,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "front_wheel_spin_joint_R",
+      "type": "revolute",
+      "body_a": "front_upright_R",
+      "body_b": "front_wheel_hub_R",
+      "point_a": [
+        0.0,
+        0.0,
+        0.05
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "axis_b": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_rack_guide",
+      "type": "prismatic",
+      "body_a": "front_rack_housing",
+      "body_b": "front_rack",
+      "point_a": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "axis_b": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "name": "front_housing_mount",
+      "type": "fixed",
+      "body_a": "chassis",
+      "body_b": "front_rack_housing",
+      "point_a": [
+        1.4000000000000001,
+        0.0,
+        0.25
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "front_wheel_mount_front_left",
+      "type": "fixed",
+      "body_a": "front_wheel_hub_L",
+      "body_b": "wheel_front_left",
+      "point_a": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "front_wheel_mount_front_right",
+      "type": "fixed",
+      "body_a": "front_wheel_hub_R",
+      "body_b": "wheel_front_right",
+      "point_a": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_uca_mount_L_inner_front",
+      "type": "revolute",
+      "body_a": "chassis",
+      "body_b": "rear_upper_arm_L",
+      "point_a": [
+        -1.4000000000000001,
+        -0.5,
+        0.5
+      ],
+      "point_b": [
+        -0.05,
+        0.08333333333333337,
+        0.05
+      ],
+      "axis_a": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "axis_b": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_lca_mount_L_inner_front",
+      "type": "revolute",
+      "body_a": "chassis",
+      "body_b": "rear_lower_arm_L",
+      "point_a": [
+        -1.4000000000000001,
+        -0.5,
+        0.1
+      ],
+      "point_b": [
+        -0.05,
+        0.08333333333333337,
+        0.0
+      ],
+      "axis_a": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "axis_b": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_upper_arm_L_outer_joint",
+      "type": "spherical",
+      "body_a": "rear_upper_arm_L",
+      "body_b": "rear_upright_L",
+      "point_a": [
+        -0.05,
+        -0.16666666666666663,
+        -0.1
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.1
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_lower_arm_L_outer_joint",
+      "type": "spherical",
+      "body_a": "rear_lower_arm_L",
+      "body_b": "rear_upright_L",
+      "point_a": [
+        -0.05,
+        -0.16666666666666663,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        -0.15
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_rack_tie_joint_L",
+      "type": "spherical",
+      "body_a": "rear_rack",
+      "body_b": "rear_tie_rod_L",
+      "point_a": [
+        0.0,
+        -0.45,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.15,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_tie_upright_joint_L",
+      "type": "spherical",
+      "body_a": "rear_tie_rod_L",
+      "body_b": "rear_upright_L",
+      "point_a": [
+        0.0,
+        -0.15,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_wheel_spin_joint_L",
+      "type": "revolute",
+      "body_a": "rear_upright_L",
+      "body_b": "rear_wheel_hub_L",
+      "point_a": [
+        0.0,
+        0.0,
+        0.05
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "axis_b": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_uca_mount_R_inner_front",
+      "type": "revolute",
+      "body_a": "chassis",
+      "body_b": "rear_upper_arm_R",
+      "point_a": [
+        -1.4000000000000001,
+        0.5,
+        0.5
+      ],
+      "point_b": [
+        -0.05,
+        -0.08333333333333337,
+        0.05
+      ],
+      "axis_a": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "axis_b": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_lca_mount_R_inner_front",
+      "type": "revolute",
+      "body_a": "chassis",
+      "body_b": "rear_lower_arm_R",
+      "point_a": [
+        -1.4000000000000001,
+        0.5,
+        0.1
+      ],
+      "point_b": [
+        -0.05,
+        -0.08333333333333337,
+        0.0
+      ],
+      "axis_a": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "axis_b": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_upper_arm_R_outer_joint",
+      "type": "spherical",
+      "body_a": "rear_upper_arm_R",
+      "body_b": "rear_upright_R",
+      "point_a": [
+        -0.05,
+        0.16666666666666663,
+        -0.1
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.1
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_lower_arm_R_outer_joint",
+      "type": "spherical",
+      "body_a": "rear_lower_arm_R",
+      "body_b": "rear_upright_R",
+      "point_a": [
+        -0.05,
+        0.16666666666666663,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        -0.15
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_rack_tie_joint_R",
+      "type": "spherical",
+      "body_a": "rear_rack",
+      "body_b": "rear_tie_rod_R",
+      "point_a": [
+        0.0,
+        0.45,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        -0.15,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_tie_upright_joint_R",
+      "type": "spherical",
+      "body_a": "rear_tie_rod_R",
+      "body_b": "rear_upright_R",
+      "point_a": [
+        0.0,
+        0.15,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_wheel_spin_joint_R",
+      "type": "revolute",
+      "body_a": "rear_upright_R",
+      "body_b": "rear_wheel_hub_R",
+      "point_a": [
+        0.0,
+        0.0,
+        0.05
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "axis_b": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rear_rack_fixed_to_chassis",
+      "type": "fixed",
+      "body_a": "chassis",
+      "body_b": "rear_rack",
+      "point_a": [
+        -1.4000000000000001,
+        0.0,
+        0.25
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_housing_mount",
+      "type": "fixed",
+      "body_a": "chassis",
+      "body_b": "rear_rack_housing",
+      "point_a": [
+        -1.4000000000000001,
+        0.0,
+        0.25
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_wheel_mount_rear_left",
+      "type": "fixed",
+      "body_a": "rear_wheel_hub_L",
+      "body_b": "wheel_rear_left",
+      "point_a": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rear_wheel_mount_rear_right",
+      "type": "fixed",
+      "body_a": "rear_wheel_hub_R",
+      "body_b": "wheel_rear_right",
+      "point_a": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "point_b": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_a": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "axis_b": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "elements": [
+    {
+      "name": "steering_front_rack",
+      "type": "steering_actuator",
+      "target": "front_rack",
+      "parameters": {
+        "type": "translation",
+        "body": "front_rack",
+        "point_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "reaction_point_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "axis_local": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "reference_quaternion": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "stiffness": 20000000.0,
+        "damping": 0.0,
+        "reaction_body": "front_rack_housing"
+      }
+    }
+  ],
+  "tires": [
+    {
+      "name": "front_left",
+      "model": "native_brush",
+      "body": "wheel_front_left",
+      "parameters": {
+        "center_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "spin_axis_local": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "forward_axis_local": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "unloaded_radius": 0.3,
+        "maximum_compression": 0.25,
+        "vertical_stiffness": 200000.0,
+        "vertical_damping": 5000.0,
+        "longitudinal_friction_coefficient": 1.0,
+        "lateral_friction_coefficient": 1.0,
+        "longitudinal_brush_stiffness": 400000.0,
+        "lateral_brush_stiffness": 266666.6666666667,
+        "longitudinal_relaxation_length": 0.3,
+        "lateral_relaxation_length": 0.3,
+        "detached_relaxation_s": 0.05,
+        "frame_body": "front_wheel_hub_L",
+        "frame_center_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "blob": "tire-parameters-0",
+        "parameter_source": "user",
+        "mirror": false
+      }
+    },
+    {
+      "name": "front_right",
+      "model": "native_brush",
+      "body": "wheel_front_right",
+      "parameters": {
+        "center_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "spin_axis_local": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "forward_axis_local": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "unloaded_radius": 0.3,
+        "maximum_compression": 0.25,
+        "vertical_stiffness": 200000.0,
+        "vertical_damping": 5000.0,
+        "longitudinal_friction_coefficient": 1.0,
+        "lateral_friction_coefficient": 1.0,
+        "longitudinal_brush_stiffness": 400000.0,
+        "lateral_brush_stiffness": 266666.6666666667,
+        "longitudinal_relaxation_length": 0.3,
+        "lateral_relaxation_length": 0.3,
+        "detached_relaxation_s": 0.05,
+        "frame_body": "front_wheel_hub_R",
+        "frame_center_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "blob": "tire-parameters-1",
+        "parameter_source": "user",
+        "mirror": false
+      }
+    },
+    {
+      "name": "rear_left",
+      "model": "native_brush",
+      "body": "wheel_rear_left",
+      "parameters": {
+        "center_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "spin_axis_local": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "forward_axis_local": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "unloaded_radius": 0.3,
+        "maximum_compression": 0.25,
+        "vertical_stiffness": 200000.0,
+        "vertical_damping": 5000.0,
+        "longitudinal_friction_coefficient": 1.0,
+        "lateral_friction_coefficient": 1.0,
+        "longitudinal_brush_stiffness": 400000.0,
+        "lateral_brush_stiffness": 266666.6666666667,
+        "longitudinal_relaxation_length": 0.3,
+        "lateral_relaxation_length": 0.3,
+        "detached_relaxation_s": 0.05,
+        "frame_body": "rear_wheel_hub_L",
+        "frame_center_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "blob": "tire-parameters-2",
+        "parameter_source": "user",
+        "mirror": false
+      }
+    },
+    {
+      "name": "rear_right",
+      "model": "native_brush",
+      "body": "wheel_rear_right",
+      "parameters": {
+        "center_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "spin_axis_local": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "forward_axis_local": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "unloaded_radius": 0.3,
+        "maximum_compression": 0.25,
+        "vertical_stiffness": 200000.0,
+        "vertical_damping": 5000.0,
+        "longitudinal_friction_coefficient": 1.0,
+        "lateral_friction_coefficient": 1.0,
+        "longitudinal_brush_stiffness": 400000.0,
+        "lateral_brush_stiffness": 266666.6666666667,
+        "longitudinal_relaxation_length": 0.3,
+        "lateral_relaxation_length": 0.3,
+        "detached_relaxation_s": 0.05,
+        "frame_body": "rear_wheel_hub_R",
+        "frame_center_local": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "blob": "tire-parameters-3",
+        "parameter_source": "user",
+        "mirror": false
+      }
+    }
+  ],
+  "blobs": [
+    {
+      "name": "tire-parameters-0",
+      "offset": 0,
+      "length": 1808,
+      "dtype": "float64",
+      "shape": [
+        226
+      ],
+      "order": "C"
+    },
+    {
+      "name": "tire-parameters-1",
+      "offset": 1808,
+      "length": 1808,
+      "dtype": "float64",
+      "shape": [
+        226
+      ],
+      "order": "C"
+    },
+    {
+      "name": "tire-parameters-2",
+      "offset": 3616,
+      "length": 1808,
+      "dtype": "float64",
+      "shape": [
+        226
+      ],
+      "order": "C"
+    },
+    {
+      "name": "tire-parameters-3",
+      "offset": 5424,
+      "length": 1808,
+      "dtype": "float64",
+      "shape": [
+        226
+      ],
+      "order": "C"
+    }
+  ]
+}

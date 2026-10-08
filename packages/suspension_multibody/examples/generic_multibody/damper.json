@@ -1,0 +1,6 @@
+{
+  "document": "element_properties", "schema_version": 1, "name": "damper",
+  "element_type": "damper", "model": "linear",
+  "units": {"force": "N", "length": "mm", "time": "s"},
+  "parameters": {"viscous_damping": 0.1}
+}

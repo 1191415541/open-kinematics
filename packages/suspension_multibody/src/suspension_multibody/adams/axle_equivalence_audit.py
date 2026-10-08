@@ -14,8 +14,8 @@ from ..axle_dynamics import (
     SPRING_OUTPUT_COLUMNS,
     TIRE_OUTPUT_COLUMNS,
     AxleDynamicsCase,
-    AxleDynamicsModel,
 )
+from ..axle_dynamics.schema import AxleDynamicsModel
 from ..io import canonical_hash
 from .axle_adams_model import (
     AxleAdamsDataset,

@@ -39,6 +39,8 @@ __all__ = [
     "PortError",
     "PortRequirement",
     "PortSpec",
+    "RoadPort",
+    "SpinPort",
     "link_counts_agree",
 ]
 
@@ -48,7 +50,7 @@ __all__ = [
 #: ``NONE`` -- must stay unconnected (a diagnostic-only port).
 Cardinality = Literal["one", "many", "none"]
 
-PortKind = Literal["geometry", "channel"]
+PortKind = Literal["geometry", "channel", "road", "spin"]
 
 
 class PortError(ValueError):
@@ -131,6 +133,28 @@ class ChannelPort(PortSpec):
 
 
 @dataclass(frozen=True)
+class RoadPort(PortSpec):
+    """A declared road resource binding without a rigid attachment."""
+
+    resource: str = ""
+    kind: Literal["road"] = field(default="road", init=False)
+
+
+@dataclass(frozen=True)
+class SpinPort(PortSpec):
+    """A rotational coordinate of one explicitly declared bearing joint."""
+
+    coordinate: str = ""
+    units: Literal["rad"] = field(default="rad", init=False)
+    kind: Literal["spin"] = field(default="spin", init=False)
+
+    def __post_init__(self) -> None:
+        super(SpinPort, self).__post_init__()
+        if not self.coordinate:
+            raise PortError("a spin port requires a joint coordinate")
+
+
+@dataclass(frozen=True)
 class PortRequirement:
     """
     What one instance needs from another.
@@ -156,16 +180,33 @@ class PortRequirement:
     bound_outputs: tuple[str, ...] = ()
     #: Why this branch is optional, for the error message.
     note: str = ""
+    kind: PortKind | None = None
+    units: str = ""
+    family: str = ""
+    name: str = ""
+
+    @property
+    def key(self) -> str:
+        """Return the declaration identity used by explicit bindings."""
+        return self.name or self.role
 
     def __post_init__(self) -> None:
         if not self.role:
             raise PortError("a requirement needs a non-empty role")
         if self.count < 1:
             raise PortError(f"requirement count must be >= 1, got {self.count}")
+        if self.kind is not None and self.kind not in {"geometry", "channel", "road", "spin"}:
+            raise PortError(f"unknown requirement kind {self.kind!r}")
 
     def accepts(self, port: PortSpec) -> bool:
         """Return whether ``port`` satisfies this requirement's role and tags."""
         if port.role != self.role:
+            return False
+        if self.kind is not None and getattr(port, "kind", None) != self.kind:
+            return False
+        if self.units and (not isinstance(port, (ChannelPort, SpinPort)) or port.units != self.units):
+            return False
+        if self.family and (not isinstance(port, GeometryPort) or port.family != self.family):
             return False
         if not self.requires_capabilities <= port.capabilities:
             return False

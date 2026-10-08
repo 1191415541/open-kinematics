@@ -24,7 +24,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from suspension_multibody.modeling.primitives import RigidBodyState
+from suspension_multibody.api import simulate
+from suspension_multibody.authoring.migration import migrate_v1_kc_case
 from suspension_multibody.outputs import BUILTIN, builtin
 from suspension_multibody.outputs.builtin import LEGACY_CLASSIFICATION
 from suspension_multibody.report.metrics import (
@@ -37,7 +38,6 @@ from suspension_multibody.report.metrics.case_specific import (
     compute_k_metrics,
     wheel_metrics,
 )
-from suspension_multibody.subsystems.entry import compose_axle
 from tests.benchmark_fixture import benchmark_model
 
 #: The 27 functions of `report/metrics/`, one entry per function, as
@@ -85,17 +85,27 @@ class FakeDiagnostics:
 
 
 class FakeResult:
+    tire_ids = ("wheel.contact",)
     times_s = np.array([0.0, 0.5, 1.0])
     tire_output = np.zeros((3, 1, 7))
     tire_output[:, 0, 4] = [1.0, 2.0, 3.0]
     tire_output[:, 0, 5] = [0.0, 1.0, 0.0]
     tire_output[:, 0, 6] = [2.0, 2.0, 2.0]
     diagnostics = None
-    performance = SimpleNamespace(available=False)
+    performance = {"available": False}
+
+    def tire_state(self, entity):
+        assert entity == "wheel.contact"
+        return self.tire_output[:, 0]
 
 
 class FakeDiagnosedResult(FakeResult):
-    diagnostics = FakeDiagnostics()
+    diagnostics = np.zeros((4, 16))
+    diagnostics[:, 0] = FakeDiagnostics.accepted
+    diagnostics[:, 2] = FakeDiagnostics.rejected_attempts
+    diagnostics[:, 3] = FakeDiagnostics.newton_iterations
+    diagnostics[:, 10] = FakeDiagnostics.active_contacts
+    diagnostics[:, 11] = FakeDiagnostics.contact_events
 
 #: The historical channels `wheel_load_metrics` published before its table became
 #: placement-driven, with the values the four-corner loads above give.  Written out
@@ -228,13 +238,11 @@ def test_the_declared_load_outputs_are_exactly_the_report_channel_table() -> Non
 
 
 def test_the_vehicle_metrics_are_restated_value_for_value() -> None:
-    vehicle = SimpleNamespace(
-        axle=FakeResult(),
-        steering_output=np.array([[1.0, -2.0], [3.0, 0.0]]),
-        native_kernel_wall_time_s=1.5,
-    )
-    values = builtin.minimum_unit_outputs(vehicle, wheel_loads=LOADS)
-    legacy = compute_vehicle_metrics(vehicle, wheel_loads=LOADS)
+    vehicle = FakeResult()
+    vehicle.element_state = lambda entity: np.array([[1., -2.], [3., 0.]])
+    options = {"wheel_loads": LOADS, "steering_ids": ("steering.actuator",), "native_kernel_wall_time_s": 1.5}
+    values = builtin.minimum_unit_outputs(vehicle, **options)
+    legacy = compute_vehicle_metrics(vehicle, **options)
     for name in (
         "maximum_steering_output",
         "rms_steering_output",
@@ -251,31 +259,27 @@ def test_the_vehicle_metrics_are_restated_value_for_value() -> None:
 
 
 def test_the_steering_restatement_ignores_non_finite_samples_like_the_legacy_code() -> None:
-    vehicle = SimpleNamespace(
-        axle=FakeResult(),
-        steering_output=np.array(
-            [[[1.0, np.nan], [3.0, np.nan]], [[2.0, np.nan], [0.0, np.nan]]]
-        ),
-        native_kernel_wall_time_s=0.0,
-    )
-    values = builtin.minimum_unit_outputs(vehicle)
-    legacy = compute_vehicle_metrics(vehicle)
+    vehicle = FakeResult()
+    vehicle.element_state = lambda entity: np.array([[1., np.nan], [3., np.nan], [2., np.nan], [0., np.nan]])
+    options = {"steering_ids": ("steering.actuator",), "native_kernel_wall_time_s": 0.}
+    values = builtin.minimum_unit_outputs(vehicle, **options)
+    legacy = compute_vehicle_metrics(vehicle, **options)
     _compare("maximum_steering_output", values, legacy["maximum_steering_output"])
     _compare("rms_steering_output", values, legacy["rms_steering_output"])
 
 
 def test_the_kc_geometry_metrics_are_restated_value_for_value() -> None:
     """The pose-based metrics, over a real assembly rather than a fake result."""
-    assembly = compose_axle(benchmark_model(), "K")
-    state = RigidBodyState(assembly.bodies)
+    result = simulate(*migrate_v1_kc_case(benchmark_model(), mode="K", wheel_values_mm=(0,))).result
+    frames = {side: "wheel.sub.json.wheel_center_" + side for side in ("L", "R")}
     values: dict[str, object] = {}
     for side in ("L", "R"):
-        values.update(builtin.kc_minimum_unit_outputs(state, assembly, side))
+        values.update(builtin.kc_minimum_unit_outputs(result, frames[side], side))
 
     legacy: dict[str, float] = {}
-    legacy.update(wheel_metrics(state, assembly, "L"))
-    legacy.update(wheel_metrics(state, assembly, "R"))
-    legacy.update(compute_k_metrics(state, assembly))
+    legacy.update(wheel_metrics(result, frames["L"], "L"))
+    legacy.update(wheel_metrics(result, frames["R"], "R"))
+    legacy.update(compute_k_metrics(result, frames))
 
     assert len(legacy) == 15, "ten per-side keys plus five axle-level keys"
     for name, expected in legacy.items():

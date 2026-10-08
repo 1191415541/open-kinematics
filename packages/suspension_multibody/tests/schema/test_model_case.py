@@ -3,16 +3,12 @@
 import pytest
 from pydantic import ValidationError
 
-from suspension_multibody.schema import (
-    CaseSpec,
-    DisplacementControl,
-    FrontAxleModel,
-    MassSpec,
-)
+from suspension_multibody.schema import CaseSpec, DisplacementControl, MassSpec
+from suspension_multibody.schema.model import AxleDeclaration
 
 
 def test_model_defaults_to_left_side_and_mirrors_hardpoints() -> None:
-    model = FrontAxleModel(
+    model = AxleDeclaration(
         hardpoints={"A": [1, -2, 3]}, mass=MassSpec(sprung_mass=1000)
     )
     assert model.hardpoints["A"].mirrored_y().y == 2
@@ -20,7 +16,7 @@ def test_model_defaults_to_left_side_and_mirrors_hardpoints() -> None:
 
 def test_model_rejects_right_side_input() -> None:
     with pytest.raises(ValidationError, match="left side"):
-        FrontAxleModel(
+        AxleDeclaration(
             side="right", hardpoints={"A": [1, -2, 3]}, mass=MassSpec(sprung_mass=1000)
         )
 

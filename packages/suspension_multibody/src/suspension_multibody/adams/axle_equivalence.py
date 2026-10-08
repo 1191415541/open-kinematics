@@ -15,19 +15,19 @@ from typing import Any, Literal, cast
 import numpy as np
 from pydantic import Field, model_validator
 
+from ..authoring.migration import migrate_v1_dynamic_axle
 from ..axle_dynamics import (
     BODY_STATE_COLUMNS,
     CONSTRAINT_WRENCH_COLUMNS,
     SPRING_OUTPUT_COLUMNS,
     AxleDynamicsCase,
-    AxleDynamicsModel,
     AxleDynamicsResult,
-    run_axle_dynamics,
 )
+from ..axle_dynamics.schema import AxleDynamicsModel
 from ..io import canonical_hash
-from ..io.artifacts import write_artifact
 from ..kernel.native import native_build_metadata
 from ..schema.common import StrictModel
+from ..simulation import run_compiled
 from .axle_channels import axle_history_from_result
 from .axle_contract import (
     AxleChannelBindings,
@@ -36,6 +36,7 @@ from .axle_contract import (
     load_axle_channel_contract,
     read_dynamic_axle_manifest,
 )
+from .axle_evidence_view import FrozenAxleEvidence
 from .time_domain import TimeHistory, write_time_history
 
 AXLE_EVIDENCE_CONTRACT = "dynamic-axle-evidence-v1"
@@ -122,7 +123,7 @@ class AxleEvidenceBundle:
 
 def initialization_evidence_from_result(
     model: AxleDynamicsModel,
-    result: AxleDynamicsResult,
+    result: AxleDynamicsResult | FrozenAxleEvidence,
     bindings: AxleChannelBindings,
 ) -> AxleInitializationEvidence:
     """Capture the complete native initial state without sharing it as input."""
@@ -446,20 +447,22 @@ def run_native_axle_manifest(
     shutil.copy2(manifest_source, copied_manifest)
 
     started = time.perf_counter()
-    result = run_axle_dynamics(manifest.model, manifest.case)
+    result = _run_document_evidence(manifest.model, manifest.case)
     elapsed_s = time.perf_counter() - started
     refined_case = _refined_case(manifest.case)
     refined_started = time.perf_counter()
-    refined_result = run_axle_dynamics(manifest.model, refined_case)
+    refined_result = _run_document_evidence(manifest.model, refined_case)
     refined_elapsed_s = time.perf_counter() - refined_started
 
-    primary_manifest = write_artifact(
+    from .axle_evidence_view import write_frozen_artifact
+
+    primary_manifest = write_frozen_artifact(
         result,
         destination / "native_result",
         model=manifest.model,
         case=manifest.case,
     )
-    refined_manifest = write_artifact(
+    refined_manifest = write_frozen_artifact(
         refined_result,
         destination / "native_refined_result",
         model=manifest.model,
@@ -562,6 +565,19 @@ def run_native_axle_manifest(
             timing_path,
         ),
     )
+
+
+def _run_document_evidence(model: AxleDynamicsModel, case: AxleDynamicsCase) -> FrozenAxleEvidence:
+    """Run a migrated SI model through the sole document/compiler boundary."""
+    from ..api import validate
+    from ..results.envelope import ResultEnvelope
+
+    assembly, case_document = migrate_v1_dynamic_axle(model, case)
+    compiled = validate(assembly, case_document)
+    result = run_compiled(compiled).result
+    if not isinstance(result, ResultEnvelope):
+        raise TypeError("ordinary documents must produce ResultEnvelope")
+    return FrozenAxleEvidence(result, model)
 
 
 def compare_strict_axle_histories(
@@ -739,7 +755,7 @@ def _refined_case(case: AxleDynamicsCase) -> AxleDynamicsCase:
 
 
 def _native_solver_gate(
-    result: AxleDynamicsResult,
+    result: AxleDynamicsResult | FrozenAxleEvidence,
     acceptance: Mapping[str, object],
 ) -> dict[str, object]:
     gate = cast(Mapping[str, object], acceptance["solver_internal_gates"])
@@ -784,7 +800,7 @@ def _native_solver_gate(
 
 
 def _native_energy_gate(
-    result: AxleDynamicsResult,
+    result: AxleDynamicsResult | FrozenAxleEvidence,
     case_name: str,
     acceptance: Mapping[str, object],
 ) -> dict[str, object]:
@@ -834,8 +850,8 @@ def _time_convergence_gate(
     refined: TimeHistory,
     acceptance: Mapping[str, object],
     *,
-    primary_result: AxleDynamicsResult | None = None,
-    refined_result: AxleDynamicsResult | None = None,
+    primary_result: AxleDynamicsResult | FrozenAxleEvidence | None = None,
+    refined_result: AxleDynamicsResult | FrozenAxleEvidence | None = None,
     primary_case: AxleDynamicsCase | None = None,
     refined_case: AxleDynamicsCase | None = None,
 ) -> dict[str, object]:
@@ -921,7 +937,7 @@ def _time_convergence_gate(
 
 
 def _accepted_step_evidence(
-    result: AxleDynamicsResult,
+    result: AxleDynamicsResult | FrozenAxleEvidence,
     case: AxleDynamicsCase,
 ) -> dict[str, object]:
     """核验求解器实际接受的步长，而不是只核验配置值。."""

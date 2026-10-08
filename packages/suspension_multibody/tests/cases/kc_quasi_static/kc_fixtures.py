@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from suspension_multibody.schema import Bushing6x6, FrontAxleModel, Pose, Vec3
+from suspension_multibody.schema import Bushing6x6, Pose, Vec3
+from suspension_multibody.schema.model import AxleDeclaration
 
 BASELINE = Path(__file__).parents[2] / "data" / "kc_baseline"
 #: Read here rather than imported from ``tests.benchmark_fixture``: the gate
@@ -12,13 +13,13 @@ BASELINE = Path(__file__).parents[2] / "data" / "kc_baseline"
 BENCHMARK_FIXTURE = Path(__file__).parents[2] / "data" / "benchmark_axle.json"
 
 
-def benchmark_model() -> FrontAxleModel:
+def benchmark_model() -> AxleDeclaration:
     """Return the fixed non-proprietary axle the K/C gates share."""
     payload = json.loads(BENCHMARK_FIXTURE.read_text(encoding="utf-8"))
-    return FrontAxleModel.model_validate(payload["model"])
+    return AxleDeclaration.model_validate(payload["model"])
 
 
-def _compliant_model() -> FrontAxleModel:
+def _compliant_model() -> AxleDeclaration:
     """Return the synthetic bushing model used by the C snapshot gates."""
     base = benchmark_model()
     stiffness = tuple(

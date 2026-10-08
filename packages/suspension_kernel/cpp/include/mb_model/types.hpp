@@ -355,6 +355,49 @@ struct DrivenSignal {
     int stride{0};
 };
 
+struct FunctionMarker {
+    int body{-1};
+    Vec3 point{};
+    Quat quaternion{};
+};
+
+struct FunctionBinding {
+    std::string source;
+    std::string measurement;
+    double value{0.0}, scale{1.0};
+    FunctionMarker action{}, reaction{}, reference{};
+    Vec3 axis{0,0,1};
+    std::vector<double> times, values;
+};
+
+struct FunctionNode {
+    std::string op;
+    double value{0.0};
+    int binding{-1}, table{-1};
+    std::vector<int> args;
+};
+
+struct FunctionTable {
+    std::string interpolation, extrapolation;
+    int dimension{1};
+    std::vector<double> x, y, values;
+};
+
+struct FunctionProgram {
+    std::vector<FunctionNode> nodes;
+    std::vector<FunctionBinding> bindings;
+    std::vector<FunctionTable> tables;
+    int output{-1};
+};
+
+struct FunctionElement {
+    std::string name;
+    int kind{0}; // 0 force, 1 torque, 2 wrench
+    FunctionMarker action{}, reaction{}, reference{};
+    Vec3 axis{0,0,1};
+    std::vector<int> programs;
+};
+
 struct Model {
     std::vector<Body> bodies;
     std::vector<Constraint> constraints;
@@ -368,6 +411,8 @@ struct Model {
     // couple, and keeping them adjacent is what makes the two couple families
     // read as one pair of laws.
     std::vector<RotationalTorque> rotational_torques;
+    std::vector<FunctionProgram> function_programs;
+    std::vector<FunctionElement> function_elements;
     std::vector<Tire> tires;
     std::vector<AerodynamicDrag> aerodynamic_drags;
     std::vector<SteeringActuator> steering_actuators;

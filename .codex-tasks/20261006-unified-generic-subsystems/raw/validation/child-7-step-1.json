@@ -1,0 +1,19 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "pytest",
+    "packages/suspension_multibody/tests/simulation/test_single_model_pipeline.py",
+    "packages/suspension_multibody/tests/simulation/test_compilers.py",
+    "packages/suspension_multibody/tests/simulation/test_no_production_bridge.py",
+    "-q",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "returncode": 0,
+  "started_at": "2026-10-06T15:59:29.270456+00:00",
+  "finished_at": "2026-10-06T15:59:32.912769+00:00",
+  "log": "raw\\validation\\child-7-step-1.log",
+  "log_sha256": "ea784170334aa429e8c7bc30837daff9435a8d603a5d444d7756d7ded837e835"
+}

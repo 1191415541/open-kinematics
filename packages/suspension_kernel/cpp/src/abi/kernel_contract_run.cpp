@@ -19,6 +19,7 @@
 
 #include "mb_config/version.hpp"
 #include "mb_config/element_wrench.hpp"
+#include "mb_config/constraint_output.hpp"
 #include "mb_config/controller_output.hpp"
 #include "mb_cases/functions.hpp"
 #include "mb_contract/functions.hpp"
@@ -80,8 +81,8 @@ Json json_object(std::vector<std::pair<std::string, Json>> fields) {
 /// The contract version a document reports.  The optional element-wrench channel
 /// is the only reason it moves, and it is off unless a caller asks for it, so a
 /// result that carries no channel keeps reporting version 1.
-long long document_contract_version() {
-  return element_wrench_output_enabled() ? 2 : 1;
+long long document_contract_version(bool observed = false) {
+  return observed || element_wrench_output_enabled() ? 2 : 1;
 }
 
 /// The block descriptor the result schema requires.
@@ -220,9 +221,19 @@ Json capability_document() {
         {"coefficients", json_array(std::move(coefficients))},
     }));
   }
+  std::vector<Json> case_families;
+  for (int index = 0; index < contract_case_family_count(false); ++index) {
+    const char* name = contract_case_family_name(index);
+    if (contract_case_supported(name)) case_families.push_back(json_string(name));
+  }
   return json_object({
       {"contract", json_string("multibody-capabilities")},
       {"contract_version", json_integer(document_contract_version())},
+      {"function_program_versions", json_array({json_integer(1)})},
+      {"joint_coordinate_motion_versions", json_array({json_integer(1)})},
+      {"constraint_channel_versions", json_array({json_integer(1)})},
+      {"case_families", json_array(std::move(case_families))},
+      {"function_element_types", json_array({json_string("force"), json_string("torque"), json_string("wrench")})},
       {"pac2002_refused_families", json_array(std::move(families))},
       {"pac2002_refused_feature_flags", json_array(std::move(flags))},
       {"pac2002_refused_parameters", json_array(std::move(parameters))},
@@ -254,7 +265,7 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
     const std::uint8_t* case_payload, std::size_t case_length,
     std::uint8_t* result_out, std::size_t* result_length_in_out,
     char* error_buffer, std::size_t error_capacity
-) {
+) try {
   using namespace axle_kernel;
   if (model_payload == nullptr || case_payload == nullptr ||
       result_length_in_out == nullptr) {
@@ -273,6 +284,9 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
       if (ElementWrenchSink* const sink = element_wrench_sink()) sink->clear();
     }
   } element_wrench_guard;
+  struct ConstraintOutputGuard {
+    ~ConstraintOutputGuard() { constraint_output_sink().clear(); }
+  } constraint_output_guard;
   // The controller ledger's recorder is process-global for the same reason and
   // holds a pointer into a block owned by this call, so every return path has to
   // hand its target back.  One guard beside the other: the two channels share
@@ -427,6 +441,8 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   // the model every case of this run shares.  An empty table leaves the
   // historical origin convention untouched.
   built.body_wrench_point_local = model.body_wrench_points();
+  built.function_programs = model.function_programs();
+  built.function_elements = model.function_elements();
   if (!error.empty()) {
     return fail(error_buffer, error_capacity, 2, "model build: " + error);
   }
@@ -602,6 +618,13 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   std::size_t total_samples = 0;
   for (const ContractCase& run : plan.cases) total_samples += run.sample_count;
   const std::size_t diagnostics_rows = total_samples + 2 * cases;
+  const Json* requested_outputs = case_payload_parsed.document.find("outputs");
+  const auto requested = [&](const char* name) {
+    const Json* value = requested_outputs == nullptr ? nullptr : requested_outputs->find(name);
+    return value != nullptr && value->kind == JsonKind::Bool && value->boolean;
+  };
+  const bool constraint_output_enabled = requested("constraint_reaction");
+  const bool jacobian_output_enabled = requested("constraint_jacobian");
 
   const std::size_t state_length = total_samples * bodies * kStatePerBody;
   const std::size_t wrench_length = total_samples * wrench_rows * kConstraintOutputWidth;
@@ -611,6 +634,18 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   std::vector<double> wrenches(wrench_length, std::numeric_limits<double>::quiet_NaN());
   std::vector<double> diagnostics(diagnostics_length,
                                   std::numeric_limits<double>::quiet_NaN());
+  std::vector<double> constraint_multipliers(
+      constraint_output_enabled ? total_samples*built.rows : 0,
+      std::numeric_limits<double>::quiet_NaN());
+  std::vector<double> constraint_reactions(
+      constraint_output_enabled ? total_samples*wrench_rows*2*kConstraintReactionWidth : 0,
+      std::numeric_limits<double>::quiet_NaN());
+  std::vector<double> coupler_reactions(
+      constraint_output_enabled ? total_samples*built.coordinate_couplers.size()*4*kConstraintReactionWidth : 0,
+      std::numeric_limits<double>::quiet_NaN());
+  std::vector<double> constraint_jacobians(
+      jacobian_output_enabled ? total_samples*built.rows*built.ndof : 0,
+      std::numeric_limits<double>::quiet_NaN());
   std::vector<double> contact_events;
   // The element, tire and energy ledgers are *result*, not scratch: the dynamic
   // families report tire forces, spring and bushing loads and the energy
@@ -646,11 +681,12 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   element_wrench_counts.bushings = bushing_count;
   element_wrench_counts.anti_rolls = anti_roll_count;
   element_wrench_counts.rotational_torques = built.rotational_torques.size();
+  element_wrench_counts.functions = built.function_elements.size();
   element_wrench_counts.steering = built.steering_actuators.size();
   element_wrench_counts.tires = tire_count;
   element_wrench_counts.bodies = bodies;
   element_wrench_counts.drags = built.aerodynamic_drags.size();
-  const bool element_wrench_enabled = element_wrench_output_enabled();
+  const bool element_wrench_enabled = element_wrench_output_enabled() || requested("element_wrench");
   const std::size_t element_wrench_records = element_wrench_enabled
       ? element_wrench_record_count(element_wrench_counts) : 0;
   std::vector<double> element_wrench_block(
@@ -766,6 +802,16 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
       std::fill(driven_target_rate.begin(), driven_target_rate.end(), 0.0);
     }
     contract_apply_solver(plan, input.axle);
+    if (constraint_output_enabled || jacobian_output_enabled) {
+      constraint_output_sink() = {
+          constraint_output_enabled ? constraint_multipliers.data()+sample_offset*built.rows : nullptr,
+          constraint_output_enabled ? constraint_reactions.data()+sample_offset*wrench_rows*2*kConstraintReactionWidth : nullptr,
+          static_cast<std::size_t>(built.rows), wrench_rows,
+          jacobian_output_enabled ? constraint_jacobians.data()+sample_offset*built.rows*built.ndof : nullptr,
+          static_cast<std::size_t>(built.ndof),
+          constraint_output_enabled ? coupler_reactions.data()+sample_offset*built.coordinate_couplers.size()*4*kConstraintReactionWidth : nullptr,
+          built.coordinate_couplers.size()};
+    }
 
     // This case's rows start at its slice of the block; the observer adds the
     // sample offset, exactly like `body_state`.
@@ -932,6 +978,79 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
     for (const std::string& body : model.body_order()) {
       body_names.push_back(json_string(body));
     }
+    std::vector<std::string> constraint_ids;
+    const Json* joints = model_payload_parsed.document.find("joints");
+    if (joints != nullptr) {
+      for (const Json& joint : joints->items) {
+        const std::string& type = *joint.find_string("type");
+        if (type != "driven_rotation" && type != "driven_translation") {
+          constraint_ids.push_back(*joint.find_string("name"));
+        }
+      }
+    }
+    const Json* elements = model_payload_parsed.document.find("elements");
+    if (elements != nullptr && model.needs_vehicle_stages()) {
+      for (const Json& element : elements->items) {
+        const std::string* type = element.find_string("type");
+        if (type == nullptr || *type != "steering_actuator") continue;
+        const Json* parameters = element.find("parameters");
+        const std::string* mode = parameters == nullptr ? nullptr : parameters->find_string("type");
+        if (mode != nullptr && (*mode == "prescribed_rotation" || *mode == "prescribed_translation")) {
+          constraint_ids.push_back(*element.find_string("name")+":motion");
+        }
+      }
+    }
+    if (joints != nullptr) {
+      for (const Json& joint : joints->items) {
+        const std::string& type = *joint.find_string("type");
+        if (type == "driven_rotation" || type == "driven_translation") {
+          constraint_ids.push_back(*joint.find_string("name"));
+        }
+      }
+    }
+    std::vector<Json> constraint_channels;
+    if (constraint_output_enabled || jacobian_output_enabled) {
+      if (constraint_ids.size() != built.constraints.size()) {
+        return fail(error_buffer, error_capacity, 4, "constraint output identity disagrees with model rows");
+      }
+      for (std::size_t index = 0; index < built.constraints.size(); ++index) {
+        const Constraint& constraint = built.constraints[index];
+        std::vector<Json> units;
+        const auto& info = joint_type_info(constraint.type);
+        for (int group = 0; group < info.class_count; ++group) {
+          for (int row = 0; row < info.classes[group].count; ++row) {
+            units.push_back(json_string(info.classes[group].angular ? "Nm" : "N"));
+          }
+        }
+        constraint_channels.push_back(json_object({
+            {"id", json_string(constraint_ids[index])},
+            {"body_a", json_string(model.body_order()[constraint.a])},
+            {"body_b", json_string(model.body_order()[constraint.b])},
+            {"row_offset", json_integer(constraint.row)},
+            {"row_count", json_integer(constraint_rows(constraint.type))},
+            {"multiplier_units", json_array(std::move(units))}}));
+      }
+      const Json* couplers = model_payload_parsed.document.find("couplers");
+      if (built.coordinate_couplers.size() != (couplers == nullptr ? 0 : couplers->items.size())) {
+        return fail(error_buffer, error_capacity, 4, "coupler output identity disagrees with model rows");
+      }
+      for (std::size_t index = 0; index < built.coordinate_couplers.size(); ++index) {
+        const auto& coupler = built.coordinate_couplers[index];
+        const Constraint& first = built.constraints[static_cast<std::size_t>(coupler.joint_a)];
+        const Constraint& second = built.constraints[static_cast<std::size_t>(coupler.joint_b)];
+        const char* unit = coupler.coordinate_a == coupler.coordinate_b
+            ? (coupler.coordinate_a == 0 ? "Nm" : "N") : "generalized";
+        constraint_channels.push_back(json_object({
+            {"id", json_string(*couplers->items[index].find_string("name"))},
+            {"row_offset", json_integer(coupler.row)}, {"row_count", json_integer(1)},
+            {"reaction_block", json_string("coupler_reaction")},
+            {"reaction_index", json_integer(static_cast<long long>(index))},
+            {"ends", json_array({json_string("a_a"), json_string("a_b"), json_string("b_a"), json_string("b_b")})},
+            {"bodies", json_array({json_string(model.body_order()[first.a]), json_string(model.body_order()[first.b]),
+                json_string(model.body_order()[second.a]), json_string(model.body_order()[second.b])})},
+            {"multiplier_units", json_array({json_string(unit)})}}));
+      }
+    }
     std::vector<Json> blocks;
     std::size_t offset = 0;
     blocks.push_back(block_descriptor("body_state", offset, state_length * sizeof(double),
@@ -984,17 +1103,27 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
     // written from one pass so they cannot disagree.
     push_block("controller_output", controller_block,
                {total_samples, kControllerOutputWidth});
+    push_block("constraint_multiplier", constraint_multipliers,
+               {total_samples, static_cast<std::size_t>(built.rows)});
+    push_block("constraint_reaction", constraint_reactions,
+               {total_samples, wrench_rows, 2, kConstraintReactionWidth});
+    push_block("constraint_jacobian", constraint_jacobians,
+               {total_samples, static_cast<std::size_t>(built.rows), static_cast<std::size_t>(built.ndof)});
+    push_block("coupler_reaction", coupler_reactions,
+               {total_samples, built.coordinate_couplers.size(), 4, kConstraintReactionWidth});
+    std::vector<Json> free_bodies;
+    for (int body : built.free_body) free_bodies.push_back(json_string(model.body_order()[body]));
 
     Json document = json_object({
         {"blocks", json_array(std::move(blocks))},
         {"case_identity",
          json_object({
              {"case_sha256", json_string(case_sha256)},
-             {"contract_version", json_integer(document_contract_version())},
+             {"contract_version", json_integer(document_contract_version(element_wrench_enabled || constraint_output_enabled))},
              {"model_sha256", json_string(model_sha256)},
          })},
         {"contract", json_string("multibody-result")},
-        {"contract_version", json_integer(document_contract_version())},
+        {"contract_version", json_integer(document_contract_version(element_wrench_enabled || constraint_output_enabled))},
         {"kind", json_string("result")},
         {"manifest",
          json_object({
@@ -1012,6 +1141,12 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
              {"failed_status", json_integer(static_cast<long long>(failure.status))},
              {"failed_time_s", json_number(failure.time_s)},
              {"failure_message", json_string(failure.message)},
+             {"constraint_channel_version", json_integer(1)},
+             {"constraints", json_array(std::move(constraint_channels))},
+             {"free_bodies", json_array(std::move(free_bodies))},
+             {"constraint_wrench_frame", json_string("world")},
+             {"constraint_moment_reference", json_string("body_com")},
+             {"multiplier_convention", json_string("generalized_wrench = J^T lambda")},
          })},
         {"status", json_string(failure.failed ? "failed" : "success")},
     });
@@ -1036,6 +1171,10 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   append_doubles(anti_roll_block.data(), anti_roll_block.size(), blob);
   append_doubles(element_wrench_block.data(), element_wrench_block.size(), blob);
   append_doubles(controller_block.data(), controller_block.size(), blob);
+  append_doubles(constraint_multipliers.data(), constraint_multipliers.size(), blob);
+  append_doubles(constraint_reactions.data(), constraint_reactions.size(), blob);
+  append_doubles(constraint_jacobians.data(), constraint_jacobians.size(), blob);
+  append_doubles(coupler_reactions.data(), coupler_reactions.size(), blob);
 
   const std::string payload = contract_build_container(canonical, blob);
   if (result_out == nullptr || *result_length_in_out < payload.size()) {
@@ -1045,4 +1184,7 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   std::memcpy(result_out, payload.data(), payload.size());
   *result_length_in_out = payload.size();
   return 0;
+} catch (const std::exception& error) {
+  return axle_kernel::fail(error_buffer, error_capacity, 4,
+                           "native evaluation: " + std::string(error.what()));
 }
