@@ -1,0 +1,6 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,关闭Adams定义审计缺口,FAILED,六组规则有官方出处/匹配实验与指纹，差异定义单列,"powershell -NoProfile -Command ""if (-not (Test-Path -LiteralPath '.codex-tasks/20261010-unified-characteristics/tasks/p5-adams-svc-parity/raw/adams-rule-audit.csv')) { exit 1 }""",2026-10-11,1,人工复核SPEC行为验收与证据：raw/adams-rule-audit.csv；本次安装与参考核对未满足前置，步骤失败保留。证据：raw/external-blocker.md、raw/reference-manifest.json、raw/validation.md
+2,整理独立参考及同模型采样映射,TODO,参考来源独立、模型/profile/冻结/事件与模式匹配；缺数据显式阻断,"powershell -NoProfile -Command ""if (-not (Test-Path -LiteralPath '.codex-tasks/20261010-unified-characteristics/tasks/p5-adams-svc-parity/raw/reference-manifest.json')) { exit 1 }""",,0,人工复核SPEC行为验收与证据：raw/reference-manifest.json；命令/文件存在只作门禁；未实施
+3,实现模式/测量基与单位符号转换,TODO,按各分量正确转换，Toe/Camber参数化/track/roll角不猜测,just check-fast,,0,人工复核SPEC行为验收与证据：SVC参考投影专项测试；命令/文件存在只作门禁；未实施
+4,执行四组合逐点响应/核心指标比较,TODO,包含交叉效果、全部目标样本/分量、有效性/原因及误差分布,just check-fast,,0,人工复核SPEC行为验收与证据：raw/parity-report.md；命令/文件存在只作门禁；未实施
+5,逐项更新兼容状态并验证发布门,TODO,只通过条目标validated，核心pending阻断，矩阵/连续独立登记,just check-fast,,0,人工复核SPEC行为验收与证据：raw/compatibility.csv；raw/validation.md；命令/文件存在只作门禁；未实施

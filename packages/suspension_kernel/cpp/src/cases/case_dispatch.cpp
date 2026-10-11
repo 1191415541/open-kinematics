@@ -176,6 +176,7 @@ bool contract_expand_case(const JsonValue& document, const std::string& blob,
       break;
   }
   if (!find_row(*family)->expander(document, blob, model, out, error)) return false;
+  if (!contract_read_characteristics(document, out.characteristics, error)) return false;
   const JsonValue* inputs = document.find("inputs");
   const JsonValue* motions = inputs == nullptr ? nullptr : inputs->find("motion");
   if (motions == nullptr) return true;

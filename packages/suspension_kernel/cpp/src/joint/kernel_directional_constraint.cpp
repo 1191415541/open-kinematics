@@ -413,8 +413,7 @@ bool mass_inverse_of_jt_mu(
         out[6*fi+1] = jt[1] / body_effective_mass(model, bi);
         out[6*fi+2] = jt[2] / body_effective_mass(model, bi);
         const Mat3 rotation = qmat(state.q[bi]);
-        const Mat3 world_inertia =
-            rotation * body_effective_inertia_body(model, bi) * transpose(rotation);
+        const Mat3 world_inertia = body_world_inertia(model, bi, rotation);
         Mat3 inverse{};
         if (!inverse3(world_inertia, inverse)) return false;
         const Vec3 angular = inverse * Vec3{jt[3], jt[4], jt[5]};
@@ -505,8 +504,7 @@ bool mass_inverse_jt_mu_directional(
 
         if (!directional_orientation_active(direction, bi)) {
             const Mat3 rotation = qmat(state.q[bi]);
-            const Mat3 world_inertia =
-                rotation * body_effective_inertia_body(model, bi) * transpose(rotation);
+            const Mat3 world_inertia = body_world_inertia(model, bi, rotation);
             Mat3 inverse{};
             if (!inverse3(world_inertia, inverse)) return false;
             const Vec3 dangular = inverse*Vec3{

@@ -18,9 +18,69 @@
     }},
     "boundaries": {"type": "array", "items": {"$ref": "#/$defs/boundary"}},
     "inputs": {"type": "array", "items": {"type": "object"}},
-    "outputs": {"type": "array", "items": {"type": "string"}}
+    "outputs": {"type": "array", "items": {"type": "string"}},
+    "characteristics": {"$ref": "#/$defs/characteristics"}
   },
   "$defs": {
+    "declaration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["measurement_id", "definition_version", "units", "response_kind", "response_version"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "measurement_id": {"type": "string", "minLength": 1},
+        "definition_version": {"type": "integer", "minimum": 1},
+        "units": {"type": "string", "minLength": 1},
+        "response_kind": {"type": "string", "minLength": 1},
+        "response_version": {"type": "integer", "minimum": 1},
+        "mode": {"type": "string", "minLength": 1}
+      }
+    },
+    "characteristics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["request_id", "domain", "samples", "measurements", "boundary", "definition", "response_operator"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 1},
+        "domain": {"enum": ["kinematic", "equilibrium", "trajectory", "dynamic"]},
+        "samples": {"type": "array", "minItems": 1, "items": {"type": "integer", "minimum": 0}},
+        "measurements": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/declaration"}},
+        "perturbations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/declaration"}},
+        "boundary": {
+          "type": "object", "additionalProperties": false,
+          "required": ["profile", "version"],
+          "properties": {
+            "profile": {"type": "string", "minLength": 1},
+            "version": {"type": "integer", "minimum": 1},
+            "released": {"type": "array", "items": {"type": "string"}},
+            "held": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "definition": {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "version"],
+          "properties": {
+            "kind": {"enum": ["frozen_force_tangent", "frozen_load_compliance", "continuous_descriptor"]},
+            "version": {"type": "integer", "minimum": 1}
+          }
+        },
+        "frozen_conditions": {
+          "type": "object", "additionalProperties": false,
+          "required": ["protocol", "version"],
+          "properties": {
+            "protocol": {"type": "string", "minLength": 1},
+            "version": {"type": "integer", "minimum": 1}
+          }
+        },
+        "response_operator": {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "version"],
+          "properties": {
+            "kind": {"type": "string", "minLength": 1},
+            "version": {"type": "integer", "minimum": 1}
+          }
+        },
+        "wheel_end_response": {"type": "object"}
+      }
+    },
     "boundary": {
       "type": "object", "additionalProperties": false,
       "required": ["name", "coordinate", "mode"],

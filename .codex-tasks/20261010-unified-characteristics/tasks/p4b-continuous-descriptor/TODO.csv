@@ -1,0 +1,6 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,审计连续状态/力律和一致扰动坐标,DONE,每力律连续方程/方向导数/不支持原因明确,just check-fast,2026-10-11,0,17类连续方程/力律已登记；区分内部方向导数、连续状态率、离散步长/活动集行为与公共能力缺口。证据：raw/continuous-capabilities.csv、raw/continuous-audit.md。
+2,实现连续描述符请求方向与测量映射,TODO,F_xdot/F_x/F_u来自连续物理方程，无离散系数泄漏,just check-fast,,0,阻断：capability response kinds 为空，缺 native evaluator、结果块/ABI 映射与 Python 查询通道；未造只有请求解析、没有物理回答的接口壳。审计证据 raw/continuous-audit.md、raw/time-response-scope.md。
+3,分别验证约束一致状态和载荷扰动,TODO,解析系统/约束/内部状态审计通过，残量与单位完整,just check-fast,,0,等待步骤2真实连续方程及状态/载荷响应通道；目前只有一致扰动坐标审计，没有 descriptor output 可执行解析模型/单位/残量验证。证据 raw/continuous-audit.md。
+4,锁定有限时域实际支持范围,DONE,实现则验证初扰动/区间/原积分复用，未实现则明确无时间响应能力,人工复核范围证据与现有结果链,2026-10-11,0,当前明确不提供有限时域 continuous response；native 无 continuous result block/传播协议，accepted states 未持久化，已有 trajectory 仅计算已存状态的几何时间率。证据：raw/time-response-scope.md。
+5,独立性能与仓库门验收,TODO,预算独立；核心局部特性语义/原轨迹无变化,just gate-numeric,,0,人工复核SPEC行为验收与证据：raw/validation.md；命令/文件存在只作门禁；未实施

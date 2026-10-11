@@ -1,0 +1,6 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,冻结目标规模与直接基准成本,FAILED,真实模型/模式/测量/环境可重放，逐项成本记录,just check-fast,2026-10-11,1,人工复核SPEC行为验收与证据：raw/direct-benchmark.json；P4a native local_response_v1 与同问题直接样本尚未可用，无法冻结真实基准；本次阻断记录不是基准验收。
+2,实现精确方向作用并验证能力,TODO,JVP与显式A v一致；VJP仅有真实A^T v证据才登记,just check-fast,,0,人工复核SPEC行为验收与证据：后端方向作用专项测试；命令/文件存在只作门禁；未实施
+3,接入预条件Krylov与失败/回退诊断,TODO,非对称方法条件明确，迭代失败不伪valid，回退有原因,just check-fast,,0,人工复核SPEC行为验收与证据：后端策略/失败专项测试；命令/文件存在只作门禁；未实施
+4,比较响应误差与模式可辨识审计,TODO,同场景直接响应/指标在P0容差，奇异/非对称/耦合不绕过,just check-fast,,0,人工复核SPEC行为验收与证据：raw/backend-parity-report.md；命令/文件存在只作门禁；未实施
+5,实测收益并独立验收,TODO,含组装/预条件/求解/内存/总成本，按收益决定推荐，不改核心门,just gate-numeric,,0,人工复核SPEC行为验收与证据：raw/performance-report.md；raw/validation.md；命令/文件存在只作门禁；未实施

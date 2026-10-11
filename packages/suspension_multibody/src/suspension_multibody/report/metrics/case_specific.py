@@ -15,6 +15,8 @@ from typing import Any
 
 import numpy as np
 
+from ...characteristics.measurements import legacy_wheel_camber, legacy_wheel_toe
+
 _CASE_METRICS: dict[str, Callable[..., Any]] = {}
 
 
@@ -82,13 +84,11 @@ def wheel_metrics(result: Any, frame_id: str, side: str) -> dict[str, float]:
     rotation = np.asarray(pose[:3, :3], dtype=float)
     center = np.asarray(pose[:3, 3], dtype=float) * 1000
     outward = -1.0 if normalized == "L" else 1.0
-    lateral_axis_y = float(rotation[1, 1])
-    camber_deg = -outward * float(
-        np.degrees(np.arctan2(float(rotation[2, 1]), lateral_axis_y))
-    )
-    toe_deg = -outward * float(
-        np.degrees(np.arctan2(float(rotation[0, 1]), lateral_axis_y))
-    )
+    # The angles come from the named legacy definitions so the formula has one
+    # owner; the mm conversion stays here because it is this report's unit
+    # convention rather than part of the angle's definition.
+    camber_deg = legacy_wheel_camber(rotation, outward=outward)
+    toe_deg = legacy_wheel_toe(rotation, outward=outward)
     return {
         f"{side_name}_wheel_center_x": float(center[0]),
         f"{side_name}_wheel_center_y": float(center[1]),

@@ -1,0 +1,190 @@
+{
+  "schema": "characteristics-boundary-profiles",
+  "version": 1,
+  "date": "2026-10-10",
+  "note": "设计 §3.4 的 boundary.profile_id/version 展开真源。本项目 profile 与本项目定义绑定；Adams profile 在 §11.1 规则核实完成前不启用。缺字段或引用无效时由编译阶段拒绝，不使用隐藏默认值补齐。",
+  "protocols": {
+    "project_native": {
+      "status": "active",
+      "note": "本项目定义。可按明确 native 协议实现并独立验证，但不解除 Adams pending_definition，也不能通过核心 Adams 发布门。"
+    },
+    "adams_car_2024_1": {
+      "status": "pending_definition",
+      "note": "六组规则审计全部 pending（见 raw/adams-rule-audit.csv）。启用前必须完成 §11.1 规则核实。",
+      "blocking_scope": "P5 全部对标项、P6 完整 Adams 兼容发布"
+    }
+  },
+  "body_increment": {
+    "note": "已声明车身 frame 的哪些平移/转动增量固定或自由；不改变样本原位姿。delta body_pose = 0 表示该样本周围零增量，不把浮动车身改成世界固定实体。",
+    "profiles": {
+      "fixed": {
+        "translation": ["x", "y", "z"],
+        "rotation": ["rx", "ry", "rz"],
+        "mode": "locked",
+        "note": "固定车身。座舱参考体在本次增量问题中六个增量全为零。"
+      },
+      "free": {
+        "translation": ["x", "y", "z"],
+        "rotation": ["rx", "ry", "rz"],
+        "mode": "free",
+        "note": "自由车身。参考体增量参与求解，柔度含其增量运动。与 fixed 是不同响应边界，不得用自由消元的 Schur 补等同固定车身。"
+      }
+    }
+  },
+  "steering": {
+    "note": "rack/转向坐标的 hold/release ID；已有执行器和被释放方向。释放只能引用已有运动边界，不能改变关节或停用衬套。",
+    "profiles": {
+      "hold": {"coordinate_ref": "steering.rack", "mode": "locked", "note": "转向坐标保持零增量，作为特性响应边界的一部分。"},
+      "release": {"coordinate_ref": "steering.rack", "mode": "free", "note": "必须显式声明。释放后该方向参与响应，影响 Toe/Camber 与侧倾指标。"}
+    }
+  },
+  "wheel_end_boundaries": {
+    "note": "每个参与及其他轮端的驱动/保持/释放方向；后轴不得隐式删除或默认固定。",
+    "profiles": {
+      "driven": {"mode": "prescribed", "note": "本指标直接驱动的轮端方向，单位增量。"},
+      "held": {"mode": "locked", "note": "保持零增量。已存在的零增量运动边界默认保持。"},
+      "released": {"mode": "free", "note": "显式释放；未声明即保持。后轴必须逐项显式记录，不得默认固定或删除。"}
+    }
+  },
+  "load_application": {
+    "note": "轮心/接地点 ID、wrench 轴向和作用点；增量是外部载荷，还是对指定参考体施加反作用 wrench；反作用需平移到其作用点后取负，保留力臂项。",
+    "profiles": {
+      "external_at_wheel_center": {
+        "application_point_ref": "wheel_center",
+        "reaction": "ground_or_declared_reference",
+        "note": "载荷为外部增量载荷，施加于轮心。"
+      },
+      "reaction_on_reference_body": {
+        "application_point_ref": "wheel_center",
+        "reaction": "declared_reference_body",
+        "moment_arm": "translated_to_application_point_then_negated",
+        "note": "对指定参考体施加反作用 wrench；力臂项必须保留。"
+      }
+    }
+  },
+  "tire_scope": {
+    "note": "真实轮胎是否激活、相关状态冻结规则、指标是含轮胎总响应还是可分辨的悬架/轮胎贡献。不由指标算子剥离轮胎。",
+    "profiles": {
+      "suspension_elastic_only": {
+        "tire_active": false,
+        "note": "仅悬架弹性贡献。Ride Rate 串联式中的 Ks 不得含再次计入的轮胎贡献。"
+      },
+      "full_tire_included": {
+        "tire_active": true,
+        "note": "完整接地点响应已含轮胎，不能再套串联式；轮胎卸载/松弛等历史状态按冻结协议处理。"
+      }
+    }
+  },
+  "measurement_reference": {
+    "note": "位移/转角相对的参考体、轴向和原点；参考体自由时包括其增量运动。相对车身的指标必须扣除车身平移和旋转。",
+    "profiles": {
+      "chassis_reference": {"reference_body_ref": "chassis.reference", "origin": "declared_frame_origin", "note": "相对车身参考 frame。"},
+      "world_reference": {"reference_body_ref": "world", "origin": "world_origin", "note": "无车身模型时明确使用 world。"},
+      "contact_patch_reference": {"reference_body_ref": "chassis.reference", "origin": "contact_patch", "note": "接地点相对车身，用于 Ride Rate 与 Total Roll Rate。"}
+    }
+  },
+  "force_scope": {
+    "note": "反力/力矩采用完整响应或哪些可分辨力元贡献，不改变内部平衡力律。内部平衡始终使用完整真实模型。",
+    "profiles": {
+      "complete_response": {"note": "完整响应，包含全部参与力元与约束反力。"},
+      "resolved_element_contributions": {"note": "仅统计明确可分辨的力元贡献；不得为分离贡献而停用力元或重算伪同模型。"}
+    }
+  },
+  "metric_bindings": {
+    "note": "设计 §3.4 最低指标绑定要求。缺 profile 字段即编译拒绝。",
+    "entries": [
+      {
+        "metric_id": "wheel_rate",
+        "load_mode": "heave_load",
+        "load_mode_definition": "左右同向等幅单位垂向轮心载荷，其余增量 wrench 为零",
+        "body_increment": ["fixed", "free"],
+        "steering": ["hold"],
+        "tire_scope": "suspension_elastic_only",
+        "measurement_reference": "chassis_reference",
+        "note": "车身固定与自由为不同 profile；转向、后轴和轮胎条件各自显式记录，不互换 C。"
+      },
+      {
+        "metric_id": "ride_rate",
+        "load_mode": "heave_load",
+        "load_mode_definition": "轮胎接地点相对车身的响应",
+        "body_increment": ["fixed"],
+        "steering": ["hold"],
+        "tire_scope": "full_tire_included",
+        "measurement_reference": "contact_patch_reference",
+        "note": "含轮胎完整响应不能再次串联轮胎；非串联边界不能冒用 Adams 简式。串联分解另有 profile。"
+      },
+      {
+        "metric_id": "suspension_roll_rate",
+        "load_mode": "roll_load",
+        "load_mode_definition": "左右反向竖向载荷，轮心角度测量，实际力臂",
+        "body_increment": ["fixed", "free"],
+        "steering": ["hold"],
+        "tire_scope": "suspension_elastic_only",
+        "measurement_reference": "chassis_reference",
+        "note": "悬架侧倾角由轮心测量。车身角不得默认为轮心连线角。"
+      },
+      {
+        "metric_id": "total_roll_rate",
+        "load_mode": "roll_load",
+        "load_mode_definition": "左右反向竖向载荷，接地点角度测量，实际接地点力臂",
+        "body_increment": ["fixed", "free"],
+        "steering": ["hold"],
+        "tire_scope": "full_tire_included",
+        "measurement_reference": "contact_patch_reference",
+        "note": "总侧倾角由接地点测量且含轮胎；与悬架侧倾率不得合名。"
+      },
+      {
+        "metric_id": "toe_compliance_lateral",
+        "load_mode": "lateral_load",
+        "load_mode_definition": "指定侧向力列及相对参考体的角度测量雅可比",
+        "body_increment": ["fixed"],
+        "steering": ["hold", "release"],
+        "tire_scope": "suspension_elastic_only",
+        "measurement_reference": "chassis_reference",
+        "note": "转向保持/释放和其他轮端响应逐项设置；不把转角行直接当 Toe/Camber。"
+      },
+      {
+        "metric_id": "camber_compliance_lateral",
+        "load_mode": "lateral_load",
+        "load_mode_definition": "指定侧向力列及相对参考体的角度测量雅可比",
+        "body_increment": ["fixed"],
+        "steering": ["hold", "release"],
+        "tire_scope": "suspension_elastic_only",
+        "measurement_reference": "chassis_reference",
+        "note": "同上。"
+      },
+      {
+        "metric_id": "roll_center_geometry",
+        "load_mode": "kinematic_virtual_motion",
+        "load_mode_definition": "第 7 节指定虚拟运动和横向载荷权重",
+        "body_increment": ["fixed", "free"],
+        "steering": ["hold"],
+        "tire_scope": "suspension_elastic_only",
+        "measurement_reference": "chassis_reference",
+        "note": "使用独立运动学边界，不套用载荷柔度的默认约束。"
+      },
+      {
+        "metric_id": "pitch_center",
+        "load_mode": "kinematic_virtual_motion",
+        "load_mode_definition": "第 7 节指定虚拟运动和纵向载荷权重",
+        "body_increment": ["fixed", "free"],
+        "steering": ["hold"],
+        "tire_scope": "suspension_elastic_only",
+        "measurement_reference": "chassis_reference",
+        "note": "同上；不等同于单轮侧视瞬心。"
+      }
+    ]
+  },
+  "expanded_profile_ids": {
+    "note": "metric-catalog.csv 中引用的 profile_id 在此展开为上述字段组合。",
+    "susp_kinematic_fixed_body_v1": {"body_increment": "fixed", "steering": "hold", "wheel_end_boundaries": "held", "load_application": "external_at_wheel_center", "tire_scope": "suspension_elastic_only", "measurement_reference": "chassis_reference", "force_scope": "complete_response"},
+    "vehicle_kinematic_fixed_body_v1": {"body_increment": "fixed", "steering": "hold", "wheel_end_boundaries": "held", "load_application": "external_at_wheel_center", "tire_scope": "suspension_elastic_only", "measurement_reference": "chassis_reference", "force_scope": "complete_response", "note": "整车线性化先组装全模型再提取，允许凝聚但保留车身/轴间/转向耦合。"},
+    "susp_force_balance_body_fixed_v1": {"body_increment": "fixed", "steering": "hold", "wheel_end_boundaries": "held", "load_application": "external_at_wheel_center", "tire_scope": "suspension_elastic_only", "measurement_reference": "chassis_reference", "force_scope": "complete_response"},
+    "vehicle_force_balance_body_fixed_v1": {"body_increment": "fixed", "steering": "hold", "wheel_end_boundaries": "held", "load_application": "external_at_wheel_center", "tire_scope": "suspension_elastic_only", "measurement_reference": "chassis_reference", "force_scope": "complete_response", "note": "整车固定车身。"},
+    "vehicle_force_balance_body_free_v1": {"body_increment": "free", "steering": "hold", "wheel_end_boundaries": "held", "load_application": "reaction_on_reference_body", "tire_scope": "suspension_elastic_only", "measurement_reference": "chassis_reference", "force_scope": "complete_response", "note": "整车自由车身；参考体增量参与求解。"},
+    "susp_dynamic_frozen_body_fixed_v1": {"body_increment": "fixed", "steering": "hold", "wheel_end_boundaries": "held", "load_application": "external_at_wheel_center", "tire_scope": "suspension_elastic_only", "measurement_reference": "chassis_reference", "force_scope": "complete_response", "frozen_conditions": "frozen_inertial_load_v1"},
+    "vehicle_dynamic_frozen_body_fixed_v1": {"body_increment": "fixed", "steering": "hold", "wheel_end_boundaries": "held", "load_application": "external_at_wheel_center", "tire_scope": "suspension_elastic_only", "measurement_reference": "chassis_reference", "force_scope": "complete_response", "frozen_conditions": "frozen_inertial_load_v1"},
+    "vehicle_dynamic_frozen_body_free_v1": {"body_increment": "free", "steering": "hold", "wheel_end_boundaries": "held", "load_application": "reaction_on_reference_body", "tire_scope": "suspension_elastic_only", "measurement_reference": "chassis_reference", "force_scope": "complete_response", "frozen_conditions": "frozen_inertial_load_v1"},
+    "legacy_envelope_primitives_v1": {"note": "R2 旧滚心路径：ResultEnvelope._roll_center_primitives 的驱动组装、最小二乘与接地点斜率。保留原数值/最小二乘选择行为与符号，不宣称新的可辨识性保证。", "algorithms": ["configurable drive row assembly on free-body rows", "np.linalg.lstsq minimum-norm twist", "consistency check at 1e-8", "contact vertical-motion guard at 1e-12"], "tolerance_source": "packages/suspension_multibody/src/suspension_multibody/results/envelope.py:311-316"}
+  }
+}

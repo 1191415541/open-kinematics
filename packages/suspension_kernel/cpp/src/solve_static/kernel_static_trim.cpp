@@ -24,6 +24,7 @@
 #include "mb_model/functions.hpp"
 #include "mb_tire/common/functions.hpp"
 #include "mb_force/functions.hpp"
+#include "mb_linearization/types.hpp"
 
 namespace axle_kernel {
 
@@ -278,21 +279,12 @@ int pin_null_pose_directions(
 }
 
 std::vector<int> static_gauge_coordinates(const Model& model) {
-    std::vector<int> coordinates;
-    if (model.static_gauge_body < 0 || model.static_gauge_dof_mask == 0) {
-        return coordinates;
-    }
-    const int free_body = model.body_to_free[
-        static_cast<std::size_t>(model.static_gauge_body)
-    ];
-    if (free_body < 0) return coordinates;
-    for (int local = 0; local < 6; ++local) {
-        if ((model.static_gauge_dof_mask &
-             (static_cast<std::uint32_t>(1) << local)) != 0) {
-            coordinates.push_back(6*free_body+local);
-        }
-    }
-    return coordinates;
+    // The derivation moved to `mb_model::gauge_coordinates` at P4a step 1: the
+    // frozen-response path needs the same coordinates but sits below this module,
+    // and the list is a pure function of the model's declared gauge.  This wrapper
+    // stays so the static path's callers are unchanged; there is deliberately no
+    // second copy, because a duplicate would agree today and drift on the first edit.
+    return gauge_coordinates(model);
 }
 
 
@@ -359,36 +351,20 @@ bool static_jacobian(
     double gravity_x, double gravity_y, double gravity_z,
     const std::vector<int>& active_tires, const std::vector<double>& x,
     std::vector<double>& jacobian, double load_scale) {
-    const int n = model.ndof;
-    const int m = model.rows;
     (void)gravity_x;
     (void)gravity_y;
     (void)gravity_z;
-    const int active_count = static_cast<int>(active_tires.size());
-    const int dimension = n+m+active_count;
-    if (static_cast<int>(x.size()) != dimension) return false;
-
-    const State candidate = pose_candidate(
-        base, model, std::vector<double>(x.begin(), x.begin()+n)
-    );
-    const auto constraint = constraint_jacobian(model, candidate);
-    const auto position_constraint = static_position_constraint_jacobian(
-        model, candidate
-    );
-    std::vector<int> active_mask(model.tires.size(), 0);
-    std::vector<double> compression(model.tires.size(), 0.0);
-    std::vector<double> compression_derivative(model.tires.size(), 0.0);
-    for (std::size_t index = 0; index < active_tires.size(); ++index) {
-        const int tire_index = active_tires[index];
-        active_mask[static_cast<std::size_t>(tire_index)] = 1;
-        compression[static_cast<std::size_t>(tire_index)] =
-            x[static_cast<std::size_t>(n+m)+index];
-    }
-    StaticContactOverride static_contact{
-        &active_mask, &compression, &compression_derivative,
-        load_scale, load_scale
-    };
-    const std::vector<double> lambda(x.begin()+n, x.begin()+n+m);
+    // R7: the arithmetic moved to `mb_linearization`; the static solver keeps its
+    // *policy* (which coordinates the gauge holds, which tires are active, the
+    // load scaling) and delegates the assembly.  There is deliberately no second
+    // copy of the assembly in this file: a duplicate would agree today and drift
+    // the first time either side is edited.
+    //
+    // The three values the assembly cannot derive for itself -- the candidate
+    // pose, the gauge and the position-constraint Jacobian -- are the solver's
+    // own conventions, so the solver hands them over as data.  Deriving them in
+    // `mb_linearization` would require it to call back up into this module.
+    const int n = model.ndof;
     const auto gauges = static_gauge_coordinates(model);
     std::vector<unsigned char> gauge(static_cast<std::size_t>(n), 0);
     for (const int coordinate : gauges) {
@@ -396,153 +372,295 @@ bool static_jacobian(
             gauge[static_cast<std::size_t>(coordinate)] = 1;
         }
     }
-    jacobian.assign(
-        static_cast<std::size_t>(dimension)*static_cast<std::size_t>(dimension),
-        0.0
+    const State candidate = pose_candidate(
+        base, model, std::vector<double>(x.begin(), x.begin()+n)
     );
-    const auto at = [dimension](int row, int column) {
-        return static_cast<std::size_t>(row)*static_cast<std::size_t>(dimension)
-            + static_cast<std::size_t>(column);
+    WorkingSample working{
+        std::move(gauge),
+        active_tires,
+        load_scale,
+        candidate,
+        static_position_constraint_jacobian(model, candidate)
     };
-    DirectionalState direction;
-    ensure_directional_state(model, direction);
-    DirectionalForceScratch force_scratch;
-    force_scratch.force.resize(model.bodies.size());
-    force_scratch.torque.resize(model.bodies.size());
-    std::vector<double> force_derivative;
-    std::vector<double> brush_derivative;
-    std::vector<double> jacobian_derivative;
-    bool smooth = true;
+    if (static_cast<int>(x.size()) !=
+        physical_tangent_dimension(model, working)) {
+        return false;
+    }
+    return assemble_physical_tangent(
+        model, sample, working, x, jacobian
+    );
+}
 
-    for (int column = 0; column < n; ++column) {
-        reset_directional_state(model, direction);
-        const int free_body = column/6;
-        const int component = column%6;
-        const int body = model.free_body[static_cast<std::size_t>(free_body)];
-        if (component < 3) {
-            direction.dr[static_cast<std::size_t>(body)] = {
-                component == 0 ? 1.0 : 0.0,
-                component == 1 ? 1.0 : 0.0,
-                component == 2 ? 1.0 : 0.0
-            };
-        } else {
-            const Vec3 increment{
-                x[6*free_body+3], x[6*free_body+4], x[6*free_body+5]
-            };
-            const Vec3 parameter_direction{
-                component == 3 ? 1.0 : 0.0,
-                component == 4 ? 1.0 : 0.0,
-                component == 5 ? 1.0 : 0.0
-            };
-            direction.dtheta[static_cast<std::size_t>(body)] =
-                so3_left_jacobian(increment)*parameter_direction;
+bool frozen_force_tangent_column(
+    const Model& model, const WorkingSample& working,
+    const std::vector<double>& tangent, const std::vector<int>& driven,
+    const std::vector<double>& prescribed, std::vector<double>& reaction
+) {
+    // Nothing is written until every refusal test has passed, so a `false` return
+    // leaves the caller's vector alone.  A partially written refusal would be
+    // indistinguishable from a legitimate reaction.
+    const int dimension = physical_tangent_dimension(model, working);
+    if (dimension <= 0 ||
+        tangent.size() !=
+            static_cast<std::size_t>(dimension)*
+                static_cast<std::size_t>(dimension)) {
+        return false;
+    }
+    if (driven.size() != prescribed.size()) return false;
+    const int pose_dimension = model.ndof;
+    for (const int coordinate : driven) {
+        // The ports are pose coordinates: a multiplier or contact column is not a
+        // displacement a caller can prescribe, so such an index is a caller error
+        // rather than a mechanism with no stiffness.
+        if (coordinate < 0 || coordinate >= pose_dimension) return false;
+    }
+    for (std::size_t i = 0; i < driven.size(); ++i) {
+        for (std::size_t j = i+1; j < driven.size(); ++j) {
+            // A repeated port would make the prescribed column inconsistent
+            // whenever the two values differ, and silently use one of them when
+            // they agree.
+            if (driven[i] == driven[j]) return false;
         }
-        const bool force_smooth = external_force_directional(
-            model, candidate, sample, direction, force_derivative,
-            brush_derivative, false, &static_contact, &force_scratch
-        );
-        const bool constraint_smooth = constraint_jacobian_directional(
-            model, candidate, direction, jacobian_derivative
-        );
-        smooth = smooth && force_smooth && constraint_smooth;
-        for (int row = 0; row < n; ++row) {
-            if (gauge[static_cast<std::size_t>(row)] != 0) {
-                jacobian[at(row, column)] = row == column ? 1.0 : 0.0;
-                continue;
-            }
-            double value = -force_derivative[static_cast<std::size_t>(row)];
-            for (int constraint_row = 0; constraint_row < m; ++constraint_row) {
-                value -= jacobian_derivative[
-                    static_cast<std::size_t>(constraint_row*n+row)
-                ] * lambda[static_cast<std::size_t>(constraint_row)];
-            }
-            jacobian[at(row, column)] = value;
-        }
-        for (int row = 0; row < m; ++row) {
-            if (column % 6 < 3) {
-                jacobian[at(n+row, column)] = position_constraint[
-                    static_cast<std::size_t>(row*n+column)
-                ];
-            } else {
-                const int free_body = column/6;
-                const int first_rotation = 6*free_body+3;
-                const Vec3 increment{
-                    x[6*free_body+3], x[6*free_body+4], x[6*free_body+5]
-                };
-                const Mat3 rotation_map = so3_left_jacobian(increment);
-                double value = 0.0;
-                for (int tangent = 0; tangent < 3; ++tangent) {
-                    value += position_constraint[
-                        static_cast<std::size_t>(row*n+first_rotation+tangent)
-                    ] * rotation_map.a[tangent][column % 6 - 3];
-                }
-                jacobian[at(n+row, column)] = value;
-            }
-        }
-        for (std::size_t index = 0; index < active_tires.size(); ++index) {
-            const int tire_index = active_tires[index];
-            bool road_smooth = true;
-            smooth = smooth && road_smooth;
-            const DirectionalScalar compression =
-                tire_contact_compression_directional(
-                    model, candidate, sample, direction,
-                    static_cast<std::size_t>(tire_index), road_smooth
-            );
-            jacobian[at(n+m+static_cast<int>(index), column)] =
-                -compression.derivative;
-            smooth = smooth && road_smooth;
+        if (!std::isfinite(prescribed[i])) return false;
+    }
+
+    // Partition the coordinates into held ports and free, and the equations the
+    // same way.  The held rows are the reaction we want; the free rows say the
+    // mechanism is in equilibrium on every coordinate nobody is holding.
+    std::vector<unsigned char> held(static_cast<std::size_t>(dimension), 0);
+    for (const int coordinate : driven) {
+        held[static_cast<std::size_t>(coordinate)] = 1;
+    }
+    std::vector<int> free_index(static_cast<std::size_t>(dimension), -1);
+    std::vector<int> free_rows;
+    free_rows.reserve(static_cast<std::size_t>(dimension));
+    for (int row = 0; row < dimension; ++row) {
+        if (held[static_cast<std::size_t>(row)] == 0) {
+            free_index[static_cast<std::size_t>(row)] =
+                static_cast<int>(free_rows.size());
+            free_rows.push_back(row);
         }
     }
 
-    for (int row = 0; row < m; ++row) {
-        for (int coordinate = 0; coordinate < n; ++coordinate) {
-            if (gauge[static_cast<std::size_t>(coordinate)] == 0 &&
-                static_rotation_gauge_for_pivot(model, coordinate) == nullptr) {
-                jacobian[at(coordinate, n+row)] = -constraint[
-                    static_cast<std::size_t>(row*n+coordinate)
-                ];
-            }
+    const int free_count = static_cast<int>(free_rows.size());
+    // The prescribed increment supplies the right-hand side through the columns of
+    // the held coordinates: A_freefree * dq_free = -A_freeheld * ds.  This is the
+    // Dirichlet elimination, and it is why the free block is assembled rather than
+    // the whole matrix inverted.
+    std::vector<double> matrix(
+        static_cast<std::size_t>(free_count)*
+            static_cast<std::size_t>(free_count), 0.0
+    );
+    std::vector<double> rhs(static_cast<std::size_t>(free_count), 0.0);
+    for (int i = 0; i < free_count; ++i) {
+        const int row = free_rows[static_cast<std::size_t>(i)];
+        for (int j = 0; j < free_count; ++j) {
+            const int column = free_rows[static_cast<std::size_t>(j)];
+            matrix[static_cast<std::size_t>(i)*
+                static_cast<std::size_t>(free_count)+
+                static_cast<std::size_t>(j)] =
+                tangent[static_cast<std::size_t>(row)*
+                    static_cast<std::size_t>(dimension)+
+                    static_cast<std::size_t>(column)];
+        }
+        double value = 0.0;
+        for (std::size_t p = 0; p < driven.size(); ++p) {
+            value -= tangent[static_cast<std::size_t>(row)*
+                static_cast<std::size_t>(dimension)+
+                static_cast<std::size_t>(driven[p])] * prescribed[p];
+        }
+        rhs[static_cast<std::size_t>(i)] = value;
+    }
+
+    std::vector<double> delta(static_cast<std::size_t>(dimension), 0.0);
+    for (std::size_t p = 0; p < driven.size(); ++p) {
+        delta[static_cast<std::size_t>(driven[p])] = prescribed[p];
+    }
+    if (free_count > 0) {
+        // A genuinely partitioned solve.  `identity` is reported separately so a
+        // singular free block is a refusal rather than a silent least-squares
+        // answer, which would present an underdetermined mechanism as stiff.
+        LuFactorization factorization;
+        if (!factorization.factor(matrix, free_count)) return false;
+        std::vector<double> solution(static_cast<std::size_t>(free_count), 0.0);
+        factorization.solve(rhs, solution);
+        for (int i = 0; i < free_count; ++i) {
+            const double value = solution[static_cast<std::size_t>(i)];
+            if (!std::isfinite(value)) return false;
+            delta[static_cast<std::size_t>(
+                free_rows[static_cast<std::size_t>(i)]
+            )] = value;
         }
     }
 
-    for (std::size_t active_index = 0;
-         active_index < active_tires.size(); ++active_index) {
-        std::fill(compression_derivative.begin(), compression_derivative.end(), 0.0);
-        const int tire_index = active_tires[active_index];
-        compression_derivative[static_cast<std::size_t>(tire_index)] = 1.0;
-        reset_directional_state(model, direction);
-        const bool force_smooth = external_force_directional(
-            model, candidate, sample, direction, force_derivative,
-            brush_derivative, false, &static_contact, &force_scratch
-        );
-        smooth = smooth && force_smooth;
-        const int column = n+m+static_cast<int>(active_index);
-        for (int row = 0; row < n; ++row) {
-            if (gauge[static_cast<std::size_t>(row)] == 0 &&
-                static_rotation_gauge_for_pivot(model, row) == nullptr) {
-                jacobian[at(row, column)] =
-                    -force_derivative[static_cast<std::size_t>(row)];
-            }
-        }
-        jacobian[at(n+m+static_cast<int>(active_index), column)] = 1.0;
-    }
-    for (const auto& rotation_gauge : model.static_rotation_gauges) {
-        const int free_body = model.body_to_free[
-            static_cast<std::size_t>(rotation_gauge.body)
-        ];
-        if (free_body < 0 || rotation_gauge.pivot < 0 ||
-            rotation_gauge.pivot >= n) {
-            continue;
-        }
-        const int first = 6*free_body+3;
+    // The reaction is the residual the held rows would otherwise carry -- the force
+    // the port must supply.  Reading it from `A * delta` is what makes it work
+    // conjugate: the work `ds^T Q_s` is the same `delta^T A delta` the free block
+    // was solved against, so no separate scaling is applied.
+    std::vector<double> result(driven.size(), 0.0);
+    for (std::size_t p = 0; p < driven.size(); ++p) {
+        const int row = driven[p];
+        double value = 0.0;
         for (int column = 0; column < dimension; ++column) {
-            jacobian[at(rotation_gauge.pivot, column)] = 0.0;
+            value += tangent[static_cast<std::size_t>(row)*
+                static_cast<std::size_t>(dimension)+
+                static_cast<std::size_t>(column)] *
+                delta[static_cast<std::size_t>(column)];
         }
-        jacobian[at(rotation_gauge.pivot, first)] = rotation_gauge.axis_world.x;
-        jacobian[at(rotation_gauge.pivot, first+1)] = rotation_gauge.axis_world.y;
-        jacobian[at(rotation_gauge.pivot, first+2)] = rotation_gauge.axis_world.z;
+        if (!std::isfinite(value)) return false;
+        result[p] = value;
     }
-    return smooth && finite_vec(jacobian);
+
+    reaction = std::move(result);
+    return true;
+}
+
+
+namespace {
+
+// Whether a generalized coordinate is a *gauge* row rather than a mechanical
+// equilibrium row.
+//
+// A gauge row constrains the arbitrary static pose of the free set; its residual is
+// a pure function of the pose and does not involve the applied load.  The tangent
+// says so by replacing the row with the identity
+// (`linearization/physical.cpp:144-147`), and the static residual says so by writing
+// the gauge value over the row (`kernel_static_trim.cpp:77-82` for the rotation
+// gauges, `:108-109` for the global one).  Everything that assembles a load-side
+// quantity has to agree with that, or the two sides of `A X = B_w P` will be
+// describing different equations for the same row.
+//
+// Extracted rather than repeated four times in `frozen_load_column`: the rule is one
+// fact about the model, and a copy that drifted from the tangent's version would be
+// invisible -- both would still compile and both would still return plausible
+// numbers.
+bool frozen_load_gauge_coordinate(const Model& model, int coordinate) {
+    if (coordinate < 0) return false;
+    if (model.static_gauge_body >= 0 && model.static_gauge_dof_mask != 0) {
+        const int free_body = model.body_to_free[
+            static_cast<std::size_t>(model.static_gauge_body)
+        ];
+        if (free_body >= 0) {
+            const int base = 6*free_body;
+            const int local = coordinate - base;
+            if (local >= 0 && local < 6 &&
+                (model.static_gauge_dof_mask &
+                 (static_cast<std::uint32_t>(1) << local)) != 0) {
+                return true;
+            }
+        }
+    }
+    return static_rotation_gauge_for_pivot(model, coordinate) != nullptr;
+}
+
+}  // namespace
+
+
+std::vector<double> frozen_load_column(
+    const Model& model, const State& pose, int body, int component
+) {
+    // `B_w = -dR/dw` for one unit wrench component applied to one body.
+    //
+    // The column is *analytic*, not a finite difference, because the load enters
+    // the residual exactly once and linearly.  `static_residual` forms
+    // `out[col] = -force[col] - reaction[col]`, and `force`/`torque` are built in
+    // `force/layout.cpp` as `external_load_scale * body_wrench` -- so an extra unit
+    // of `body_wrench[k]` adds exactly `-1` to the generalized coordinate it feeds,
+    // plus a *pose-dependent* moment when the wrench acts at a declared marker
+    // rather than at the body origin:
+    //
+    //     torque += cross(rotate(q, point), force)      (force/layout.cpp:172)
+    //
+    // so `d(torque)/dF = -cross(R*p, e_k)` and the derivative is evaluated at the
+    // pose being solved for, which is the geometric term the design requires
+    // (SPEC :35, :42).  A finite difference here would also be a finite difference
+    // of the *solver's* response, which the design explicitly refuses (:439).
+    //
+    // The unit magnitude is conditional on `external_load_scale == 1`.  That is not
+    // an assumption about the caller: it is the frozen protocol's own definition.
+    // `frozen_working_sample` pins `working.load_scale = 1.0` with the reason
+    // written out (`linearization/physical.cpp:350-353`) -- a frozen response asks
+    // how the mechanism answers a variation in the *load direction* about this
+    // state, and scaling the load would answer a different question.  A caller that
+    // assembled its tangent at some other scale has changed the physical problem and
+    // must scale this column to match.
+    std::vector<double> column(static_cast<std::size_t>(model.ndof), 0.0);
+    // Every guard below is a *complete* bound on the index that follows it, so
+    // removing any one of them still leaves the routine unable to write outside its
+    // own vector.  That is deliberate: a negative `base` writes *before* the vector,
+    // which is silent heap corruption rather than a visible crash -- the worst kind
+    // of defect to leave for a test to notice.
+    if (component < 0 || component >= 6) return column;
+    if (body < 0) return column;
+    if (body >= static_cast<int>(model.body_to_free.size())) return column;
+    const int free_body = model.body_to_free[static_cast<std::size_t>(body)];
+    // A fixed body has no free coordinate to load.  Returning zeros is the honest
+    // answer -- the request cannot move the mechanism -- and the caller's
+    // compatibility audit is what turns that into a refusal.
+    if (free_body < 0) return column;
+    const int base = 6*free_body;
+    if (base < 0 || base + 5 >= model.ndof) return column;
+
+    const bool is_force = component < 3;
+    const int axis = is_force ? component : component - 3;
+    // A moment lands in the rotational block, not on the translational coordinate
+    // that happens to share its axis index: `[Fx,Fy,Fz,Mx,My,Mz]` maps to the six
+    // consecutive generalized coordinates, so a moment is offset by three.  Writing
+    // `base + axis` would put `Mx` on `Fy`, which is a permutation of the wrench --
+    // plausible enough to look like a working routine.
+    const int slot = is_force ? axis : 3 + axis;
+
+    // A gauge row is *not* a force-balance row.  The tangent replaces it with the
+    // identity (`linearization/physical.cpp:144-147`) because the row carries a
+    // gauge value -- a pure function of the pose -- rather than the mechanical
+    // equilibrium; the static residual does the same at `:77-82` (rotation gauges)
+    // and `:108-109` (the global gauge).  None of those rows depends on the load, so
+    // the true derivative there is zero.
+    //
+    // Writing `-1` anyway would not merely be a wrong entry in a vector: it fabricates
+    // a right-hand side for a row that cannot carry one, and `A X = B_w P` would then
+    // report `X[gauge] = -1` -- a unit displacement conjured out of a load applied to
+    // a coordinate the model deliberately does not let move.  That leaks into every
+    // measurement through `Y = G X`.  The check is on the *coordinate*, so it covers
+    // the moment block and the lever-arm terms below as well, not only `slot`.
+    if (frozen_load_gauge_coordinate(model, base + slot)) return column;
+
+    column[static_cast<std::size_t>(base + slot)] = -1.0;
+
+    if (is_force) {
+        // The lever arm only exists when the model declares an application point
+        // for this body; an origin wrench adds nothing, which is what keeps every
+        // model without a marker bit-for-bit unchanged.
+        Vec3 point{};
+        if (body < static_cast<int>(model.body_wrench_point_local.size())) {
+            point = model.body_wrench_point_local[static_cast<std::size_t>(body)];
+        }
+        if (point.x != 0.0 || point.y != 0.0 || point.z != 0.0) {
+            // `d/df_k cross(R*p, f) = cross(R*p, e_k)`, negated because the residual
+            // carries `-force`.  The arm is rotated into world at the *given* pose,
+            // so the derivative is a function of the base point as the design
+            // requires rather than of the load.
+            const Vec3 arm = rotate(pose.q[static_cast<std::size_t>(body)], point);
+            const Vec3 unit{
+                axis == 0 ? 1.0 : 0.0, axis == 1 ? 1.0 : 0.0, axis == 2 ? 1.0 : 0.0
+            };
+            const Vec3 moment = cross(arm, unit);
+            // The lever arm reaches the rotational coordinates, so each one is
+            // checked against the same gauge rule before it is written: a gauge row
+            // among them would be corrupted by the moment exactly as `slot` would be
+            // by the force.
+            if (!frozen_load_gauge_coordinate(model, base + 3)) {
+                column[static_cast<std::size_t>(base + 3)] -= moment.x;
+            }
+            if (!frozen_load_gauge_coordinate(model, base + 4)) {
+                column[static_cast<std::size_t>(base + 4)] -= moment.y;
+            }
+            if (!frozen_load_gauge_coordinate(model, base + 5)) {
+                column[static_cast<std::size_t>(base + 5)] -= moment.z;
+            }
+        }
+    }
+    return column;
 }
 
 

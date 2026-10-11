@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "blocked",
+  "target_model": null,
+  "target_samples": null,
+  "environment": "Windows 11 / Python 3.12.13",
+  "direct_baseline": null,
+  "reason": "P4a 原动态样本 ABI/local_response_v1 尚未交付，缺少可重放的同物理问题直接基准；不能用静态自测或未知规模宣称无矩阵收益。",
+  "required_before_retry": [
+    "P4a native response block and Python query",
+    "same sample/mode/measurement direct timing",
+    "assembled tangent and non-symmetric/ singular audit"
+  ],
+  "checked_at": "2026-10-11"
+}

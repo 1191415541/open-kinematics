@@ -1,0 +1,7 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,收口查询与全部消费者,TODO,旧measure/表达式/报告/replay兼容，消费者无私有/重复算法,just check-fast,,0,阻断：R1–R6生产消费者迁移和统一查询收口尚未完成；不能用artifact写表步骤替代消费者验收。
+2,实现同通道表布局与实际CSV/Parquet写表,DONE,formats真实写入，JSON/NPZ和表格同值/单位/身份/原因,"uv run --no-sync pytest packages/suspension_multibody/tests/io/test_artifacts_unified.py packages/suspension_multibody/tests/characteristics/test_query_artifact.py -q -p no:cacheprovider",2026-10-11,0,已实现真实CSV/Parquet写表；保留JSON/NPZ/native通道，表行保留case/sample/time/组件身份；35 passed。证据：raw/table-export-evidence.md。
+3,验证冷读取/部分结果/独立网格往返,DONE,禁求解探针下查询导出读取通过，无效点/接受步映射不丢,"uv run --no-sync pytest packages/suspension_multibody/tests/io/test_artifacts_unified.py packages/suspension_multibody/tests/characteristics/test_query_artifact.py -q -p no:cacheprovider",2026-10-11,0,已有冷读、失败/部分结果、样本身份与artifact独立重答测试连同新表往返测试共35 passed；P4a/P5核心发布前置仍未满足。证据：raw/table-export-evidence.md。
+4,收口R1–R9唯一归属和保留入口,TODO,定向调用/DAG证明无旧生产副本或未迁调用，公共符号理由明确,just check-fast,,0,人工复核SPEC行为验收与证据：raw/retirement-ledger.csv；命令/文件存在只作门禁；未实施
+5,运行四组合与性能发布门,TODO,P0目标清单和P5核心兼容全通过，完整一致采样/预算达标,just check-fast,,0,人工复核SPEC行为验收与证据：raw/core-release-report.md；命令/文件存在只作门禁；未实施
+6,运行跨系统收尾回归并同步文档,TODO,构建/快速/数值/完整架构/全量通过且skip/xfail不增长，示例可执行,just test-all,,0,人工复核SPEC行为验收与证据：raw/validation.md；用户文档与保留入口清单；命令/文件存在只作门禁；未实施

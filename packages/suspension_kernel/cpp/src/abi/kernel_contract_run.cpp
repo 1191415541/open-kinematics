@@ -226,12 +226,21 @@ Json capability_document() {
     const char* name = contract_case_family_name(index);
     if (contract_case_supported(name)) case_families.push_back(json_string(name));
   }
+  // The characteristics declaration is deliberately two fields rather than one.
+  // Reading a request and *answering* it are different capabilities, and this
+  // build does the first without the second.  Publishing the request version
+  // and an empty response list says exactly that; claiming a response kind here
+  // would be the empty-shell capability the contract forbids, because the
+  // reader would accept a request this kernel cannot answer.
+  std::vector<Json> characteristics_kinds;
   return json_object({
       {"contract", json_string("multibody-capabilities")},
       {"contract_version", json_integer(document_contract_version())},
       {"function_program_versions", json_array({json_integer(1)})},
       {"joint_coordinate_motion_versions", json_array({json_integer(1)})},
       {"constraint_channel_versions", json_array({json_integer(1)})},
+      {"characteristics_request_versions", json_array({json_integer(1)})},
+      {"characteristics_response_kinds", json_array(std::move(characteristics_kinds))},
       {"case_families", json_array(std::move(case_families))},
       {"function_element_types", json_array({json_string("force"), json_string("torque"), json_string("wrench")})},
       {"pac2002_refused_families", json_array(std::move(families))},

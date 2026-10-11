@@ -1,5 +1,18 @@
 """Versioned, solver-independent suspension interchange contracts."""
 
+# Imported after ``multibody`` on purpose: the request validator raises
+# ``ContractError``, which lives there.  Importing it first would make a partial
+# ``suspension_contracts`` the source of the name and fail with a circular-import
+# error at package import time.
+from .characteristics import (
+    DOMAINS,
+    DYNAMIC_DEFINITION_KINDS,
+    REQUEST_VERSION,
+    SAMPLE_STATUSES,
+    request_document,
+    split_request,
+    validate_characteristics_request,
+)
 from .geometry import (
     SCHEMA_VERSION,
     CoordinateFrame,
@@ -40,6 +53,10 @@ from .multibody import (
 from .resolved import validate_resolved_model, validate_solve_plan
 
 __all__ = [
+    "DOMAINS",
+    "DYNAMIC_DEFINITION_KINDS",
+    "REQUEST_VERSION",
+    "SAMPLE_STATUSES",
     "CONTRACT_MAGIC",
     "CONTRACT_VERSION",
     "SCHEMA_FILES",
@@ -63,10 +80,13 @@ __all__ = [
     "load_schema",
     "pack_container",
     "parse_json",
+    "request_document",
+    "split_request",
     "unpack_container",
     "validate",
     "validate_assembly",
     "validate_case",
+    "validate_characteristics_request",
     "validate_element_properties",
     "validate_model",
     "validate_result",

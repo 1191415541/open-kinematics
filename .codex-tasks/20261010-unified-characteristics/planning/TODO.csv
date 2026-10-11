@@ -1,0 +1,5 @@
+id,task,status,acceptance_criteria,validation_command,completed_at,retry_count,notes
+1,读完整设计/taskmaster并核对当前落点,DONE,原文/模板/工作区/关键证据已读,只读原文与定点源码核查,2026-10-10,0,FastCtx不可调用，使用rg与PowerShell；源码未改
+2,生成Epic与全部子任务规格及真源,DONE,9子任务51叶子步且完整范围/依赖/验收,独立结构审查通过,2026-10-10,0,产品状态TODO
+3,独立审查并修订全部阻断项,DONE,设计忠实且内部一致，REVIEW终态无阻断,语义审查及P0阻断复审通过,2026-10-10,0,一个P0完成条件矛盾已修订复审
+4,验证结构/链接/来源与仓库门并交付,DONE,自检/check-fast等价展开/diff-check通过,validate_plan.py --planning及VALIDATION.md快速门展开,2026-10-10,0,just缺sh未启动；等价展开全过；日志raw/check-fast-expanded.log

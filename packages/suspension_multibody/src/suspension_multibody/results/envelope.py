@@ -8,6 +8,13 @@ from typing import Any
 
 import numpy as np
 
+from ..characteristics import (
+    camber_angle,
+    frame_position,
+    legacy_roll_center_envelope_values,
+    legacy_roll_center_primitives,
+    toe_angle,
+)
 from ..modeling.primitives.spatial import quaternion_to_matrix
 from ..modeling.resolved import ResolvedModel
 from .element_wrench import _declared_element_names, decode_element_wrench
@@ -250,15 +257,19 @@ class ResultEnvelope:
             values, units = self.tire_state(row["element"])[:, 4], "N"
         elif kind in ("toe", "camber", "frame_position"):
             pose, basis = self.frame_pose(row["frame"]), self.frame_pose(reference)
+            # R1: the formulas live in `characteristics.measurements`; this method
+            # keeps the query, the declaration lookup and the unit check.
             if kind == "frame_position":
-                values = np.einsum("nji,nj->ni", basis[:, :3, :3], pose[:, :3, 3]-basis[:, :3, 3])
+                values = frame_position(pose, basis)
                 units = "m"
             else:
                 axis = np.asarray(row["axis"], dtype=float)
-                vector = np.einsum("nij,j->ni", pose[:, :3, :3], axis)
-                vector = np.einsum("nji,nj->ni", basis[:, :3, :3], vector)
-                values = np.arctan2(-vector[:, 0], vector[:, 1]) if kind == "toe" else np.arctan2(vector[:, 2], np.hypot(vector[:, 0], vector[:, 1]))
-                values *= row.get("sign", 1)
+                sign = row.get("sign", 1)
+                values = (
+                    toe_angle(pose, basis, axis, sign=sign)
+                    if kind == "toe"
+                    else camber_angle(pose, basis, axis, sign=sign)
+                )
                 units = "rad"
         else:
             raise ValueError(f"unsupported measurement primitive {kind!r}")
@@ -266,56 +277,96 @@ class ResultEnvelope:
             raise ValueError(f"measurement {name!r} requires units {units!r}")
         return Measurement(name, _readonly_array(values), units, reference)
 
+    def characteristic(self, name: str) -> Any:
+        """
+        Answer one declared measurement as a characteristic request.
+
+        This is the query the design's §4 describes: it reads channels this
+        result already holds, attaches a sample identity to every value, and
+        refuses to solve.  Delegated to ``results.characteristics`` so the
+        envelope keeps its existing ``measure`` contract untouched.
+        """
+        from .characteristics import measurement_query
+
+        return measurement_query(self, name)
+
     def _roll_center(self, declaration: Mapping[str, Any]) -> np.ndarray:
-        readings = self._roll_center_primitives(declaration)
-        return np.column_stack((np.mean(readings[:, :, 1], axis=1),
-            np.mean(readings[:, :, 1]*readings[:, :, 3], axis=1)))
+        # The aggregation *is* the legacy definition, so it lives beside that
+        # definition rather than here; this method keeps only the duty of handing
+        # the primitive readings over in the envelope's own shape.
+        return legacy_roll_center_envelope_values(self._roll_center_primitives(declaration))
 
     def _roll_center_primitives(self, declaration: Mapping[str, Any]) -> np.ndarray:
-        jacobians = self.raw.block("constraint_jacobian")
+        """
+        Extract the legacy per-sample readings from this envelope's own data.
+
+        The assembly itself lives in ``characteristics.centers``; this method only
+        gathers what the envelope already holds -- the native constraint rows, the
+        body states and the declared frame positions -- and hands them over as
+        plain arrays.  That keeps the formula in one place while leaving the
+        envelope in charge of reading its own result, and it is why
+        ``characteristics`` needs no import of the results layer.
+        """
+        jacobians = np.asarray(self.raw.block("constraint_jacobian"), dtype=float)
         free = tuple(self.raw.metadata["free_bodies"])
         frames = {row["name"]: row for row in self.model.to_document()["frames"]}
         reference = self.frame_pose(declaration.get("reference", "world"))
         selected = {row["id"]: row for row in self.raw.metadata["constraints"]}
-        indices = [index for name in declaration["constraints"]
-            for index in range(selected[name]["row_offset"], selected[name]["row_offset"]+selected[name]["row_count"])]
-        values = []
-        for sample, jacobian in enumerate(jacobians):
-            rotation = reference[sample, :3, :3]
-            origin = reference[sample, :3, 3]
-            slopes, patches = [], []
-            for contact, drive in zip(declaration["contact_frames"], declaration["drive_frames"]):
-                body = frames[drive]["body"]
-                if frames[contact]["body"] != body or body not in free:
-                    raise ValueError("roll-center contact and drive must belong to the same free body")
-                state = self.body_state(body)[sample]
-                drive_point = self.frame_pose(drive)[sample, :3, 3]
-                contact_point = self.frame_pose(contact)[sample, :3, 3]
-                arm = drive_point-state[:3]
-                up = rotation[:, 2]
-                drive_row = np.zeros(jacobian.shape[1])
-                start = 6*free.index(body)
-                drive_row[start:start+3] = up
-                drive_row[start+3:start+6] = np.cross(arm, up)
-                matrix = [*jacobian[indices], drive_row]
-                targets = [0.]*len(indices)+[1.]
-                reference_id = declaration.get("reference", "world")
-                if reference_id != "world" and frames[reference_id]["body"] in free:
-                    offset = 6*free.index(frames[reference_id]["body"])
-                    for axis in range(6):
-                        fixed = np.zeros(jacobian.shape[1])
-                        fixed[offset+axis] = 1
-                        matrix.append(fixed)
-                        targets.append(0.)
-                matrix_array = np.asarray(matrix)
-                twist = np.linalg.lstsq(matrix_array, targets, rcond=None)[0]
-                if np.max(np.abs(matrix_array @ twist-targets)) > 1e-8:
-                    raise ValueError("roll-center drive is inconsistent with selected constraints")
-                velocity = rotation.T @ (twist[start:start+3]+np.cross(twist[start+3:start+6], contact_point-state[:3]))
-                if abs(velocity[2]) <= 1e-12:
-                    raise ValueError("roll-center contact has no vertical motion")
-                slopes.append(velocity[1]/velocity[2])
-                patches.append(rotation.T @ (contact_point-origin))
-            patches_array = np.asarray(patches)
-            values.append(np.column_stack((patches_array, slopes)))
-        return np.asarray(values)
+        indices = [
+            index
+            for name in declaration["constraints"]
+            for index in range(
+                selected[name]["row_offset"],
+                selected[name]["row_offset"] + selected[name]["row_count"],
+            )
+        ]
+        contacts = declaration["contact_frames"]
+        drives = declaration["drive_frames"]
+        bodies = []
+        for contact, drive in zip(contacts, drives):
+            body = frames[drive]["body"]
+            if frames[contact]["body"] != body or body not in free:
+                raise ValueError(
+                    "roll-center contact and drive must belong to the same free body"
+                )
+            bodies.append(body)
+        samples = jacobians.shape[0]
+        states = np.stack([np.asarray(self.body_state(body)[:samples]) for body in bodies], axis=1)
+        contact_points = np.stack(
+            [np.asarray(self.frame_pose(name)[:samples, :3, 3]) for name in contacts], axis=1
+        )
+        drive_points = np.stack(
+            [np.asarray(self.frame_pose(name)[:samples, :3, 3]) for name in drives], axis=1
+        )
+        return legacy_roll_center_primitives(
+            jacobians=jacobians,
+            selected_rows=np.asarray(indices, dtype=int),
+            body_offsets=np.asarray([6 * free.index(body) for body in bodies], dtype=int),
+            reference_rotations=np.asarray(reference[:samples, :3, :3], dtype=float),
+            reference_origins=np.asarray(reference[:samples, :3, 3], dtype=float),
+            body_positions=states[:, :, :3],
+            drive_points=drive_points,
+            contact_points=contact_points,
+            reference_body_offset=self._held_reference_offset(declaration, frames, free),
+        )
+
+    def _held_reference_offset(
+        self,
+        declaration: Mapping[str, Any],
+        frames: Mapping[str, Any],
+        free: tuple[str, ...],
+    ) -> int | None:
+        """
+        Return the free-body offset whose six coordinates the legacy drive held.
+
+        A declared reference that is itself a free body was pinned by the legacy
+        assembly; the world reference pins nothing, which is why this returns
+        ``None`` rather than a zero offset.
+        """
+        reference_id = declaration.get("reference", "world")
+        if reference_id == "world":
+            return None
+        body = frames[reference_id]["body"]
+        if body not in free:
+            return None
+        return 6 * free.index(body)

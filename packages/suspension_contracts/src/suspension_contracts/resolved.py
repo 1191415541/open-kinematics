@@ -6,6 +6,7 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
+from .characteristics import validate_characteristics_request
 from .multibody import (
     ContractError,
     canonical_json_bytes,
@@ -224,6 +225,12 @@ def validate_solve_plan(document: Mapping[str, Any]) -> None:
     """Validate one run's facts; model entities cannot be stored on the plan."""
     validate(document, "solve_plan")
     canonical_json_bytes(document)
+    if "characteristics" in document:
+        # The JSON schema bounds the shape; this pass owns the semantics the
+        # schema subset cannot express (known domains, units, kinds, versions).
+        validate_characteristics_request(
+            {"schema_version": 1, "characteristics": document["characteristics"]}
+        )
     _indexed(document["boundaries"], "boundaries")
     _indexed(document["inputs"], "inputs")
     if "excitation" in document:

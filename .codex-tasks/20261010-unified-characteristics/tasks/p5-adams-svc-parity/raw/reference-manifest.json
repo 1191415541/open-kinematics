@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "status": "pending_reference",
+  "reference_source": null,
+  "reference_sha256": null,
+  "model_fingerprint": null,
+  "profile": null,
+  "frozen_protocol": null,
+  "sample_mapping": null,
+  "reason": "独立 Adams Car 2024.1 结果文件未提供；本机只有 Adams 2025_1_1，不能冒充 2024.1。",
+  "checked_at": "2026-10-11",
+  "blocking_scope": "P5 core SVC parity and P6 Adams-compatible release"
+}

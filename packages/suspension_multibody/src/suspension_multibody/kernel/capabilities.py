@@ -73,6 +73,22 @@ def require_function_program_version(version: int) -> None:
         raise ValueError(f"loaded kernel does not support function program version {version}")
 
 
+def require_characteristics_answerable(kind: str) -> None:
+    """
+    Refuse a characteristics response this kernel cannot produce.
+
+    Reading a request and *answering* it are separate capabilities.  A build may
+    accept the request and still be unable to compute the response; asking
+    anyway must fail here, with the missing capability named, rather than return
+    the unchanged channels and let the caller believe the request was honoured.
+    """
+    document = kernel_capability_document()
+    if 1 not in document.get("characteristics_request_versions", ()):
+        raise ValueError("loaded kernel does not support characteristics request version 1")
+    if kind not in document.get("characteristics_response_kinds", ()):
+        raise ValueError(f"loaded kernel does not compute characteristics response kind {kind!r}")
+
+
 @functools.lru_cache(maxsize=1)
 def _kernel_scope() -> tuple[
     frozenset[int], frozenset[str], frozenset[str], tuple[Pac2002FeatureFamily, ...]

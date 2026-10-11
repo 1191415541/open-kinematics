@@ -453,7 +453,7 @@ void residual(
         // Effective inertia: the body's own, plus any tire that declared its mass
         // (decision D2).  Reading it here rather than the body's own is what makes
         // a declared tire mass part of the dynamics instead of a field nobody uses.
-        const Mat3 Iw=R*body_effective_inertia_body(model, bi)*transpose(R);
+        const Mat3 Iw = body_world_inertia(model, bi, R);
         Vec3 av{
             (1-ctx.alpha_m)*a_next[6*fi]+ctx.alpha_m*ctx.previous.a[bi].x,
             (1-ctx.alpha_m)*a_next[6*fi+1]+ctx.alpha_m*ctx.previous.a[bi].y,

@@ -512,6 +512,52 @@ class ContractModel {
   double gravity_[3] = {0.0, 0.0, 0.0};
 };
 
+/// One declared measurement or perturbation inside a characteristics request.
+struct ContractDeclaration {
+  std::string id;
+  std::string measurement_id;
+  int definition_version = 0;
+  std::string units;
+  std::string response_kind;
+  int response_version = 0;
+  std::string mode;
+};
+
+/// One characteristics output request, decoded.
+///
+/// A request is inert data: it names what to derive, never how to solve.  Every
+/// component carries its own version so a definition can be revised without
+/// overwriting the older meaning, and the read is strict -- unknown fields are
+/// refused rather than ignored, because ignoring one turns a typo into a
+/// different physical question.
+struct ContractCharacteristics {
+  bool present = false;
+  std::string request_id;
+  std::string domain;
+  std::vector<int> samples;
+  std::vector<ContractDeclaration> measurements;
+  std::vector<ContractDeclaration> perturbations;
+  std::string boundary_profile;
+  int boundary_version = 0;
+  std::string definition_kind;
+  int definition_version = 0;
+  std::string frozen_protocol;
+  int frozen_version = 0;
+  std::string operator_kind;
+  int operator_version = 0;
+};
+
+/// Read and validate `document`'s characteristics request into `out`.
+///
+/// Absent means "no request" and succeeds with `out.present == false`.  A
+/// present request is validated in full: wrong version, unknown field, unknown
+/// domain, unsupported unit or response kind, non-positive version, empty
+/// measurement list or a duplicate sample index all fail with a message naming
+/// the offending path.
+bool contract_read_characteristics(const JsonValue& document,
+                                   ContractCharacteristics& out,
+                                   std::string& error);
+
 /// The plan a `multibody-case` document expands into.
 struct ContractPlan {
   std::string family;
@@ -538,6 +584,14 @@ struct ContractPlan {
   double dynamics_tolerance = 1e-8;
   double increment_tolerance = 1e-8;
   std::vector<ContractCase> cases;
+  /// The verbatim characteristics request, empty when the case asked for none.
+  ///
+  /// The kernel does not *compute* characteristics yet; this field exists so a
+  /// request cannot be silently dropped on the way in.  A document that carries
+  /// one is read and validated strictly, and the decoded form is echoed back in
+  /// the result metadata, so "the request arrived" is observable rather than
+  /// assumed.  An unknown field, domain, unit, kind or version is an error.
+  ContractCharacteristics characteristics;
 };
 
 /// Install the tire-own mass and inertia a `multibody-model` document declared

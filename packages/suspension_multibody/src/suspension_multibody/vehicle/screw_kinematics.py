@@ -62,6 +62,16 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
+from ..characteristics.motion import (
+    Screw as _Screw,
+)
+from ..characteristics.motion import (
+    Twist as _Twist,
+)
+from ..characteristics.motion import (
+    screw_from_twist as _screw_from_twist,
+)
+from ..characteristics.values import CharacteristicsError
 from ..modeling.primitives import (
     ConstantVelocityJoint,
     Constraint,
@@ -103,9 +113,6 @@ NUMERICAL_STEP = 1e-6
 #: and far below the smallest singular value an assembled mechanism produces
 #: (measured ``1.9e-4`` for the double-wishbone axle, ``raw/engine_contract.md``).
 RANK_TOLERANCE = 1e-9
-
-#: Below this angular speed a twist is taken to have no rotation axis.
-_ANGULAR_SPEED_FLOOR = 1e-12
 
 
 class KinematicError(ValueError):
@@ -294,33 +301,19 @@ def constraint_jacobian(
     return jacobian, moved
 
 
-@dataclass(frozen=True)
-class Twist:
-    """A rigid velocity: the angular velocity and the velocity of the world origin."""
+# --- the motion and axis types (R4: thin adapters, no second algorithm) ------- #
+#
+# The implementations live in ``characteristics/motion.py``.  What stays here is
+# the *compatibility* contract this engine published: the same names, the same
+# pure-translation refusal, and this module's own ``KinematicError``.  Without the
+# adapter below a caller catching ``screw_kinematics.KinematicError`` would stop
+# catching the refusal once the formula moved, which is exactly the kind of silent
+# contract change a migration is supposed to avoid.
 
-    omega: np.ndarray
-    velocity: np.ndarray
-
-    def transform_point(self, point: np.ndarray) -> np.ndarray:
-        """Return the velocity of the world point ``point``."""
-        return self.velocity + np.cross(self.omega, np.asarray(point, dtype=float))
+Twist = _Twist
 
 
-@dataclass(frozen=True)
-class Screw:
-    """
-    A space instantaneous axis: one point of it, its direction and its pitch.
-
-    ``pitch`` is the advance along ``direction`` per radian of rotation, so a pure
-    rotation has ``pitch == 0``.  ``point`` is a point of the axis, not a fixed
-    point: any point on the axis describes the same screw, which is why the engine
-    reports the one closest to a caller-chosen anchor.
-    """
-
-    point: np.ndarray
-    direction: np.ndarray
-    pitch: float
-    angular_speed: float
+Screw = _Screw
 
 
 def screw_from_twist(twist: Twist, *, anchor: np.ndarray | None = None) -> Screw:
@@ -330,26 +323,14 @@ def screw_from_twist(twist: Twist, *, anchor: np.ndarray | None = None) -> Screw
     ``anchor`` picks which point of the axis is reported: the point closest to
     ``anchor``, or to the world origin when it is ``None``.  A motion with no
     rotation has no axis and is refused.
+
+    The formula is ``characteristics.motion.screw_from_twist``; only the exception
+    type is translated, so that this engine's refusal stays a ``KinematicError``.
     """
-    omega = np.asarray(twist.omega, dtype=float)
-    speed = float(np.linalg.norm(omega))
-    if not np.isfinite(speed) or speed <= _ANGULAR_SPEED_FLOOR:
-        raise KinematicError(
-            "this motion has no angular velocity, so it has no instantaneous axis: a "
-            "pure translation is not a screw"
-        )
-    velocity = np.asarray(twist.velocity, dtype=float)
-    point = np.cross(omega, velocity) / (speed * speed)
-    direction = omega / speed
-    if anchor is not None:
-        offset = np.asarray(anchor, dtype=float) - point
-        point = point + direction * float(offset @ direction)
-    return Screw(
-        point=point,
-        direction=direction,
-        pitch=float(omega @ velocity) / (speed * speed),
-        angular_speed=speed,
-    )
+    try:
+        return _screw_from_twist(twist, anchor=anchor)
+    except CharacteristicsError as exc:
+        raise KinematicError(str(exc)) from exc
 
 
 @dataclass(frozen=True)
@@ -482,6 +463,17 @@ def _minimum_norm(
     ``rows`` right singular vectors, so every free direction beyond that count
     would be lost and ``null_space`` would silently under-report the motion the
     drives leave free.
+
+    The rank policy is kept local on purpose.  It is ``singular > tol * largest``,
+    while ``characteristics.motion.rank_and_null_space`` floors the comparison at
+    ``max(largest, 1.0)`` to stay meaningful for the tiny, differently-scaled
+    matrices a boundary audit sees.  Sharing that policy here would *lower* this
+    engine's reported rank whenever the largest singular value falls below 1 --
+    measured on a diagonal matrix scaled to ``1e-3``: rank 2 became rank 1 -- and
+    a lower rank raises ``nullity``, which is the number ``solve_rigid_motion``
+    publishes about a mechanism's remaining freedom.  Reusing the *formula* would
+    be a silent change to a reported physical quantity, so only the definition of
+    the rank tolerance is shared, not the comparison around it.
     """
     if matrix.shape[0] == 0:
         return np.zeros(matrix.shape[1]), np.eye(matrix.shape[1]), 0

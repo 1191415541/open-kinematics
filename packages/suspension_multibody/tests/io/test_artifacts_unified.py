@@ -6,10 +6,12 @@ from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import pyarrow.parquet as pq
 import pytest
 
 from suspension_multibody.api import simulate
 from suspension_multibody.io import read_artifact, write_artifact
+from suspension_multibody.io.artifacts import _channel_table
 from suspension_multibody.results import ResultEnvelope
 
 from ..authoring.test_generic_multibody import _assembly, _case
@@ -41,6 +43,101 @@ def test_times_diagnostics_performance_and_provenance_survive_roundtrip(tmp_path
     np.testing.assert_array_equal(loaded["diagnostics"], result.diagnostics)
     assert loaded["performance"] == dict(result.performance)
     assert loaded["manifest"]["model"]["name"] == result.model.name
+
+
+def test_requested_tables_are_real_and_keep_output_identity(tmp_path):
+    result = _result()
+    write_artifact(result, tmp_path, formats=("csv", "parquet"))
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["table_formats"]) == {"csv", "parquet"}
+    assert "body_state" in manifest["table_formats"]["csv"]
+    assert (tmp_path / "body_state.csv").is_file()
+    assert (tmp_path / "body_state.parquet").is_file()
+    assert manifest["table_layouts"]["body_state"] == [
+        "sample_index", "case_index", "case_name", "output_sample_id",
+        "time_s", "sample_role", "index_0", "index_1", "value", "unit",
+        "frame_id", "reason",
+    ]
+    loaded = read_artifact(tmp_path)
+    rows = loaded["tables"]["body_state"]
+    assert rows[0]["case_name"] == result.raw.cases[0]["name"]
+    assert rows[0]["output_sample_id"] == 0
+    assert rows[0]["sample_role"] == "output"
+    assert float(rows[0]["time_s"]) == pytest.approx(float(result.times_s[0]))
+    assert rows[0]["value"] == pytest.approx(float(result.named_blocks["body_state"][0, 0, 0]))
+    assert rows[0]["unit"] == "m"
+    assert rows[0]["frame_id"] == "world"
+    assert rows[0]["reason"] == ""
+
+
+@pytest.mark.parametrize("format_name", ["csv", "parquet"])
+def test_table_format_selection_writes_only_requested_format(tmp_path, format_name):
+    result = _result()
+    write_artifact(result, tmp_path, formats=(format_name,))
+    assert (tmp_path / f"body_state.{format_name}").is_file()
+    other = "parquet" if format_name == "csv" else "csv"
+    assert not (tmp_path / f"body_state.{other}").exists()
+    if format_name == "parquet":
+        table = pq.read_table(tmp_path / "body_state.parquet")
+        values = table.column("value").to_pylist()
+    else:
+        import csv
+
+        with (tmp_path / "body_state.csv").open(newline="", encoding="utf-8") as stream:
+            values = [float(row["value"]) for row in csv.DictReader(stream)]
+    np.testing.assert_array_equal(
+        np.asarray(values), result.named_blocks["body_state"].reshape(-1)
+    )
+
+
+def test_unknown_table_format_fails_before_creating_artifacts(tmp_path):
+    with pytest.raises(ValueError, match="unsupported artifact table format"):
+        write_artifact(_result(), tmp_path, formats=("xls",))
+    assert list(tmp_path.iterdir()) == []
+
+    nested = tmp_path / "not-created" / "artifact"
+    with pytest.raises(ValueError, match="unsupported artifact table format"):
+        write_artifact(_result(), nested, formats=("xls",))
+    assert not nested.exists()
+    assert not nested.parent.exists()
+
+
+def test_table_annotations_keep_component_units_and_refuse_unknowns():
+    identities = [{
+        "sample_index": 0,
+        "case_index": 0,
+        "case_name": "case",
+        "output_sample_id": 0,
+        "time_s": 0.0,
+        "sample_role": "output",
+    }]
+    bushing, _ = _channel_table(
+        np.zeros((1, 1, 12)),
+        identities=identities,
+        channel_name="bushing_output",
+        case_spans=(),
+    )
+    assert (bushing[0]["unit"], bushing[0]["frame_id"]) == ("m", "local")
+    assert (bushing[3]["unit"], bushing[3]["frame_id"]) == ("rad", "local")
+    assert (bushing[6]["unit"], bushing[6]["frame_id"]) == ("N", "local")
+    assert (bushing[9]["unit"], bushing[9]["frame_id"]) == ("N*m", "local")
+    bump_stop, _ = _channel_table(
+        np.zeros((1, 1, 5)),
+        identities=identities,
+        channel_name="bump_stop_output",
+        case_spans=(),
+    )
+    assert bump_stop[1]["unit"] == "m/s"
+
+    unknown, _ = _channel_table(
+        np.array([[np.nan]]),
+        identities=identities,
+        channel_name="unmapped_channel",
+        case_spans=(),
+    )
+    assert unknown[0]["unit"] is None
+    assert unknown[0]["frame_id"] is None
+    assert unknown[0]["reason"] == "non_finite_value"
 
 
 def test_failed_partial_artifact_preserves_channels_and_evidence(tmp_path):

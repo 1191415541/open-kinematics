@@ -144,6 +144,13 @@ def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: 
     case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
     if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
         case["outputs"]["constraint_jacobian"] = True
+    # Rebuilding the case must not drop the output request: the native reader
+    # has to see the same request the plan carried, or a caller would get the
+    # unchanged channels back and never learn the request was discarded.
+    if "characteristics" in run:
+        case["characteristics"] = {
+            "schema_version": 1, "characteristics": run["characteristics"],
+        }
     payload = bytearray(plan.input_payload)
     descriptors = case.setdefault("blobs", [])
     occupied = {row["name"] for row in descriptors if "name" in row}
@@ -213,11 +220,18 @@ def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: 
     _check_input_references(document, case, bytes(payload))
     from ..kernel.capabilities import (
         kernel_capability_document,
+        require_characteristics_answerable,
         require_function_program_version,
     )
 
     if document.get("function_programs"):
         require_function_program_version(1)
+    if "characteristics" in run:
+        # The kernel reads the request today but does not yet answer it, so this
+        # refuses rather than returning the unchanged channels: a caller must
+        # never mistake "accepted" for "computed".
+        for declared in run["characteristics"].get("measurements", ()):
+            require_characteristics_answerable(str(declared.get("response_kind", "")))
     if motion.targets and 1 not in kernel_capability_document().get("joint_coordinate_motion_versions", ()):
         raise ValueError("loaded kernel does not support joint coordinate motion version 1")
     if family not in kernel_capability_document().get("case_families", ()):

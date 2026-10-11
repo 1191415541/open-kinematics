@@ -177,6 +177,15 @@
         "tolerance": {"type": "object"}
       }
     },
-    "blobs": {"type": "array", "items": {"type": "object"}}
+    "blobs": {"type": "array", "items": {"type": "object"}},
+    "characteristics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "characteristics"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "characteristics": {"type": "object"}
+      }
+    }
   }
 }

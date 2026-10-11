@@ -1,0 +1,212 @@
+{
+  "schema": "characteristics-acceptance-budgets",
+  "version": 1,
+  "date": "2026-10-10",
+  "locked_by": "P0",
+  "rule": "P0 锁定后方可推进；P0 预算与容差后续不得为通过而放宽。数值由 P0 实测锁定，不在 SPEC 猜值。",
+
+  "measurement_environment": {
+    "os": "Microsoft Windows 11 专业版 (10.0.26200)",
+    "cpu": "AMD Ryzen 9 5950X 16-Core Processor (AMD64 Family 25 Model 80)",
+    "memory_gb": 39.9,
+    "python": "3.12.13 (MSC v.1944 64 bit AMD64)",
+    "numpy": "2.2.0",
+    "note": "预算的绝对值仅在同等环境可比；相对预算（次数、模式数）跨环境有效。"
+  },
+
+  "physical_scales": {
+    "note": "取自仓库现有冻结基线的真实物理量级，用于把绝对/相对容差绑定到可解释尺度。不是新录基线。",
+    "source": "packages/suspension_multibody/tests/data/kc_baseline/{k_states.json,c_states.json}",
+    "wheel_travel_mm": {"magnitude": 10.0, "range": [-10.0, 10.0]},
+    "rack_displacement_mm": {"magnitude": 5.0, "range": [-5.0, 5.0]},
+    "wheel_center_z_mm": {"magnitude": 300.0},
+    "wheel_center_y_mm": {"magnitude": 700.0},
+    "toe_deg": {"magnitude": 6.66},
+    "camber_deg": {"magnitude": 0.48},
+    "track_mm": {"magnitude": 1400.0},
+    "compliance_translation_mm_per_unit_load": {"magnitude": 1.06e-4},
+    "compliance_rotation_rad_per_unit_load": {"magnitude": 3.35e-7},
+    "note_on_compliance": "C 状态中的 deformation 分量是单位载荷下的位移/转角，量级 1e-4 mm 与 1e-7 rad。"
+  },
+
+  "tolerances": {
+    "note": "直接复用仓库现有严格门禁的容差权威，不新造。它们是当前唯一有数值验证历史的口径。",
+    "authorities": [
+      {
+        "id": "case_parity_translation",
+        "rule": "0.1 + 0.002 * |reference|",
+        "unit": "mm",
+        "source": "packages/suspension_multibody/scripts/case_parity_check.py:78-79",
+        "applies_to": ["wheel_center_translation_derivatives", "geometry_positions"]
+      },
+      {
+        "id": "case_parity_rotation",
+        "rule": "0.02 + 0.005 * |reference|",
+        "unit": "deg",
+        "source": "packages/suspension_multibody/scripts/case_parity_check.py:80-81",
+        "applies_to": ["toe_camber_derivatives", "angle_values"]
+      },
+      {
+        "id": "case_parity_matrix_translation",
+        "rule": "1e-6 + 1e-4 * |reference|",
+        "unit": "mm",
+        "source": "packages/suspension_multibody/scripts/case_parity_check.py:82-84",
+        "applies_to": ["compliance_matrix_translation_rows"]
+      },
+      {
+        "id": "case_parity_matrix_rotation",
+        "rule": "1e-8 + 1e-4 * |reference|",
+        "unit": "rad",
+        "source": "packages/suspension_multibody/scripts/case_parity_check.py:82-84",
+        "applies_to": ["compliance_matrix_rotation_rows"]
+      },
+      {
+        "id": "kc_native_probe",
+        "rule": "同 case_parity（0.1+0.002*|r| mm；0.02+0.005*|r| deg）",
+        "source": "packages/suspension_multibody/scripts/kc_native_probe.py:46-52",
+        "applies_to": ["direct_vs_unit_basis_mode_response"]
+      },
+      {
+        "id": "kc_native_c_probe",
+        "rule": "translation 1e-6 + 1e-4*|ref| mm；rotation 1e-8 + 1e-4*|ref| rad",
+        "source": "packages/suspension_multibody/scripts/kc_native_c_probe.py:8,49-50",
+        "applies_to": ["C_matrix_direct_response"]
+      }
+    ],
+    "characteristics_specific": {
+      "note": "P4a/P5 新增判定必须**复用上述权威**，不得新造更宽的口径。以下为把既有口径套到特性量的映射。",
+      "local_response_translation": "1e-6 + 1e-4*|reference| m/N 或 m/(N*m)（按分量量纲换算到 mm 后使用 matrix_translation 口径）",
+      "local_response_rotation": "1e-8 + 1e-4*|reference| rad/N 或 rad/(N*m)",
+      "input_derivative": "复用 case_parity_translation/rotation（分子为 mm 或 deg 的导数按同一相对规则）",
+      "time_derivative": "复用 case_parity_translation/rotation（分子为 mm 或 deg，分母为 s）",
+      "wheel_rate": "相对容差 1e-4（源于 1/(C33+C39) 的倒数传播），并同时核对绝对容差 N/m 由 P2 实测锁定",
+      "ride_rate": "同上；串联式额外核对 Ks/Kt 相对 1e-4",
+      "roll_rate": "相对容差 1e-4；力矩与角度分量各自按上述 translation/rotation 口径"
+    }
+  },
+
+  "residual_and_rank_thresholds": {
+    "note": "取自当前源码中已存在的判据，不新造。",
+    "roll_center_consistency": {
+      "rule": "max|matrix @ twist - targets| <= 1e-8",
+      "source": "packages/suspension_multibody/src/suspension_multibody/results/envelope.py:312",
+      "note": "R2 旧定义保留此阈值与行为。"
+    },
+    "roll_center_vertical_motion_guard": {
+      "rule": "|velocity_z| > 1e-12",
+      "source": "packages/suspension_multibody/src/suspension_multibody/results/envelope.py:315-316"
+    },
+    "finite_perturbation_step_ladder": {
+      "note": "独立有限扰动必须报步长序列与误差，不能只报单点。下列为 SPEC/P0 要求；具体步长在 P1/P2 实测锁定，届时不得放宽。",
+      "required": ["至少 3 个步长", "报收敛阶或误差单调性", "报最终采用步长", "与解析或已知线性解对照"]
+    },
+    "zero_response_threshold": {
+      "rule": "abs(value) <= 1e-12",
+      "source": "packages/suspension_multibody/src/suspension_multibody/kernel/capabilities.py:137-140",
+      "note": "现有 '视为零' 判据；特性量的零响应判定沿用同一量级，按分量单位换算。"
+    },
+    "identifiability": {
+      "rule": "对目标测量检查 g_q N = 0（N 为剩余零空间基）；不成立返回 unidentifiable",
+      "source": "设计 §6.1",
+      "note": "不得静默把最小范数解当唯一物理运动。"
+    },
+    "singularity": {
+      "rule": "按实际模式 B_w P[:,j] 检查相容性；不相容报 singular",
+      "source": "设计 §6.6"
+    }
+  },
+
+  "budgets": {
+    "note": "预算按设计 §8.1：P0 固定独立模式/测量投影、组装/分解次数、峰值内存、输出体积和全接受步预算；超预算报告而不静默降采样。以下基线由 P0 实测试运行锁定。",
+
+    "benchmark_axle_k_grid": {
+      "source_measurement": "P0 本次实测，2026-10-10，本机",
+      "protocol": "kc_quasi_static, mode=K, wheel_values_mm=(-10,0,10), rack_values_mm=(-5,0,5)",
+      "sample_count": 18,
+      "bodies": 13,
+      "free_bodies": 12,
+      "joints": 21,
+      "constraints": 21,
+      "linear_system_dimension": "6*12 + 21 = 93",
+      "wall_time_s": 0.034,
+      "output_numeric_bytes": 156240,
+      "block_breakdown": {
+        "body_state": {"shape": [18, 13, 19], "bytes": 35568},
+        "constraint_wrench": {"shape": [18, 21, 6], "bytes": 18144},
+        "diagnostics": {"shape": [36, 16], "bytes": 4608},
+        "energy": {"shape": [18, 21], "bytes": 3024},
+        "element_wrench": {"shape": [18, 13, 13], "bytes": 24336},
+        "constraint_multiplier": {"shape": [18, 70], "bytes": 10080},
+        "constraint_reaction": {"shape": [18, 21, 2, 10], "bytes": 60480}
+      },
+      "note": "constraint_jacobian 块仅在模型含 roll_center 测量时开启（compilation/resolved.py:145-146）。本基准模型不含，故实测无该块。"
+    },
+
+    "frozen_native_performance_reference": {
+      "source": "packages/suspension_multibody/tests/data/kc_perf_baseline_native.json（既有冻结基线，仅引用不重录）",
+      "k-100": {"states": 100, "median_seconds": 1.036, "min_seconds": 1.023},
+      "c-66": {"states": 66, "median_seconds": 1.494, "min_seconds": 1.490},
+      "repeats": 5,
+      "note": "可作为特性路径的性能参照系：特性请求的额外成本不得使既有 K/C 路径超出此基线的允许漂移。具体允许漂移由 P6 性能门判定。"
+    },
+
+    "mode_and_projection_budget": {
+      "note": "P0 固定上限；P3/P4a 验证，超预算报告。",
+      "independent_load_modes_per_metric": {
+        "wheel_rate": 1,
+        "ride_rate": 1,
+        "suspension_roll_rate": 1,
+        "total_roll_rate": 1,
+        "toe_compliance_lateral": 1,
+        "camber_compliance_lateral": 1,
+        "matrix_view_adams_12_v1": 12,
+        "note": "核心指标每项一个具名模式右端（同相/反向载荷），不是 12 个独立右端。仅显式矩阵视图请求才用 12 列单位基。"
+      },
+      "measurement_projections_per_mode": {
+        "wheel_rate": 2,
+        "ride_rate": 2,
+        "suspension_roll_rate": 2,
+        "total_roll_rate": 2,
+        "note": "左右两侧。同相模式一次解可同时得到两侧。"
+      }
+    },
+
+    "assembly_factorization_budget": {
+      "rule": "同一工作样本、同一切线 A 的全部兼容请求：组装一次、数值分解一次。",
+      "per_sample": {"assemblies": 1, "numeric_factorizations": 1},
+      "allowed_reuse": "跨采样点仅可复用已核实不变的稀疏结构分析；新的工作点仍重新评估物理切线并数值分解。",
+      "invalidation": ["事件", "边界变化", "布局变化", "非零模式变化"],
+      "forbidden": ["连续样本间复用上一点分解", "复用积分 Newton 缓存", "以 A 代替 A^T"],
+      "note": "现有 mb_linear 8 个后端全部只有单 RHS solve；多 RHS/转置接口属 P2 交付项，当前不可声明已具备。"
+    },
+
+    "all_accepted_step_budget": {
+      "rule": "全接受步预算按接受步数线性；不得静默降采样。",
+      "requirement": ["报告接受步总数与实际产出特性数的差异", "缺完整一致状态的接受步计入未完成，不跳过", "开启特性不影响原积分/事件/接受拒绝次数"],
+      "note": "具体接受步数由 P3 在真实动态工况上实测锁定。P0 只锁定规则与必须报告的量。"
+    },
+
+    "peak_memory_and_volume": {
+      "requirement": ["报告峰值内存", "报告输出体积", "分别计量组装/分解/回代/序列化"],
+      "baseline_reference_bytes": 156240,
+      "note": "基准 K 网格 18 样本的数值描述符总量。特性输出体积以此为量级参照；实际预算由 P2/P4a 实测锁定。"
+    },
+
+    "no_request_invariance": {
+      "rule": "无特性请求时不增加切线计算或额外输出块；开启后单独测量时间、分解次数和结果体积。",
+      "verification": ["无请求基线逐位不变", "开启功能不改变原积分/事件/步序", "不改变原轨迹/事件/步序"]
+    }
+  },
+
+  "p4b_budget": {
+    "note": "P4b 另设预算，与核心分离。",
+    "status": "to_be_locked_by_p4b",
+    "rule": "P4b 独立验收；未交付不阻断核心 P5/P6。"
+  },
+
+  "p7_budget": {
+    "note": "P7 后端扩展的成本/误差预算独立登记。",
+    "status": "to_be_locked_by_p7",
+    "rule": "必须实测组装/预条件/求解/内存及总成本，并与 P2/P4a 直接基准比较。无收益则明确不推荐。"
+  }
+}

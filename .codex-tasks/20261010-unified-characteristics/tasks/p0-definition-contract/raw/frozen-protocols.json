@@ -1,0 +1,196 @@
+{
+  "schema": "characteristics-frozen-protocols",
+  "version": 1,
+  "date": "2026-10-10",
+  "note": "设计 §6.5 冻结态力切线与 §6.6 载荷柔度使用的独立协议 ID/version。冻结协议与指标公式、响应类型分别版本化，不能用一个 Adams 名称推导另两项。本项目协议与 Adams 协议分别命名。",
+  "protocols": {
+    "frozen_inertial_load_v1": {
+      "status": "project_definition",
+      "kind": "frozen_force_tangent",
+      "version": 1,
+      "domain": ["dynamic", "equilibrium"],
+      "adams_equivalent": "pending_definition",
+      "adams_blocking": "G1/G2/G3/G4/G5/G6 全部 pending（见 raw/adams-rule-audit.csv）。本协议为本项目定义，不得宣称 Adams 等价。",
+      "definition": {
+        "base_point": "原动态样本（接受态）或合格静态平衡样本",
+        "pose": "位姿为基点，不全部冻结。机械残差 R_m(q,lambda;v*,z*,u,f_inertia*)=0",
+        "fixed_quantities": {
+          "velocity": "固定速度，world 表达（world 分量在增量中保持固定）",
+          "internal_state": "内部状态固定（轮胎松弛、衬套历史、摩擦/return mapping 均不演化）",
+          "undisturbed_inputs": "未扰动输入固定",
+          "contact_and_limit_branch": "接触/限位活动分支固定",
+          "inertial_load": "惯性载荷快照 f_inertia* 固定"
+        },
+        "excluded_from_fixed": "被扰动的输入量（作为扰动时从固定清单中排除）",
+        "inertial_wrench": {
+          "components": 6,
+          "expressed_in": "world",
+          "action_point": "该刚体质心这一材料点，随增量位姿移动",
+          "wrench_components": "world 分量及参考 world 轴保持固定",
+          "source": "该接受态的质量/惯量、线加速度、角速度/角加速度和陀螺项",
+          "generalized_load": "B_com(q)^T w_inertia* —— 只对几何映射 B_com 求位姿导数，不重新计算惯性 wrench，也不把广义力协向量数值固定",
+          "residual_audit": "基点须通过残量审计"
+        },
+        "not_in_scope": "质量/加速度及内部状态演化的变化属于第 6.4 节连续响应（P4b），不属本协议。非平衡接受态可满足含冻结惯性载荷的基点残量，仍不是第 6.2 节静态柔度。",
+        "variant_rule": "采用 body 固定分量、固定世界作用点或随扰动重新计算惯性者须另设定义版本。独立有限扰动与解析切线使用相同规则。"
+      },
+      "output": {
+        "drive": "对端口坐标 s 施加 delta s=1，保持其他声明边界",
+        "solve_for": "在未驱动自由坐标上联合求冻结条件下的增量力平衡、约束一致性、delta q、delta lambda 和驱动反力",
+        "quantity": "阻止位移所需的外部功共轭驱动力 Q_s 的 K_ij = partial Q_si / partial s_j",
+        "sign_convention": "恢复力符号相反，定义中记录",
+        "units": {
+          "displacement": "m",
+          "rotation": "rad",
+          "K_translation_translation": "N/m",
+          "K_translation_rotation": "N/rad",
+          "K_rotation_translation": "N*m/m",
+          "K_rotation_rotation": "N*m/rad"
+        },
+        "must_preserve": [
+          "d(J^T lambda*) 预载几何项",
+          "实际力律在固定速度下的位姿导数",
+          "端口投影",
+          "参考 frame 的方向导数"
+        ],
+        "multiplier_rule": "乘子基值来自样本，增量按力平衡和约束求出，不能默认冻结"
+      },
+      "validity_conditions": {
+        "valid": "基点残量审计合格且受约束响应空间可解",
+        "not_equilibrium": "残量不合格",
+        "underdetermined": "欠驱动",
+        "note": "不合格或欠驱动返回原因，不返回零或截断值"
+      },
+      "oracles": [
+        "线性质量弹簧阻尼 K=k（固定速度/惯性载荷）",
+        "预载几何切线",
+        "轴间耦合",
+        "固定/自由车身",
+        "移动参考体",
+        "相同冻结条件下独立有限扰动"
+      ],
+      "rejected_substitutes": [
+        "只输出描述符矩阵",
+        "轨迹力/位移比",
+        "相邻点斜率"
+      ]
+    },
+    "frozen_load_compliance_v1": {
+      "status": "project_definition",
+      "kind": "frozen_load_compliance",
+      "version": 1,
+      "domain": ["dynamic"],
+      "adams_equivalent": "pending_definition",
+      "adams_blocking": "同 frozen_inertial_load_v1；且本协议为载荷驱动，与坐标驱动不能借矩阵求逆互相切换。",
+      "definition": {
+        "base_point": "在原动态样本及 frozen_inertial_load_v1 已声明冻结条件下",
+        "initial_sample_rebalanced": false,
+        "time_propagation": false,
+        "equations": {
+          "A": "partial R_m^B / partial x",
+          "B_w": "- partial R_m^B / partial w",
+          "G": "partial y / partial x",
+          "D": "partial y / partial w",
+          "direct": "A X = B_w P, Y = G X + D P",
+          "theoretical_compliance": "C = G A^-1 B_w + D, so Y = C P",
+          "production_rule": "逆仅用于说明等价；生产算法解线性方程，不构造逆矩阵，也不默认存储 C"
+        },
+        "load_mode_binding": "每列载荷模式 P[:,j] = partial w / partial alpha_j 绑定具名轮端、力/力矩轴、作用点、反作用路径及模式幅值单位",
+        "dimensional_rule": "混合力和力矩时使用明确的物理换算，不把不同量纲直接相加",
+        "boundary_rows": "保持/释放行与乘子按 §6.1 去重/处理，包含预载几何项、固定速度下的力律导数与参考体运动",
+        "lambda_rule": "不冻结 delta lambda"
+      },
+      "core_capability": {
+        "statement": "核心交付是可按任意具名载荷模式评估的局部响应算子，不固定为两轮、12 个端口方向或 144 个输出。",
+        "matrix_view_status": "adams_wheel_center_12_v1 是该算子在特定输入/输出基下的一种表示，为可选诊断/互操作请求，不作为 P4a 核心指标的完成前置。",
+        "equivalence_rule": "等价指同一物理局部问题及其可辨识响应，不能靠更换冻结条件、拆出悬架或省略耦合来获得。"
+      },
+      "response_contract": {
+        "channel": "local_response_v1",
+        "records": ["mode ID", "measurement ID", "value", "component units", "validity"],
+        "no_solver_objects": "请求和导出不暴露线性求解器对象；返回后不能借算子重新发起求解",
+        "translation_definition": "轮心相对 measurement_reference 的位置增量",
+        "rotation_definition": "该相对姿态在基点的空间小转角 rad；包含随动参考体的增量运动，不直接等同于 Euler 角或 Adams AX/AY/AZ",
+        "load_expression": "载荷按基点轴向表达；实际作用点、反作用 wrench 的力臂转换和既有随动预载导数按原协议处理",
+        "units": {
+          "force": "N",
+          "moment": "N*m",
+          "translation_compliance": "m/N",
+          "translation_moment_compliance": "m/(N*m)",
+          "rotation_force_compliance": "rad/N",
+          "rotation_moment_compliance": "rad/(N*m)"
+        },
+        "unit_rule": "单位、左右符号和 frame 转换作用于相应测量与载荷映射，不能对整组输出乘一个常数"
+      },
+      "validity_conditions": {
+        "compatibility_check": "按实际模式 B_w P[:,j] 检查线性问题相容性",
+        "identifiability_check": "按目标测量对剩余零空间的不变性判定可辨识",
+        "singular": "不相容",
+        "unidentifiable": "测量不唯一",
+        "combined_mode_rule": "某组合载荷相容而各单列不相容时，应直接求组合并给出有效测量，不能因未请求单列无效而拒绝该指标",
+        "matrix_view_rule": "矩阵视图才按其所请求单位基列分别审计，不以任意世界 pin 掩盖刚体模态"
+      },
+      "solving_strategy": {
+        "preferred": "复用现有物理方向导数、mb_linear 与可验证的 factorization/solve-many 接口",
+        "shared_factorization": "对同一工作样本、同一切线 A 的全部兼容请求组装/数值分解一次，批量求独立载荷模式",
+        "heave_mode": "Wheel 同相模式为一个右端，可同时测量两侧位移、Toe/Camber",
+        "mode_reuse": "相同模式跨指标复用；严格线性相关模式可由已求基精确重构，须保留重构系数与来源",
+        "truncation_forbidden": "不以截断小奇异值的近似降阶替代本轮目标",
+        "transpose_strategy": "少量输出对应大量载荷模式时可选 A^T Z = G^T 再求 Y = Z^T B_w P + D P；非对称切线必须真正使用转置系统，不能假定 A 对称",
+        "strategy_selection": "由实际独立右端、输出数和 backend 成本决定，不盲目按矩阵尺寸切换",
+        "not_adjoint_optimization": "这不是硬点优化的伴随梯度功能"
+      },
+      "cache_rule": {
+        "shared": "同一样本、同一域、同一边界、同一活动模式共享物理切线分解和响应算子右端",
+        "not_shared": "不同域或不同释放边界不能复用同一个结果",
+        "cross_sample": "跨采样点只可复用已核实不变的稀疏结构分析；新的工作点仍重新评估物理切线并数值分解",
+        "invalidation": "事件、边界、布局或非零模式变化使结构缓存失效",
+        "forbidden": "连续样本间不能复用上一点分解来冒充当前局部特性；不得复用积分 Newton 缓存（NewtonLinearizationCache 含积分系数）"
+      },
+      "verification_layers": {
+        "numeric_equivalence": "同一物理问题中用独立全单位基测试参考核对直接模式响应、转置求解和矩阵乘模式的数值等价，含非对称切线和单位/frame 变换",
+        "singular_combinations": "对奇异组合单独以解析/有限扰动验证，不要求不存在的单列参考",
+        "physical_oracles": [
+          "线性 K=k, C=1/k",
+          "防倾杆交叉项",
+          "预载非线性",
+          "车身/轴间耦合",
+          "同冻结有限载荷 oracle"
+        ],
+        "isolation_rule": "隔离副本严格保持 v*、z*、惯性 wrench、活动分支、载荷/反作用与边界，测试不提交生产状态",
+        "rejected_substitutes": [
+          "相邻轨迹差分",
+          "重配平",
+          "连续传播"
+        ]
+      }
+    },
+    "continuous_descriptor_v1": {
+      "status": "p4b_independent",
+      "kind": "continuous_descriptor",
+      "version": 1,
+      "domain": ["dynamic"],
+      "adams_equivalent": "not_claimed",
+      "definition": {
+        "equation": "F_xdot delta xdot + F_x delta x + F_u delta u = 0",
+        "note": "带约束连续动态响应，可能是时变描述符系统。不能一般性地对质量/描述符矩阵求逆，也不能把位姿/载荷比称为瞬时静态柔度。",
+        "first_round_output": "请求方向的描述符导数 F_xdot、F_x、F_u 及测量映射",
+        "separate_acceptance": "约束一致的状态扰动和载荷扰动能力分别验收",
+        "not_in_scope": ["频域", "新轨迹积分器"],
+        "propagation_rule": "有限时域载荷响应另定义传播区间、初始扰动与既有积分路径的复用协议；未实现传播不得声称已交付时间响应",
+        "discrete_separation": "动态 Newton 矩阵含步长、generalized-alpha 参数和前步状态，是离散算法对象。连续响应与离散步导数不共享名称或证据。",
+        "per_model_audit": "部分状态模型带显式步长依赖、return mapping 或未公开连续状态方程，其动态响应能力需逐模型审计；不因已有方向导数而统一宣称支持。"
+      },
+      "blocking_scope": "不阻断 P4a/P5/P6；P4a 冻态响应定义不变"
+    }
+  },
+  "naming_rule": {
+    "statement": "刚度/柔度分别按驱动边界求解，不一般性地用 1/K_zz 或矩阵逆代替释放其他坐标后的柔度。",
+    "tire_scope_rule": "含轮胎端口刚度与仅悬架弹性贡献分别定义；内部平衡使用完整真实模型，不为单项贡献停用力元。",
+    "audit_rule": "轮胎卸载、衬套历史、摩擦和限位切换逐力律审计。不重放 return mapping、重置内部状态或自动配平。"
+  },
+  "p4a_p4b_separation": {
+    "statement": "domain=dynamic, definition.kind=frozen_load_compliance 是 P4a 必交付能力；frozen_force_tangent 与 continuous_descriptor 分别命名、分别验收。",
+    "non_equilibrium_rule": "非平衡点仍不能通过 equilibrium 请求。"
+  }
+}

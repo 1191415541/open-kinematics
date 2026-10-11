@@ -1,0 +1,2 @@
+uv run --all-packages ruff check .
+error: recipe `lint` could not be run because just could not find the shell `sh`: program not found

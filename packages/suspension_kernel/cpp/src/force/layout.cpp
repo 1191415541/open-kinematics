@@ -258,7 +258,7 @@ void assemble_generalized_force(
         for (int fi = 0; fi < static_cast<int>(model.free_body.size()); ++fi) {
             const int bi = model.free_body[fi];
             const Mat3 R = qmat(state.q[bi]);
-            const Mat3 Iw = R * body_effective_inertia_body(model, bi) * transpose(R);
+            const Mat3 Iw = body_world_inertia(model, bi, R);
             const Vec3 gyro = cross(state.omega[bi], Iw*state.omega[bi]);
             const Vec3 F = force[bi];
             const Vec3 T = torque[bi];

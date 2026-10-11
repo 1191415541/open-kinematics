@@ -243,6 +243,176 @@ def test_the_tire_state_interface_is_self_consistent() -> None:
     assert "mb_tire_state selftest: OK" in output, output
 
 
+def test_the_frozen_port_tangent_reports_the_holding_force() -> None:
+    """
+    P4a step 2's coordinate-driven port tangent solves the partitioned system.
+
+    The reaction is a number, so the executable states each one in closed form: a
+    single spring reports `-k*ds` (the holding force, not the restoring force), a
+    two-coordinate chain reports the *series* stiffness rather than the diagonal, a
+    coupled pair includes its off-diagonal term, and a singular free block is refused
+    rather than answered with a least-squares value.
+
+    Registered here because the routine lives in the solver layer and has no product
+    ABI entry point yet: without a caller its assertions would never run, and an
+    executable nothing runs buys nothing.
+
+    ``mb_frozen_sample_selftest`` (step 1) is deliberately **not** registered here.
+    Measured: it exits 0 when run directly, and exits 0 when launched from a fresh
+    pytest file in this same directory, but launched from *this* module it returns
+    0xC0000005 while still printing its success line.  ``mb_frozen_tangent_selftest``
+    is stable in exactly the same position (5/5 runs of this whole file), so the
+    fault is specific to that one executable rather than to this module's process.
+    The cause is not yet identified, so registering it would put an unexplained
+    crash into the fast gate; the step-1 evidence therefore stays with the executable
+    and this limitation is recorded rather than papered over.
+    """
+    output = _kernel_selftest("mb_frozen_tangent_selftest")
+    assert "frozen force tangent self-test passed" in output, output
+
+
+def test_the_frozen_load_column_carries_the_inverse_stiffness() -> None:
+    """
+    P4a step 3's ``B_w = -dR/dw`` producer lands the load where it names.
+
+    The load-driven half of P4a.  The executable asserts each of the six wrench
+    components individually -- a transposed or offset mapping satisfies a single
+    ``Fx`` check -- and then solves ``A X = B_w P`` with the column as its right-hand
+    side to show the composition reports ``C = 1/k``.
+
+    The two boundaries are asserted *together*, against one spring: the
+    coordinate-driven routine reports `k` and this one reports `1/k`.  That is what
+    makes it impossible to "simplify" one path into the other, which the design
+    forbids (SPEC :37) because they are different physical boundary conditions.
+    """
+    output = _kernel_selftest("mb_frozen_load_selftest")
+    assert "frozen load column self-test passed" in output, output
+
+
+def test_the_frozen_oracle_checks_the_tangent_against_the_residual() -> None:
+    """
+    P4a step 5's independent oracle: a perturbation of the nonlinear residual.
+
+    The three executables above test each operator against a number known by
+    construction, which leaves open that they are *mutually consistent and jointly
+    wrong*.  This one closes that gap: it perturbs the frozen state and evaluates
+    the real ``static_residual`` -- an unrelated computation -- then requires the
+    analytic tangent to predict the change, with the discrepancy falling at the
+    second-order rate.
+
+    The rate is the discriminating part, and it is asserted rather than a bare
+    tolerance.  The discrepancy is ``|0.5*h^2*v^T H v + h*(dA v)|`` -- the honest
+    truncation plus whatever the tangent is wrong by -- so a correct tangent gives a
+    ratio of ~100 between successive steps while an additive error of ``dA`` pulls it
+    toward ~10.  The threshold is 50, between the two regimes.  Measured baseline:
+    ``4.136e-04 / 4.138e-06 / 4.138e-08`` (ratios 100.0 and 100.0).
+
+    Sensitivity, measured rather than assumed: an additive error is resolved only
+    once ``h*|dA|`` is comparable to the truncation at the smallest step, so on this
+    fixture (entries ~5000, ``h`` down to 1e-6) the crossover is ~``0.1``-``0.5``.
+    Measured survivors: ``dA`` of 1e-3, 1e-2 and 1e-1 leave ratios 102.2, 128.7 and
+    53.5; 5e-1 collapses to 5.8 and is caught.  Note ``dA=1e-1`` clears the threshold
+    by only 7%, which is the honest resolution limit of this oracle -- *not* that the
+    error "hides under the truncation floor", which would be wrong by two orders of
+    magnitude (``h*1e-3`` is ~1e-7 against a 4.1e-04 truncation).  A bounded oracle
+    with a recorded bound, not an unbounded one.
+
+    It also pins the SPEC claims beside the oracle (SPEC :51, :67, :59): rotating the
+    whole system rotates the tangent by congruence (measured deviation ``1.137e-13``);
+    the true transpose ``A^T x = b`` is solved rather than assumed from a symmetric
+    matrix, on a hand-built asymmetric fixture (its forward and transpose solutions
+    genuinely differ and ``A^T x = b`` is re-checked against the original matrix); and
+    the direct/transpose equivalence design :439 asks for is asserted on the *real*
+    frozen tangent, and on a **supported** one: a symmetric bushing plus one
+    ``AXLE_INPLANE`` row (an asymmetric *bushing stiffness* is rejected by both model
+    builders, so a fixture built that way would exercise the assembler on a matrix no
+    supported model can produce -- reviewer finding, corrected).  On that fixture the
+    assembled ``A`` is asymmetric and the two routes are required to agree (measured
+    ``1.110e-16``) while the forward and transposed solutions genuinely differ; the
+    assembled ``A`` is also required to predict the nonlinear residual's change while
+    ``A^T`` is required to fail it (``1.8e-13`` vs ``1.0e-3``), which is what catches a
+    tangent written as the derivative of the wrong system.  The SPEC's *unit* clause is
+    checked by rescaling the coordinate units (``A S``, ``G S``) and requiring the
+    physical response to be unchanged (measured relative ``0.0``), with an
+    uncompensated-``G`` control proving the assertion is live.
+    """
+    output = _kernel_selftest("mb_frozen_oracle_selftest")
+    assert "frozen oracle self-test passed" in output, output
+    # The oracle's own liveness, *parsed* rather than grepped: a degenerate fixture
+    # reports a zero ladder and would satisfy every ratio check trivially, so the
+    # printed numbers are read back and required to be non-zero and decreasing.
+    match = re.search(
+        r"pose-block oracle error:\s*([0-9.eE+-]+)\s*\(h=1e-4\),\s*"
+        r"([0-9.eE+-]+)\s*\(1e-5\),\s*([0-9.eE+-]+)\s*\(1e-6\)",
+        output,
+    )
+    assert match is not None, f"the oracle printed no error ladder:\n{output}"
+    e0, e1, e2 = (float(value) for value in match.groups())
+    assert e0 > 0.0, "the fixture's residual change is identically zero"
+    assert e1 < e0 and e2 < e1, f"the ladder does not decrease: {e0}, {e1}, {e2}"
+    # And the frame-equivalence deviation must be a real number, not a vacuous pass.
+    frame = re.search(r"frame-equivalence worst deviation:\s*([0-9.eE+-]+)", output)
+    assert frame is not None, f"the oracle printed no frame deviation:\n{output}"
+    assert float(frame.group(1)) < 1e-9, frame.group(1)
+    # The direct/transpose agreement must be on the *real* frozen tangent, not only on
+    # a hand-built matrix: the spring fixture is symmetric, so its transpose check is
+    # vacuous.  Parse the printed pair and require agreement, which is design :439's
+    # claim ("同一物理问题 ... 含非对称切线").
+    frozen = re.search(
+        r"frozen direct vs transpose:\s*([0-9.eE+-]+)\s+vs\s+([0-9.eE+-]+)\s+"
+        r"\(diff\s+([0-9.eE+-]+)\)",
+        output,
+    )
+    assert frozen is not None, f"the oracle printed no frozen direct/transpose pair:\n{output}"
+    y_direct, y_adjoint, diff = (float(value) for value in frozen.groups())
+    assert y_direct != 0.0, "the frozen direct/transpose response is identically zero"
+    # The delivered tangent must predict the *nonlinear residual's* change, and A^T
+    # must fail that same check: without this the direct/transpose pair could agree with
+    # each other on a tangent that is the derivative of the wrong system.
+    residual = re.search(
+        r"frozen asymmetric residual oracle \(h=[0-9.eE+-]+\):\s*"
+        r"\|A dx - dR\| = ([0-9.eE+-]+),\s*"
+        r"\|A\^T dx - dR\| = ([0-9.eE+-]+)",
+        output,
+    )
+    assert residual is not None, f"the oracle printed no residual oracle line:\n{output}"
+    err_a, err_at = (float(value) for value in residual.groups())
+    assert err_a < 1e-9, residual.groups()
+    assert err_at > err_a, residual.groups()
+    # The SPEC's clause also names *unit* equivalence (SPEC :51); parse the printed
+    # relative gap and require it to be at round-off, which is design :342's
+    # "尺度变换还原后才输出" made observable.
+    unit = re.search(
+        r"frozen unit rescaled:\s*([0-9.eE+-]+)\s+vs\s+([0-9.eE+-]+)\s+"
+        r"\(relative\s+([0-9.eE+-]+)\)",
+        output,
+    )
+    assert unit is not None, f"the oracle printed no unit-rescaling pair:\n{output}"
+    assert float(unit.group(3)) < 1e-12, unit.groups()
+    assert diff == 0.0 or diff <= 1e-12, frozen.groups()
+
+
+def test_the_transpose_and_batch_surface_is_actually_executed() -> None:
+    """
+    The batch/transpose solver surface is run by a gate, not merely built.
+
+    This executable has existed and passed since the transpose work landed, but it
+    was registered nowhere: `CMakeLists.txt` built it and no gate ever executed it,
+    so a regression in `solve_transpose_many` would have been invisible.  Measured
+    before this registration: the binary exits 0 when run by hand and no test in the
+    tree referenced it by name.
+
+    P4a step 5 is the task that makes this load-bearing, because its acceptance
+    names direct/transpose equivalence, so the gate that owns that claim is the right
+    place to stop the surface being unexercised.  Registered rather than duplicated:
+    the oracle self-test asserts the transpose *in the physical context* (a real
+    asymmetric frozen tangent), while this one asserts the arithmetic in isolation
+    against an independently computed `A^T x = b`.
+    """
+    output = _kernel_selftest("mb_linear_batch_selftest")
+    assert "batch and transpose solves behave as declared" in output, output
+
+
 def test_the_solver_does_not_dispatch_on_a_tire_model_kind() -> None:
     """
     The solver reads semantic flags, not model enumerations.

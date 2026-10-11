@@ -73,6 +73,7 @@ TARGET_MODULES = (
     "mb_dual",
     "mb_config",
     "mb_linear",
+    "mb_linearization",
     "mb_joint",
     "mb_input",
     "mb_solve_static",

@@ -1,0 +1,7 @@
+metric_id,kind,version,status,reason,reference_manifest
+wheel_rate,frozen_load_compliance,1,pending_definition,Adams 2024.1规则与冻结协议尚未核实,reference-manifest.json
+ride_rate,frozen_load_compliance,1,pending_definition,Adams 2024.1规则与完整接地点/轮胎边界尚未核实,reference-manifest.json
+roll_rate,frozen_load_compliance,1,pending_definition,Adams 2024.1滚转定义与参考frame尚未核实,reference-manifest.json
+toe_compliance,frozen_load_compliance,1,pending_definition,Toe参数化/符号/单位尚未核实,reference-manifest.json
+camber_compliance,frozen_load_compliance,1,pending_definition,Camber参数化/符号/单位尚未核实,reference-manifest.json
+all_core,adams_svc,1,pending_reference,独立参考结果文件缺失,reference-manifest.json

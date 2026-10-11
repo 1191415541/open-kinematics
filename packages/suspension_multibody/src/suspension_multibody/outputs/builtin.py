@@ -33,6 +33,11 @@ from typing import Any
 
 import numpy as np
 
+from ..characteristics.measurements import (
+    legacy_wheel_camber,
+    legacy_wheel_toe,
+    transformed_point,
+)
 from .declarations import DeclarationSet, OutputDeclaration
 from .derived import BUILTIN, DerivedOutput, MinimumUnitOutputs
 
@@ -443,26 +448,19 @@ def wheel_center_component(
     view: MinimumUnitOutputs, *, rotation: str, translation: str, local: str, axis: int
 ) -> float:
     """Return one axis of the wheel centre the upright pose places."""
-    matrix = np.asarray(view[rotation], dtype=float)
-    origin = np.asarray(view[translation], dtype=float)
-    center_local = np.asarray(view[local], dtype=float)
-    return float((origin + matrix @ center_local)[axis])
+    return transformed_point(
+        view[rotation], view[translation], view[local], axis=axis
+    )
 
 
 def wheel_camber(view: MinimumUnitOutputs, *, rotation: str, outward: float) -> float:
     """Return the camber angle with the legacy left/right sign convention."""
-    matrix = np.asarray(view[rotation], dtype=float)
-    return -outward * float(
-        np.degrees(np.arctan2(float(matrix[2, 1]), float(matrix[1, 1])))
-    )
+    return legacy_wheel_camber(view[rotation], outward=outward)
 
 
 def wheel_toe(view: MinimumUnitOutputs, *, rotation: str, outward: float) -> float:
     """Return the toe angle with the legacy left/right sign convention."""
-    matrix = np.asarray(view[rotation], dtype=float)
-    return -outward * float(
-        np.degrees(np.arctan2(float(matrix[0, 1]), float(matrix[1, 1])))
-    )
+    return legacy_wheel_toe(view[rotation], outward=outward)
 
 
 def difference(view: MinimumUnitOutputs, *, a: str, b: str) -> float:

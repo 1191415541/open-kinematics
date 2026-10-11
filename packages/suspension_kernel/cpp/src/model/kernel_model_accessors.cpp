@@ -98,6 +98,27 @@ const Mat3& body_effective_inertia_body(const Model& model, int body) {
     return model.bodies[index].inertia_body;
 }
 
+Mat3 body_world_inertia(const Model& model, int body, const Mat3& rotation) {
+    return rotation * body_effective_inertia_body(model, body) * transpose(rotation);
+}
+
+std::vector<int> gauge_coordinates(const Model& model) {
+    std::vector<int> coordinates;
+    if (model.static_gauge_body < 0 || model.static_gauge_dof_mask == 0) {
+        return coordinates;
+    }
+    const int free_body =
+        model.body_to_free[static_cast<std::size_t>(model.static_gauge_body)];
+    if (free_body < 0) return coordinates;
+    for (int local = 0; local < 6; ++local) {
+        if ((model.static_gauge_dof_mask &
+             (static_cast<std::uint32_t>(1) << local)) != 0) {
+            coordinates.push_back(6*free_body + local);
+        }
+    }
+    return coordinates;
+}
+
 
 bool compute_effective_body_inertia(Model& model, std::string& error) {
     const std::size_t count = model.bodies.size();

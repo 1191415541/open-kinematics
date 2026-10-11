@@ -60,8 +60,7 @@ void fill_analytic_jacobian_columns(
     for (int fi = 0; fi < static_cast<int>(model.free_body.size()); ++fi) {
         const int bi = model.free_body[fi];
         const Mat3 rotation = qmat(evaluation.q[bi]);
-        const Mat3 world_inertia =
-            rotation * body_effective_inertia_body(model, bi) * transpose(rotation);
+        const Mat3 world_inertia = body_world_inertia(model, bi, rotation);
         for (int k = 0; k < 6; ++k) {
             const int column = 2*n + 6*fi + k;
             analytic_columns[static_cast<std::size_t>(column)] = 1;
@@ -112,8 +111,7 @@ void fill_analytic_jacobian_columns(
             J[at(offset+1, column)] = -j1/body_effective_mass(model, bi);
             J[at(offset+2, column)] = -j2/body_effective_mass(model, bi);
             const Mat3 rotation = qmat(next.q[bi]);
-            const Mat3 world_inertia =
-                rotation * body_effective_inertia_body(model, bi) * transpose(rotation);
+            const Mat3 world_inertia = body_world_inertia(model, bi, rotation);
             Mat3 inverse{};
             if (!inverse3(world_inertia, inverse)) continue;
             const Vec3 angular = inverse * Vec3{j3, j4, j5};

@@ -481,6 +481,145 @@ def test_roll_centers_routes_the_per_side_read_to_the_injected_construction() ->
     assert np.mean(np.asarray(patches)[:, 1]*injected_slopes) != pytest.approx(independent_height)
 
 
+def test_the_vehicle_report_really_calls_both_its_paths() -> None:
+    """
+    ``compute_vehicle_roll_centers`` is exercised through its default *and* injected path.
+
+    P1 SPEC requires the report entry point itself to be called, not merely for its
+    arithmetic to be reproduced by hand: a test that recomputes the formula proves
+    the formula, and says nothing about whether the report still reaches it.  This
+    test therefore makes the real call twice -- once with no hook, once with an
+    ``instant_center_engine`` -- and asserts the hook actually changes the answer,
+    which is what a hook that is silently ignored would fail to do.
+    """
+    from suspension_multibody.schema import SteeringSystemSpec, TireModelSpec, WheelSpec
+    from suspension_multibody.schema.vehicle import VehicleDeclaration
+    from suspension_multibody.vehicle.roll_centers import compute_vehicle_roll_centers
+    from tests.physics.test_vehicle_physics import _roll_center_run
+
+    vehicle = VehicleDeclaration(
+        chassis=RigidBodySpec(name="chassis", mass=1200.0),
+        front_axle=double_wishbone_axle(),
+        rear_axle=double_wishbone_axle(name="rear", x=-1400.0),
+        wheels=tuple(
+            WheelSpec(
+                name=name,
+                body=f"wheel_{name}",
+                center_local=Vec3(),
+                mass=20.0,
+                axial_inertia=2.0,
+                tire=TireModelSpec(kind="fiala", vertical_stiffness=20.0),
+            )
+            for name in ("front_left", "front_right", "rear_left", "rear_right")
+        ),
+        steering=SteeringSystemSpec(ratio=16.0),
+    )
+    result = _roll_center_run(vehicle)
+
+    # --- the default path -------------------------------------------------- #
+    default = compute_vehicle_roll_centers(result, measurements={"front": "front"})
+    assert set(default) == {"front"}
+    front = default["front"]
+    assert front.lateral_force == pytest.approx(-2.0)
+    assert front.left_contact_patch[1] == pytest.approx(-0.75)
+    assert front.right_contact_patch[1] == pytest.approx(0.75)
+    # The report's height is the summed moment over the historical lateral force.
+    expected_moment = (
+        front.left_contact_patch[1] * front.left_contact_patch_slope
+        + front.right_contact_patch[1] * front.right_contact_patch_slope
+    )
+    assert front.roll_moment == pytest.approx(expected_moment)
+    assert front.center[1] == pytest.approx(-expected_moment / -2.0)
+
+    # --- the injected path ------------------------------------------------- #
+    def engine(_result: object, _frame: str) -> np.ndarray:
+        return np.array([-0.100, 0.200])
+
+    injected = compute_vehicle_roll_centers(
+        result, measurements={"front": "front"}, instant_center_engine=engine
+    )["front"]
+    # The centre moved because the slopes were recomputed from the injected
+    # instant centre; an ignored hook would leave this identical to the default.
+    assert injected.center[1] != pytest.approx(front.center[1])
+    for patch, slope in (
+        (front.left_contact_patch, injected.left_contact_patch_slope),
+        (front.right_contact_patch, injected.right_contact_patch_slope),
+    ):
+        expected = (0.200 - patch[2]) / (patch[1] - (-0.100))
+        assert slope == pytest.approx(expected, abs=1e-12)
+
+
+def test_the_engine_rank_policy_is_not_the_boundary_audit_policy() -> None:
+    """
+    R4 moved the motion types, but this engine keeps its own rank comparison.
+
+    ``characteristics.motion.rank_and_null_space`` floors its comparison at
+    ``max(largest_singular_value, 1.0)``, which is right for the tiny, differently
+    scaled matrices a boundary audit sees.  This engine instead compares against
+    the largest singular value alone.  The two agree for well-scaled mechanisms
+    and disagree when the whole matrix is small -- measured below at a scale of
+    ``1e-3``, where the audit policy reports rank 1 and this engine reports rank 2.
+
+    The difference matters because a lower rank raises ``nullity``, the number
+    ``solve_rigid_motion`` publishes about a mechanism's remaining freedom.  This
+    test fails if someone "reuses" the audit comparison here and silently starts
+    under-reporting that quantity.
+    """
+    scaled = np.diag([1e-3, 1e-9, 0.0])
+    engine_rank = sk._minimum_norm(scaled, np.zeros(3))[2]
+
+    from suspension_multibody.characteristics.motion import rank_and_null_space
+
+    audit_rank, _ = rank_and_null_space(scaled, tolerance=sk.RANK_TOLERANCE)
+    assert engine_rank == 2
+    assert audit_rank == 1
+    assert engine_rank != audit_rank
+
+
+def test_the_moved_twist_and_screw_refuse_in_this_engines_exception_type() -> None:
+    """
+    The moved types keep this module's refusal contract.
+
+    ``Twist``/``Screw``/``screw_from_twist`` now delegate to
+    ``characteristics.motion``, which raises ``CharacteristicsError``.  A caller
+    catching ``screw_kinematics.KinematicError`` must keep catching the refusal,
+    so the adapter translates it -- otherwise moving the formula would have
+    quietly changed which exception a caller can see.
+    """
+    # The names are this module's, and they really are the migrated types.
+    from suspension_multibody.characteristics.motion import Screw as MovedScrew
+    from suspension_multibody.characteristics.motion import Twist as MovedTwist
+
+    assert sk.Twist is MovedTwist
+    assert sk.Screw is MovedScrew
+
+    # A pure translation has no axis, and the refusal is this engine's type.
+    with pytest.raises(sk.KinematicError, match="no instantaneous axis"):
+        sk.screw_from_twist(sk.Twist(omega=np.zeros(3), velocity=np.array([1.0, 0.0, 0.0])))
+
+    # The moved type is itself refused, so the adapter is not the only guard.
+    with pytest.raises(ValueError, match="three-vector"):
+        sk.Twist(omega=np.zeros(2), velocity=np.zeros(3))
+
+
+def test_the_moved_twist_solves_the_same_axis_as_before() -> None:
+    """The migrated screw arithmetic reproduces the previously published numbers."""
+    twist = sk.Twist(omega=np.array([0.0, 1.0, 0.0]), velocity=np.array([2.0, 1.0, 0.0]))
+    screw = sk.screw_from_twist(twist)
+    assert screw.angular_speed == pytest.approx(1.0)
+    assert screw.pitch == pytest.approx(1.0)
+    assert screw.direction == pytest.approx([0.0, 1.0, 0.0])
+    assert screw.point == pytest.approx([0.0, 0.0, -2.0])
+    # The published numbers satisfy the velocity field they describe:
+    # v(0) = pitch * omega + point x omega.
+    omega = screw.direction * screw.angular_speed
+    rebuilt = screw.pitch * omega + np.cross(screw.point, omega)
+    assert rebuilt == pytest.approx(twist.velocity)
+    # And the axis point really lies on the axis closest to the world origin,
+    # which is where an unanchored screw reports it.
+    assert float(screw.point @ screw.direction) == pytest.approx(0.0, abs=1e-12)
+
+
 def test_no_engine_source_names_a_hardpoint_role() -> None:
     """
     The engine's own source names no hardpoint role.

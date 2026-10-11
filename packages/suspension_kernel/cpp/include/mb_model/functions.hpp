@@ -82,4 +82,40 @@ double body_effective_mass(const Model& model, int body);
 
 const Mat3& body_effective_inertia_body(const Model& model, int body);
 
+// The effective body inertia rotated into the world frame: `R * I_body * R^T`.
+//
+// Extracted at P3 step 6 (R8) because the identical expression appeared seven times
+// across six translation units -- `force/layout.cpp`, `joint/kernel_directional_constraint.cpp`
+// (twice), `output/kernel_output.cpp`, `solve_dynamic/kernel_integrator.cpp`,
+// `solve_dynamic/kernel_integrator_newton.cpp` (twice) and
+// `solve_dynamic/kernel_integrator_residual.cpp`.  Rotation into the world frame is a
+// property of the model and the pose, not of any solver's discretisation, so it belongs
+// beside the accessor it is built on rather than at each call site.
+//
+// Callers that already hold the rotation matrix pass it in, so the shared unit never
+// re-evaluates `qmat` on a value the caller computed.  Every one of the seven migrated
+// call sites already had the matrix in hand, so there is deliberately no quaternion
+// overload: an unused one would be speculative API, and the rule here is to extract on
+// the second real use rather than to guess at a second use.
+Mat3 body_world_inertia(const Model& model, int body, const Mat3& rotation);
+
+// The pose coordinates the model's declared static gauge holds.
+//
+// A gauge row is a *declared* coordinate rather than a physical constraint: the
+// static problem is rank-deficient by the linkage's rigid-body modes, and the gauge
+// removes them by naming coordinates to hold (see `WorkingSample`).  The declaration
+// lives on the model -- the contract installs it before the first run and every case
+// in a document shares it -- so deriving the coordinate list from it is a model
+// question, not a solver one.
+//
+// Moved here from `mb_solve_static` at P4a step 1: the frozen-response path needs the
+// same list but sits *below* the static solver, so reaching up for it would invert the
+// layering.  `static_gauge_coordinates` stays as a delegating wrapper so the static
+// path's own callers are unchanged.
+//
+// Returns an empty list when the model declares no gauge (`static_gauge_body < 0` or
+// a zero mask) or names a body outside the free set.  An empty gauge is the honest
+// answer for such a model, not a default.
+std::vector<int> gauge_coordinates(const Model& model);
+
 } // namespace axle_kernel

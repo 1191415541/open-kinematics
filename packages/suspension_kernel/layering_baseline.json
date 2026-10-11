@@ -267,6 +267,38 @@
       "mb_numeric"
     ],
     [
+      "mb_linearization",
+      "mb_config"
+    ],
+    [
+      "mb_linearization",
+      "mb_dual"
+    ],
+    [
+      "mb_linearization",
+      "mb_force"
+    ],
+    [
+      "mb_linearization",
+      "mb_input"
+    ],
+    [
+      "mb_linearization",
+      "mb_joint"
+    ],
+    [
+      "mb_linearization",
+      "mb_model"
+    ],
+    [
+      "mb_linearization",
+      "mb_numeric"
+    ],
+    [
+      "mb_linearization",
+      "mb_tire_common"
+    ],
+    [
       "mb_model",
       "mb_config"
     ],
@@ -409,6 +441,10 @@
     [
       "mb_solve_static",
       "mb_linear"
+    ],
+    [
+      "mb_solve_static",
+      "mb_linearization"
     ],
     [
       "mb_solve_static",
@@ -585,10 +621,6 @@
   ],
   "header_edges": [
     [
-      "mb_cases",
-      "mb_model"
-    ],
-    [
       "abi",
       "mb_config"
     ],
@@ -675,6 +707,10 @@
     [
       "mb_cases",
       "mb_input"
+    ],
+    [
+      "mb_cases",
+      "mb_model"
     ],
     [
       "mb_cases",
@@ -770,6 +806,26 @@
     ],
     [
       "mb_linear",
+      "mb_numeric"
+    ],
+    [
+      "mb_linearization",
+      "mb_config"
+    ],
+    [
+      "mb_linearization",
+      "mb_dual"
+    ],
+    [
+      "mb_linearization",
+      "mb_input"
+    ],
+    [
+      "mb_linearization",
+      "mb_model"
+    ],
+    [
+      "mb_linearization",
       "mb_numeric"
     ],
     [
@@ -899,6 +955,10 @@
     [
       "mb_solve_static",
       "mb_linear"
+    ],
+    [
+      "mb_solve_static",
+      "mb_linearization"
     ],
     [
       "mb_solve_static",
@@ -3880,6 +3940,213 @@
       "successors": {},
       "symbols": [],
       "verdict": "reviewed: the edge is a real dependency of the module (subtask 04 split of mb_vehicle/mb_suspension; the direction follows the layering DAG)"
+    },
+    {
+      "edge": [
+        "mb_cases",
+        "mb_contract"
+      ],
+      "includes": [
+        "mb_contract/types.hpp"
+      ],
+      "kinds": [
+        "symbol_reference"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/cases/case_characteristics.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "ContractDocument"
+      ],
+      "verdict": "reviewed: case_characteristics.cpp must name the contract document type it reads; the include is the same mb_contract/types.hpp every other case translation unit already uses through case_common.hpp, so the edge adds no new dependency direction."
+    },
+    {
+      "edge": [
+        "mb_linearization",
+        "mb_config"
+      ],
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the module's own header pulls in the shared prelude/constants; the .cpp calls finite-vector and diagnostic helpers"
+    },
+    {
+      "edge": [
+        "mb_linearization",
+        "mb_dual"
+      ],
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "so3_left_jacobian",
+        "value"
+      ],
+      "verdict": "reviewed: so3_left_jacobian maps a left-SO(3) increment into the tangent space, which is exactly the rotation-parameter convention the pose block must use"
+    },
+    {
+      "edge": [
+        "mb_linearization",
+        "mb_force"
+      ],
+      "includes": [
+        "mb_force/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: external_force_directional is the material tangent: the assembled pose block IS d(force)/d(pose) plus the preload term"
+    },
+    {
+      "edge": [
+        "mb_linearization",
+        "mb_input"
+      ],
+      "includes": [],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: the header names SampleInput in assemble_physical_tangent's signature; no translation unit in the module calls into mb_input"
+    },
+    {
+      "edge": [
+        "mb_linearization",
+        "mb_joint"
+      ],
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "constraint_jacobian",
+        "constraint_jacobian_directional"
+      ],
+      "verdict": "reviewed: constraint_jacobian supplies the multiplier block and constraint_jacobian_directional supplies d(J^T lambda), the preload geometry term"
+    },
+    {
+      "edge": [
+        "mb_linearization",
+        "mb_model"
+      ],
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "ensure_directional_state",
+        "reset_directional_state",
+        "static_rotation_gauge_for_pivot"
+      ],
+      "verdict": "reviewed: reads Model/State and the rotation-gauge declarations; ensure/reset_directional_state own the directional workspace"
+    },
+    {
+      "edge": [
+        "mb_linearization",
+        "mb_numeric"
+      ],
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "finite_vec"
+      ],
+      "verdict": "reviewed: finite_vec is the caller-visible non-finite gate on the assembled matrix"
+    },
+    {
+      "edge": [
+        "mb_linearization",
+        "mb_tire_common"
+      ],
+      "includes": [
+        "mb_tire/common/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "successors": {},
+      "symbols": [
+        "tire_contact_compression_directional"
+      ],
+      "verdict": "reviewed: tire_contact_compression_directional fills the contact-compression block of the working sample"
+    },
+    {
+      "edge": [
+        "mb_solve_static",
+        "mb_linearization"
+      ],
+      "includes": [
+        "mb_linearization/types.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "legacy_endpoints": [],
+      "sources": [
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "successors": {},
+      "symbols": [],
+      "verdict": "reviewed: R7 delegation: static_jacobian no longer owns the assembly arithmetic and calls down into the shared module"
     }
   ],
   "self_includes": [],
@@ -3916,6 +4183,9 @@
     },
     {
       "includes": [
+        "mb_config/constraint_output.hpp",
+        "mb_config/controller_output.hpp",
+        "mb_config/element_wrench.hpp",
         "mb_config/functions.hpp",
         "mb_config/version.hpp"
       ],
@@ -3930,6 +4200,11 @@
         "cpp/src/abi/kernel_core.cpp"
       ],
       "symbols": [
+        "controller_output_enabled",
+        "controller_sink",
+        "element_wrench_output_enabled",
+        "element_wrench_record_count",
+        "element_wrench_sink",
         "profiling_enabled"
       ],
       "target": "mb_config"
@@ -4022,6 +4297,7 @@
         "cpp/src/abi/kernel_core.cpp"
       ],
       "symbols": [
+        "compute_effective_body_inertia",
         "set_error",
         "tire_frame_body"
       ],
@@ -4311,8 +4587,23 @@
       "target": "mb_config"
     },
     {
+      "includes": [],
+      "kinds": [
+        "symbol_reference"
+      ],
+      "module": "mb_cases",
+      "sources": [
+        "cpp/src/cases/case_characteristics.cpp"
+      ],
+      "symbols": [
+        "find"
+      ],
+      "target": "mb_contract"
+    },
+    {
       "includes": [
-        "mb_model/enums.hpp"
+        "mb_model/enums.hpp",
+        "mb_model/types.hpp"
       ],
       "kinds": [
         "tu_include"
@@ -4325,16 +4616,24 @@
       "target": "mb_model"
     },
     {
-      "includes": [],
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
       "kinds": [
-        "symbol_reference"
+        "symbol_reference",
+        "tu_include"
       ],
       "module": "mb_cases",
       "sources": [
         "cpp/src/cases/contract_model.cpp"
       ],
       "symbols": [
-        "norm"
+        "determinant",
+        "dot",
+        "norm",
+        "normalized",
+        "qconj",
+        "qmul"
       ],
       "target": "mb_numeric"
     },
@@ -4382,9 +4681,12 @@
     },
     {
       "includes": [
+        "mb_config/controller_output.hpp",
+        "mb_config/element_wrench.hpp",
         "mb_config/functions.hpp"
       ],
       "kinds": [
+        "symbol_reference",
         "tu_include"
       ],
       "module": "mb_element",
@@ -4393,9 +4695,16 @@
         "cpp/src/element/bushing.cpp",
         "cpp/src/element/directional.cpp",
         "cpp/src/element/drive_brake.cpp",
-        "cpp/src/element/spring.cpp"
+        "cpp/src/element/function_program.cpp",
+        "cpp/src/element/spring.cpp",
+        "cpp/src/element/steering.cpp"
       ],
-      "symbols": [],
+      "symbols": [
+        "active_element_wrench_sink",
+        "controller_sink_active",
+        "record_controller_sample",
+        "set_controller_driver_demand"
+      ],
       "target": "mb_config"
     },
     {
@@ -4409,14 +4718,17 @@
       "module": "mb_element",
       "sources": [
         "cpp/src/element/curves.cpp",
-        "cpp/src/element/directional.cpp"
+        "cpp/src/element/directional.cpp",
+        "cpp/src/element/function_program.cpp"
       ],
       "symbols": [
         "d_body_quaternion",
         "d_cardan_xyz_from_rotation",
         "d_cardan_xyz_rate",
+        "d_cos",
         "d_cross",
         "d_dot",
+        "d_exp",
         "d_norm",
         "d_normalized",
         "d_qconj",
@@ -4424,6 +4736,8 @@
         "d_qmat",
         "d_qmul",
         "d_rotate",
+        "d_sin",
+        "d_sqrt",
         "d_transpose",
         "interpolated_curve_directional",
         "value"
@@ -4463,6 +4777,7 @@
         "cpp/src/element/bushing.cpp",
         "cpp/src/element/directional.cpp",
         "cpp/src/element/drive_brake.cpp",
+        "cpp/src/element/function_program.cpp",
         "cpp/src/element/spring.cpp",
         "cpp/src/element/steering.cpp"
       ],
@@ -4496,6 +4811,7 @@
         "cpp/src/element/curves.cpp",
         "cpp/src/element/directional.cpp",
         "cpp/src/element/drive_brake.cpp",
+        "cpp/src/element/function_program.cpp",
         "cpp/src/element/spring.cpp",
         "cpp/src/element/steering.cpp"
       ],
@@ -4563,9 +4879,11 @@
     },
     {
       "includes": [
+        "mb_config/element_wrench.hpp",
         "mb_config/functions.hpp"
       ],
       "kinds": [
+        "symbol_reference",
         "tu_include"
       ],
       "module": "mb_force",
@@ -4573,7 +4891,9 @@
         "cpp/src/force/directional.cpp",
         "cpp/src/force/layout.cpp"
       ],
-      "symbols": [],
+      "symbols": [
+        "active_element_wrench_sink"
+      ],
       "target": "mb_config"
     },
     {
@@ -4642,9 +4962,12 @@
         "cpp/src/force/layout.cpp"
       ],
       "symbols": [
+        "body_effective_inertia_body",
+        "body_effective_mass",
         "d_state_point",
         "directional_body_active",
         "directional_inertial_active",
+        "state_point",
         "state_point_velocity",
         "tire_center_body",
         "tire_center_local",
@@ -4781,6 +5104,7 @@
       "module": "mb_joint",
       "sources": [
         "cpp/src/joint/kernel_directional_constraint.cpp",
+        "cpp/src/joint/kernel_model_constraint.cpp",
         "cpp/src/joint/registry.cpp"
       ],
       "symbols": [
@@ -4799,7 +5123,8 @@
         "d_rotate",
         "d_row_times",
         "d_skew",
-        "d_transpose"
+        "d_transpose",
+        "value"
       ],
       "target": "mb_dual"
     },
@@ -4834,6 +5159,8 @@
         "cpp/src/joint/kernel_model_constraint.cpp"
       ],
       "symbols": [
+        "body_effective_inertia_body",
+        "body_effective_mass",
         "d_state_point",
         "directional_body_active",
         "directional_orientation_active",
@@ -4926,6 +5253,123 @@
       "kinds": [
         "tu_include"
       ],
+      "module": "mb_linearization",
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_config"
+    },
+    {
+      "includes": [
+        "mb_dual/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_linearization",
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "symbols": [
+        "so3_left_jacobian",
+        "value"
+      ],
+      "target": "mb_dual"
+    },
+    {
+      "includes": [
+        "mb_force/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_linearization",
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_force"
+    },
+    {
+      "includes": [
+        "mb_joint/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_linearization",
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "symbols": [
+        "constraint_jacobian",
+        "constraint_jacobian_directional"
+      ],
+      "target": "mb_joint"
+    },
+    {
+      "includes": [
+        "mb_model/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_linearization",
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "symbols": [
+        "ensure_directional_state",
+        "reset_directional_state",
+        "static_rotation_gauge_for_pivot"
+      ],
+      "target": "mb_model"
+    },
+    {
+      "includes": [
+        "mb_numeric/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_linearization",
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "symbols": [
+        "finite_vec"
+      ],
+      "target": "mb_numeric"
+    },
+    {
+      "includes": [
+        "mb_tire/common/functions.hpp"
+      ],
+      "kinds": [
+        "symbol_reference",
+        "tu_include"
+      ],
+      "module": "mb_linearization",
+      "sources": [
+        "cpp/src/linearization/physical.cpp"
+      ],
+      "symbols": [
+        "tire_contact_compression_directional"
+      ],
+      "target": "mb_tire_common"
+    },
+    {
+      "includes": [
+        "mb_config/functions.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
       "module": "mb_model",
       "sources": [
         "cpp/src/model/kernel_model.cpp"
@@ -4977,16 +5421,23 @@
     },
     {
       "includes": [
+        "mb_config/constraint_output.hpp",
+        "mb_config/controller_output.hpp",
+        "mb_config/element_wrench.hpp",
         "mb_config/functions.hpp"
       ],
       "kinds": [
+        "symbol_reference",
         "tu_include"
       ],
       "module": "mb_output",
       "sources": [
         "cpp/src/output/kernel_output.cpp"
       ],
-      "symbols": [],
+      "symbols": [
+        "controller_sink",
+        "element_wrench_sink"
+      ],
       "target": "mb_config"
     },
     {
@@ -5035,6 +5486,7 @@
       "symbols": [
         "constraint_jacobian",
         "constraint_rows",
+        "joint_coordinate_gradients",
         "steering_axis_reference"
       ],
       "target": "mb_joint"
@@ -5052,6 +5504,8 @@
         "cpp/src/output/kernel_output.cpp"
       ],
       "symbols": [
+        "body_effective_inertia_body",
+        "body_effective_mass",
         "state_point",
         "state_point_velocity"
       ],
@@ -5242,10 +5696,13 @@
       ],
       "module": "mb_solve_dynamic",
       "sources": [
+        "cpp/src/solve_dynamic/kernel_integrator.cpp",
         "cpp/src/solve_dynamic/kernel_integrator_newton.cpp",
         "cpp/src/solve_dynamic/kernel_integrator_residual.cpp"
       ],
       "symbols": [
+        "body_effective_inertia_body",
+        "body_effective_mass",
         "directional_body_active",
         "ensure_directional_state",
         "reset_directional_state"
@@ -5411,7 +5868,6 @@
         "cpp/src/solve_static/kernel_static_trim.cpp"
       ],
       "symbols": [
-        "so3_left_jacobian",
         "value"
       ],
       "target": "mb_dual"
@@ -5464,7 +5920,6 @@
       ],
       "symbols": [
         "constraint_jacobian",
-        "constraint_jacobian_directional",
         "constraint_residual",
         "constraint_rows",
         "joint_coordinate_value"
@@ -5491,6 +5946,20 @@
     },
     {
       "includes": [
+        "mb_linearization/types.hpp"
+      ],
+      "kinds": [
+        "tu_include"
+      ],
+      "module": "mb_solve_static",
+      "sources": [
+        "cpp/src/solve_static/kernel_static_trim.cpp"
+      ],
+      "symbols": [],
+      "target": "mb_linearization"
+    },
+    {
+      "includes": [
         "mb_model/functions.hpp"
       ],
       "kinds": [
@@ -5503,8 +5972,7 @@
         "cpp/src/solve_static/kernel_static_trim.cpp"
       ],
       "symbols": [
-        "ensure_directional_state",
-        "reset_directional_state",
+        "body_effective_mass",
         "state_point",
         "static_rotation_gauge_for_pivot",
         "tire_center_body",
@@ -5575,7 +6043,6 @@
         "cpp/src/solve_static/kernel_static_trim.cpp"
       ],
       "symbols": [
-        "tire_contact_compression_directional",
         "tire_contact_kinematics"
       ],
       "target": "mb_tire_common"
@@ -5596,9 +6063,11 @@
     },
     {
       "includes": [
+        "mb_config/element_wrench.hpp",
         "mb_config/functions.hpp"
       ],
       "kinds": [
+        "symbol_reference",
         "tu_include"
       ],
       "module": "mb_tire",
@@ -5607,7 +6076,9 @@
         "cpp/src/tire/directional.cpp",
         "cpp/src/tire/kernel_tire_assembly.cpp"
       ],
-      "symbols": [],
+      "symbols": [
+        "active_element_wrench_sink"
+      ],
       "target": "mb_config"
     },
     {
@@ -6174,6 +6645,10 @@
     ],
     [
       "mb_cases",
+      "mb_contract"
+    ],
+    [
+      "mb_cases",
       "mb_model"
     ],
     [
@@ -6293,6 +6768,34 @@
       "mb_numeric"
     ],
     [
+      "mb_linearization",
+      "mb_config"
+    ],
+    [
+      "mb_linearization",
+      "mb_dual"
+    ],
+    [
+      "mb_linearization",
+      "mb_force"
+    ],
+    [
+      "mb_linearization",
+      "mb_joint"
+    ],
+    [
+      "mb_linearization",
+      "mb_model"
+    ],
+    [
+      "mb_linearization",
+      "mb_numeric"
+    ],
+    [
+      "mb_linearization",
+      "mb_tire_common"
+    ],
+    [
       "mb_model",
       "mb_config"
     ],
@@ -6407,6 +6910,10 @@
     [
       "mb_solve_static",
       "mb_linear"
+    ],
+    [
+      "mb_solve_static",
+      "mb_linearization"
     ],
     [
       "mb_solve_static",

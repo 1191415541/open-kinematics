@@ -123,8 +123,7 @@ bool initialize_acceleration(
                 body_effective_mass(model, bi);
         }
         const Mat3 rotation = qmat(state.q[bi]);
-        const Mat3 inertia =
-            rotation * body_effective_inertia_body(model, bi) * transpose(rotation);
+        const Mat3 inertia = body_world_inertia(model, bi, rotation);
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 3; ++col) {
                 matrix[(offset+3+row)*dimension+offset+3+col] = inertia.a[row][col];
