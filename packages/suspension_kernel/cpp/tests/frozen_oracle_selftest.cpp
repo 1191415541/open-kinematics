@@ -185,6 +185,8 @@ State make_pose() {
     pose.q.assign(2, axle_kernel::Quat{1.0, 0.0, 0.0, 0.0});
     pose.v.assign(2, axle_kernel::Vec3{});
     pose.omega.assign(2, axle_kernel::Vec3{});
+    pose.a.assign(2, axle_kernel::Vec3{});
+    pose.alpha.assign(2, axle_kernel::Vec3{});
     return pose;
 }
 
@@ -1102,6 +1104,102 @@ void test_the_oracle_leaves_the_frozen_state_untouched() {
           "asking the same question twice returns bitwise the same tangent");
 }
 
+void test_original_inertia_is_fixed_while_the_material_pose_varies() {
+    Model model = make_model();
+    model.bodies[0].mass = 2.0;
+    model.bodies[0].inertia_body.a[0][0] = 1.0;
+    model.bodies[0].inertia_body.a[1][1] = 2.0;
+    model.bodies[0].inertia_body.a[2][2] = 4.0;
+    State original = make_pose();
+    original.omega[0] = {1.0, 2.0, 3.0};
+    original.a[0] = {2.0, -3.0, 4.0};
+    original.alpha[0] = {0.3, -0.2, 0.1};
+    SampleInput input;
+    WorkingSample working;
+    check(make_sample(model, original, working), "complete inertial snapshot builds");
+    const std::array<double, 6> expected{4.0, -6.0, 8.0, 12.3, -9.4, 2.4};
+    for (std::size_t i = 0; i < expected.size(); ++i)
+        check(std::abs(working.inertial_wrench[i] - expected[i]) < 1e-12,
+              "snapshot includes m*a, I*alpha and gyro");
+    const std::vector<double> zero(6, 0.0);
+    std::vector<double> tangent;
+    check(axle_kernel::assemble_physical_tangent(model, input, working, zero,
+          tangent), "fixed inertia tangent assembles");
+    bool live_gyro_detected = false;
+    constexpr double h = 1e-5;
+    for (int column = 0; column < 6; ++column) {
+        std::vector<double> xp = zero, xm = zero;
+        xp[column] = h; xm[column] = -h;
+        std::vector<double> plus, minus;
+        double force = 0.0, position = 0.0;
+        check(axle_kernel::frozen_inertial_residual(model, input, working, xp,
+              0.0, 0.0, 0.0, plus, force, position), "positive frozen perturbation");
+        check(axle_kernel::frozen_inertial_residual(model, input, working, xm,
+              0.0, 0.0, 0.0, minus, force, position), "negative frozen perturbation");
+        const auto live_plus = residual_at(model, original, input, xp, force, position);
+        const auto live_minus = residual_at(model, original, input, xm, force, position);
+        for (int row = 0; row < 6; ++row) {
+            const double derivative = (plus[row] - minus[row])/(2*h);
+            check(std::abs(derivative - tangent[row*6+column]) < 2e-6,
+                  "real fixed-wrench residual derivative matches tangent");
+            if (std::abs((live_plus[row] - live_minus[row])/(2*h) - derivative) > 0.1)
+                live_gyro_detected = true;
+        }
+    }
+    check(live_gyro_detected, "oracle distinguishes live gyro from frozen inertia");
+    check(working.pose.a[0].x == 2.0 && working.pose.omega[0].z == 3.0,
+          "frozen oracle preserves original accelerations and velocities");
+}
+
+void test_dynamic_tire_keeps_original_velocity_and_internal_state() {
+    Model model = make_model();
+    model.springs.clear();
+    model.bodies[0].mass = 10.0;
+    for (int i = 0; i < 3; ++i) model.bodies[0].inertia_body.a[i][i] = 1.0;
+    axle_kernel::Tire tire;
+    tire.body = tire.frame_body = 0; tire.radius = .3;
+    tire.maximum_compression = .05; tire.k = 10000; tire.c = 100;
+    tire.mu_longitudinal = .2; tire.mu_lateral = .3;
+    tire.brush_k_longitudinal = 100000; tire.brush_k_lateral = 80000;
+    tire.relaxation_length_longitudinal = .2; tire.relaxation_length_lateral = .25;
+    tire.detached_relaxation = .02;
+    model.tires = {tire};
+    State pose = make_pose();
+    pose.r[0] = {0.0, 0.0, .29}; pose.v[0] = {0.0, 0.0, -.3};
+    pose.tire_sx = {.00001}; pose.tire_sy = {.00002};
+    pose.tire_sx_dot = {.01}; pose.tire_sy_dot = {.02};
+    // Independent brush forces: F=(-1,-1.6,130), moment=r_patch x F.
+    pose.a[0] = {-.1, -.16, 13.0}; pose.alpha[0] = {-.48, .3, 0.0};
+    WorkingSample working; SampleInput input;
+    check(axle_kernel::frozen_working_sample(model, pose, {0}, working),
+          "dynamic tire checkpoint is preserved");
+    check(axle_kernel::physical_tangent_dimension(model, working) == 6,
+          "dynamic tire does not acquire static compression unknowns");
+    const std::vector<double> zero(6, 0.0);
+    std::vector<double> residual, tangent;
+    double force = 0.0, position = 0.0;
+    check(axle_kernel::frozen_inertial_residual(model, input, working, zero,
+          0.0, 0.0, 0.0, residual, force, position), "dynamic tire residual evaluates");
+    check(force < 1e-12, "frozen tire balances 130N including 30N dynamic damping");
+    check(axle_kernel::assemble_physical_tangent(model, input, working, zero,
+          tangent), "dynamic tire pose derivative evaluates");
+    check(std::abs(tangent[2*6+2] - 10000) < 1e-9,
+          "fixed world velocity gives actual tire stiffness");
+    for (const double h : {1e-4, 1e-5, 1e-6}) {
+        auto plus = zero, minus = zero; plus[2] = h; minus[2] = -h;
+        std::vector<double> rp, rm;
+        check(axle_kernel::frozen_inertial_residual(model, input, working, plus,
+              0.0, 0.0, 0.0, rp, force, position), "positive dynamic tire perturbation");
+        check(axle_kernel::frozen_inertial_residual(model, input, working, minus,
+              0.0, 0.0, 0.0, rm, force, position), "negative dynamic tire perturbation");
+        check(std::abs((rp[2]-rm[2])/(2*h)-tangent[2*6+2]) < 1e-6,
+              "tire finite perturbation matches the frozen tangent at three steps");
+    }
+    check(working.pose.v[0].z == -.3 && working.pose.tire_sx[0] == .00001
+          && working.pose.tire_sy_dot[0] == .02,
+          "no internal state reset or return mapping during frozen analysis");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1119,6 +1217,8 @@ int main(int argc, char** argv) {
         test_the_adjoint_route_agrees_with_the_direct_solve,
         test_the_direct_and_transpose_routes_agree_on_the_frozen_tangent,
         test_the_oracle_leaves_the_frozen_state_untouched,
+        test_original_inertia_is_fixed_while_the_material_pose_varies,
+        test_dynamic_tire_keeps_original_velocity_and_internal_state,
     };
     const int count = static_cast<int>(sizeof(tests)/sizeof(tests[0]));
 

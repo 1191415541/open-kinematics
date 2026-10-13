@@ -2,10 +2,11 @@
 
 ## 恢复入口
 
-- 日期：2026-10-11（Asia/Shanghai）。
+- 日期：2026-10-13（Asia/Shanghai）。
 - 任务：在原动态工作样本实现 frozen_force_tangent 和 frozen_load_compliance，按具名载荷/测量直接输出局部响应及 Wheel/Ride/Roll/Toe/Camber 序列。
 - 形态：single-full；状态：**IN_PROGRESS**。
-- 进度：**5/6**；当前步骤：6 — 验证四组合覆盖及成本并归档（本轮已执行，步骤 6 FAILED，retry_count=1；步骤 5 已 DONE）。
+- 进度：**3/6 步 DONE**（2/5 DONE）；步骤 1/3 IN_PROGRESS（本轮补齐 `frozen_inertial_load_v1`、B_w 符号与 gauge 力臂，剩余见文末）；**步骤 4 IN_PROGRESS（2026-10-13 起：第 1 层 native 求解核心已落地，
+  见下「2026-10-13 本轮」）**；步骤 6 FAILED（retry_count=1）。
 - 真源：[TODO.csv](TODO.csv)；范围：[SPEC.md](SPEC.md)；父真源：[SUBTASKS.csv](../../SUBTASKS.csv)。
 
 ## 步骤 1：DONE（冻结协议与原样本残量审计）
@@ -288,9 +289,11 @@
    oracle **有界**（分辨率约 1e-4 相对切线误差，更小的加性误差藏于 `O(h^2)` 截断项下）。
 8. **动态样本 → 装配的适配器未实现**：本步接受已装配的 `pose`/`model`，
    从 `AxleDynamicsResult` 样本的接线尚缺。
-9. **`mb_frozen_sample_selftest` 在 `test_registry_consistency.py` 进程内崩溃（0xC0000005）
-   原因未明**：直接运行退出 0，仅该模块内崩溃且仍打印成功行；已排除 5 类假设并留对照
-   （tangent 同位置全文件通过）。故**不注册**，如实登记。
+9. ~~`mb_frozen_sample_selftest` 在 `test_registry_consistency.py` 进程内崩溃（0xC0000005）~~
+   → **2026-10-12 已注册且本模块内连跑 3 次不复现**（每次 18 passed，1.0~1.2 s）；
+   `pytest packages/suspension_kernel/tests` 由 180 增至 **182 passed**。
+   **根因仍未定位**（曾推断的 `active_mask` 越界写已被证伪：HEAD 版该自测
+   `assemble_physical_tangent` 调用次数为 0），故只陈述"不复现"而不声称已解释。
 10. **`factor`/`isfinite` 双防线冗余无注释**（步骤 2 遗留），当前无缺陷。
 11. **`mb_linear_batch_selftest` 同样无调用者**：既有缺口，不属本步权限。
 12. **`frozen_protocol`/`frozen_version` 缓存键已预留但未接线**。
@@ -313,6 +316,111 @@
   乘子有现成块 `constraint_multiplier` `(samples,rows)`（`:1115`，经 `envelope.py:172`）；
   约束 Jacobian 有现成块 `(samples,rows,ndof)`（`:1119`，经 `envelope.py:310`）。
   **`gauge`/`position_constraint` 已确定为模型级数据，无新策略概念**（步骤 1 已实现，见上）。
+
+## 2026-10-12 本轮：`frozen_inertial_load_v1`、B_w 符号与 gauge 力臂
+
+- **证据**：[raw/frozen-inertial-load-evidence.md](raw/frozen-inertial-load-evidence.md)；
+  旧文档的符号口径纠正见 [raw/frozen-load-evidence.md](raw/frozen-load-evidence.md) 文末追加段。
+- **步骤 1 补齐**：`frozen_working_sample` 现读 `a/alpha`（尺寸 + 有限性）、拒绝越界/重复
+  `active_tires`，用既有共享 `body_world_inertia` 逐自由体算
+  `f = m*a`、`moment = I_world*alpha + omega × I_world*omega` 存入 `inertial_wrench`
+  并置 `frozen_inertial_load`；切维改为 `ndof + rows`；`static_residual` 新增可选
+  `frozen_inertial_wrench` 参数，以**公共力总线的同一套算术**替换总线惯性项；
+  新增报告式 `frozen_inertial_residual`。
+- **步骤 3 修复两处真实缺陷（红-修-绿）**：
+  ① **符号**：原 `frozen_load_column` 写 `dR/dw`，与声明的 `B_w = -dR/dw` 相反。
+  新增 `test_load_column_is_negative_derivative_of_real_residual`，对真实 `static_residual`
+  六分量中心差分逐行断言 `B_w == -dR/dw`，旧符号下先红；修正后 exit 0。
+  ② **gauge 作用域**：原实现遇 gauge 平移坐标**整列 return**，丢掉力臂力矩。
+  新增 `test_a_gauge_translation_still_carries_its_lever_arm_moment` 先红后绿，带无 gauge 反向对照。
+- **步骤 1/5 新 oracle**：惯性 wrench 逐分量精确等于 `(4,-6,8,12.3,-9.4,2.4)`（`1e-12`）；
+  6 坐标中心差分断言**实际残量导数 == 解析切线**，并断言"把惯性当活量"的版本差异 > 0.1（判别力）；
+  轮胎用例断言世界速度固定下 `tangent = 10000`、分析后 `v`/`tire_sx`/`tire_sy_dot` 逐位未变。
+- **真实动态运行侧**：`mb_run_sample_selftest` 对**真实运行**的每个非输出接受态求冻结残量，
+  初始一致点残量 `1.14e-16`（平衡原惯性），自适应与固定步长两条路径都跑过。
+- **实测**：`mb_frozen_sample/load/oracle/tangent/runsample_selftest` 全部 exit 0；
+  characteristics 472 passed；快速集 2034 passed / 1 xfailed；kernel+contracts 182 passed；
+  ruff/ty 与三架构门 exit 0；sentinel 逐位不变、parity 8 族、perf 见 P3 证据 §6 的对照实验。
+- **仍缺（故步骤 1/3 不 DONE）**：设计 §6.5 的"lambda 基值取原态、`delta lambda` 联立求"
+  无独立断言；目标力律 capability 审计未由本步产出；组合模式相容/唯一性诊断、完整整车耦合、
+  逐测量单位/frame 换算、原生 `local_response_v1` 结果块、`characteristics_response_kinds`、
+  具名轮端→`body_wrench` 映射层均未实现。
+
+## 2026-10-13 本轮：步骤 4 第 1 层（native 载荷驱动求解核心）
+
+- **证据**：[raw/local-response-layer1-evidence.md](raw/local-response-layer1-evidence.md)（9 节）；
+  只读设计 [raw/local-response-design.md](raw/local-response-design.md)。
+- **用户裁定（2026-10-13，C5）**：本轮直接开始 P4a 步骤 4 实施（先写只读设计，再逐层改 native/Python）。
+- **交付（第 1 层）**：`FrozenLoadMode` / `FrozenMeasurement` /
+  `frozen_measurement_gradient` / `frozen_local_response`
+  （声明 `mb_solve_static/functions.hpp:148-278`；实现 `kernel_static_trim.cpp:717-963`）；
+  自测 `cpp/tests/frozen_local_response_selftest.cpp`（7 组断言，注册进 `CMakeLists.txt` 与
+  `tests/test_registry_consistency.py`）。
+- **关键结论（省下大量重复侦察）**：**`G` 不需要新物理**。`A` 的前 `ndof` 行/列就是各自由体的
+  6 个增量，而 `pose_candidate`（`solve_dynamic/kernel_integrator_state.cpp:39-55`）规定
+  `r += dr`（世界系平动）、`q = exp(dtheta)*q`（世界系转动，绕体原点），故材料点位移为
+  `dr + dtheta x (R(q) p)`，其沿世界轴 `e` 的分量即 `dr·e + dtheta·(a x e)`（`a = R(q) p`）。
+  转角测量取相对姿态的世界系小转角分量。`A`/`B_w`/`G` 因此描述**同一组坐标**。
+- **`A X = B_w P` 的求解复用 `mb_linear`**：`LinearFactorHandle::factorize_numeric` 一次，
+  逐模式回代；`factorizations_used == 1` 由自测断言（设计 `shared_factorization` 由构造成立）。
+- **两轮反证（判别力）**：①力臂 `cross(arm,unit)` 与参考体符号 `-=` 破坏 → **exit 1，4 条断言失败**；
+  ②参考体力臂符号 + 空请求拒绝破坏 → **exit 1，3 条断言失败**；两次均逐字节还原。
+- **独立只读复审（D2）4 项阻断全部核实成立并已修**：
+  ①头文件宣称「相容/可辨识已实现」但**根本不存在** → 改为如实登记缺口（不解除要求）；
+  ②无效项被写 `0.0`，违反 SPEC §98「不填零」→ 改 **NaN**；
+  ③`solve_many` 任一列非有限即**整批失败**（`linear/kernel_linear_batch.cpp:161-167`），
+  使「逐模式隔离」与实现相反且我的分支不可达 → 改为**逐模式单列求解**；
+  ④补转动测量（component 3..5）、`has_reference_point` 力臂、纯固定体零响应、拒绝哨兵共 4 类断言。
+- **复审未指出、由我自查发现的测试缺陷（第 3 次同一模式）**：第一版新增断言把「体 1 的 rz」
+  写成 `row+5`、把「参考体（体 0）的 rz」写成 `row+11`，且单测量时用 `row+列` **越界读** `G`
+  （C++ 不报错）。**是断言写错、不是实现错**；已改绝对列号并先断言 `gradient.size()`。
+- **门禁（本轮实跑）**：`build_suspension_kernel` + `build_axle_native` exit 0；
+  `mb_frozen_local_response_selftest` exit 0；registry **20 passed**；kernel **130 passed**；
+  contracts **78 passed**；快速集 **2051 passed/1 xfailed**（skip 0，未增长）；
+  sentinel 逐位不变、parity 8 族；ruff/ty/三架构门 0；`git diff --check` 干净；
+  perf 为**同一负载抖动**（k-100 ×1.265）且本层代码**无生产调用者**；**未重录任何基线**，
+  `layering_baseline.json` 未改（`mb_solve_static → mb_linear` 已是登记边）。
+- **仍未交付（故步骤 4 不 DONE）**：相容/可辨识审计（`singular`/`unidentifiable`/
+  `combined_mode_rule`）；`D` 恒为 0；**`G` 宽度 `ndof` 与 Python 消费层要求的 `dimension` 不一致**
+  （接线前必须对齐，否则接线即报错）；固定/自由车身 profile 无落地处；
+  契约绑定（测量/模式的实体与分量声明，需按 SPEC §21 以新 kind/version 回写契约）；
+  ABI `local_response_v1` 结果块与 `characteristics_response_kinds`；Python 读侧与单位/frame；
+  四组合端到端验收（步骤 6）。
+
+## 2026-10-13 本轮：步骤 4 第 3 层（契约绑定被 native 消费 + local_response_v1 跨 ABI）
+
+- **状态**：**已实现并编译通过，未经测试验证**。用户于本轮中途裁定「先提交更改代码和任务记录」，
+  故本层在移植完成、`kernel` 构建 exit 0 之后即收工，**未跑任何自测、未做反证、未跑全量门禁**。
+  下列描述是**实现内容**而非已验证能力；行为正确性与「无请求时不改变原结果」两条都**尚无证据**。
+- **交付 ①：契约绑定被求解器真实消费**（此前最需要登记的诚实缺口）。
+  新增 `resolve_local_response_bindings`（`cpp/src/abi/kernel_contract_run.cpp`，ABI 层）：
+  - 测量 `binding{marker,component,reference}` → `FrozenMeasurement`：标记经
+    `ContractModel::find_marker` 查表、体名经 `body_index`，**空 `reference` = world**（显式空串已在
+    `case_characteristics.cpp` 被拒，两者因此不可混同），测量落在**固定体**（`body_to_free < 0`）
+    在请求期拒绝并**点名该声明**。
+  - 扰动 `binding.terms[{body,wrench,amplitude}]` → `FrozenLoadMode`：`amplitude` 稠密铺在
+    `bodies*6` 的 `[Fx,Fy,Fz,Mx,My,Mz]` 上，同一 (体, 分量) 相加而非丢弃。
+  - 落点在 ABI 是因为只有这一层同时看得见两侧：`mb_cases` 拥有文档且**被禁止**触达求解器，
+    `mb_solve_static` 拥有冻结描述且读不了文档。**契约禁令遵守**：无任何按名字前缀/后缀推断。
+- **交付 ②：逐样本 A 的生产者**。接在既有 `accepted_observer` 内，只用该观察者已经拿到的
+  `RunSample`：`frozen_working_sample(model, sample.state, {})` + `interpolate_input` +
+  `assemble_physical_tangent(..., x)`，其中 `x` 的乘子块**取自样本自身的 `constraint_multiplier`**
+  （`lambda` 基值取原态，**不冻结 delta lambda**，符合 `frozen-protocols.json` 的 `lambda_rule`），
+  `active_tires` 为空（冻结样本自带接触态，不引入压缩未知量）。
+  **无请求零额外工作**：整段 gate 在 `answers_local_response` 上，`false` 时既不分配缓冲也不进循环。
+- **交付 ③：`local_response_v1` 跨 ABI**。结果块
+  `local_response_value` / `_status` / `_modes_per_sample` / `_audit` / `_identity`
+  （`push_block` 与 `append_doubles` 顺序一致），manifest 新增 `local_response` 段
+  （`load_modes`/`measurements`/`measurement_units`/`measurement_components`/`status_vocabulary`/
+  `audit_columns`/`identity_columns`/`refused_samples`/`frozen_protocol`/`frozen_version`）。
+  状态码为**冻结枚举** 0 `valid` / 1 `unidentifiable` / 2 `singular` / 3 `refused`；
+  值块保留 NaN、状态块承载**原因**，两者不互相推断。
+- **交付 ④：`characteristics_response_kinds` 由空数组改为 `["local_response"]`**。
+  口径与 Python 编译期门**同一字段**（`measurements[].response_kind`，
+  `compilation/resolved.py:309-310`），故两门不会互相打架；native 应答门亦按同字段判定。
+- **未做（下一步）**：Python 读侧与逐测量单位/frame 换算、指标层
+  （Wheel/Ride/Roll/Toe/Camber）、固定/自由车身 profile 落地、四组合端到端验收（步骤 6 重试）；
+  `D` 恒为 0 仍是已登记缺口。**步骤 4 保持 IN_PROGRESS**。
 
 ## 证据与同步规则
 

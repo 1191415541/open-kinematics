@@ -16,12 +16,12 @@
 //      individually.  Checking only `Fx` would pass on a routine that mapped every
 //      force to the first coordinate.
 //
-//   2. The sign.  The residual carries `-force`, so an applied unit force must
-//      appear as `-1` in the column.  A routine that dropped the sign would produce
+//   2. The sign.  The residual carries `-force`, so B_w = -dR/dw must
+//      carry `+1`.  A routine that dropped the second minus would produce
 //      a compliance of the wrong sign, which is a *stable-looking* wrong answer.
 //
 //   3. The lever arm.  A force at a declared marker makes a pose-dependent moment,
-//      so the column carries `-cross(R*p, e_k)` in its rotational block.  This is
+//      so B_w carries `+cross(R*p, e_k)` in its rotational block.  This is
 //      the geometric term the design requires (SPEC :35, :42).  It is checked
 //      against a hand-computed cross product at a *rotated* pose, because at the
 //      identity pose the term is a permutation of the force components and a
@@ -121,11 +121,11 @@ void test_each_wrench_component_lands_on_its_own_coordinate() {
         const int expected = 6 + component;
         bool exact = true;
         for (int i = 0; i < model.ndof; ++i) {
-            const double want = (i == expected) ? -1.0 : 0.0;
+            const double want = (i == expected) ? 1.0 : 0.0;
             if (!close(value_at(column, i), want, 1e-14)) exact = false;
         }
         check(exact,
-              "a unit wrench component puts -1 on its own coordinate and 0 elsewhere");
+              "B_w puts +1 on the loaded coordinate and 0 elsewhere");
     }
 }
 
@@ -135,8 +135,8 @@ void test_the_sign_is_the_residual_convention() {
     const Model model = make_model(1);
     const State pose = make_pose(1);
     const std::vector<double> fx = axle_kernel::frozen_load_column(model, pose, 0, 0);
-    check(value_at(fx, 0) == -1.0, "an applied +Fx enters the residual as -1");
-    check(close(value_at(fx, 0), -1.0, 0.0), "the sign is exact, not merely finite");
+    check(value_at(fx, 0) == 1.0, "an applied +Fx enters B_w as +1");
+    check(close(value_at(fx, 0), 1.0, 0.0), "the sign is exact, not merely finite");
 }
 
 // --- 3/4. the lever arm ------------------------------------------------------
@@ -146,11 +146,8 @@ void test_a_declared_marker_adds_the_pose_dependent_moment() {
     // and `R` a quarter turn about z, `R*p = (0,1,0)`; for `F = e_x` that gives
     // `cross((0,1,0),(1,0,0)) = (0*0-0*0, 0*1-0*0, 0*0-1*1) = (0,0,-1)`.
     //
-    // The residual is `-force - torque` (`kernel_static_trim.cpp:74`), so a moment
-    // that the load *adds* enters the residual with the opposite sign: the column
-    // carries `+M_z = +1`.  Both facts are asserted, because getting the cross
-    // product right and then the residual sign wrong yields `-1` -- a value that
-    // looks like a sign convention rather than like a bug.
+    // R carries -force - torque; B_w negates the load derivative, so the
+    // physical -Mz from the cross product stays -Mz in the response RHS.
     const Model model = make_model(1);
     const State pose = [&] {
         State s = make_pose(1);
@@ -162,11 +159,11 @@ void test_a_declared_marker_adds_the_pose_dependent_moment() {
 
     const std::vector<double> fx =
         axle_kernel::frozen_load_column(with_point, pose, 0, 0);
-    check(close(value_at(fx, 0), -1.0, 1e-14), "the force still lands on Fx");
+    check(close(value_at(fx, 0), 1.0, 1e-14), "the force still lands on Fx");
     check(close(value_at(fx, 3), 0.0, 1e-12), "the lever-arm moment has no Mx here");
     check(close(value_at(fx, 4), 0.0, 1e-12), "the lever-arm moment has no My here");
-    check(close(value_at(fx, 5), 1.0, 1e-12),
-          "cross(R*p, e_x) at a quarter turn about z enters as +M_z through -dR/dw");
+    check(close(value_at(fx, 5), -1.0, 1e-12),
+          "cross(R*p, e_x) at a quarter turn about z enters as -M_z in B_w");
 
     // The rotation must actually be read: at the identity the same marker gives
     // `cross((1,0,0),(1,0,0)) = 0`, so a routine that ignored the pose would report
@@ -190,7 +187,7 @@ void test_a_declared_marker_adds_the_pose_dependent_moment() {
     // (`axis=2`, `unit=e_z`) that is `cross((0,1,0),(0,0,1)) = (1,0,0)` -- an `+Mx`.
     const std::vector<double> mz =
         axle_kernel::frozen_load_column(with_point, pose, 0, 5);
-    check(close(value_at(mz, 5), -1.0, 1e-14), "a unit Mz lands on its coordinate");
+    check(close(value_at(mz, 5), 1.0, 1e-14), "a unit Mz lands on its coordinate");
     check(close(value_at(mz, 0), 0.0, 1e-14) && close(value_at(mz, 1), 0.0, 1e-14) &&
               close(value_at(mz, 2), 0.0, 1e-14),
           "a moment mode adds no translational term even with a marker declared");
@@ -200,7 +197,7 @@ void test_a_declared_marker_adds_the_pose_dependent_moment() {
     // the check above cannot pass merely because the cross product vanished.
     const std::vector<double> my =
         axle_kernel::frozen_load_column(with_point, pose, 0, 4);
-    check(close(value_at(my, 4), -1.0, 1e-14), "a unit My lands on its coordinate");
+    check(close(value_at(my, 4), 1.0, 1e-14), "a unit My lands on its coordinate");
     check(close(value_at(my, 3), 0.0, 1e-12) && close(value_at(my, 5), 0.0, 1e-12),
           "a moment mode gains no lever-arm term on the other rotational axes");
     // And the fixture is not degenerate: the *force* mode at this same marker and
@@ -323,7 +320,7 @@ void test_loaded_directions_that_cannot_move_the_mechanism_are_zero() {
     // the bounds check rather than the model being unusable.
     const std::vector<double> fits =
         axle_kernel::frozen_load_column(truncated, pose, 0, 2);
-    check(close(value_at(fits, 2), -1.0, 1e-14),
+    check(close(value_at(fits, 2), 1.0, 1e-14),
           "the body that fits in ndof is still answered (the fixture is live)");
 }
 
@@ -355,13 +352,11 @@ void test_the_load_driven_chain_reports_the_inverse_stiffness() {
     // coordinate-driven routine uses, so the chain inherits its correctness.
     const std::vector<double> column =
         axle_kernel::frozen_load_column(model, pose, 0, 0);
-    check(close(value_at(column, 0), -1.0, 1e-14),
-          "the unit x force enters the residual as -1");
+    check(close(value_at(column, 0), 1.0, 1e-14),
+          "the unit x force enters B_w as +1");
 
-    // `A X = B_w P` with `P = +1` (a physically applied unit force).  The residual
-    // convention makes the right-hand side `-B_w * alpha` for a load that *adds* to
-    // the applied force, so the displacement is `+1/k` in the loaded direction and
-    // the magnitude, not the sign, is what `C = 1/k` states.
+    // `A X = B_w P` with P = +1.  No extra sign conversion is allowed between
+    // the producer and the solve: positive load must give positive displacement.
     //
     // The system is solved here rather than stated: a test that wrote
     // `displacement = applied/stiffness` and then compared it to `1/stiffness`
@@ -371,10 +366,8 @@ void test_the_load_driven_chain_reports_the_inverse_stiffness() {
     const std::vector<double> rhs = [&] {
         std::vector<double> b(6, 0.0);
         for (int i = 0; i < 6; ++i) {
-            // A physically applied load adds `-B_w * alpha` to the residual's
-            // right-hand side, because `B_w` itself is `-dR/dw`.
             b[static_cast<std::size_t>(i)] =
-                -value_at(column, i)*applied_force;
+                value_at(column, i)*applied_force;
         }
         return b;
     }();
@@ -451,7 +444,7 @@ void test_a_gauge_coordinate_carries_no_load_column() {
     // the assertion above and fail this one.
     const std::vector<double> ungauged =
         axle_kernel::frozen_load_column(model, pose, 0, 1);
-    check(close(value_at(ungauged, 1), -1.0, 1e-14),
+    check(close(value_at(ungauged, 1), 1.0, 1e-14),
           "an ungauged coordinate of the same body is still answered");
 
     // A moment on the gauge coordinate of a *rotational-gauge* model.  This is the
@@ -483,7 +476,7 @@ void test_a_gauge_coordinate_carries_no_load_column() {
     turned.q[0] = quarter_turn_z();
     const std::vector<double> armed =
         axle_kernel::frozen_load_column(with_marker, turned, 0, 1);
-    check(close(value_at(armed, 1), -1.0, 1e-14), "the force is still written");
+    check(close(value_at(armed, 1), 1.0, 1e-14), "the force is still written");
     check(close(value_at(armed, 3), 0.0, 0.0),
           "the lever arm does not write a rotation-gauge coordinate");
     check(!close(value_at(armed, 1), 0.0, 0.0),
@@ -496,8 +489,75 @@ void test_a_gauge_coordinate_carries_no_load_column() {
     ungauge.body_wrench_point_local = {Vec3{0.0, 0.0, 1.0}};
     const std::vector<double> live_column =
         axle_kernel::frozen_load_column(ungauge, turned, 0, 1);
-    check(close(value_at(live_column, 3), 1.0, 1e-12),
+    check(close(value_at(live_column, 3), -1.0, 1e-12),
           "without a gauge the same lever arm does write Mx (the fixture is live)");
+}
+
+// A gauge and a lever arm are independent facts about one column.
+//
+// The global gauge replaces the *force-balance row* of the pinned coordinate with
+// `dy=0` (`kernel_static_trim.cpp:117-122`), so `dR/dw` is zero there.  It does not
+// touch the body's *moment* rows, which keep the physical `cross(R*p, F)` term.  A
+// routine that returned on the first gauge coordinate would discard that moment and
+// report a load on a pinned translation as producing no rotation at all -- a
+// plausible-looking zero, and exactly the shape of error this file exists to catch.
+void test_a_gauge_translation_still_carries_its_lever_arm_moment() {
+    Model model = make_model(1);
+    model.static_gauge_body = 0;
+    model.static_gauge_dof_mask = 1u;  // local coordinate 0 == x
+    model.body_wrench_point_local = {Vec3{0.0, 0.0, 1.0}};
+    const State pose = make_pose(1);
+
+    // `cross(R*p, e_x)` at the identity is `cross((0,0,1),(1,0,0)) = (0,1,0)`, so the
+    // arm contributes an `My`.  `B_w = -dR/dw` keeps the sign of that physical moment.
+    const std::vector<double> column =
+        axle_kernel::frozen_load_column(model, pose, 0, 0);
+    check(close(value_at(column, 0), 0.0, 0.0),
+          "the pinned translation still gets no load column entry of its own");
+    check(close(value_at(column, 4), 1.0, 1e-12),
+          "a force on a pinned translation still carries its arm moment");
+    check(close(value_at(column, 3), 0.0, 1e-12) &&
+          close(value_at(column, 5), 0.0, 1e-12),
+          "the arm writes only the axis its own cross product names");
+
+    // The same model without the gauge writes the force term as well, so the check
+    // above is about *what the gauge suppresses*, not about a dead fixture.
+    Model ungauge = make_model(1);
+    ungauge.body_wrench_point_local = {Vec3{0.0, 0.0, 1.0}};
+    const std::vector<double> live =
+        axle_kernel::frozen_load_column(ungauge, pose, 0, 0);
+    check(close(value_at(live, 0), 1.0, 1e-14) && close(value_at(live, 4), 1.0, 1e-12),
+          "without a gauge the same load writes both its own coordinate and the arm");
+}
+
+// The response equation uses B_w = -dR/dw, not dR/dw.  Compare with the
+// production residual rather than sharing a hand-written sign convention.
+void test_load_column_is_negative_derivative_of_real_residual() {
+    Model model = make_model(1);
+    model.body_wrench_point_local = {Vec3{0.4, -0.3, 0.2}};
+    State pose = make_pose(1);
+    pose.q[0] = quarter_turn_z();
+    pose.v.assign(1, Vec3{});
+    pose.omega.assign(1, Vec3{});
+    const std::vector<double> x(6, 0.0);
+    for (int component = 0; component < 6; ++component) {
+        axle_kernel::SampleInput plus, minus;
+        plus.body_wrench.assign(6, 0.0);
+        minus.body_wrench.assign(6, 0.0);
+        const double h = 1e-4;
+        plus.body_wrench[component] = h;
+        minus.body_wrench[component] = -h;
+        double force = 0.0, position = 0.0;
+        const auto rp = axle_kernel::static_residual(
+            model, pose, plus, 0.0, 0.0, 0.0, {}, x, force, position);
+        const auto rm = axle_kernel::static_residual(
+            model, pose, minus, 0.0, 0.0, 0.0, {}, x, force, position);
+        const auto bw = axle_kernel::frozen_load_column(model, pose, 0, component);
+        for (int row = 0; row < 6; ++row) {
+            check(close(bw[row], -(rp[row]-rm[row])/(2.0*h), 1e-12),
+                  "B_w equals -dR/dw on the real six-axis marker load path");
+        }
+    }
 }
 
 }  // namespace
@@ -509,7 +569,9 @@ int main() {
     test_no_marker_means_no_moment();
     test_loaded_directions_that_cannot_move_the_mechanism_are_zero();
     test_a_gauge_coordinate_carries_no_load_column();
+    test_a_gauge_translation_still_carries_its_lever_arm_moment();
     test_the_load_driven_chain_reports_the_inverse_stiffness();
+    test_load_column_is_negative_derivative_of_real_residual();
 
     if (failures != 0) {
         std::fprintf(stderr, "%d check(s) failed\n", failures);

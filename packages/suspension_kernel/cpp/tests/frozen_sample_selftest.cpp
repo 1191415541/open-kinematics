@@ -90,6 +90,8 @@ State make_state(const Model& model, double scale) {
     state.q.resize(model.bodies.size());
     state.v.resize(model.bodies.size());
     state.omega.resize(model.bodies.size());
+    state.a.resize(model.bodies.size());
+    state.alpha.resize(model.bodies.size());
     for (std::size_t i = 0; i < model.bodies.size(); ++i) {
         const double k = scale * static_cast<double>(i + 1);
         state.r[i] = Vec3{k + 1.0, k + 2.0, k + 3.0};
@@ -233,11 +235,11 @@ void test_shape_scale_and_tires() {
     // the shape check would pass on the defect.
     //
     // The rows are prismatic joints.  They are chosen because each contributes
-    // exactly one row and needs only an axis, so the matrix is non-empty without
+    // five rows each and need only an axis, so the matrix is non-empty without
     // the test having to build a fully consistent linkage -- this test is about the
     // *shape and presence* of the frozen description, not about its physics.
     Model model = make_model(false, 0, -1);
-    model.rows = 2;
+    model.rows = 10;
     axle_kernel::Constraint first;
     first.type = AXLE_PRISMATIC;
     first.a = 0;
@@ -251,8 +253,9 @@ void test_shape_scale_and_tires() {
     second.b = 2;
     second.axis_a = Vec3{0.0, 0.0, 1.0};
     second.axis_b = Vec3{0.0, 0.0, 1.0};
-    second.row = 1;
+    second.row = 5;
     model.constraints = {first, second};
+    model.tires.resize(2);
 
     const State state = make_state(model, 1.0);
     const std::vector<int> tires{1, 0};
@@ -270,11 +273,17 @@ void test_shape_scale_and_tires() {
           "position_constraint is actually filled for a model with constraint rows");
     check(working.load_scale == 1.0,
           "a frozen response is assembled at the unperturbed load");
-    // Order is preserved, not sorted: the tire order is the sample's contact column
-    // order, so re-ordering it would silently relabel the contact columns.
+    // Preserve the original branch identity; a frozen dynamic sample uses its
+    // real force law rather than static compression-column unknowns.
     check(working.active_tires.size() == tires.size() &&
           working.active_tires[0] == 1 && working.active_tires[1] == 0,
           "the active tire set is passed through in the order given");
+    check(axle_kernel::physical_tangent_dimension(model, working) == model.ndof+model.rows,
+          "frozen dynamic tangent adds no static contact unknowns");
+    check(!axle_kernel::frozen_working_sample(model, state, {2}, working),
+          "out-of-range active tire is refused");
+    check(!axle_kernel::frozen_working_sample(model, state, {0, 0}, working),
+          "duplicate active tire is refused");
 }
 
 // --- 6. a mismatched state is refused ---------------------------------------

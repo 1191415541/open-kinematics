@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 import struct
 
 import pytest
@@ -265,6 +266,85 @@ def test_case_validation_rejects_an_unknown_family() -> None:
     document["family"] = "not_a_family"
     with pytest.raises(ContractError):
         validate_case(document)
+
+
+def _run(**fields) -> dict:
+    """One `runs` entry: a name, plus whatever the caller adds."""
+    return {"name": fields.pop("name", "left"), **fields}
+
+
+def _case_with_runs(*runs) -> dict:
+    document = _case()
+    document["family"] = "axle_dynamic"
+    document.pop("k", None)
+    document["runs"] = list(runs)
+    return document
+
+
+def test_case_validation_accepts_a_run_list() -> None:
+    """
+    A document may state its cases as a `runs` list.
+
+    The list is the case-level form of "one excitation per case", so the shape
+    the reader is handed has to be the one the published schema accepts.
+    """
+    document = _case_with_runs(_run(), _run(name="right"))
+    validate_case(document)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"blobs": [{"name": "w", "role": "body_wrench"}]},
+        {"inputs": {"static_gauge": {"body": "chassis", "dof": ["x"]}}},
+        {"road": {"kind": "flat"}},
+        {"handling": {"steering": []}},
+        {"four_post": {"corners": []}},
+        {"ride_random_road": {"wheels": []}},
+    ],
+)
+def test_a_run_entry_carries_the_per_run_fields(fields) -> None:
+    """Every field a run is allowed to override is one the schema knows."""
+    validate_case(_case_with_runs(_run(**fields)))
+
+
+def _case_with_runs_value(value) -> dict:
+    """One case document whose `runs` is whatever the caller passes."""
+    document = _case()
+    document["family"] = "axle_dynamic"
+    document.pop("k", None)
+    document["runs"] = value
+    return document
+
+
+def test_a_run_list_that_is_not_an_array_is_refused() -> None:
+    """A mapping is the shape a reader would otherwise iterate as a list of names."""
+    with pytest.raises(ContractError, match=re.escape("expected array, got dict")):
+        validate_case(_case_with_runs_value({"left": {}}))
+
+
+@pytest.mark.parametrize(
+    "runs,message",
+    [
+        ([], "needs at least 1 items"),
+        ([{"blobs": []}], "missing required field 'name'"),
+        ([{"name": "left", "time": {"start_s": 0.0}}], "unexpected fields ['time']"),
+        ([{"name": "left", "solver": {}}], "unexpected fields ['solver']"),
+        ([{"name": "left", "name2": 1}], "unexpected fields ['name2']"),
+        ([{"name": ""}], "needs at least 1 characters"),
+    ],
+)
+def test_the_run_list_shape_is_checked(runs, message) -> None:
+    """
+    The list's own shape and the entry's own fields are both delimited.
+
+    ``time`` and ``solver`` stay document-level: one grid and one solver reach
+    every case of one document.  A schema that let a run restate them would
+    make the kernel silently ignore the override, which is the failure the
+    narrow entry exists to prevent.
+    """
+    with pytest.raises(ContractError, match=re.escape(message)):
+        validate_case(_case_with_runs_value(runs))
 
 
 def test_result_validation_requires_a_case_identity() -> None:

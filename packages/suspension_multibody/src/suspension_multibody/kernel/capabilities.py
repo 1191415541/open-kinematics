@@ -73,6 +73,19 @@ def require_function_program_version(version: int) -> None:
         raise ValueError(f"loaded kernel does not support function program version {version}")
 
 
+def require_case_runs_version(version: int) -> None:
+    """
+    Refuse a run list before submission when the loaded kernel cannot read it.
+
+    A `runs` list changes what one document means, so a build that only knew the
+    single-case form would expand the document's shared excitation once and report
+    one case, silently dropping every other run.  Naming the missing capability
+    here is what makes that a refusal instead of a wrong answer.
+    """
+    if version not in kernel_capability_document().get("case_runs_versions", ()):
+        raise ValueError(f"loaded kernel does not support case runs version {version}")
+
+
 def require_characteristics_answerable(kind: str) -> None:
     """
     Refuse a characteristics response this kernel cannot produce.

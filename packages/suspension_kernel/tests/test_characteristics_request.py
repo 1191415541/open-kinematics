@@ -85,6 +85,26 @@ def _request_body() -> dict:
                 "units": "N/m",
                 "response_kind": "frozen_force_tangent",
                 "response_version": 1,
+                "binding": {
+                    "marker": "front.left.wheel_center",
+                    "component": "z",
+                    "reference": "chassis.reference",
+                },
+            }
+        ],
+        "perturbations": [
+            {
+                "measurement_id": "heave_load",
+                "definition_version": 1,
+                "units": "N",
+                "response_kind": "frozen_load_compliance",
+                "response_version": 1,
+                "binding": {
+                    "terms": [
+                        {"body": "front_left_upright", "wrench": "Fz", "amplitude": 1.0},
+                        {"body": "front_right_upright", "wrench": "Fz", "amplitude": 1.0},
+                    ]
+                },
             }
         ],
         "boundary": {"profile": "susp_force_balance_body_fixed_v1", "version": 1},
@@ -208,6 +228,19 @@ def test_the_valid_request_is_accepted(compiled) -> None:
         ("frozen kind without protocol", lambda c: c.pop("frozen_conditions")),
         ("unknown definition kind", lambda c: c["definition"].update(kind="vibes")),
         ("unknown request schema version", lambda c: None),
+        # The entity binding: a measurement must name a known component and a
+        # perturbation must name known wrench components.  A reader that skipped
+        # the vocabulary would accept a request that later maps "qz" onto a
+        # coordinate by guesswork -- exactly the name-derived metric the contract
+        # bans.
+        ("unknown measurement component", lambda c: c["measurements"][0]["binding"].update(component="qz")),
+        ("missing measurement marker", lambda c: c["measurements"][0]["binding"].pop("marker")),
+        ("unknown measurement binding field", lambda c: c["measurements"][0]["binding"].update(axis="z")),
+        ("empty measurement reference", lambda c: c["measurements"][0]["binding"].update(reference="")),
+        ("empty perturbation terms", lambda c: c["perturbations"][0]["binding"].update(terms=[])),
+        ("unknown wrench component", lambda c: c["perturbations"][0]["binding"]["terms"][0].update(wrench="Fq")),
+        ("missing term amplitude", lambda c: c["perturbations"][0]["binding"]["terms"][0].pop("amplitude")),
+        ("unknown term field", lambda c: c["perturbations"][0]["binding"]["terms"][0].update(sign=-1)),
     ],
 )
 def test_malformed_requests_are_refused_by_the_kernel(compiled, label, mutate) -> None:
@@ -244,3 +277,170 @@ def test_a_tampered_request_still_uses_the_original_payload(compiled) -> None:
     code, error = _run(compiled.model_payload, case_payload)
     assert code != 0
     assert "unknown domain" in error
+
+
+def _run_and_read_manifest(model_payload: bytes, case_payload: bytes) -> dict:
+    """
+    Run the ABI and decode the result manifest, so the echo can be inspected.
+
+    ``_run`` discards the result document because the refusal tests only need the
+    exit code.  The echo assertions need the opposite: a *successful* run whose
+    manifest is parsed back into a mapping.
+    """
+    library = ctypes.CDLL(str(_mirror_library()))
+    entry = library.suspension_kernel_run
+    entry.restype = ctypes.c_int32
+    entry.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_size_t,
+        ctypes.c_char_p,
+        ctypes.c_size_t,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.c_char_p,
+        ctypes.c_size_t,
+    ]
+    out = ctypes.create_string_buffer(OUTPUT_CAPACITY)
+    out_length = ctypes.c_size_t(OUTPUT_CAPACITY)
+    error = ctypes.create_string_buffer(ERROR_CAPACITY)
+    code = entry(
+        model_payload,
+        len(model_payload),
+        case_payload,
+        len(case_payload),
+        out,
+        ctypes.byref(out_length),
+        error,
+        ERROR_CAPACITY,
+    )
+    assert code == 0, f"a valid document was refused: {error.value!r}"
+    document, _blob = contracts.unpack_container(out.raw[: out_length.value])
+    return document["manifest"]
+
+
+def test_a_request_reaches_the_result_manifest(compiled) -> None:
+    """
+    A decoded request is echoed into the manifest, not silently dropped.
+
+    The kernel does not *answer* a characteristics request yet, but reading one
+    and dropping it would make "the request arrived" indistinguishable from "the
+    request was ignored" -- and the caller cannot tell those apart from a
+    successful run, which is precisely the class of silent substitution the
+    contract forbids.
+    """
+    manifest = _run_and_read_manifest(compiled.model_payload, compiled.case_payload)
+    echo = manifest.get("characteristics")
+    assert echo is not None, "the request was read but not echoed into the manifest"
+    assert echo["present"] is True
+    assert echo["request_id"] == "p0-native"
+    assert echo["domain"] == "dynamic"
+    assert echo["samples"] == [0, 1]
+    assert echo["definition_kind"] == "frozen_force_tangent"
+    assert echo["frozen_protocol"] == "frozen_inertial_load_v1"
+    assert echo["operator_kind"] == "local_response_v1"
+    # The boundary profile and both name lists survive the round trip.
+    assert echo["boundary_profile"] == "susp_force_balance_body_fixed_v1"
+    assert echo["boundary_version"] == 1
+    assert echo["boundary_released"] == []
+    assert echo["boundary_held"] == []
+    assert echo["measurements"][0]["measurement_id"] == "front.{left;right}.wheel_center"
+    assert echo["measurements"][0]["units"] == "N/m"
+
+
+def test_a_document_without_a_request_has_no_echo(compiled) -> None:
+    """No request means no echo, so the echo itself is evidence a request existed."""
+    tampered = copy.deepcopy(compiled.case_document)
+    tampered.pop("characteristics")
+    case_payload = contracts.pack_container(tampered, compiled.case_payload)
+    manifest = _run_and_read_manifest(compiled.model_payload, case_payload)
+    assert "characteristics" not in manifest
+
+
+def _boundary_of(case_document: dict) -> dict:
+    return case_document["characteristics"]["characteristics"]["boundary"]
+
+
+@pytest.mark.parametrize(
+    ("label", "mutate"),
+    [
+        # A boundary named in both lists is a contradiction, not a precedence
+        # question: freeing and holding the same motion boundary at once has no
+        # physical meaning, and letting one list win would answer a different
+        # question than the caller asked.
+        (
+            "a boundary both held and released",
+            lambda c: _boundary_of(c).update(
+                held=["steering"], released=["steering"]
+            ),
+        ),
+        # `held`/`released` carry boundary *names*; a number is not a name, and
+        # accepting it would defer the failure to a place with less context.
+        (
+            "a numeric held entry",
+            lambda c: _boundary_of(c).update(held=[3]),
+        ),
+        (
+            "an empty released name",
+            lambda c: _boundary_of(c).update(released=[""]),
+        ),
+        (
+            "released is not an array",
+            lambda c: _boundary_of(c).update(released="steering"),
+        ),
+        # A repeated name inside one list would make the decoded request disagree
+        # with its own array.
+        (
+            "a repeated held name",
+            lambda c: _boundary_of(c).update(held=["front_axle", "front_axle"]),
+        ),
+    ],
+)
+def test_contradictory_boundary_lists_are_refused(compiled, label, mutate) -> None:
+    tampered = copy.deepcopy(compiled.case_document)
+    mutate(tampered)
+    case_payload = contracts.pack_container(tampered, compiled.case_payload)
+    code, error = _run(compiled.model_payload, case_payload)
+    assert code != 0, f"the kernel accepted {label}"
+    assert "boundary" in error, f"the refusal does not name the boundary: {error!r}"
+
+
+def test_held_and_released_names_are_echoed(compiled) -> None:
+    """
+    Distinct held and released names round-trip, so the refusal above is about
+    the contradiction and not about the fields being unusable.
+    """
+    tampered = copy.deepcopy(compiled.case_document)
+    _boundary_of(tampered).update(held=["front_axle"], released=["rear_axle"])
+    case_payload = contracts.pack_container(tampered, compiled.case_payload)
+    manifest = _run_and_read_manifest(compiled.model_payload, case_payload)
+    echo = manifest["characteristics"]
+    assert echo["boundary_held"] == ["front_axle"]
+    assert echo["boundary_released"] == ["rear_axle"]
+
+
+def test_wheel_end_response_is_echoed_verbatim(compiled) -> None:
+    """
+    ``wheel_end_response`` is carried through unchanged.
+
+    The reader must not decompose it: the declaration names frames and axis ids
+    whose meaning belongs to the caller's model, and re-deriving a component from
+    a name is exactly what the contract bans.
+    """
+    declaration = {
+        "left": {"frame": "front_left_wheel_center", "axes": ["x", "y", "z"], "version": 1},
+        "right": {"frame": "front_right_wheel_center", "axes": ["x", "y", "z"], "version": 1},
+    }
+    tampered = copy.deepcopy(compiled.case_document)
+    tampered["characteristics"]["characteristics"]["wheel_end_response"] = declaration
+    case_payload = contracts.pack_container(tampered, compiled.case_payload)
+    manifest = _run_and_read_manifest(compiled.model_payload, case_payload)
+    assert manifest["characteristics"]["wheel_end_response"] == declaration
+
+
+def test_a_non_object_wheel_end_response_is_refused(compiled) -> None:
+    tampered = copy.deepcopy(compiled.case_document)
+    tampered["characteristics"]["characteristics"]["wheel_end_response"] = ["left"]
+    case_payload = contracts.pack_container(tampered, compiled.case_payload)
+    code, error = _run(compiled.model_payload, case_payload)
+    assert code != 0
+    assert "wheel_end_response" in error

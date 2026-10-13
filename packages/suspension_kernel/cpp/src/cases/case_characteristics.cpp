@@ -14,6 +14,7 @@
 #include "case_common.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -43,8 +44,51 @@ const std::vector<std::string>& body_fields() {
 const std::vector<std::string>& declaration_fields() {
   static const std::vector<std::string> fields = {
       "id", "measurement_id", "definition_version", "units",
-      "response_kind", "response_version", "mode"};
+      "response_kind", "response_version", "mode", "binding"};
   return fields;
+}
+
+const std::vector<std::string>& measurement_binding_fields() {
+  static const std::vector<std::string> fields = {"marker", "component",
+                                                  "reference"};
+  return fields;
+}
+
+const std::vector<std::string>& load_binding_fields() {
+  static const std::vector<std::string> fields = {"terms"};
+  return fields;
+}
+
+const std::vector<std::string>& load_term_fields() {
+  static const std::vector<std::string> fields = {"body", "wrench", "amplitude"};
+  return fields;
+}
+
+/// The six measurement blades, in the order the declaration names them: three
+/// world translations followed by the relative attitude's small rotation about
+/// the three world axes (design :434, not an Euler angle).  The vector is the
+/// single home of that order, so the reader and the response both index it.
+const std::vector<std::string>& measurement_components() {
+  static const std::vector<std::string> values = {"x",  "y",  "z",
+                                                  "rx", "ry", "rz"};
+  return values;
+}
+
+/// The wrench components, in `body_wrench`'s own `[Fx,Fy,Fz,Mx,My,Mz]` order.
+/// A perturbation that names a component and the column the kernel assembles
+/// therefore cannot disagree about which physical quantity a unit means.
+const std::vector<std::string>& wrench_components() {
+  static const std::vector<std::string> values = {"Fx", "Fy", "Fz",
+                                                  "Mx", "My", "Mz"};
+  return values;
+}
+
+int component_index(const std::vector<std::string>& vocabulary,
+                    const std::string& value) {
+  for (std::size_t index = 0; index < vocabulary.size(); ++index) {
+    if (vocabulary[index] == value) return static_cast<int>(index);
+  }
+  return -1;
 }
 
 const std::vector<std::string>& boundary_fields() {
@@ -151,8 +195,96 @@ bool require_text(const JsonValue& object, const std::string& key,
   return true;
 }
 
+/// A measurement's explicit entity binding.  The marker and reference are
+/// *names*; the reader checks that they are non-empty and well-formed tokens and
+/// leaves their resolution to the model's marker table, because the contract
+/// bans recovering a metric or a frame from a name.  An absent `reference` means
+/// the world; an explicitly empty one is refused rather than read as the world,
+/// since the two would otherwise be indistinguishable.
+bool read_measurement_binding(const JsonValue& entry, const std::string& path,
+                              ContractMeasurementBinding& out,
+                              std::string& error) {
+  if (!entry.is_object()) {
+    return fail(error, path + " must be an object");
+  }
+  if (!check_fields(entry, measurement_binding_fields(), path, error)) {
+    return false;
+  }
+  if (!require_text(entry, "marker", path, out.marker, error)) return false;
+  if (!known_request_tokens(out.marker)) {
+    return fail(error, path + " marker \"" + out.marker +
+                            "\" has an unsupported character");
+  }
+  std::string component;
+  if (!require_text(entry, "component", path, component, error)) return false;
+  out.component = component_index(measurement_components(), component);
+  if (out.component < 0) {
+    return fail(error, path + " declares unknown component \"" + component +
+                            "\"");
+  }
+  const JsonValue* reference = entry.find("reference");
+  if (reference != nullptr) {
+    if (reference->kind != JsonKind::String || reference->text.empty()) {
+      return fail(error, path + " reference must be a non-empty string");
+    }
+    if (!known_request_tokens(reference->text)) {
+      return fail(error, path + " reference \"" + reference->text +
+                              "\" has an unsupported character");
+    }
+    out.reference = reference->text;
+  }
+  out.present = true;
+  return true;
+}
+
+/// A perturbation's explicit load-mode binding: one or more `{body, wrench,
+/// amplitude}` terms.  The amplitude must be finite, because a non-finite one
+/// would make every response of that mode non-finite and the refusal belongs
+/// here rather than in the solver.
+bool read_load_binding(const JsonValue& entry, const std::string& path,
+                       ContractLoadBinding& out, std::string& error) {
+  if (!entry.is_object()) {
+    return fail(error, path + " must be an object");
+  }
+  if (!check_fields(entry, load_binding_fields(), path, error)) return false;
+  const JsonValue* terms = entry.find("terms");
+  if (terms == nullptr || !terms->is_array() || terms->items.empty()) {
+    return fail(error, path + " terms must be a non-empty array");
+  }
+  for (std::size_t index = 0; index < terms->items.size(); ++index) {
+    const JsonValue& item = terms->items[index];
+    const std::string term_path =
+        path + " terms[" + std::to_string(index) + "]";
+    if (!item.is_object()) return fail(error, term_path + " must be an object");
+    if (!check_fields(item, load_term_fields(), term_path, error)) return false;
+    ContractLoadTerm term;
+    if (!require_text(item, "body", term_path, term.body, error)) return false;
+    if (!known_request_tokens(term.body)) {
+      return fail(error, term_path + " body \"" + term.body +
+                              "\" has an unsupported character");
+    }
+    std::string wrench;
+    if (!require_text(item, "wrench", term_path, wrench, error)) return false;
+    term.wrench = component_index(wrench_components(), wrench);
+    if (term.wrench < 0) {
+      return fail(error, term_path + " declares unknown wrench \"" + wrench +
+                              "\"");
+    }
+    const JsonValue* amplitude = item.find("amplitude");
+    if (amplitude == nullptr || amplitude->kind != JsonKind::Number ||
+        !std::isfinite(amplitude->number)) {
+      return fail(error, term_path + " requires a finite numeric amplitude");
+    }
+    term.amplitude = amplitude->number;
+    out.terms.push_back(term);
+  }
+  out.present = true;
+  return true;
+}
+
 bool read_declaration(const JsonValue& entry, const std::string& path,
-                      ContractDeclaration& out, std::string& error) {
+                      bool is_measurement, ContractDeclaration& out,
+                      std::string& error) {
   if (!entry.is_object()) return fail(error, path + " must be an object");
   if (!check_fields(entry, declaration_fields(), path, error)) return false;
   if (!require_text(entry, "measurement_id", path, out.measurement_id, error)) {
@@ -199,6 +331,45 @@ bool read_declaration(const JsonValue& entry, const std::string& path,
   }
   const std::string* mode = entry.find_string("mode");
   if (mode != nullptr) out.mode = *mode;
+  const JsonValue* binding = entry.find("binding");
+  if (binding != nullptr) {
+    const std::string binding_path = path + " binding";
+    if (is_measurement) {
+      if (!read_measurement_binding(*binding, binding_path,
+                                    out.measurement_binding, error)) {
+        return false;
+      }
+    } else if (!read_load_binding(*binding, binding_path, out.load_binding,
+                                  error)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// A boundary name list (`held` / `released`): an array of non-empty names.  A
+/// name that appears more than once inside one list is refused, because the
+/// contract carries names rather than a set and a repeated name would make the
+/// decoded request disagree with its own array.
+bool read_boundary_names(const JsonValue& boundary, const std::string& key,
+                         const std::string& path,
+                         std::vector<std::string>& out, std::string& error) {
+  const JsonValue* list = boundary.find(key);
+  if (list == nullptr) return true;
+  if (!list->is_array()) {
+    return fail(error, path + " " + key + " must be an array of names");
+  }
+  for (const JsonValue& item : list->items) {
+    if (item.kind != JsonKind::String || item.text.empty()) {
+      return fail(error, path + " " + key +
+                             " must contain non-empty boundary names");
+    }
+    if (std::find(out.begin(), out.end(), item.text) != out.end()) {
+      return fail(error, path + " " + key + " repeats boundary \"" + item.text +
+                             "\"");
+    }
+    out.push_back(item.text);
+  }
   return true;
 }
 
@@ -272,7 +443,7 @@ bool contract_read_characteristics(const JsonValue& document,
     if (!read_declaration(measurements->items[index],
                           "characteristics measurement[" +
                               std::to_string(index) + "]",
-                          declaration, error)) {
+                          true, declaration, error)) {
       return false;
     }
     out.measurements.push_back(std::move(declaration));
@@ -289,7 +460,7 @@ bool contract_read_characteristics(const JsonValue& document,
       if (!read_declaration(perturbations->items[index],
                             "characteristics perturbation[" +
                                 std::to_string(index) + "]",
-                            declaration, error)) {
+                            false, declaration, error)) {
         return false;
       }
       out.perturbations.push_back(std::move(declaration));
@@ -310,6 +481,25 @@ bool contract_read_characteristics(const JsonValue& document,
                             "characteristics request boundary",
                             out.boundary_version, error)) {
     return false;
+  }
+  if (!read_boundary_names(*boundary, "released",
+                           "characteristics request boundary",
+                           out.boundary_released, error) ||
+      !read_boundary_names(*boundary, "held",
+                           "characteristics request boundary",
+                           out.boundary_held, error)) {
+    return false;
+  }
+  // A boundary named in both lists is a contradiction, not a precedence rule:
+  // freeing and holding the same motion boundary at once has no physical
+  // meaning, and letting one list win would silently answer a different
+  // question than the caller asked.
+  for (const std::string& name : out.boundary_held) {
+    if (std::find(out.boundary_released.begin(), out.boundary_released.end(),
+                  name) != out.boundary_released.end()) {
+      return fail(error, "characteristics request boundary names \"" + name +
+                             "\" in both held and released");
+    }
   }
 
   const JsonValue* definition = body->find("definition");
@@ -384,9 +574,17 @@ bool contract_read_characteristics(const JsonValue& document,
   }
 
   if (const JsonValue* wheel_end = body->find("wheel_end_response");
-      wheel_end != nullptr && !wheel_end->is_object()) {
-    return fail(error,
-                "characteristics request wheel_end_response must be an object");
+      wheel_end != nullptr) {
+    if (!wheel_end->is_object()) {
+      return fail(error,
+                  "characteristics request wheel_end_response must be an object");
+    }
+    // Kept verbatim rather than decomposed: the declaration names frames and
+    // axis ids whose meaning belongs to the caller's model, and re-deriving a
+    // component from a name is what the reader must never do.  The request is
+    // echoed so "the declaration arrived" is observable instead of assumed.
+    out.has_wheel_end_response = true;
+    out.wheel_end_response = *wheel_end;
   }
   return true;
 }

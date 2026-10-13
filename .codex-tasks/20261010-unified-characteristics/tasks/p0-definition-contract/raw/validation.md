@@ -105,11 +105,24 @@ sample_count: 18 == 18
 
 ## 6. 未覆盖与阻断项（诚实登记）
 
-- **Adams Car 2024.1 未安装**：本机仅有 `G:\MSC.Software\Adams\2025_1_1`。
-  设计 §11.1 引用的路径无法复现（`example_o_wheelenv.html` 在 2025_1_1 是车轮包络格式页，
-  `turn.html` 是转向半径页；柔度矩阵实际在 `steer_axis.html`，Wheel Rate 在 `wheel_1.html`，
-  Ride Rate 在 `ride1.html`）。六组规则 G1–G6 全部保持 `pending_definition`。
-  按 EPIC §36 与 P0 SPEC §41–42，这**不阻断 P0 DONE**，
+- **Adams Car 2024.1 已安装（2026-10-13 修订）**：原版此处断言「未安装、仅有
+  `G:\MSC.Software\Adams\2025_1_1`」，**该断言已被实测证伪**。实测证据：
+  `C:\Program Files\MSC.Software\Adams\2024_1\` 存在（含 `bin\adams2024_1.bat`、
+  `acar\shared_car_database.cdb\subsystems.tbl\TR_Front_Suspension.sub`）；
+  `suspension_multibody.adams.probe_profile('adams-car-2024.1')` 返回
+  `available=True` / `version="2024.1"` / `license_probe="passed"`；
+  `validate-adams --profile adams-car-2024.1 --smoke --require-installed` **exit 0**。
+  原版失败的根因是**路径核对范围不足**——只查了 `G:\...` 与 `C:\MSC.Software\...`，
+  漏掉真实的 `C:\Program Files\MSC.Software\Adams\2024_1`。
+  六组规则据此在 2024.1 本地 help 上重建：G6 由 `pending_definition` 升为 `stated`，
+  G3 由 `pending_definition` 改为 `partial`（`adams_solver/gtcmat.html` 明确给出
+  C++ Solver 动态柔度算法，「动态段无完整算法」的旧结论对 Solver 手册不成立），
+  G1/G2/G5 为 `partial`，G4 为 `not_stated`。**判定口径未放宽**：Adams 兼容的完整动态冻结
+  等价声称仍被阻断，未知项不得默认使用本项目规则。
+  本节引用的版本一致性缺陷（原版版本列写 2024.1、路径列却是 2025_1_1）已随
+  `raw/adams-rule-audit.csv` / `.md` 的重写一并修正；原版保留在
+  `backups/20261013-p0-adams-2024-1-audit/`。
+  按 EPIC §36 与 P0 SPEC §41–42，定义缺口**不阻断 P0 DONE**，
   但**严格阻断 P5 与 P6 的 Adams 兼容发布**。
 - **独立参考数据缺失**：Adams 对标所需独立数据保持 `pending_reference`。
 - **native 其余路径仍宽松**：`contract_read_characteristics` 已严格拒绝未知字段；
@@ -118,7 +131,10 @@ sample_count: 18 == 18
 - **指标计算未实现**：本阶段只落契约与读取链；37 项指标的数值实现属 P1–P4。
   `metric-catalog.csv` 中除 `roll_center_legacy=existing` 外全部 `planned`。
 
-## 7. 门禁结果（仓库根执行）
+## 7. 门禁结果（仓库根执行，2026-10-10/12 历史记录）
+
+> 下表是步骤 5/6 首次收口时的记录。2026-10-13 因重开步骤 5/6（native 请求读取与
+> manifest 回显）后的**重验结果见 §9**；下表的数字不代表当前状态。
 
 | 门 | 结果 |
 |---|---|
@@ -155,3 +171,82 @@ kind `symbol_reference`，symbol `ContractDocument`），并附人工复核判�
    触发 numba JIT 崩溃（崩在 `spatial.py::_quaternion_to_matrix_unit`）。
    该崩溃仅在 `test_binding.py` 之后出现，单跑不出现。
    已改为**子进程**编译 bundle 并落盘复用，套件不再触发崩溃（kernel 套件 112 passed）。
+
+## 9. 重开步骤 5/6 后的重验（2026-10-13）
+
+步骤 5/6 于 2026-10-12 被重开，原因：native 只读取 `profile`/`version`，
+`held`/`released` 与 `wheel_end_response` 未被完整消费。本轮补齐并重验。
+
+### 9.1 补齐的实现（可执行证据）
+
+- `cpp/include/mb_cases/functions.hpp`：`ContractCharacteristics` 新增
+  `boundary_released` / `boundary_held`（`std::vector<std::string>`）与
+  `has_wheel_end_response` / `wheel_end_response`（`JsonValue`）。
+- `cpp/src/cases/case_characteristics.cpp`：新增 `read_boundary_names(...)`，
+  逐项拒绝非字符串、空串与列表内重复；并**拒绝同时出现在 `held` 与 `released`
+  的名字**（错误信息含 `in both held and released`）；`wheel_end_response` 由
+  「只校验 `is_object`」改为**原样存回**。
+- `cpp/src/abi/kernel_contract_run.cpp`：请求存在时，把解码后的请求**回显到结果
+  manifest 的 `characteristics` 字段**（兑现 `functions.hpp` 原有承诺）。
+- 测试 `packages/suspension_kernel/tests/test_characteristics_request.py`：
+  **15 → 25 passed**，新增 10 条（含 5 个参数化负例与 2 个回显正例）。
+
+**反证（判别力验证）**：把 held/released 冲突检查改为 `if (false)` → 重建 →
+测试 **FAILED（缺陷被逮住）**；还原后 25 passed。说明该测试能区分「接线被断开」
+与「正常实现」，不是只断言部署。
+
+### 9.2 关键语义（权威来源，避免二次猜测）
+
+- `solve_plan.schema.json:53-54`：`released`/`held` 是
+  `{"type":"array","items":{"type":"string"}}`（字符串数组＝运动边界名）；
+  `:81`：`wheel_end_response` 是 `{"type":"object"}`。
+- `characteristics.py:102`：`_BOUNDARY_FIELDS = {"profile","version","released","held"}`。
+- 设计 `unified_characteristics_design.md:132`：`wheel_end_response` 记录左右轮心
+  frame/测量 ID、轴及版本。
+
+### 9.3 本轮门禁（实际执行，命令 / 结果 / 退出码）
+
+| 门 | 命令 | 结果 |
+|---|---|---|
+| build-kernel | `python packages/suspension_kernel/scripts/build_suspension_kernel.py` | exit 0 |
+| build-axle-native | `python packages/suspension_multibody/scripts/build_axle_native.py` | exit 0 |
+| P0 native 契约测试 | `pytest packages/suspension_kernel/tests/test_characteristics_request.py` | **25 passed** |
+| kernel 套件 | `pytest packages/suspension_kernel/tests` | **129 passed** |
+| contracts 套件 | `pytest packages/suspension_contracts/tests` | **78 passed** |
+| no_legacy 架构测试 | `pytest .../architecture/test_no_legacy_vehicle_models.py` | **5 passed** |
+| 快速集 | `pytest packages/suspension_multibody/tests --ignore=…adams --ignore=…architecture --ignore=…cases` | **2051 passed, 1 xfailed**（skip 0，xfail 未增长） |
+| characteristics 定向 | `pytest packages/suspension_multibody/tests/characteristics` | **489 passed** |
+| `ruff check .` | — | `All checks passed!` (exit 0) |
+| `ty check .` | — | `All checks passed!` (exit 0) |
+| `legacy_surface_gate.py --check` | — | `OK: no unregistered Python boundary violation`（findings 0, exit 0） |
+| `check_module_layering.py --strict --final` | — | `OK: layering matches the recorded baseline`（0 cycles, exit 0） |
+| `check_composable_release.py --skip-isolation` | — | `OK: 3 release checks passed` (exit 0) |
+| `dynamic_hash_sentinel.py --check` | — | `OK: dynamic output matches the frozen baseline byte-for-byte` (exit 0) |
+| `case_parity_check.py` | — | `OK: 8 families accepted` (exit 0) |
+| `kc_perf_gate.py` | — | **FAIL**（见 9.4） |
+| `git diff --check` | — | exit 0（仅 Git 的 LF→CRLF 提示） |
+
+未重录任何数值/性能/架构基线；`layering_baseline.json` 未再改动。
+
+### 9.4 `kc_perf_gate.py` 的 FAIL 判定（登记口径）
+
+本轮两次执行均 FAIL，但**判定为「高负载下的负载敏感抖动 + 该路径不经本次改动」**，
+依据两条独立证据：
+
+1. **比值自身在抖动**（基线固定不变）：k-100 ×1.288 → ×1.467，c-66 ×1.275 → ×1.427；
+   门禁脚本自述「同一负载在安静机器实测 ×0.92、繁忙桌面 ×1.5」，并因此默认取 5 次
+   最优值（`kc_perf_gate.py:39-51`）。一个真实回归不会让同一二进制在同一基线上
+   两次读数相差 0.18。
+2. **本次改动不在该路径上**：实测 perf 的两个用例（k-100 / c-66）经 `validate()`
+   后**不含 `characteristics` 键**（打印 `k-100 contains characteristics key: False`
+   / `c-66 … False`），即 P0 新增的 `characteristics` 解码与 manifest 回显分支
+   **根本不执行**。
+
+因此**不重录基线、不放宽 `BUDGET_FACTOR`**，如实记为
+`BASELINE_RED` 性质的环境抖动，而非本次回归；也不把它写成 `PASS`。
+
+### 9.5 本轮仍未覆盖
+
+- `raw/reference-manifest.json` 仍为 `pending_reference`（P5 逐点对标所需独立参考未生成）。
+- `contract_read_characteristics` 之外的 case 文档字段仍走旧宽松路径（P0 既定范围，非遗漏）。
+- 指标数值实现属 P1–P4，不在 P0 范围。

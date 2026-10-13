@@ -57,7 +57,7 @@ def sample_identities(result: Any) -> tuple[SampleIdentity, ...]:
     offset indistinguishable from a sample that legitimately has no time.
     """
     times = np.asarray(result.times_s, dtype=float)
-    cases = tuple(getattr(result.raw, "cases", ()) or ())
+    cases = tuple(getattr(getattr(result, "raw", result), "cases", ()) or ())
     identities: list[SampleIdentity] = []
     if not cases:
         for index in range(times.size):
@@ -96,15 +96,20 @@ def require_channel(result: Any, name: str, *, request_id: str) -> np.ndarray:
     A channel that was never requested is *absent*, not zero.  Returning an empty
     or zero-filled array here would let a caller treat "the kernel was not asked"
     as "the answer is zero", which is the failure this function exists to prevent.
+
+    The stored result reaches this module as either the envelope or the raw
+    contract result; naming the envelope only would make the same query crash on
+    the other shape.
     """
-    blocks = getattr(result.raw, "blocks", None)
+    raw = getattr(result, "raw", result)
+    blocks = getattr(raw, "blocks", None)
     if blocks is None or name not in blocks:
         available = ", ".join(sorted(blocks)) if blocks else "none"
         raise CharacteristicsError(
             f"request {request_id!r} needs the native channel {name!r}, which this "
             f"result does not contain; available channels: {available}"
         )
-    return np.asarray(result.raw.block(name), dtype=float)
+    return np.asarray(raw.block(name), dtype=float)
 
 
 def measurement_from_channel(

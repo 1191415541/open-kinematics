@@ -512,6 +512,41 @@ class ContractModel {
   double gravity_[3] = {0.0, 0.0, 0.0};
 };
 
+/// One measurement's explicit entity binding: *which* marker, *which* component
+/// of it, and *which* reference body the measurement is taken against.
+///
+/// The binding is a declaration rather than an inference.  The contract bans
+/// recovering a metric or a frame from an entity *name*, so nothing here parses
+/// a marker name for a prefix or a suffix -- the name is looked up in the model's
+/// own marker table and the component is read from the enumerated vocabulary.
+///
+/// `component` indexes `[x, y, z, rx, ry, rz]`: the first three are translations
+/// along the world axes, the last three are the relative attitude's small
+/// rotation about that world axis (design :434), which is deliberately not an
+/// Euler angle.  An empty `reference` means the world; a named one is resolved
+/// like `marker` and its increment is subtracted.
+struct ContractMeasurementBinding {
+  bool present = false;
+  std::string marker;
+  int component = -1;
+  std::string reference;
+};
+
+/// One term of a named load mode: a wrench component on one body, scaled by an
+/// amplitude.  The mode is the list of terms, which is why a mode is not one
+/// entry -- the design's `heave_load` is two wheels at once.
+struct ContractLoadTerm {
+  std::string body;
+  int wrench = -1;
+  double amplitude = 0.0;
+};
+
+/// One perturbation's explicit load-mode binding.
+struct ContractLoadBinding {
+  bool present = false;
+  std::vector<ContractLoadTerm> terms;
+};
+
 /// One declared measurement or perturbation inside a characteristics request.
 struct ContractDeclaration {
   std::string id;
@@ -521,6 +556,10 @@ struct ContractDeclaration {
   std::string response_kind;
   int response_version = 0;
   std::string mode;
+  /// Filled for a measurement declaration that carried `binding`.
+  ContractMeasurementBinding measurement_binding;
+  /// Filled for a perturbation declaration that carried `binding`.
+  ContractLoadBinding load_binding;
 };
 
 /// One characteristics output request, decoded.
@@ -530,6 +569,19 @@ struct ContractDeclaration {
 /// overwriting the older meaning, and the read is strict -- unknown fields are
 /// refused rather than ignored, because ignoring one turns a typo into a
 /// different physical question.
+///
+/// `boundary_released` and `boundary_held` name *existing motion boundaries* of
+/// the plan (see `multibody-case`'s `boundary` array): released ones are freed,
+/// held ones keep their zero increment.  A name cannot appear in both lists --
+/// that is a contradictory request, not an ordering question -- so the reader
+/// refuses it rather than letting the last list win.  Neither list is defaulted:
+/// a name the plan does not declare is refused by whoever consumes them, and the
+/// decoded request carries only what the caller wrote.
+///
+/// `wheel_end_response` is the optional wheel-end channel declaration (left/right
+/// wheel-center frame and axis ids with their version).  It is read verbatim and
+/// echoed; the kernel does not interpret entity names, because recovering a
+/// metric or a frame from a name is exactly what the contract bans.
 struct ContractCharacteristics {
   bool present = false;
   std::string request_id;
@@ -539,12 +591,18 @@ struct ContractCharacteristics {
   std::vector<ContractDeclaration> perturbations;
   std::string boundary_profile;
   int boundary_version = 0;
+  std::vector<std::string> boundary_released;
+  std::vector<std::string> boundary_held;
   std::string definition_kind;
   int definition_version = 0;
   std::string frozen_protocol;
   int frozen_version = 0;
   std::string operator_kind;
   int operator_version = 0;
+  /// True when the request carried `wheel_end_response`; `wheel_end_response`
+  /// then holds the verbatim declaration object.
+  bool has_wheel_end_response = false;
+  JsonValue wheel_end_response;
 };
 
 /// Read and validate `document`'s characteristics request into `out`.

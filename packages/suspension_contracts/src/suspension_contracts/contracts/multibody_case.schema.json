@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://open-kinematics.dev/contracts/multibody_case_v1.json",
   "title": "Multibody Case Contract V1",
-  "description": "Declarative case definition. The document never carries an expanded case list: the case layer expands grids, load paths, side modes and excitations itself. Family-specific requirements beyond the structural rules below are enforced by the case layer, and the expanded identity is reported back in the result manifest.",
+  "description": "Declarative case definition. The case layer expands grids, load paths, side modes and excitations itself, and the expanded identity is reported back in the result manifest. A time-history family that runs one excitation per case may instead declare a top-level `runs` array: each entry names one run and overrides only the fields that family reads for it (its payload tables, its road, its own section), while the time grid, the solver and the outputs stay shared because the kernel runs every case on one grid. Family-specific requirements beyond the structural rules below are enforced by the case layer.",
   "type": "object",
   "additionalProperties": false,
   "required": ["contract", "contract_version", "kind", "family", "name"],
@@ -161,7 +161,8 @@
       "properties": {
         "constraint_reaction": {"type": "boolean"},
         "constraint_jacobian": {"type": "boolean"},
-        "element_wrench": {"type": "boolean"}
+        "element_wrench": {"type": "boolean"},
+        "accepted_state": {"type": "boolean"}
       }
     },
     "vehicle": {"type": "object"},
@@ -185,6 +186,29 @@
       "properties": {
         "schema_version": {"const": 1},
         "characteristics": {"type": "object"}
+      }
+    },
+    "runs": {
+      "description": "One entry per run, for a time-history family that runs one excitation per case. Each entry names its run and overrides only the fields that family reads for the run: its payload tables, its road, its own section, and the two case-level overrides under inputs. The document keeps the time grid, the solver, the outputs and the characteristics request because the kernel runs every case of one document on one grid with one solver, and a run may not restate them. Every entry override merges with the document: blobs merge by name (a run of the same name replaces the document's table), inputs merge one level deep, and any other key replaces. Family-specific acceptance of a key is enforced by the case layer.",
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/run"}
+    }
+  },
+  "$defs": {
+    "run": {
+      "description": "One named run of a document that declares a runs list. The union of the keys the time-history families read is listed here; a family refuses a key it does not read, so an override cannot be silently ignored.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "blobs": {"type": "array", "items": {"type": "object"}},
+        "inputs": {"type": "object"},
+        "road": {"type": "object"},
+        "handling": {"type": "object"},
+        "four_post": {"type": "object"},
+        "ride_random_road": {"type": "object"}
       }
     }
   }

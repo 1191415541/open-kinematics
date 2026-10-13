@@ -86,6 +86,7 @@ _MEASUREMENT_FIELDS = frozenset({
     "units",
     "response_kind",
     "response_version",
+    "binding",
 })
 _PERTURBATION_FIELDS = frozenset({
     "id",
@@ -95,7 +96,22 @@ _PERTURBATION_FIELDS = frozenset({
     "response_kind",
     "response_version",
     "mode",
+    "binding",
 })
+
+MEASUREMENT_COMPONENTS = ("x", "y", "z", "rx", "ry", "rz")
+"""The six world-axis blades a measurement may name.  The first three are
+translations, the last three are the relative attitude's small rotation about
+that world axis (design §434), which is deliberately *not* an Euler angle."""
+
+WRENCH_COMPONENTS = ("Fx", "Fy", "Fz", "Mx", "My", "Mz")
+"""The wrench order ``body_wrench`` itself uses, so a perturbation that names a
+component and the column the kernel assembles cannot disagree about which
+physical quantity a unit means."""
+
+_MEASUREMENT_BINDING_FIELDS = frozenset({"marker", "component", "reference"})
+_PERTURBATION_BINDING_FIELDS = frozenset({"terms"})
+_PERTURBATION_TERM_FIELDS = frozenset({"body", "wrench", "amplitude"})
 _DEFINITION_FIELDS = frozenset({"kind", "version"})
 _FROZEN_FIELDS = frozenset({"protocol", "version"})
 _OPERATOR_FIELDS = frozenset({"kind", "version"})
@@ -139,22 +155,85 @@ def _check_measurement_id(value: str, label: str) -> None:
         )
 
 
-def _check_declaration(row: Mapping[str, Any], label: str) -> None:
-    _reject_unknown(row, _MEASUREMENT_FIELDS, label)
+def _check_measurement_binding(row: Mapping[str, Any], label: str) -> None:
+    """
+    Check one measurement's explicit entity binding.
+
+    A measurement must say *which* marker, *which* component and *which*
+    reference body it reads.  The contract bans recovering a metric or a frame
+    from an entity name (``mb_cases/functions.hpp``), so the binding is a
+    declaration, never an inference: nothing here parses a marker name for a
+    prefix or a suffix.
+    """
+    _reject_unknown(row, _MEASUREMENT_BINDING_FIELDS, label)
+    _require_text(row, "marker", label)
+    component = _require_text(row, "component", label)
+    if component not in MEASUREMENT_COMPONENTS:
+        raise ContractError(
+            f"characteristics: {label} declares unknown component {component!r}; "
+            f"expected one of {list(MEASUREMENT_COMPONENTS)}"
+        )
+    reference = row.get("reference")
+    if reference is not None and not isinstance(reference, str):
+        raise ContractError(f"characteristics: {label} reference must be a string")
+
+
+def _check_perturbation_binding(row: Mapping[str, Any], label: str) -> None:
+    """
+    Check one perturbation's explicit load-mode binding.
+
+    The binding is a list of *terms*, each naming a body, a wrench component and
+    an amplitude.  A named mode (the design's ``heave_load``) is exactly the list
+    with two terms, which is why the shape is a list rather than one entry: a
+    single-component representation could not express the in-phase pair.
+    """
+    _reject_unknown(row, _PERTURBATION_BINDING_FIELDS, label)
+    terms = row.get("terms")
+    if not isinstance(terms, Sequence) or isinstance(terms, (str, bytes)):
+        raise ContractError(f"characteristics: {label} terms must be a list")
+    if not terms:
+        raise ContractError(f"characteristics: {label} terms must not be empty")
+    for entry in terms:
+        term = _require_mapping(entry, f"{label} term")
+        _reject_unknown(term, _PERTURBATION_TERM_FIELDS, f"{label} term")
+        _require_text(term, "body", f"{label} term")
+        wrench = _require_text(term, "wrench", f"{label} term")
+        if wrench not in WRENCH_COMPONENTS:
+            raise ContractError(
+                f"characteristics: {label} term declares unknown wrench {wrench!r}; "
+                f"expected one of {list(WRENCH_COMPONENTS)}"
+            )
+        amplitude = term.get("amplitude")
+        if isinstance(amplitude, bool) or not isinstance(amplitude, (int, float)):
+            raise ContractError(
+                f"characteristics: {label} term requires a numeric amplitude"
+            )
+
+
+def _check_declaration(row: Mapping[str, Any], label: str, *, kind: str) -> None:
+    _reject_unknown(row, _MEASUREMENT_FIELDS if kind == "measurement" else _PERTURBATION_FIELDS, label)
     identifier = _require_text(row, "measurement_id", label)
     _check_measurement_id(identifier, label)
     _require_version(row, label)
     units = _require_text(row, "units", label)
     if units not in _UNIT_TOKENS:
         raise ContractError(f"characteristics: {label} declares unsupported unit {units!r}")
-    kind = _require_text(row, "response_kind", label)
-    if kind not in _RESPONSE_KINDS:
-        raise ContractError(f"characteristics: {label} declares unknown response_kind {kind!r}")
+    response_kind = _require_text(row, "response_kind", label)
+    if response_kind not in _RESPONSE_KINDS:
+        raise ContractError(f"characteristics: {label} declares unknown response_kind {response_kind!r}")
     version = row.get("response_version")
     if not isinstance(version, int) or isinstance(version, bool) or version < 1:
         raise ContractError(f"characteristics: {label} requires a positive integer response_version")
     if "id" in row:
         _require_text(row, "id", label)
+    binding = row.get("binding")
+    if binding is None:
+        return
+    binding_row = _require_mapping(binding, f"{label}.binding")
+    if kind == "measurement":
+        _check_measurement_binding(binding_row, f"{label}.binding")
+    else:
+        _check_perturbation_binding(binding_row, f"{label}.binding")
 
 
 _UNIT_TOKENS = frozenset({
@@ -239,12 +318,7 @@ def validate_characteristics_request(payload: Any, label: str = "characteristics
             raise ContractError(f"characteristics: {key} must not be empty when present")
         for entry in entries:
             item = _require_mapping(entry, label_key)
-            _reject_unknown(
-                item,
-                _MEASUREMENT_FIELDS if key == "measurements" else _PERTURBATION_FIELDS,
-                label_key,
-            )
-            _check_declaration(item, label_key)
+            _check_declaration(item, label_key, kind=label_key)
 
     boundary = _require_mapping(body.get("boundary"), "characteristics.boundary")
     _reject_unknown(boundary, _BOUNDARY_FIELDS, "characteristics.boundary")

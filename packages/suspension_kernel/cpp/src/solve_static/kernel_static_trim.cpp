@@ -25,6 +25,7 @@
 #include "mb_tire/common/functions.hpp"
 #include "mb_force/functions.hpp"
 #include "mb_linearization/types.hpp"
+#include "mb_linear/batch.hpp"
 
 namespace axle_kernel {
 
@@ -34,7 +35,7 @@ std::vector<double> static_residual(
     const std::vector<int>& active_tires, const std::vector<double>& x,
     double& force_residual, double& position_residual,
     int* worst_force_coordinate, double* worst_force_value,
-    double load_scale) {
+    double load_scale, const std::vector<double>* frozen_inertial_wrench) {
     const int n=model.ndof, m=model.rows;
     std::vector<double> dy(x.begin(),x.begin()+n);
     const State candidate=pose_candidate(base,model,dy);
@@ -62,8 +63,20 @@ std::vector<double> static_residual(
         model, candidate, sample, gravity_x, gravity_y, gravity_z, tire_forces,
         tire_state_derivatives, tire_output, potential, external_power,
         dissipation, force, nullptr, nullptr, nullptr, nullptr, nullptr,
-        &static_contact
+        frozen_inertial_wrench == nullptr ? &static_contact : nullptr
     );
+    if (frozen_inertial_wrench != nullptr) {
+        // The common bus stores applied torque minus live gyro. Replace only
+        // that inertia contribution, through the bus's own arithmetic, with the
+        // original sample's complete fixed COM wrench.
+        const std::vector<Vec3> zero(model.bodies.size());
+        std::vector<double> inertia_bus(static_cast<std::size_t>(n), 0.0);
+        assemble_generalized_force(model, candidate, zero, zero, inertia_bus, false);
+        for (int i = 0; i < n; ++i)
+            force[static_cast<std::size_t>(i)] -=
+                inertia_bus[static_cast<std::size_t>(i)] +
+                (*frozen_inertial_wrench)[static_cast<std::size_t>(i)];
+    }
     std::vector<double> out(
         static_cast<std::size_t>(n+m)+active_tires.size(), 0.0
     );
@@ -130,6 +143,9 @@ std::vector<double> static_residual(
         }
         double& scale = i % 6 < 3 ? force_scale : moment_scale;
         scale = std::max(scale, std::abs(force[i]));
+        if (frozen_inertial_wrench != nullptr)
+            scale = std::max(scale, std::abs(
+                (*frozen_inertial_wrench)[static_cast<std::size_t>(i)]));
         double reaction = 0.0;
         for (int row = 0; row < m; ++row) {
             reaction = std::max(
@@ -188,6 +204,30 @@ std::vector<double> static_residual(
         *worst_force_value = worst_value;
     }
     return out;
+}
+
+bool frozen_inertial_residual(const Model& model, const SampleInput& sample,
+    const WorkingSample& working, const std::vector<double>& x,
+    double gravity_x, double gravity_y, double gravity_z,
+    std::vector<double>& residual, double& force_residual,
+    double& position_residual) {
+    if (!working.frozen_inertial_load ||
+        working.inertial_wrench.size() != static_cast<std::size_t>(model.ndof) ||
+        x.size() != static_cast<std::size_t>(physical_tangent_dimension(model, working)) ||
+        !finite_vec(working.inertial_wrench) || !finite_vec(x)) return false;
+    for (const int tire : working.active_tires)
+        if (tire < 0 || static_cast<std::size_t>(tire) >= model.tires.size())
+            return false;
+    double force = 0.0, position = 0.0;
+    auto values = static_residual(model, working.pose, sample,
+        gravity_x, gravity_y, gravity_z, {}, x, force,
+        position, nullptr, nullptr, 1.0, &working.inertial_wrench);
+    if (!finite_vec(values) || !std::isfinite(force) || !std::isfinite(position))
+        return false;
+    residual = std::move(values);
+    force_residual = force;
+    position_residual = position;
+    return true;
 }
 
 ConstraintResidualMaxima constraint_residual_maxima(
@@ -380,7 +420,9 @@ bool static_jacobian(
         active_tires,
         load_scale,
         candidate,
-        static_position_constraint_jacobian(model, candidate)
+        static_position_constraint_jacobian(model, candidate),
+        false,
+        {}
     };
     if (static_cast<int>(x.size()) !=
         physical_tangent_dimension(model, working)) {
@@ -565,13 +607,14 @@ std::vector<double> frozen_load_column(
     // the residual exactly once and linearly.  `static_residual` forms
     // `out[col] = -force[col] - reaction[col]`, and `force`/`torque` are built in
     // `force/layout.cpp` as `external_load_scale * body_wrench` -- so an extra unit
-    // of `body_wrench[k]` adds exactly `-1` to the generalized coordinate it feeds,
+    // of `body_wrench[k]` adds exactly `-1` to dR/dw.  The response RHS is its
+    // negative, B_w = -dR/dw, hence +1 on the generalized coordinate it feeds,
     // plus a *pose-dependent* moment when the wrench acts at a declared marker
     // rather than at the body origin:
     //
     //     torque += cross(rotate(q, point), force)      (force/layout.cpp:172)
     //
-    // so `d(torque)/dF = -cross(R*p, e_k)` and the derivative is evaluated at the
+    // so B_w carries +cross(R*p, e_k), evaluated at the
     // pose being solved for, which is the geometric term the design requires
     // (SPEC :35, :42).  A finite difference here would also be a finite difference
     // of the *solver's* response, which the design explicitly refuses (:439).
@@ -621,11 +664,18 @@ std::vector<double> frozen_load_column(
     // a right-hand side for a row that cannot carry one, and `A X = B_w P` would then
     // report `X[gauge] = -1` -- a unit displacement conjured out of a load applied to
     // a coordinate the model deliberately does not let move.  That leaks into every
-    // measurement through `Y = G X`.  The check is on the *coordinate*, so it covers
-    // the moment block and the lever-arm terms below as well, not only `slot`.
-    if (frozen_load_gauge_coordinate(model, base + slot)) return column;
-
-    column[static_cast<std::size_t>(base + slot)] = -1.0;
+    // measurement through `Y = G X`.
+    //
+    // The suppression is scoped to *this coordinate only*.  A gauge replaces one
+    // equation; it says nothing about the rest of the body's row block, which still
+    // carries the physical `cross(R*p, F)` moment.  Returning the whole column here
+    // would drop that moment and report a load on a pinned translation as producing
+    // no rotation at all -- a plausible-looking zero, and the mirror image of the
+    // error the `-1` would have caused.  So the guard suppresses its own entry and
+    // the routine continues into the lever-arm terms below.
+    if (!frozen_load_gauge_coordinate(model, base + slot)) {
+        column[static_cast<std::size_t>(base + slot)] = 1.0;
+    }
 
     if (is_force) {
         // The lever arm only exists when the model declares an application point
@@ -636,8 +686,9 @@ std::vector<double> frozen_load_column(
             point = model.body_wrench_point_local[static_cast<std::size_t>(body)];
         }
         if (point.x != 0.0 || point.y != 0.0 || point.z != 0.0) {
-            // `d/df_k cross(R*p, f) = cross(R*p, e_k)`, negated because the residual
-            // carries `-force`.  The arm is rotated into world at the *given* pose,
+            // `d/df_k cross(R*p, f) = cross(R*p, e_k)`.  The residual carries
+            // -force, and B_w negates that derivative.  The arm is rotated into
+            // world at the given pose,
             // so the derivative is a function of the base point as the design
             // requires rather than of the load.
             const Vec3 arm = rotate(pose.q[static_cast<std::size_t>(body)], point);
@@ -650,17 +701,668 @@ std::vector<double> frozen_load_column(
             // among them would be corrupted by the moment exactly as `slot` would be
             // by the force.
             if (!frozen_load_gauge_coordinate(model, base + 3)) {
-                column[static_cast<std::size_t>(base + 3)] -= moment.x;
+                column[static_cast<std::size_t>(base + 3)] += moment.x;
             }
             if (!frozen_load_gauge_coordinate(model, base + 4)) {
-                column[static_cast<std::size_t>(base + 4)] -= moment.y;
+                column[static_cast<std::size_t>(base + 4)] += moment.y;
             }
             if (!frozen_load_gauge_coordinate(model, base + 5)) {
-                column[static_cast<std::size_t>(base + 5)] -= moment.z;
+                column[static_cast<std::size_t>(base + 5)] += moment.z;
             }
         }
     }
     return column;
+}
+
+// --- The load-driven frozen response, `A X = B_w P`, `Y = G X + D P` ------------
+//
+// `frozen_load_column` above answers "what is the residual derivative with respect
+// to one unit wrench component"; `frozen_force_tangent_column` answers the
+// *coordinate-driven* question; these two answer the load-driven one.  They are
+// separate routines on purpose: the three boundary conditions are three different
+// physical questions, and the design forbids obtaining one from another by
+// inverting a matrix (SPEC :37, design :422).
+
+bool frozen_measurement_gradient(
+    const Model& model, const WorkingSample& working,
+    const std::vector<FrozenMeasurement>& measurements,
+    std::vector<double>& gradient
+) {
+    const int ndof = model.ndof;
+    const State& pose = working.pose;
+    // `G` spans the same vector `X` does, so its width is the tangent dimension
+    // and not `ndof`.  Leaving it at `ndof` would make the consumer's
+    // `gradient.shape[1] == dimension` check refuse the very response this
+    // routine exists to produce.
+    const int dimension = physical_tangent_dimension(model, working);
+    if (dimension < ndof) return false;
+    std::vector<double> out(
+        measurements.size()*static_cast<std::size_t>(dimension), 0.0
+    );
+    // Nothing is written to the caller's vector until every measurement has been
+    // resolved: a refusal that had already written half a row would be
+    // indistinguishable from a real measurement that happens to be zero.
+    for (std::size_t m = 0; m < measurements.size(); ++m) {
+        const FrozenMeasurement& measurement = measurements[m];
+        if (measurement.component < 0 || measurement.component > 5) return false;
+        if (measurement.body < 0) return false;
+        if (measurement.body >= static_cast<int>(model.body_to_free.size())) {
+            return false;
+        }
+        const int free_body =
+            model.body_to_free[static_cast<std::size_t>(measurement.body)];
+        // A fixed body has no free coordinate: the caller must know that before it
+        // asks, exactly as in `frozen_load_column`.
+        if (free_body < 0) return false;
+        const int base = 6*free_body;
+        if (base < 0 || base + 6 > ndof) return false;
+
+        const bool is_rotation = measurement.component >= 3;
+        const int axis = is_rotation ? measurement.component - 3
+                                     : measurement.component;
+        const Vec3 unit{
+            axis == 0 ? 1.0 : 0.0, axis == 1 ? 1.0 : 0.0, axis == 2 ? 1.0 : 0.0
+        };
+
+        // The primary body's blade.  The increment map is `r += dr` (world) and
+        // `q = exp(dtheta) * q` (world rotation about the body origin,
+        // `kernel_integrator_state.cpp:39-55`), so the translation at a material
+        // point is `dr + dtheta x (R(q) p)` and its `e` component is
+        // `dr.e + dtheta.(a x e)` with `a = R(q) p`.  A rotation measurement is the
+        // world angular increment about `e` directly -- the design's "relative
+        // attitude's small rotation at the base point", not a Euler angle
+        // (design :434).
+        double* row = out.data() + m*static_cast<std::size_t>(dimension);
+        if (!is_rotation) {
+            row[base + axis] += 1.0;
+            if (measurement.has_point) {
+                const Vec3 arm = rotate(
+                    pose.q[static_cast<std::size_t>(measurement.body)],
+                    measurement.point
+                );
+                const Vec3 blade = cross(arm, unit);
+                row[base + 3] += blade.x;
+                row[base + 4] += blade.y;
+                row[base + 5] += blade.z;
+            }
+        } else {
+            row[base + 3 + axis] += 1.0;
+        }
+
+        // The reference body's blade is *subtracted*: the design's displacement is
+        // the wheel-centre increment *relative to* `measurement_reference`, and a
+        // free reference body brings its own increment into the answer
+        // (`boundary-profiles.json`: "参考体增量参与求解").
+        if (measurement.reference >= 0) {
+            if (measurement.reference >=
+                static_cast<int>(model.body_to_free.size())) {
+                return false;
+            }
+            const int free_reference = model.body_to_free[
+                static_cast<std::size_t>(measurement.reference)
+            ];
+            if (free_reference < 0) return false;
+            const int ref_base = 6*free_reference;
+            if (ref_base < 0 || ref_base + 6 > ndof) return false;
+            if (!is_rotation) {
+                row[ref_base + axis] -= 1.0;
+                if (measurement.has_reference_point) {
+                    const Vec3 arm = rotate(
+                        pose.q[static_cast<std::size_t>(measurement.reference)],
+                        measurement.reference_point
+                    );
+                    const Vec3 blade = cross(arm, unit);
+                    row[ref_base + 3] -= blade.x;
+                    row[ref_base + 4] -= blade.y;
+                    row[ref_base + 5] -= blade.z;
+                }
+            } else {
+                row[ref_base + 3 + axis] -= 1.0;
+            }
+        }
+    }
+    gradient = std::move(out);
+    return true;
+}
+
+
+namespace {
+
+/// A rank test with an explicit scale, so two calls on matrices that differ only
+/// by one appended column can be compared.  `matrix_rank` already derives its own
+/// tolerance from the largest entry, which is right for "what is this matrix's
+/// rank" but wrong for "did adding this column raise the rank": the appended
+/// column would be allowed to move the tolerance it is being judged against, and
+/// a small but genuinely independent column could be absorbed.  The tolerance here
+/// is therefore fixed by the caller's `scale`, taken from the *original* matrix.
+int rank_with_tolerance(std::vector<double> matrix, int rows, int columns,
+                        double scale) {
+    if (rows == 0 || columns == 0) return 0;
+    const double tolerance =
+        static_cast<double>(std::max(rows, columns))
+        * std::numeric_limits<double>::epsilon()*std::max(1.0, scale);
+    int rank = 0;
+    for (int column = 0; column < columns && rank < rows; ++column) {
+        int pivot = rank;
+        double pivot_value = std::abs(matrix[static_cast<std::size_t>(rank)*
+                                            static_cast<std::size_t>(columns) +
+                                            static_cast<std::size_t>(column)]);
+        for (int row = rank + 1; row < rows; ++row) {
+            const double candidate = std::abs(
+                matrix[static_cast<std::size_t>(row)*
+                           static_cast<std::size_t>(columns) +
+                       static_cast<std::size_t>(column)]);
+            if (candidate > pivot_value) {
+                pivot = row;
+                pivot_value = candidate;
+            }
+        }
+        if (pivot_value <= tolerance) continue;
+        if (pivot != rank) {
+            for (int col = column; col < columns; ++col) {
+                std::swap(matrix[static_cast<std::size_t>(rank)*
+                                     static_cast<std::size_t>(columns) +
+                                 static_cast<std::size_t>(col)],
+                          matrix[static_cast<std::size_t>(pivot)*
+                                     static_cast<std::size_t>(columns) +
+                                 static_cast<std::size_t>(col)]);
+            }
+        }
+        const double diagonal = matrix[static_cast<std::size_t>(rank)*
+                                           static_cast<std::size_t>(columns) +
+                                       static_cast<std::size_t>(column)];
+        for (int row = rank + 1; row < rows; ++row) {
+            const double factor =
+                matrix[static_cast<std::size_t>(row)*
+                           static_cast<std::size_t>(columns) +
+                       static_cast<std::size_t>(column)]/diagonal;
+            for (int col = column; col < columns; ++col) {
+                matrix[static_cast<std::size_t>(row)*
+                           static_cast<std::size_t>(columns) +
+                       static_cast<std::size_t>(col)] -=
+                    factor*matrix[static_cast<std::size_t>(rank)*
+                                      static_cast<std::size_t>(columns) +
+                                  static_cast<std::size_t>(col)];
+            }
+        }
+        ++rank;
+    }
+    return rank;
+}
+
+/// An orthonormal basis of `A`'s null space, as `dimension x nullity` in
+/// row-major-per-column layout (`basis[column*dimension + row]`).
+///
+/// The basis is built by Gram-Schmidt over the columns of `A`'s rank-revealing
+/// elimination, which is the same arithmetic `rank_with_tolerance` performs -- so
+/// the basis cannot disagree with the rank it is derived from.  It is used to test
+/// whether a measurement row annihilates the null space: a row that does is
+/// invariant under the motions the load leaves free, and a row that does not is a
+/// measurement the load cannot determine.
+///
+/// `basis` is empty when the null space is empty, which is the ordinary
+/// full-rank case and the answer that makes every measurement identifiable by
+/// construction.
+bool null_space_basis(const std::vector<double>& matrix, int dimension,
+                      int rank, std::vector<double>& basis) {
+    basis.clear();
+    if (rank >= dimension) return true;
+    // Column-wise elimination with the pivots recorded, then a back substitution
+    // per free column.  Scaling is inherited from `matrix` itself, exactly as the
+    // rank test above: a pivot is a pivot only if it beats the same tolerance.
+    double scale = 0.0;
+    for (double value : matrix) scale = std::max(scale, std::abs(value));
+    const double tolerance =
+        static_cast<double>(dimension)
+        * std::numeric_limits<double>::epsilon()*std::max(1.0, scale);
+    std::vector<double> working = matrix;
+    std::vector<int> pivot_column(dimension, -1);
+    int found = 0;
+    for (int column = 0; column < dimension && found < rank; ++column) {
+        int pivot = found;
+        double pivot_value = std::abs(working[static_cast<std::size_t>(found)*
+                                                static_cast<std::size_t>(dimension) +
+                                            static_cast<std::size_t>(column)]);
+        for (int row = found + 1; row < dimension; ++row) {
+            const double candidate = std::abs(
+                working[static_cast<std::size_t>(row)*
+                            static_cast<std::size_t>(dimension) +
+                        static_cast<std::size_t>(column)]);
+            if (candidate > pivot_value) {
+                pivot = row;
+                pivot_value = candidate;
+            }
+        }
+        if (pivot_value <= tolerance) continue;
+        if (pivot != found) {
+            for (int col = 0; col < dimension; ++col) {
+                std::swap(working[static_cast<std::size_t>(found)*
+                                      static_cast<std::size_t>(dimension) +
+                                  static_cast<std::size_t>(col)],
+                          working[static_cast<std::size_t>(pivot)*
+                                      static_cast<std::size_t>(dimension) +
+                                  static_cast<std::size_t>(col)]);
+            }
+        }
+        const double diagonal = working[static_cast<std::size_t>(found)*
+                                            static_cast<std::size_t>(dimension) +
+                                        static_cast<std::size_t>(column)];
+        for (int row = found + 1; row < dimension; ++row) {
+            const double factor =
+                working[static_cast<std::size_t>(row)*
+                            static_cast<std::size_t>(dimension) +
+                        static_cast<std::size_t>(column)]/diagonal;
+            for (int col = column; col < dimension; ++col) {
+                working[static_cast<std::size_t>(row)*
+                            static_cast<std::size_t>(dimension) +
+                        static_cast<std::size_t>(col)] -=
+                    factor*working[static_cast<std::size_t>(found)*
+                                       static_cast<std::size_t>(dimension) +
+                                   static_cast<std::size_t>(col)];
+            }
+        }
+        pivot_column[static_cast<std::size_t>(found)] = column;
+        ++found;
+    }
+    if (found < rank) return false;
+    std::vector<unsigned char> is_pivot(dimension, 0);
+    for (int index = 0; index < rank; ++index) {
+        is_pivot[static_cast<std::size_t>(pivot_column[static_cast<std::size_t>(index)])] = 1;
+    }
+    basis.assign(static_cast<std::size_t>(dimension)*
+                     static_cast<std::size_t>(dimension - rank),
+                 0.0);
+    int column_index = 0;
+    for (int free_column = 0; free_column < dimension; ++free_column) {
+        if (is_pivot[static_cast<std::size_t>(free_column)] != 0) continue;
+        std::vector<double> vector(static_cast<std::size_t>(dimension), 0.0);
+        vector[static_cast<std::size_t>(free_column)] = 1.0;
+        for (int index = rank - 1; index >= 0; --index) {
+            const int pivot = pivot_column[static_cast<std::size_t>(index)];
+            double value = 0.0;
+            for (int col = pivot + 1; col < dimension; ++col) {
+                value += working[static_cast<std::size_t>(index)*
+                                     static_cast<std::size_t>(dimension) +
+                                 static_cast<std::size_t>(col)]*
+                    vector[static_cast<std::size_t>(col)];
+            }
+            const double diagonal = working[static_cast<std::size_t>(index)*
+                                                static_cast<std::size_t>(dimension) +
+                                            static_cast<std::size_t>(pivot)];
+            vector[static_cast<std::size_t>(pivot)] = -value/diagonal;
+        }
+        double norm = 0.0;
+        for (double value : vector) norm += value*value;
+        norm = std::sqrt(norm);
+        if (!(norm > 0.0) || !std::isfinite(norm)) return false;
+        for (int row = 0; row < dimension; ++row) {
+            basis[static_cast<std::size_t>(column_index)*
+                      static_cast<std::size_t>(dimension) +
+                  static_cast<std::size_t>(row)] =
+                vector[static_cast<std::size_t>(row)]/norm;
+        }
+        ++column_index;
+    }
+    return true;
+}
+
+}  // namespace
+
+
+/// One particular solution of `A x = b` under the *consistent convention* the
+/// design names for a singular system: the free coordinates are set to zero and
+/// the pivots are solved for.
+///
+/// This exists because the LU factorization refuses a rank-deficient matrix
+/// (`factorization_types.hpp`: a pivot below `1e-14` aborts the factorization),
+/// and a flat refusal would make the design's `combined_mode_rule` unimplementable:
+/// on a singular sample *every* mode would be refused, including the compatible
+/// ones the rule says must still report.  The convention is what makes those
+/// answers well defined -- the measurement values are read from a member of the
+/// solution family that is picked by a stated rule rather than by the solver's
+/// internal order -- and it is exactly why the identifiability audit has to be
+/// against the null space: only measurements that annihilate that family have a
+/// value this convention does not choose for them.
+///
+/// Returns `false` when the right-hand side is *not* in the range, i.e. when the
+/// reduced system has a row of zeros with a non-zero right-hand side.  That is the
+/// `singular` case of `frozen-protocols.json`'s `validity_conditions`, detected on
+/// the actual right-hand side rather than on the unit columns that built it.
+bool consistent_solution(
+    const std::vector<double>& matrix, int dimension,
+    const std::vector<double>& rhs, double scale,
+    std::vector<double>& solution
+) {
+    const double tolerance =
+        static_cast<double>(dimension)
+        * std::numeric_limits<double>::epsilon()*std::max(1.0, scale);
+    std::vector<double> reduced = matrix;
+    std::vector<double> working = rhs;
+    std::vector<int> pivot_column(static_cast<std::size_t>(dimension), -1);
+    int rank = 0;
+    for (int column = 0; column < dimension && rank < dimension; ++column) {
+        int pivot = rank;
+        double best = std::abs(reduced[static_cast<std::size_t>(rank)*
+                                           static_cast<std::size_t>(dimension) +
+                                       static_cast<std::size_t>(column)]);
+        for (int row = rank + 1; row < dimension; ++row) {
+            const double candidate = std::abs(
+                reduced[static_cast<std::size_t>(row)*
+                            static_cast<std::size_t>(dimension) +
+                        static_cast<std::size_t>(column)]);
+            if (candidate > best) {
+                pivot = row;
+                best = candidate;
+            }
+        }
+        if (best <= tolerance) continue;
+        if (pivot != rank) {
+            for (int col = column; col < dimension; ++col) {
+                std::swap(reduced[static_cast<std::size_t>(rank)*
+                                      static_cast<std::size_t>(dimension) +
+                                  static_cast<std::size_t>(col)],
+                          reduced[static_cast<std::size_t>(pivot)*
+                                      static_cast<std::size_t>(dimension) +
+                                  static_cast<std::size_t>(col)]);
+            }
+            std::swap(working[static_cast<std::size_t>(rank)],
+                      working[static_cast<std::size_t>(pivot)]);
+        }
+        const double diagonal = reduced[static_cast<std::size_t>(rank)*
+                                            static_cast<std::size_t>(dimension) +
+                                        static_cast<std::size_t>(column)];
+        for (int row = rank + 1; row < dimension; ++row) {
+            const double factor =
+                reduced[static_cast<std::size_t>(row)*
+                            static_cast<std::size_t>(dimension) +
+                        static_cast<std::size_t>(column)]/diagonal;
+            if (factor == 0.0) continue;
+            for (int col = column; col < dimension; ++col) {
+                reduced[static_cast<std::size_t>(row)*
+                            static_cast<std::size_t>(dimension) +
+                        static_cast<std::size_t>(col)] -=
+                    factor*reduced[static_cast<std::size_t>(rank)*
+                                       static_cast<std::size_t>(dimension) +
+                                   static_cast<std::size_t>(col)];
+            }
+            working[static_cast<std::size_t>(row)] -=
+                factor*working[static_cast<std::size_t>(rank)];
+        }
+        pivot_column[static_cast<std::size_t>(rank)] = column;
+        ++rank;
+    }
+    // The rows the pivots were swapped past are exactly the rows whose
+    // coefficients are now zero; a non-zero right-hand side among them is the
+    // incompatibility.
+    for (int row = rank; row < dimension; ++row) {
+        if (std::abs(working[static_cast<std::size_t>(row)]) > tolerance) {
+            return false;
+        }
+    }
+    solution.assign(static_cast<std::size_t>(dimension), 0.0);
+    for (int index = rank - 1; index >= 0; --index) {
+        const int pivot = pivot_column[static_cast<std::size_t>(index)];
+        double value = working[static_cast<std::size_t>(index)];
+        for (int col = pivot + 1; col < dimension; ++col) {
+            value -= reduced[static_cast<std::size_t>(index)*
+                                 static_cast<std::size_t>(dimension) +
+                             static_cast<std::size_t>(col)]*
+                solution[static_cast<std::size_t>(col)];
+        }
+        const double diagonal = reduced[static_cast<std::size_t>(index)*
+                                            static_cast<std::size_t>(dimension) +
+                                        static_cast<std::size_t>(pivot)];
+        if (!(std::abs(diagonal) > 0.0)) return false;
+        solution[static_cast<std::size_t>(pivot)] = value/diagonal;
+    }
+    return finite_vec(solution);
+}
+
+
+bool frozen_local_response(
+    const Model& model, const WorkingSample& working,
+    const std::vector<double>& tangent,
+    const std::vector<FrozenLoadMode>& modes,
+    const std::vector<FrozenMeasurement>& measurements,
+    std::vector<double>& response, std::vector<unsigned char>& mode_ok,
+    int& factorizations_used, FrozenResponseAudit& audit
+) {
+    const int dimension = physical_tangent_dimension(model, working);
+    const int ndof = model.ndof;
+    if (dimension <= 0 || ndof <= 0 || ndof > dimension) return false;
+    if (tangent.size() !=
+        static_cast<std::size_t>(dimension)*static_cast<std::size_t>(dimension)) {
+        return false;
+    }
+    const std::size_t body_count = model.body_to_free.size();
+    for (const FrozenLoadMode& mode : modes) {
+        if (mode.amplitudes.size() != body_count*6) return false;
+        for (const double amplitude : mode.amplitudes) {
+            if (!std::isfinite(amplitude)) return false;
+        }
+    }
+
+    // `G` is assembled first, and a measurement that cannot be resolved refuses the
+    // whole request rather than contributing a silent zero row.  `D` is zero for
+    // every measurement that is a kinematic functional of the pose, which is the
+    // only kind this routine declares: a measurement that *is* the load would have
+    // to say so, and none does.
+    std::vector<double> gradient;
+    if (!frozen_measurement_gradient(model, working, measurements, gradient)) {
+        return false;
+    }
+
+    const int mode_count = static_cast<int>(modes.size());
+    const int measurement_count = static_cast<int>(measurements.size());
+    // An empty request is refused rather than answered with an empty block: a
+    // caller that receives a well-formed empty result cannot tell "nothing was
+    // asked" from "nothing could be answered", and the Python consumer refuses the
+    // same shape (`results/equilibrium.py:297-301`).
+    if (mode_count <= 0 || measurement_count <= 0) return false;
+    std::vector<double> rhs(static_cast<std::size_t>(dimension)*
+        static_cast<std::size_t>(mode_count), 0.0);
+    for (int j = 0; j < mode_count; ++j) {
+        const FrozenLoadMode& mode = modes[static_cast<std::size_t>(j)];
+        for (std::size_t body = 0; body < body_count; ++body) {
+            for (int component = 0; component < 6; ++component) {
+                const double amplitude =
+                    mode.amplitudes[body*6 + static_cast<std::size_t>(component)];
+                if (amplitude == 0.0) continue;
+                const std::vector<double> column = frozen_load_column(
+                    model, working.pose, static_cast<int>(body), component
+                );
+                // `B_w` spans the pose coordinates; the multiplier and contact rows
+                // of the right-hand side stay zero because the load does not enter
+                // those equations directly.
+                for (int row = 0; row < ndof; ++row) {
+                    rhs[static_cast<std::size_t>(j)*
+                            static_cast<std::size_t>(dimension) +
+                        static_cast<std::size_t>(row)] +=
+                        amplitude*column[static_cast<std::size_t>(row)];
+                }
+            }
+        }
+    }
+
+    // --- the compatibility and identifiability audit -------------------------
+    //
+    // Both checks are on the *assembled* request rather than on the individual
+    // unit columns, which is what makes the design's `combined_mode_rule` true:
+    // `sum_j rhs_j` can lie in `A`'s range while some `rhs_j` alone does not, and
+    // a per-column audit would refuse a mode the caller never asked about.  The
+    // tolerance comes from `A` alone, so the appended right-hand-side column is
+    // judged against the matrix it is being checked against rather than being
+    // allowed to move the bar (see `rank_with_tolerance`).
+    double scale = 0.0;
+    for (double value : tangent) scale = std::max(scale, std::abs(value));
+    const int matrix_rank_value =
+        rank_with_tolerance(tangent, dimension, dimension, scale);
+    std::vector<double> null_basis;
+    if (!null_space_basis(tangent, dimension, matrix_rank_value, null_basis)) {
+        return false;
+    }
+    const int nullity = dimension - matrix_rank_value;
+    // The audit is assembled in locals and written to the caller's structure only
+    // once the whole request has been answered.  A refusal that had already
+    // published half an audit would be indistinguishable from a complete one, and
+    // "a refusal leaves the caller's outputs alone" is a property the self-test
+    // checks on every refusal path.
+    std::vector<unsigned char> mode_compatible(
+        static_cast<std::size_t>(mode_count), 0);
+    std::vector<unsigned char> measurement_identifiable(
+        static_cast<std::size_t>(measurement_count), 1);
+    std::vector<double> augmented(
+        static_cast<std::size_t>(dimension)*
+            static_cast<std::size_t>(dimension + 1), 0.0);
+    for (int j = 0; j < mode_count; ++j) {
+        for (int row = 0; row < dimension; ++row) {
+            for (int column = 0; column < dimension; ++column) {
+                augmented[static_cast<std::size_t>(row)*
+                              static_cast<std::size_t>(dimension + 1) +
+                          static_cast<std::size_t>(column)] =
+                    tangent[static_cast<std::size_t>(row)*
+                                static_cast<std::size_t>(dimension) +
+                            static_cast<std::size_t>(column)];
+            }
+            augmented[static_cast<std::size_t>(row)*
+                          static_cast<std::size_t>(dimension + 1) +
+                      static_cast<std::size_t>(dimension)] =
+                rhs[static_cast<std::size_t>(j)*
+                        static_cast<std::size_t>(dimension) +
+                    static_cast<std::size_t>(row)];
+        }
+        const int augmented_rank = rank_with_tolerance(
+            augmented, dimension, dimension + 1, scale);
+        mode_compatible[static_cast<std::size_t>(j)] =
+            augmented_rank == matrix_rank_value ? 1 : 0;
+    }
+    // A measurement is identifiable when its row annihilates the null space: the
+    // load then fixes the reading even though it does not fix the motion.  The
+    // basis vectors have unit norm, so the comparison is against the row's own
+    // magnitude and a physically large measurement is not refused for being large.
+    const double relative_tolerance =
+        std::sqrt(std::numeric_limits<double>::epsilon());
+    for (int m = 0; m < measurement_count; ++m) {
+        const double* row = gradient.data() + static_cast<std::size_t>(m)*
+            static_cast<std::size_t>(dimension);
+        double magnitude = 0.0;
+        for (int coordinate = 0; coordinate < dimension; ++coordinate) {
+            magnitude = std::max(magnitude, std::abs(row[coordinate]));
+        }
+        const double tolerance = relative_tolerance*std::max(1.0, magnitude);
+        for (int column = 0; column < nullity; ++column) {
+            double projection = 0.0;
+            for (int coordinate = 0; coordinate < dimension; ++coordinate) {
+                projection += row[coordinate]*
+                    null_basis[static_cast<std::size_t>(column)*
+                                   static_cast<std::size_t>(dimension) +
+                               static_cast<std::size_t>(coordinate)];
+            }
+            if (std::abs(projection) > tolerance) {
+                measurement_identifiable[static_cast<std::size_t>(m)] = 0;
+                break;
+            }
+        }
+    }
+
+    // One factorization for the whole batch: the design's "assemble and decompose
+    // once per working sample, then solve independent load modes" is here by
+    // construction rather than by a comment.
+    //
+    // A rank-deficient `A` does **not** abort the request.  The audit already says
+    // which modes are compatible with the actual right-hand side, and that answer
+    // is worth more than a bare failure: `matrix_rank < dimension` is the reason a
+    // mode was refused, and hiding it behind a `false` return would leave the caller
+    // unable to tell a malformed request from a singular sample.  When the LU
+    // factorization refuses the matrix, the compatible modes are still answered
+    // through the stated consistent convention (`consistent_solution` above) rather
+    // than dropped, which is what keeps the design's `combined_mode_rule` true on a
+    // singular sample.
+    LinearFactorHandle handle;
+    const bool factorization_ok =
+        handle.factorize_numeric(tangent, dimension);
+
+    // The modes are solved **one at a time**, not through `solve_many`, and that is a
+    // correction rather than a preference.  `solve_many` gives up on the whole batch
+    // as soon as any single column produces a non-finite value
+    // (`linear/kernel_linear_batch.cpp:161-167`), so one bad load mode would take
+    // every other mode of the same sample down with it -- the opposite of the
+    // design's rule that a compatible mode still reports
+    // (`frozen-protocols.json` `combined_mode_rule`).  The factorization is still
+    // built once and each back-substitution reuses it, so the cost claim is
+    // unchanged.
+    std::vector<double> out(
+        static_cast<std::size_t>(mode_count)*
+        static_cast<std::size_t>(measurement_count),
+        std::numeric_limits<double>::quiet_NaN()
+    );
+    std::vector<unsigned char> ok(static_cast<std::size_t>(mode_count), 0);
+    std::vector<double> rhs_column(static_cast<std::size_t>(dimension), 0.0);
+    std::vector<double> solution(static_cast<std::size_t>(dimension), 0.0);
+    for (int j = 0; j < mode_count; ++j) {
+        // An incompatible mode has no solution at all -- the right-hand side is
+        // outside the range -- so it is refused *by name*: `G X` would otherwise
+        // project a member of an empty solution set as if the load had picked it.
+        if (mode_compatible[static_cast<std::size_t>(j)] == 0) continue;
+        for (int row = 0; row < dimension; ++row) {
+            rhs_column[static_cast<std::size_t>(row)] =
+                rhs[static_cast<std::size_t>(j)*
+                        static_cast<std::size_t>(dimension) +
+                    static_cast<std::size_t>(row)];
+        }
+        // A full-rank `A` uses the factorization that was built once; a
+        // rank-deficient one falls back to the stated consistent convention, which
+        // is the only way a compatible mode can still be answered on a singular
+        // sample (the LU refuses such a matrix outright).
+        bool solved = false;
+        if (factorization_ok) {
+            handle.factorization.solve(rhs_column, solution);
+            solved = finite_vec(solution);
+        }
+        if (!solved &&
+            !consistent_solution(tangent, dimension, rhs_column, scale,
+                                 solution)) {
+            continue;
+        }
+        ok[static_cast<std::size_t>(j)] = 1;
+        for (int m = 0; m < measurement_count; ++m) {
+            // A measurement the load does not determine keeps NaN even though its
+            // mode is compatible and answered.  The distinction is the whole point
+            // of the audit: the mode has *a* motion, the reading is not *the*
+            // reading, and writing the member the solver happened to return would
+            // publish a plausible wrong number.  Neighbouring measurements of the
+            // same mode are unaffected, which is the design's
+            // `combined_mode_rule` applied one level down.
+            if (measurement_identifiable[static_cast<std::size_t>(m)] == 0) {
+                continue;
+            }
+            const double* row_gradient =
+                gradient.data() + static_cast<std::size_t>(m)*
+                    static_cast<std::size_t>(dimension);
+            double value = 0.0;
+            for (int coordinate = 0; coordinate < dimension; ++coordinate) {
+                value += row_gradient[coordinate]*
+                    solution[static_cast<std::size_t>(coordinate)];
+            }
+            if (!std::isfinite(value)) continue;
+            out[static_cast<std::size_t>(j)*
+                    static_cast<std::size_t>(measurement_count) +
+                static_cast<std::size_t>(m)] = value;
+        }
+    }
+
+    response = std::move(out);
+    mode_ok = std::move(ok);
+    audit.dimension = dimension;
+    audit.matrix_rank = matrix_rank_value;
+    audit.mode_compatible = std::move(mode_compatible);
+    audit.measurement_identifiable = std::move(measurement_identifiable);
+    // One numeric factorization, whatever the mode count: `factorize_numeric` builds
+    // the LU once and every `solve` above is a back-substitution against it.  The
+    // number counts *numeric* factorizations and excludes any symbolic/pattern step,
+    // which no backend in this tree exposes separately (`mb_linear/batch.hpp:58-67`).
+    factorizations_used = 1;
+    return true;
 }
 
 

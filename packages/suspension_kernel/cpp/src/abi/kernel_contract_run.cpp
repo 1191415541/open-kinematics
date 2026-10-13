@@ -23,6 +23,7 @@
 #include "mb_config/controller_output.hpp"
 #include "mb_cases/functions.hpp"
 #include "mb_contract/functions.hpp"
+#include "mb_input/functions.hpp"
 #include "mb_model/enums.hpp"
 #include "mb_tire/pac2002/functions.hpp"
 #include "mb_model/functions.hpp"
@@ -31,6 +32,7 @@
 #include "mb_joint/functions.hpp"
 #include "mb_assembly/functions.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -78,12 +80,155 @@ Json json_object(std::vector<std::pair<std::string, Json>> fields) {
   return out;
 }
 
+/// Resolve one characteristics request's explicit entity bindings into the
+/// solver's own frozen measurement and load-mode descriptions.
+///
+/// This is the one place the declarative vocabulary of a request meets the
+/// numeric vocabulary of the solver, and it is deliberately a *lookup* rather
+/// than an interpretation: the contract bans recovering a metric or a frame from
+/// an entity name (`mb_cases/functions.hpp`), so a marker is looked up in the
+/// model's own marker table and a body name in its own body order, and nothing
+/// is ever derived from how either one is spelled.
+///
+/// It lives in the ABI entry point because that is the only level that may see
+/// both sides: `mb_cases` owns the documents and deliberately cannot reach the
+/// solver, while `mb_solve_static` owns the frozen descriptions and cannot read
+/// a document.  Splitting it would either break the module order or duplicate
+/// the binding rules in two places that could then disagree.
+///
+/// Returns false with a message naming the offending declaration when a binding
+/// is missing or cannot be resolved: an unknown marker, an unknown body, or a
+/// measurement on a body the model fixes.  A fixed body has no free coordinate,
+/// so no measurement of it can ever be answered; letting such a declaration
+/// through would refuse the whole request later for a reason that names none of
+/// the declarations, which is exactly the report this project refuses to lose.
+bool resolve_local_response_bindings(
+    const ContractModel& document, const Model& model,
+    const ContractCharacteristics& request,
+    std::vector<FrozenMeasurement>& measurements,
+    std::vector<FrozenLoadMode>& modes, std::string& error) {
+  if (document.body_count() != model.bodies.size()) {
+    error = "characteristics: the document's bodies and the built model disagree";
+    return false;
+  }
+  // A binding names either a marker (a point on a body) or a body.  Both are
+  // explicit and neither is inferred; the marker table is consulted first
+  // because a model that declares a marker of that name means that point, and a
+  // body name only falls through when no marker carries it.
+  const auto bind_entity = [&](const std::string& name, int& body, Vec3& point,
+                               bool& has_point, const std::string& where) {
+    ContractMarker marker;
+    if (document.find_marker(name, marker)) {
+      body = marker.body;
+      point = marker.point;
+      has_point = true;
+      return true;
+    }
+    const int index = document.body_index(name);
+    if (index < 0) {
+      error = where + " names neither a declared marker nor a declared body: \"" +
+              name + "\"";
+      return false;
+    }
+    body = index;
+    point = Vec3{};
+    has_point = false;
+    return true;
+  };
+  for (std::size_t index = 0; index < request.measurements.size(); ++index) {
+    const ContractDeclaration& declared = request.measurements[index];
+    const std::string where =
+        "characteristics measurement[" + std::to_string(index) + "]";
+    if (!declared.measurement_binding.present) {
+      error = where +
+              " declares no binding, so the request does not say which entity it"
+              " measures";
+      return false;
+    }
+    FrozenMeasurement measurement;
+    measurement.id = declared.id.empty() ? declared.measurement_id : declared.id;
+    measurement.units = declared.units;
+    measurement.component = declared.measurement_binding.component;
+    if (!bind_entity(declared.measurement_binding.marker, measurement.body,
+                     measurement.point, measurement.has_point,
+                     where + " binding marker")) {
+      return false;
+    }
+    if (declared.measurement_binding.reference.empty()) {
+      // An absent reference is the world, which is the one reference with no
+      // body to name.  An explicitly empty reference is refused by the reader,
+      // so "absent" and "empty" cannot reach here as the same thing.
+      measurement.reference = -1;
+    } else if (!bind_entity(declared.measurement_binding.reference,
+                            measurement.reference, measurement.reference_point,
+                            measurement.has_reference_point,
+                            where + " binding reference")) {
+      return false;
+    }
+    if (model.body_to_free[static_cast<std::size_t>(measurement.body)] < 0) {
+      error = where + " measures \"" + declared.measurement_binding.marker +
+              "\", which the model fixes, so it has no free coordinate";
+      return false;
+    }
+    measurements.push_back(std::move(measurement));
+  }
+  for (std::size_t index = 0; index < request.perturbations.size(); ++index) {
+    const ContractDeclaration& declared = request.perturbations[index];
+    const std::string where =
+        "characteristics perturbation[" + std::to_string(index) + "]";
+    if (!declared.load_binding.present) {
+      error = where +
+              " declares no binding, so the request does not say which load it"
+              " applies";
+      return false;
+    }
+    FrozenLoadMode mode;
+    mode.id = declared.id.empty() ? declared.measurement_id : declared.id;
+    // The amplitudes are dense over *bodies* in body order, which is the layout
+    // `frozen_local_response` reads and `frozen_load_column` indexes: six entries
+    // per body in `[Fx,Fy,Fz,Mx,My,Mz]` order.  Two terms on the same body and
+    // component add, which is how a mode that names the same wrench twice is
+    // read as one amplitude rather than silently losing a term.
+    mode.amplitudes.assign(model.bodies.size()*6, 0.0);
+    for (const ContractLoadTerm& term : declared.load_binding.terms) {
+      const int body = document.body_index(term.body);
+      if (body < 0) {
+        error = where + " names an unknown body \"" + term.body + "\"";
+        return false;
+      }
+      mode.amplitudes[static_cast<std::size_t>(body)*6 +
+                      static_cast<std::size_t>(term.wrench)] += term.amplitude;
+    }
+    modes.push_back(std::move(mode));
+  }
+  return true;
+}
+
 /// The contract version a document reports.  The optional element-wrench channel
 /// is the only reason it moves, and it is off unless a caller asks for it, so a
 /// result that carries no channel keeps reporting version 1.
 long long document_contract_version(bool observed = false) {
   return observed || element_wrench_output_enabled() ? 2 : 1;
 }
+
+/// The `local_response_status` vocabulary.
+///
+/// It is a small frozen enum rather than a string because the channel is a
+/// numeric block (`block_descriptor` carries numbers only), and because the
+/// reason a cell is unanswered is the part a caller must not have to infer: an
+/// all-NaN column would otherwise mean "singular", "unidentifiable" and "this
+/// sample was never reached" at the same time.
+enum LocalResponseStatus {
+  /// The mode's right-hand side is in `A`'s range but the reading is not
+  /// determined by it, so no value is published.
+  kLocalResponseUnidentifiable = 1,
+  /// The mode's actual right-hand side is outside `A`'s range: no solution.
+  kLocalResponseSingular = 2,
+  /// The sample could not be prepared at all (frozen state, tangent or solve).
+  kLocalResponseRefused = 3,
+  /// A value is present and the measurement is identifiable for this sample.
+  kLocalResponseValid = 0,
+};
 
 /// The block descriptor the result schema requires.
 Json block_descriptor(const std::string& name, std::size_t offset, std::size_t length,
@@ -228,11 +373,16 @@ Json capability_document() {
   }
   // The characteristics declaration is deliberately two fields rather than one.
   // Reading a request and *answering* it are different capabilities, and this
-  // build does the first without the second.  Publishing the request version
-  // and an empty response list says exactly that; claiming a response kind here
-  // would be the empty-shell capability the contract forbids, because the
-  // reader would accept a request this kernel cannot answer.
+  // build does the first for every request and the second for exactly one
+  // response kind: `local_response`, the load-driven frozen projection the
+  // `frozen_load_compliance_v1` protocol's own `response_contract` names.  That
+  // is also the kind the Python compiler checks, so a request naming it is
+  // answerable and every other kind is refused before submission.  Listing a
+  // kind the kernel does not compute would be the empty-shell capability the
+  // contract forbids; listing nothing while it does compute one would refuse a
+  // request the kernel can answer.
   std::vector<Json> characteristics_kinds;
+  characteristics_kinds.push_back(json_string("local_response"));
   return json_object({
       {"contract", json_string("multibody-capabilities")},
       {"contract_version", json_integer(document_contract_version())},
@@ -242,6 +392,11 @@ Json capability_document() {
       {"characteristics_request_versions", json_array({json_integer(1)})},
       {"characteristics_response_kinds", json_array(std::move(characteristics_kinds))},
       {"case_families", json_array(std::move(case_families))},
+      // A time-history family may declare its cases as a top-level `runs` list,
+      // which lets one document run several excitations on the shared grid.  The
+      // version names the merge and refusal rules the case layer implements, so a
+      // caller that writes a runs list can refuse a build that would ignore it.
+      {"case_runs_versions", json_array({json_integer(1)})},
       {"function_element_types", json_array({json_string("force"), json_string("torque"), json_string("wrench")})},
       {"pac2002_refused_families", json_array(std::move(families))},
       {"pac2002_refused_feature_flags", json_array(std::move(flags))},
@@ -634,6 +789,28 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   };
   const bool constraint_output_enabled = requested("constraint_reaction");
   const bool jacobian_output_enabled = requested("constraint_jacobian");
+  const bool accepted_state_enabled = requested("accepted_state");
+  if (accepted_state_enabled &&
+      (plan.family == "kc_quasi_static" || plan.family == "vehicle_kc")) {
+    return fail(error_buffer, error_capacity, 2,
+                "accepted_state requires a dynamic case");
+  }
+  std::vector<double> accepted_identity, accepted_output_map, accepted_states, accepted_multipliers,
+      accepted_internal;
+  // All State-owned internal vectors, including their derivatives, are copied.
+  // An absent vector has count zero, not a fabricated tire-sized zero vector.
+  const std::vector<std::pair<const char*, std::vector<double> State::*>> internal_fields = {
+      {"tire_sx", &State::tire_sx}, {"tire_sy", &State::tire_sy},
+      {"tire_sx_dot", &State::tire_sx_dot}, {"tire_sy_dot", &State::tire_sy_dot},
+      {"tire_u", &State::tire_u}, {"tire_v", &State::tire_v},
+      {"tire_u_dot", &State::tire_u_dot}, {"tire_v_dot", &State::tire_v_dot},
+      {"tire_beta", &State::tire_beta}, {"tire_beta_dot", &State::tire_beta_dot},
+      {"tire_u_ddot", &State::tire_u_ddot}, {"tire_v_ddot", &State::tire_v_ddot},
+      {"tire_beta_ddot", &State::tire_beta_ddot}, {"tire_phi", &State::tire_phi},
+      {"tire_phi_dot", &State::tire_phi_dot}, {"tire_maxwell", &State::tire_maxwell}};
+  std::vector<std::size_t> internal_counts;
+  std::size_t internal_width = 1; // State::step_size
+
 
   const std::size_t state_length = total_samples * bodies * kStatePerBody;
   const std::size_t wrench_length = total_samples * wrench_rows * kConstraintOutputWidth;
@@ -667,6 +844,75 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   const std::size_t bushing_count = built.bushings.size();
   const std::size_t anti_roll_count = built.anti_roll_bars.size();
   const double kNan = std::numeric_limits<double>::quiet_NaN();
+  // --- the load-driven frozen local response ----------------------------------
+  //
+  // A characteristics request is inert data until something answers it.  This
+  // build answers exactly one definition: `frozen_load_compliance` projected
+  // through the `local_response` operator, which is the request the frozen
+  // protocol's own `response_contract` names.  Any other definition keeps the
+  // read-and-echo behaviour it had -- publishing a block for a definition the
+  // kernel does not compute would be the empty-shell capability the contract
+  // forbids, and the capability document below says the same thing in the
+  // caller's own vocabulary.
+  //
+  // The bindings are resolved *once*, here, rather than inside the observer:
+  // a request whose bindings cannot be resolved is refused before a single
+  // sample runs, with a message naming the declaration, instead of failing
+  // halfway through a dynamic integration.
+  const bool answers_local_response =
+      plan.characteristics.present &&
+      plan.characteristics.definition_kind == "frozen_load_compliance" &&
+      plan.characteristics.operator_kind == "local_response" &&
+      // The response kind is a property of each *measurement* declaration, and
+      // it is the same field the Python compiler checks against the capability
+      // document.  Reading it here is what keeps the two gates from disagreeing:
+      // a request the compiler admits must be one this build answers, and a
+      // request whose measurements ask for something else keeps the read-only
+      // behaviour it had.
+      std::all_of(plan.characteristics.measurements.begin(),
+                  plan.characteristics.measurements.end(),
+                  [](const ContractDeclaration& declared) {
+                    return declared.response_kind == "local_response";
+                  });
+  std::vector<FrozenMeasurement> local_measurements;
+  std::vector<FrozenLoadMode> local_modes;
+  std::vector<double> local_values, local_status, local_modes_per_sample,
+      local_audit, local_identity;
+  std::size_t local_records = 0;
+  // Counted rather than derived, because a refused sample is the one fact the
+  // status block cannot express on its own: an all-NaN row looks the same
+  // whether the sample was refused or simply never reached.
+  std::size_t local_refused_samples = 0;
+  if (answers_local_response) {
+    std::string binding_error;
+    if (!resolve_local_response_bindings(model, built, plan.characteristics,
+                                         local_measurements, local_modes,
+                                         binding_error)) {
+      return fail(error_buffer, error_capacity, 2, binding_error);
+    }
+    if (local_measurements.empty() || local_modes.empty()) {
+      return fail(error_buffer, error_capacity, 2,
+                  "characteristics: a load-driven response needs at least one"
+                  " measurement and one perturbation");
+    }
+    local_values.resize(total_samples * local_modes.size() *
+                            local_measurements.size(),
+                        kNan);
+    local_status.resize(total_samples * local_modes.size() *
+                            local_measurements.size(),
+                        kNan);
+    local_modes_per_sample.assign(total_samples, kNan);
+    // Three audit columns per sample: the tangent dimension, its rank, and the
+    // number of numeric factorizations the sample actually spent.  They are
+    // numbers rather than prose so a caller can see that one sample reused one
+    // factorization for every mode, which is the cost claim the design makes.
+    local_audit.assign(total_samples*3, kNan);
+    // [case_index, accepted_step_index, time_s, last_output_sample_id].  A
+    // sample the run never reached (a case that failed part way) leaves this
+    // row NaN, so "no response" cannot be confused with "response of zero".
+    local_identity.assign(total_samples*4, kNan);
+    local_records = total_samples;
+  }
   std::vector<double> energy_block(total_samples * kEnergyOutputWidth, kNan);
   std::vector<double> steering_block(
       total_samples * actuator_count * kSteeringOutputWidth, kNan);
@@ -889,14 +1135,181 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
     std::size_t event_capacity = 0;
     std::size_t contact_count = 0;
     int status = 0;
+    const std::size_t accepted_start = accepted_identity.size()/4;
+    const std::size_t output_map_start = accepted_output_map.size();
+    const RunSampleObserver accepted_observer = [&](const RunSample& sample) {
+      if (sample.kind == RunSampleKind::output) {
+        // This is an explicit observation of the same committed state, rather
+        // than a floating-point time match between independent grids.
+        if (accepted_identity.size()/4 > accepted_start) {
+          if (accepted_identity.back() < 0.0) accepted_identity.back() =
+              static_cast<double>(sample.output_sample_id);
+        }
+        accepted_output_map.insert(accepted_output_map.end(), {
+            static_cast<double>(case_spans.size()),
+            static_cast<double>(sample.output_sample_id),
+            static_cast<double>(sample.accepted_step_id), sample.time});
+        return;
+      }
+      if (sample.kind == RunSampleKind::initial) accepted_output_map.insert(
+          accepted_output_map.end(), {static_cast<double>(case_spans.size()), 0.0, 0.0, sample.time});
+      accepted_identity.insert(accepted_identity.end(), {
+          static_cast<double>(case_spans.size()),
+          static_cast<double>(sample.accepted_step_id), sample.time,
+          sample.kind == RunSampleKind::initial ? 0.0 : -1.0});
+      const std::size_t offset = accepted_states.size();
+      accepted_states.resize(offset+bodies*kStatePerBody);
+      copy_state(sample.state, sample.model, accepted_states.data()+offset, 0);
+      accepted_multipliers.insert(accepted_multipliers.end(),
+          sample.constraint_multiplier.begin(), sample.constraint_multiplier.end());
+      // --- the load-driven frozen local response at this committed state -------
+      //
+      // The response is evaluated *here*, on the sample the integrator actually
+      // committed, and never on a neighbouring state or on an interpolation the
+      // run would have had to invent.  Three properties are deliberate:
+      //
+      //   * the increment vector carries the sample's own multipliers as the
+      //     lambda base value, because `assemble_physical_tangent` reads
+      //     `d(J^T lambda)` out of it and the frozen protocol forbids freezing
+      //     `delta lambda` (`frozen-protocols.json` `lambda_rule`);
+      //   * the working sample brings its own fixed inertia wrench, so the force
+      //     bus's live gyroscopic derivative is removed and only the original
+      //     snapshot remains -- the `frozen_inertial_load_v1` statement;
+      //   * the active tire set is empty on purpose: the frozen sample carries
+      //     its own contact state and therefore adds no compression unknowns
+      //     (`physical_tangent_dimension`).
+      //
+      // A sample that cannot be answered is *reported*, not thrown: the design
+      // requires one refused sample to leave its neighbours' answers intact, and
+      // an exception here would abort the whole run and lose them.
+      if (answers_local_response) {
+        const std::size_t row = sample_offset + sample.accepted_step_id;
+        if (row >= local_records) {
+          throw std::runtime_error("local response row outside the request's samples");
+        }
+        WorkingSample local_working;
+        const int local_dimension =
+            physical_tangent_dimension(sample.model, local_working);
+        std::vector<double> local_tangent;
+        std::vector<double> local_x(static_cast<std::size_t>(local_dimension), 0.0);
+        bool prepared = frozen_working_sample(sample.model, sample.state, {},
+                                              local_working);
+        // `local_dimension` was read through `local_working` before it was
+        // filled, which is exactly what `physical_tangent_dimension` documents
+        // it may be read for; the value does not depend on the contents.
+        if (prepared &&
+            sample.constraint_multiplier.size() !=
+                static_cast<std::size_t>(sample.model.rows)) {
+          prepared = false;
+        }
+        if (prepared) {
+          for (std::size_t index = 0; index < sample.constraint_multiplier.size();
+               ++index) {
+            local_x[static_cast<std::size_t>(sample.model.ndof) + index] =
+                sample.constraint_multiplier[index];
+          }
+          SampleInput local_input;
+          interpolate_input(sample.model, input.axle, sample.time, local_input);
+          prepared = assemble_physical_tangent(sample.model, local_input,
+                                               local_working, local_x,
+                                               local_tangent);
+        }
+        std::vector<double> local_response;
+        std::vector<unsigned char> local_mode_ok;
+        int local_factorizations = 0;
+        FrozenResponseAudit local_sample_audit;
+        if (prepared) {
+          prepared = frozen_local_response(sample.model, local_working,
+                                          local_tangent, local_modes,
+                                          local_measurements, local_response,
+                                          local_mode_ok, local_factorizations,
+                                          local_sample_audit);
+        }
+        if (!prepared) {
+          // Every value stays NaN and the reason is a number a caller can read:
+          // a zero-filled refusal is numerically indistinguishable from a
+          // mechanism whose response genuinely is zero.
+          ++local_refused_samples;
+          for (std::size_t cell = 0;
+               cell < local_modes.size()*local_measurements.size(); ++cell) {
+            local_status[row*local_modes.size()*local_measurements.size() + cell] =
+                static_cast<double>(kLocalResponseRefused);
+          }
+        } else {
+          const std::size_t cells = local_modes.size()*local_measurements.size();
+          local_modes_per_sample[row] = static_cast<double>(local_modes.size());
+          local_audit[row*3] = static_cast<double>(local_sample_audit.dimension);
+          local_audit[row*3+1] = static_cast<double>(local_sample_audit.matrix_rank);
+          local_audit[row*3+2] = static_cast<double>(local_factorizations);
+          for (std::size_t mode = 0; mode < local_modes.size(); ++mode) {
+            const bool mode_answered =
+                local_mode_ok[mode] != 0;
+            for (std::size_t measurement = 0;
+                 measurement < local_measurements.size(); ++measurement) {
+              const std::size_t cell = mode*local_measurements.size() + measurement;
+              // The value block keeps NaN for anything that was refused; the
+              // status block carries *why* so the two never have to be inferred
+              // from each other.  `combined_mode_rule` lives here as well: an
+              // incompatible mode leaves its own cells unanswered while a
+              // compatible neighbour of the same sample still reports.
+              if (!mode_answered) {
+                local_status[row*cells + cell] =
+                    static_cast<double>(kLocalResponseSingular);
+                continue;
+              }
+              if (local_sample_audit.measurement_identifiable[measurement] == 0) {
+                local_status[row*cells + cell] =
+                    static_cast<double>(kLocalResponseUnidentifiable);
+                continue;
+              }
+              const double value = local_response[cell];
+              if (!std::isfinite(value)) {
+                local_status[row*cells + cell] =
+                    static_cast<double>(kLocalResponseRefused);
+                continue;
+              }
+              local_values[row*cells + cell] = value;
+              local_status[row*cells + cell] =
+                  static_cast<double>(kLocalResponseValid);
+            }
+          }
+        }
+        local_identity[row*4] = static_cast<double>(case_spans.size());
+        local_identity[row*4+1] = static_cast<double>(sample.accepted_step_id);
+        local_identity[row*4+2] = sample.time;
+        local_identity[row*4+3] =
+            sample.kind == RunSampleKind::initial ? 0.0 : -1.0;
+      }
+      if (internal_counts.empty()) {
+        for (const auto& field : internal_fields) {
+          const std::size_t count = (sample.state.*field.second).size();
+          internal_counts.push_back(count); internal_width += count;
+        }
+      }
+      for (std::size_t index = 0; index < internal_fields.size(); ++index) {
+        const auto& values = sample.state.*internal_fields[index].second;
+        if (values.size() != internal_counts[index]) {
+          throw std::runtime_error("accepted internal state layout changed within a run");
+        }
+        accepted_internal.insert(accepted_internal.end(), values.begin(), values.end());
+      }
+      accepted_internal.push_back(sample.state.step_size);
+    };
     for (;;) {
+      // A contact-event buffer retry replays the case. Retain only its final
+      // execution, including partial accepted states if that execution fails.
+      accepted_identity.resize(accepted_start*4);
+      accepted_output_map.resize(output_map_start);
+      accepted_states.resize(accepted_start*bodies*kStatePerBody);
+      accepted_multipliers.resize(accepted_start*static_cast<std::size_t>(built.rows));
+      accepted_internal.resize(accepted_start*internal_width);
       events.assign(event_capacity * 3, 0.0);
       axle_output.contact_event_output = event_capacity == 0 ? nullptr : events.data();
       axle_output.contact_event_output_capacity = events.size();
       contact_count = 0;
       axle_output.contact_event_count = &contact_count;
       status = run_model(&input.axle, &axle_output, error_buffer, error_capacity,
-                         &built);
+                         &built, accepted_state_enabled ? &accepted_observer : nullptr);
       if (status == 10) {
         event_capacity = contact_count == 0 ? event_capacity + 1 : contact_count;
         continue;
@@ -1120,6 +1533,39 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
                {total_samples, static_cast<std::size_t>(built.rows), static_cast<std::size_t>(built.ndof)});
     push_block("coupler_reaction", coupler_reactions,
                {total_samples, built.coordinate_couplers.size(), 4, kConstraintReactionWidth});
+    const std::size_t accepted_count = accepted_identity.size()/4;
+    push_block("accepted_sample_identity", accepted_identity, {accepted_count, 4});
+    push_block("accepted_output_map", accepted_output_map, {accepted_output_map.size()/4, 4});
+    push_block("accepted_body_state", accepted_states, {accepted_count, bodies, kStatePerBody});
+    push_block("accepted_constraint_multiplier", accepted_multipliers,
+               {accepted_count, static_cast<std::size_t>(built.rows)});
+    push_block("accepted_internal_state", accepted_internal, {accepted_count, internal_width});
+    // The load-driven frozen response, when one was requested and answered.  The
+    // three numeric blocks are pushed together with the strings that name their
+    // axes: a value block whose rows and columns are not named is a matrix a
+    // caller has to guess the meaning of, and the manifest below is the only
+    // channel that can carry those names (`block_descriptor` is numeric-only).
+    push_block("local_response_value", local_values,
+               {local_records, local_modes.size(), local_measurements.size()});
+    push_block("local_response_status", local_status,
+               {local_records, local_modes.size(), local_measurements.size()});
+    push_block("local_response_modes_per_sample", local_modes_per_sample,
+               {local_records});
+    push_block("local_response_audit", local_audit, {local_records, 3});
+    push_block("local_response_identity", local_identity, {local_records, 4});
+    std::vector<Json> accepted_internal_layout;
+    std::size_t internal_offset = 0;
+    for (std::size_t index = 0; index < internal_counts.size(); ++index) {
+      accepted_internal_layout.push_back(json_object({
+          {"name", json_string(internal_fields[index].first)},
+          {"offset", json_integer(static_cast<long long>(internal_offset))},
+          {"count", json_integer(static_cast<long long>(internal_counts[index]))}}));
+      internal_offset += internal_counts[index];
+    }
+    if (accepted_state_enabled) accepted_internal_layout.push_back(json_object({
+        {"name", json_string("step_size")},
+        {"offset", json_integer(static_cast<long long>(internal_offset))},
+        {"count", json_integer(1)}}));
     std::vector<Json> free_bodies;
     for (int body : built.free_body) free_bodies.push_back(json_string(model.body_order()[body]));
 
@@ -1159,6 +1605,123 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
          })},
         {"status", json_string(failure.failed ? "failed" : "success")},
     });
+    if (accepted_state_enabled) {
+      for (auto& field : document.fields) if (field.first == "manifest") {
+        field.second.fields.push_back({"accepted_state_version", json_integer(1)});
+        field.second.fields.push_back({"accepted_constraint_rows", json_integer(built.rows)});
+        field.second.fields.push_back({"accepted_internal_layout", json_array(std::move(accepted_internal_layout))});
+        field.second.fields.push_back({"accepted_identity_columns", json_array({
+            json_string("case_index"), json_string("accepted_step_id"),
+            json_string("time_s"), json_string("first_output_sample_id")})});
+        field.second.fields.push_back({"accepted_output_map_columns", json_array({
+            json_string("case_index"), json_string("output_sample_id"),
+            json_string("accepted_step_id"), json_string("time_s")})});
+      }
+    }
+    // A decoded characteristics request is echoed back so "the request arrived"
+    // is observable rather than assumed.  The kernel still does not compute a
+    // characteristics response -- the capability document says so with an empty
+    // `characteristics_response_kinds` -- but it must not silently drop what it
+    // read.  Only the fields the reader decoded are echoed; the reader refuses
+    // unknown fields, so there is nothing left over to lose.
+    if (plan.characteristics.present) {
+      const ContractCharacteristics& request = plan.characteristics;
+      std::vector<Json> measurements;
+      for (const ContractDeclaration& declared : request.measurements) {
+        measurements.push_back(json_object({
+            {"id", json_string(declared.id)},
+            {"measurement_id", json_string(declared.measurement_id)},
+            {"definition_version", json_integer(declared.definition_version)},
+            {"units", json_string(declared.units)},
+            {"response_kind", json_string(declared.response_kind)},
+            {"response_version", json_integer(declared.response_version)},
+            {"mode", json_string(declared.mode)}}));
+      }
+      std::vector<Json> samples_json;
+      for (int index : request.samples) {
+        samples_json.push_back(json_integer(static_cast<long long>(index)));
+      }
+      std::vector<Json> released_json;
+      for (const std::string& name : request.boundary_released) {
+        released_json.push_back(json_string(name));
+      }
+      std::vector<Json> held_json;
+      for (const std::string& name : request.boundary_held) {
+        held_json.push_back(json_string(name));
+      }
+      std::vector<std::pair<std::string, Json>> characteristics_fields = {
+          {"present", Json{JsonKind::Bool, true, 0.0, false, 0, std::string(), {}, {}}},
+          {"request_id", json_string(request.request_id)},
+          {"domain", json_string(request.domain)},
+          {"samples", json_array(std::move(samples_json))},
+          {"measurements", json_array(std::move(measurements))},
+          {"boundary_profile", json_string(request.boundary_profile)},
+          {"boundary_version", json_integer(request.boundary_version)},
+          {"boundary_released", json_array(std::move(released_json))},
+          {"boundary_held", json_array(std::move(held_json))},
+          {"definition_kind", json_string(request.definition_kind)},
+          {"definition_version", json_integer(request.definition_version)},
+          {"frozen_protocol", json_string(request.frozen_protocol)},
+          {"frozen_version", json_integer(request.frozen_version)},
+          {"operator_kind", json_string(request.operator_kind)},
+          {"operator_version", json_integer(request.operator_version)}};
+      if (request.has_wheel_end_response) {
+        characteristics_fields.push_back(std::make_pair(
+            std::string("wheel_end_response"), request.wheel_end_response));
+      }
+      for (auto& field : document.fields) if (field.first == "manifest") {
+        field.second.fields.push_back(std::make_pair(
+            std::string("characteristics"),
+            json_object(std::move(characteristics_fields))));
+      }
+    }
+    if (answers_local_response) {
+      // The names of the two axes and the reason vocabulary.  A caller reading
+      // `local_response_value` by index would otherwise have to reconstruct the
+      // mode order from the request, and the status column would be four
+      // unexplained integers.
+      std::vector<Json> mode_ids;
+      for (const FrozenLoadMode& mode : local_modes) {
+        mode_ids.push_back(json_string(mode.id));
+      }
+      std::vector<Json> measurement_ids, measurement_units, measurement_components;
+      for (const FrozenMeasurement& measurement : local_measurements) {
+        measurement_ids.push_back(json_string(measurement.id));
+        measurement_units.push_back(json_string(measurement.units));
+        static const std::vector<std::string> components = {"x",  "y",  "z",
+                                                           "rx", "ry", "rz"};
+        measurement_components.push_back(json_string(
+            components[static_cast<std::size_t>(measurement.component)]));
+      }
+      for (auto& field : document.fields) if (field.first == "manifest") {
+        field.second.fields.push_back({"local_response",
+          json_object({
+              {"status_vocabulary", json_object({
+                  {"0", json_string("valid")},
+                  {"1", json_string("unidentifiable")},
+                  {"2", json_string("singular")},
+                  {"3", json_string("refused")}})},
+              {"value_block", json_string("local_response_value")},
+              {"status_block", json_string("local_response_status")},
+              {"modes_per_sample_block", json_string("local_response_modes_per_sample")},
+              {"audit_block", json_string("local_response_audit")},
+              {"identity_block", json_string("local_response_identity")},
+              {"audit_columns", json_array({json_string("dimension"),
+                                            json_string("matrix_rank"),
+                                            json_string("factorizations_used")})},
+              {"identity_columns", json_array({json_string("case_index"),
+                                               json_string("accepted_step_id"),
+                                               json_string("time_s"),
+                                               json_string("first_output_sample_id")})},
+              {"load_modes", json_array(std::move(mode_ids))},
+              {"measurements", json_array(std::move(measurement_ids))},
+              {"measurement_units", json_array(std::move(measurement_units))},
+              {"measurement_components", json_array(std::move(measurement_components))},
+              {"refused_samples", json_integer(static_cast<long long>(local_refused_samples))},
+              {"frozen_protocol", json_string(plan.characteristics.frozen_protocol)},
+              {"frozen_version", json_integer(plan.characteristics.frozen_version)}})});
+      }
+    }
     if (!contract_write_canonical(document, canonical, error)) {
       return fail(error_buffer, error_capacity, 4, "result document: " + error);
     }
@@ -1184,6 +1747,16 @@ extern "C" AXLE_API int32_t suspension_kernel_run(
   append_doubles(constraint_reactions.data(), constraint_reactions.size(), blob);
   append_doubles(constraint_jacobians.data(), constraint_jacobians.size(), blob);
   append_doubles(coupler_reactions.data(), coupler_reactions.size(), blob);
+  append_doubles(accepted_identity.data(), accepted_identity.size(), blob);
+  append_doubles(accepted_output_map.data(), accepted_output_map.size(), blob);
+  append_doubles(accepted_states.data(), accepted_states.size(), blob);
+  append_doubles(accepted_multipliers.data(), accepted_multipliers.size(), blob);
+  append_doubles(accepted_internal.data(), accepted_internal.size(), blob);
+  append_doubles(local_values.data(), local_values.size(), blob);
+  append_doubles(local_status.data(), local_status.size(), blob);
+  append_doubles(local_modes_per_sample.data(), local_modes_per_sample.size(), blob);
+  append_doubles(local_audit.data(), local_audit.size(), blob);
+  append_doubles(local_identity.data(), local_identity.size(), blob);
 
   const std::string payload = contract_build_container(canonical, blob);
   if (result_out == nullptr || *result_length_in_out < payload.size()) {

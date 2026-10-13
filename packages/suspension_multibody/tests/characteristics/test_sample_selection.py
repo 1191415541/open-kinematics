@@ -35,6 +35,9 @@ from suspension_multibody.results.sampling import (
     require_selection,
     select_samples,
 )
+from tests.benchmark_fixture import benchmark_model
+from tests.cases.kc_quasi_static._documents import documents
+from tests.cases.kc_quasi_static._documents import run as kc_run
 
 
 class _FakeRaw:
@@ -308,3 +311,197 @@ def test_an_identity_rejects_a_kind_outside_the_contract() -> None:
 def test_an_identity_without_a_kind_is_still_allowed() -> None:
     """Unlabelled is permitted for callers that predate selections; wrongly labelled is not."""
     assert SampleIdentity(index=0).sample_kind is None
+
+
+def _two_cases() -> _FakeResult:
+    """Two cases of two stored samples each, with the per-case grids concatenated."""
+    times = np.array([0.0, 0.5, 0.0, 0.5])
+    rows = np.zeros((4 + 2*2, 16))
+    cases = (
+        {"sample_offset": 0, "sample_count": 2},
+        {"sample_offset": 2, "sample_count": 2},
+    )
+    return _FakeResult(times, cases, rows)
+
+
+def test_explicit_ids_select_the_named_grid_ids() -> None:
+    """
+    `indices` selects by the grid's own id, which is not the array position.
+
+    The stored samples of case 1 sit at array positions 2 and 3 but carry ids 0
+    and 1.  Selecting id 0 must return the *first* point of the named case, and
+    selecting 1 must return the second -- a reader that matched on position would
+    answer case 0's point for case 1 and the numbers would still look plausible.
+    """
+    result = _two_cases()
+    selection = select_samples(result, "output", ids=[0, 1], case_index=1)
+    assert [point.index for point in selection.identities] == [2, 3]
+    assert [point.output_sample_id for point in selection.identities] == [0, 1]
+    assert [point.case_index for point in selection.identities] == [1, 1]
+    assert {point.sample_kind for point in selection.identities} == {"output"}
+    assert selection.complete
+
+
+def test_explicit_ids_refuse_a_reordered_request() -> None:
+    """
+    A selection is a sequence, and reordering it changes every rate over it.
+
+    Ids listed out of sampling order are refused rather than reordered: silently
+    sorting them would answer a *different* request than the one made, and the
+    caller would have no way to notice.
+    """
+    with pytest.raises(CharacteristicsError, match="not listed in sampling order"):
+        select_samples(_two_cases(), "output", ids=[1, 0], case_index=0)
+
+
+def test_explicit_ids_refuse_a_repeat_and_an_out_of_range_id() -> None:
+    result = _two_cases()
+    with pytest.raises(CharacteristicsError, match="requested twice"):
+        select_samples(result, "output", ids=[0, 0], case_index=0)
+    with pytest.raises(CharacteristicsError, match="no sample id"):
+        select_samples(result, "output", ids=[7], case_index=0)
+    with pytest.raises(CharacteristicsError, match="non-negative integers"):
+        select_samples(result, "output", ids=[-1], case_index=0)
+    with pytest.raises(CharacteristicsError, match="at least one id"):
+        select_samples(result, "output", ids=[], case_index=0)
+
+
+def test_explicit_ids_refuse_an_id_that_names_two_cases() -> None:
+    """
+    Per-case counters make one id name a real point in *every* case.
+
+    Picking one would attach another case's state to the answer under a message
+    that looks specific, so the ambiguity is refused and resolved by naming the
+    case -- which is the information the reader does not have.
+    """
+    with pytest.raises(CharacteristicsError, match="more than one case"):
+        select_samples(_two_cases(), "output", ids=[0])
+    resolved = select_samples(_two_cases(), "output", ids=[0], case_index=1)
+    assert [point.index for point in resolved.identities] == [2]
+
+
+def test_explicit_ids_are_refused_for_the_initial_selection() -> None:
+    """`initial` has no ids of its own, so an id selection over it is a category error."""
+    with pytest.raises(CharacteristicsError, match="has no ids of its own"):
+        select_samples(_two_cases(), "initial", ids=[0])
+
+
+
+def test_require_selection_forwards_the_explicit_ids() -> None:
+    """
+    The strict entry point must not answer a *different* selection than it was asked.
+
+    `require_selection` fails closed, so a caller that named ids has to get exactly
+    those ids (or a refusal) -- forwarding nothing would quietly answer the whole
+    grid, which is the "looks complete" failure this entry point exists to prevent.
+    """
+    result = _two_cases()
+    strict = require_selection(result, "output", ids=[1], case_index=1)
+    loose = select_samples(result, "output", ids=[1], case_index=1)
+    assert strict == loose
+    assert [point.index for point in strict.identities] == [3]
+    with pytest.raises(CharacteristicsError, match="no sample id"):
+        require_selection(result, "output", ids=[9], case_index=0)
+
+
+
+# --------------------------------------------------------------------------- #
+# the same selections on a real multi-case run, not a hand-written ledger
+# --------------------------------------------------------------------------- #
+
+
+def _real_grid_run():
+    """
+    Run a three-case K grid through the native kernel and return its raw result.
+
+    The other multi-case fixtures here are hand-built ledgers, so they prove the
+    reader agrees with the *documented* writer layout.  Everything below exercises
+    the same selections against a result the production entry point actually
+    produced, which is the only way to see a disagreement between the two.
+    """
+    assembly = documents(benchmark_model(), "K")
+    case = {
+        "contract": "multibody-case",
+        "contract_version": 1,
+        "kind": "case",
+        "family": "kc_quasi_static",
+        "name": "axes-grid",
+        "time": {"start_s": 0.0, "end_s": 1e-3, "step_s": 1e-3},
+        "k": {
+            "axes": [{"coordinate": "rack_drive", "values_mm": [-5.0, 0.0, 5.0]}],
+            "drive": "wheel_center",
+        },
+    }
+    return kc_run(assembly, case)
+
+
+def test_a_real_grid_run_really_has_several_cases() -> None:
+    """Guard: the selections below are only multi-case if the run is."""
+    raw = _real_grid_run()
+    assert int(raw.document["manifest"]["case_count"]) == 3
+    assert len(raw.cases) == 3
+    assert [int(row["sample_count"]) for row in raw.cases] == [2, 2, 2]
+
+
+def test_one_id_names_a_real_point_in_every_case_of_a_real_run() -> None:
+    """
+    Per-case counters make an id ambiguous, and the run proves it is not theoretical.
+
+    Sample id 0 is the first point of case 0, of case 1 and of case 2 -- three
+    different times and three different states.  A reader that picked one and said
+    nothing would attach another case's state to a request that named only an id.
+    """
+    raw = _real_grid_run()
+    firsts = [
+        select_samples(raw, "output", ids=[0], case_index=case).identities[0]
+        for case in range(3)
+    ]
+    assert [point.case_index for point in firsts] == [0, 1, 2]
+    assert [point.output_sample_id for point in firsts] == [0, 0, 0]
+    indexes = [point.index for point in firsts]
+    assert indexes == [0, 2, 4]
+    assert len(set(indexes)) == 3
+    with pytest.raises(CharacteristicsError, match="more than one case"):
+        select_samples(raw, "output", ids=[0])
+
+
+def test_explicit_ids_on_a_real_run_are_grid_ids_not_array_positions() -> None:
+    """
+    Case 2's first point sits at array position 4 and must be named id 0.
+
+    Asking for ids ``[0, 1]`` in case 2 returns positions 4 and 5; the same request
+    read as positions would return case 0's and case 1's first points, and every
+    number would still look like a plausible answer.
+    """
+    raw = _real_grid_run()
+    selection = select_samples(raw, "output", ids=[0, 1], case_index=2)
+    assert [point.index for point in selection.identities] == [4, 5]
+    assert [point.case_index for point in selection.identities] == [2, 2]
+    assert [point.output_sample_id for point in selection.identities] == [0, 1]
+
+
+def test_the_initial_selection_on_a_real_run_is_one_point_per_case() -> None:
+    """
+    ``initial`` is the first stored sample of each case, on the real grid too.
+
+    A driver that took "the first N stored samples" would return case 0's two
+    points; the selection has to be one point per case, at positions 0, 2 and 4.
+    """
+    raw = _real_grid_run()
+    selection = select_samples(raw, "initial")
+    assert [point.case_index for point in selection.identities] == [0, 1, 2]
+    assert [point.index for point in selection.identities] == [0, 2, 4]
+    assert [point.output_sample_id for point in selection.identities] == [0, 0, 0]
+    assert all(point.sample_kind == "initial" for point in selection.identities)
+
+
+def test_a_real_grid_run_refuses_the_accepted_selection() -> None:
+    """
+    A quasi-static grid has no accepted steps, and the refusal says where to look.
+
+    The kernel rejects ``accepted_state`` on the grid families outright, so this is
+    the request-level refusal rather than a silently empty answer.
+    """
+    raw = _real_grid_run()
+    with pytest.raises(CharacteristicsError, match="no per-accepted-step states"):
+        select_samples(raw, "accepted")

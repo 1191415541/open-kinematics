@@ -2,48 +2,116 @@
 
 ## 恢复块
 
-- 任务：统一多体特性分析；形态：epic；日期：2026-10-11（Asia/Shanghai）。
-- 状态：IN_PROGRESS；进度：**4/9 子任务、33/51 实施步骤**（P4a 步骤6 FAILED；P4b 步骤1、4 DONE；P5 步骤1 FAILED；P6 步骤2、3 DONE；P7 步骤1 FAILED）
-  （P0 6/6 步 DONE；P1 6/6 步 DONE 并已关闭；P2 6/6 步 DONE 并已关闭；
-  **P3 6/6 步 DONE 并已关闭**——时序审计 + 采样选择与身份表 + 动态几何真实时间导数 +
-  显式时间差分 + 状态不变性与性能预算 + R8 迁移与退出验证；
-  **P4b 2/5 步 DONE**——连续力律/状态审计与无有限时域传播的范围锁定；
-  **P4a 5/6 步 DONE**——冻结协议与原样本残量审计 + 坐标驱动的冻结态反力切线 +
-  具名载荷模式响应及可辨识诊断 + 贯通逐样本派生指标与请求共享 +
-  独立有限扰动 oracle 与直接/转置/单位/frame 等价核对）。
-- P4a 收尾状态：**冻结态刚度柔度**（6 步）——步骤 1–5 **DONE**，步骤 6 已执行但
-  **FAILED（retry_count=1）**；覆盖与门禁证据见
-  [P4a 步骤6验证](tasks/p4a-frozen-local-response/raw/validation.md)。**步骤 5 最重要的产出是一个覆盖缺口**：
-  oracle 交付时测试 3/4 用手工矩阵，而 SPEC §51/设计 §439 要求"同一物理问题含
-  **非对称切线**"；探针实测 **oracle 物理夹具（`rows == 0`）切线完全对称**
-  （`worst|A-A^T| = 0`），转置核对在其上**真空**。已新增测试 4b 在**真实且受支持**的
-  非对称冻结切线（对称衬套 + 一条 `AXLE_INPLANE` 约束行，`worst|A-A^T| = 1.44`）上核对：
-  直接/转置一致 1.110e-16、单位缩放等价 0.0（未补偿 `G` 反证相对 1.448）、前向/转置解
-  确实不同 1.49，并要求 `A` 预测**残量**变化（1.809e-13）而 `A^T` **不能**（1.011e-03）。
-  交付后**独立只读复审发现并修复两个真实缺陷**：①夹具不可达（初版非对称衬套刚度被
-  `build_model.cpp:326`/`element_reader.cpp:311` 拒绝）；②切线只与自身比较（`K^T` 写法会全过，
-  已加残量判别）。修 ② 连带发现"位姿-only 右端 + 位姿-only 测量时两条路线恒等"
-  （`A^{-1}` 位姿块对称），测量已改为同时读**乘子（约束反力）坐标**使路由可见。
-  **P4a 三个真实缺口中的第一个已补**：
-  `B_w = -dR/dw` 此前全仓库零实现，步骤 3 已实现并行为验收（`C = 1/k` 解析通过），
-  且 `dynamic_hash_sentinel` 逐位不变，证明只增能力、未改既有物理。
-  步骤 4 交付逐样本驱动层（`results/per_sample.py`）：循环**样本在外、问题在内**，
-  同一份 A 逐样本只分解一次且 `counters` 使共享**可观测**；拒绝按样本记录不抛不丢邻居；
-  provenance 记边界/指纹/冻结协议使来源可追溯。
-  **步骤 4 最重要的产出是一个设计缺陷**：首轮已过 35 自测/11 门/23 破坏，
-  仍被第二份独立对抗复审找出 **6 处真实缺陷**（3 处探针当场复现），
-  其中 3 处属"合法输入 ⇒ 静默错误有限值"——已全部修复，
-  并以 **32/32 蓄意破坏全抓** 固化。
-  仍缺：物理切线跨 ABI 导出 + `characteristics_response_kinds` 声明（当前仍为空数组）、
-  `local_response_v1` 结果通道跨 ABI 接线、命名轮端模式映射层、单位/frame 换算
-  （输出侧换算；求解侧的"不泄漏 scaling/frame"已由步骤 5 证明）。
-  依赖 P2/P3 均已 DONE 并关闭，核对通过。
-  P4a 步骤 1 证据：[raw/frozen-protocol-evidence.md](tasks/p4a-frozen-local-response/raw/frozen-protocol-evidence.md)、
-  步骤 2 证据：[raw/frozen-tangent-evidence.md](tasks/p4a-frozen-local-response/raw/frozen-tangent-evidence.md)、
-  步骤 3 证据：[raw/frozen-load-evidence.md](tasks/p4a-frozen-local-response/raw/frozen-load-evidence.md)、
-  步骤 4 证据：[raw/frozen-derived-evidence.md](tasks/p4a-frozen-local-response/raw/frozen-derived-evidence.md)、
-  前置侦察 [raw/frozen-recon.md](tasks/p4a-frozen-local-response/raw/frozen-recon.md)。
-- 真源：[SUBTASKS.csv](SUBTASKS.csv)；范围：[EPIC.md](EPIC.md)；设计：[原设计](../../packages/suspension_multibody/docs/unified_characteristics_design.md)。
+- 日期：2026-10-13；状态：IN_PROGRESS。当前真源：**3/9 子任务 DONE（P0、P1、P2）**；
+  叶子步骤以各任务 TODO 为准（P0 6/6）。
+- 原目标及关闭条件不变；P3/P4a 因原范围生产缺口重开。历史完成数字与下文
+  2026-10-10/11/12 证据不代表当前状态。
+- **P0 于 2026-10-13 重新收口为 DONE**（步骤 5/6 于 2026-10-12 重开、retry_count=1）：
+  native 完整消费 `held`/`released`（字符串数组，拒绝非字符串/空串/列表内重复/同时出现在
+  `held` 与 `released`）与 `wheel_end_response`（对象原样存回），并把解码后的请求**回显到
+  结果 manifest 的 `characteristics` 字段**；测试 15→25 passed，反证（冲突检查置
+  `if(false)`）可判 FAILED。门禁：build 两条 exit 0；kernel 129 / contracts 78 /
+  no_legacy 5 全 passed；快速集 **2051 passed / 1 xfailed**（skip 0，xfail 未增长）；
+  characteristics 489；ruff/ty/三架构门 0；sentinel/parity exit 0；
+  `kc_perf_gate` FAIL 已按用户裁定登记为环境抖动（比值自身在 ×1.288–×1.467 抖动，
+  且 perf 用例不含 `characteristics` 键即新分支不执行），未重录基线、未放宽 BUDGET_FACTOR。
+  证据 [raw/validation.md](tasks/p0-definition-contract/raw/validation.md) 第 9 节。
+- **P0 的 Adams 审计已修订（2026-10-13）**：原「本机无 Adams Car 2024.1」前提**被证伪**
+  （`C:\Program Files\MSC.Software\Adams\2024_1` 存在；`probe_profile` 返回
+  `available=True`/`version="2024.1"`/`license_probe="passed"`；`validate-adams --smoke
+  --require-installed` exit 0）。按用户裁定以 P5 权威 2024.1 审计重写
+  `raw/adams-rule-audit.csv`/`.md`：**G6 由 `pending_definition` 升为 `stated`**、
+  **G3 改为 `partial`**（`adams_solver/gtcmat.html` 明确给出 C++ Solver 动态柔度算法，
+  旧「动态段无完整算法」对 Solver 手册不成立）、G1/G2/G5 为 `partial`、G4 为
+  `not_stated`；`source_sha256` 由脚本对本机 2024.1 help **实时计算**（非手写），与 P5 版
+  逐字一致。原版保留于 `backups/20261013-p0-adams-2024-1-audit/`。**口径未放宽**：
+  Adams 兼容的完整动态冻结等价声称仍被阻断。
+- **P1/P2 保留库级成果 DONE，P6 真实消费者仍未完成。**
+- **P4a 步骤 4 第 1 层已落地（2026-10-13，IN_PROGRESS）**：新增 native
+  `FrozenLoadMode`/`FrozenMeasurement`/`frozen_measurement_gradient`/`frozen_local_response`
+  （声明 `mb_solve_static/functions.hpp:148-278`，实现 `kernel_static_trim.cpp:717-963`），
+  实现 `A X = B_w P`、`Y = G X`；**关键结论：`G` 不需要新物理**（`A` 的前 `ndof` 行/列即各自由体
+  6 个增量，与 `pose_candidate` 的增量语义严格一致）。自测
+  `cpp/tests/frozen_local_response_selftest.cpp` 已注册进 CMake 与 registry。
+  实测：自测 exit 0、registry 20 / kernel 130 / contracts 78 passed、快速集 2051 passed/1 xfailed
+  （skip 0 未增长）、sentinel/parity exit 0、ruff/ty/三架构门 0。两轮反证均被断言抓住。
+  独立只读复审 4 项阻断（相容/可辨识缺失被过度宣称、无效项写 0、`solve_many` 整批失败、
+  测试覆盖缺口）**全部核实成立并已修**。
+  证据 [raw/local-response-layer1-evidence.md](tasks/p4a-frozen-local-response/raw/local-response-layer1-evidence.md)。
+  **仍未交付**：相容/可辨识审计、契约绑定（需新 kind/version）、`G` 宽度与 Python 消费层对齐、
+  固定/自由车身 profile、ABI 结果块、`characteristics_response_kinds`、Python 读侧与单位/frame、
+  四组合端到端验收。
+- **P4a 步骤 4 第 2/3 层已落地（2026-10-13，IN_PROGRESS）**：
+  第 2 层：①`local_response_v1` 契约新增**显式实体绑定**段（`characteristics.py` +
+  `solve_plan.schema.json` + native `case_characteristics.cpp`，含 8 条 native 负例）；
+  ②`G` 宽度由 `ndof` 改为 `dimension`，与 `results/equilibrium.py` 的
+  `gradient.shape[1] == dimension` 对齐；③新增相容/可辨识审计 `FrozenResponseAudit`
+  （秩 / 增广秩判相容 / 零空间判可辨识）+ 奇异样本的 `consistent_solution` 一致规约
+  （因 `LuFactorization` 在主元 `<1e-14` 时直接失败，奇异样本只能走该规约）；
+  自测扩到 14 个测试；实测 4 处变异全部被抓。
+  第 3 层：①**契约绑定被 native 求解器真实消费**——新增 `resolve_local_response_bindings`
+  （ABI 层）把 `binding` 解析为 `FrozenMeasurement`/`FrozenLoadMode`（标记经 `find_marker`
+  查表、空 reference = world、固定体测量点名拒绝）；②逐样本 A 生产者接入 accepted 观察者
+  （`frozen_working_sample` + `interpolate_input` + `assemble_physical_tangent`，`x` 乘子块取
+  样本自身，**不冻结 delta lambda**）；③ABI 结果块 `local_response_value/status/`
+  `modes_per_sample/audit/identity` + manifest `local_response` 段（push_block 与 append_doubles
+  顺序一致）；④`characteristics_response_kinds` 由空改 `["local_response"]`，与 Python 门
+  同字段口径（`measurements[].response_kind`）。
+  **实测边界（本轮如实标注）**：第 2、3 层只验证到 `kernel` 构建 exit 0；
+  **第 3 层未跑任何自测/测试/反证/全量门禁**（按用户裁定「先提交代码与任务记录」收工），
+  故「行为正确」与「无请求时不改变原结果」两条**尚无证据**，不得当作已验证能力。
+  **仍缺**：Python 读侧与逐测量单位/frame、指标层（Wheel/Ride/Roll/Toe/Camber）、
+  固定/自由车身 profile、四组合端到端（步骤 6 重试）；`D` 恒为 0 仍为登记缺口。
+- **用户裁定（2026-10-13，C5）两项**：
+  1. **P3 步骤 2 剩余项**：用户选择「**单独立项修改 native 动态展开器使多 case 可产，
+     再达到原条件后关闭**」。口径：P3 原条件（多 case 真实 accepted 生产者）**不放宽**；
+     该 native 能力缺口**另立工作项**（移交方/接收任务/验收条件/最迟集成门须在 P3
+     PROGRESS/TODO 中登记），完成后再按原条件关闭 P3 步骤 2。
+  2. **P5 Adams 外部前置**：用户授权「**启动本机 Adams 2024.1（含许可）做只读诊断与
+     必要本地验证，并尝试生成独立参考**」。据此 P5 步骤 1（定义审计重建）**已 DONE**
+     （2026-10-13，retry 1，见 [tasks/p5-adams-svc-parity/TODO.csv](tasks/p5-adams-svc-parity/TODO.csv)）；
+     步骤 2–5 仍 TODO，其中步骤 2 需生成独立参考（`reference-manifest.json` 仍
+     `pending_reference`）。
+- P3：重开2（真实 accepted 生产者）和5（同计划开关不变性与预算）。**本轮已把真实 accepted 生产者落地并行为验收**：
+  native 只读观察原提交点（`RunSampleObserver`，导出 C 结构布局不变、无请求零工作量）、
+  五个 accepted 结果块 + manifest 列名、Python `select_samples("accepted")` 校验后枚举与按检查点身份导出；
+  同一次 `run_model` 有/无观察的 state/diagnostics/energy/力元素/contact_events **逐位相同**（含接触事件与自适应两半）。
+  证据 [raw/accepted-producer-evidence.md](tasks/p3-dynamic-sampling/raw/accepted-producer-evidence.md)。
+  步骤 2 仍 IN_PROGRESS：`indices` 显式集合选择**已落地**（读侧库 API `select_samples(..., ids=, case_index=)`，
+  `SAMPLE_KINDS` 不变；拒绝重排/重复/越界/跨 case 歧义，`initial` 带 ids 一律拒绝），
+  真实三 case K 网格的 output/initial 选择已纳入读侧验收，另修 `sample_identities`/`require_channel`
+  写死 `result.raw` 导致 raw 形状崩溃的 2 处缺陷（红-修-绿 + sabotage 反证）；
+  剩余项经实测**重新定性为「本版本动态多 case 无生产者」**（五个动态族展开器各只有一处
+  `out.cases.push_back`，单 case 动态计划 `case_count == 1`），属 native 能力、非漏测，
+  已如实登记；关闭口径待用户裁定。步骤 5 仍 TODO（预算分项计量未复测）。
+- P4a：重开1/3/4/5；步骤6保持 FAILED。**本轮补齐 `frozen_inertial_load_v1`**：
+  `frozen_working_sample` 读 a/alpha、逐自由体算 m*a 与 I*alpha+omega×I*omega 存入 `inertial_wrench`，
+  切维改 `ndof+rows`，`static_residual` 以公共力总线同一算术替换总线惯性项，新增 `frozen_inertial_residual`。
+  证据 [raw/frozen-inertial-load-evidence.md](tasks/p4a-frozen-local-response/raw/frozen-inertial-load-evidence.md)。
+  仍缺：原生 `local_response_v1` 结果块、`characteristics_response_kinds`、具名轮端→body_wrench 映射、
+  逐测量单位/frame、组合相容性诊断与整车耦合、设计 §6.5 的 delta lambda 联立求。
+- 本轮实证修复：①`frozen_load_column` 原写 dR/dw，与声明 Bw=-dR/dw 相反——新增真实 static_residual 六分量
+  中心差分回归先红，修正为正单位列 + 正力臂后 exit 0；②gauge 在力的平移 slot 上整列 return 会丢弃力臂力矩，
+  已改为只抑制自身条目并补 gauge 力臂回归；③`sampling.py` 时间容差硬编码 1e-12 误拒合法长运行、
+  状态列接受非前缀/越界值、输出映射未与成功样本数核对、manifest 列名未校验——四条均红-修-绿，
+  2 处 sabotage 反证判别力后已还原。
+- 门禁（本轮实际执行）：ruff/ty 0；三架构门 0；快速集 **2051 passed / 1 xfailed**（skip 0、xfail 未增长）；
+  characteristics **488 passed**；`test_native_accepted_sampling.py` 与 `test_sample_selection.py` 各 **30 passed**；
+  kernel+contracts **182 passed**（新注册 mb_run_sample_selftest 与
+  mb_frozen_sample_selftest）；五个内核自测 exit 0；sentinel 逐位不变、parity 8 族。
+  **kc_perf_gate 高负载时超预算，但已用 `git stash` 退回全部 packages 改动重建后同样 FAIL 的对照实验证明
+  与本次改动无关**，负载回落后 OK；未重录基线、未放宽 BUDGET_FACTOR。
+- 环境：开始时 native DLL/metadata 是旧 ABI16，源码期望17，初次快速集收集失败；已备份并重建两个包的
+  native 镜像。历史红项不写成首次命令 PASS。
+- Adams：用户提供安装目录 C:/Program Files/MSC.Software/Adams/2024_1；已核实2024.1安装。
+  最小 Car 批处理 exit0 但无成功标记，含 license 类输出，启动/许可具体原因待安全诊断，
+  不能据此宣称可运行或已对标。六组规则 G1–G6 保持 `pending_definition`。
+- 下步：**先补 P4a 步骤 4 第 3 层的验证**（本轮按用户裁定只提交未验证的接线：
+  注册/更新自测与负例、跑 kernel 自测 + kernel/contracts/characteristics 测试、
+  并证明「无请求时结果逐位不变」），再推进 Python 读侧与单位/frame、指标层与四组合端到端；
+  另推进 P3 步骤 5（预算分项计量）与 `indices` 显式集合选择；P4a 步骤 4（原生 local_response_v1 已接线，
+  具名轮端映射 + 单位/frame）以解除步骤 6 的 FAILED。P4b/P5/P6/P7 保持未完成。
+- 真源：[SUBTASKS.csv](SUBTASKS.csv)；范围：[EPIC.md](EPIC.md)；目标对账由本轮独立只读复审确认，未放宽任何原验收条件。
 
 ## 本轮完成剩余任务的执行计划（2026-10-11）
 
@@ -82,7 +150,8 @@
   步骤 6（R8 迁移与退出验证，
   [证据](tasks/p3-dynamic-sampling/raw/retirement-evidence.md)、
   [验证](tasks/p3-dynamic-sampling/raw/validation.md)）。
-  **P3 已关闭**（6/6 步，2026-10-10）。
+  **历史状态：P3 于 2026-10-10 曾以 6/6 关闭；2026-10-12 因原范围生产缺口重开步骤 2/5**
+  （真实 accepted 生产者已补，`indices` 与预算分项计量仍缺）。关闭条件未放宽。
 - 历史推进块：P2 共享物理切线、平衡响应与指标（依赖 P1，已就绪）。
   P1 关键结论：R1/R2/R3/R4/R6 已迁移，R5 按设计保持 pending；两个中心聚合与两个 camber/toe
   定义**各自具名保留**（非疏漏，实测差异见 P1 证据）；引擎秩判定与边界审计策略不可共享。

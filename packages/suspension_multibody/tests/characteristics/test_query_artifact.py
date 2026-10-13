@@ -169,6 +169,21 @@ def test_a_channel_query_returns_the_stored_values_unchanged() -> None:
     )
 
 
+def test_a_channel_query_answers_both_stored_result_shapes() -> None:
+    """
+    The raw contract result is a legal way to name the same stored run.
+
+    ``require_channel`` unwrapped the envelope but addressed the raw result's
+    block table through ``result.raw`` unconditionally, so passing the raw result
+    raised ``AttributeError`` instead of returning the very channel it holds.
+    """
+    result = _solved()
+    stored = require_channel(result, "constraint_jacobian", request_id="probe")
+    np.testing.assert_array_equal(
+        require_channel(result.raw, "constraint_jacobian", request_id="probe"), stored
+    )
+
+
 def test_an_unavailable_sample_needs_a_reason_and_is_not_a_zero() -> None:
     """
     Non-finite samples become an explicit status; without a reason this refuses.

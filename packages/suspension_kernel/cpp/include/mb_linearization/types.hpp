@@ -55,12 +55,25 @@ struct WorkingSample {
     /// not), so the solver supplies them instead of this module re-deriving a
     /// mask that could disagree with the residual the solver is actually driving.
     std::vector<double> position_constraint;
+    // World wrench at each material COM, in free-body generalized order. The
+    // complete m*a and I_world*alpha + omega x I_world*omega are evaluated once
+    // at the original sample. They never rotate/recompute with a pose variation.
+    bool frozen_inertial_load = false;
+    std::vector<double> inertial_wrench;
 };
 
 /// Assemble the physical tangent `K` of one working sample.
 ///
 /// `jacobian` is filled as a dense `dimension x dimension` matrix with
-/// `dimension = ndof + rows + active_tires.size()`, in the block order
+/// `dimension = physical_tangent_dimension(model, working)`:
+///
+///   `ndof + rows + active_tires.size()` for an ordinary sample, and
+///   `ndof + rows` when `working.frozen_inertial_load` is set -- a frozen dynamic
+///   sample brings its own contact state, so it has no static compression
+///   unknowns to solve for.  Callers must use that function rather than the sum:
+///   the two forms differ, and a mismatch is refused by `assemble_physical_tangent`.
+///
+/// For the ordinary form the block order is
 ///
 ///   [ pose coordinates | constraint multipliers | contact compressions ]
 ///
@@ -121,11 +134,10 @@ int physical_tangent_dimension(const Model& model, const WorkingSample& working)
 ///   mask here would be a second copy of an identity.
 /// * ``load_scale`` is 1.0: a frozen response is asked at the unperturbed load.
 ///
-/// Only ``r``, ``q``, ``v`` and ``omega`` are required of ``pose``.  That is not an
-/// oversight: the tangent assembly reads the pose and the velocity-dependent force
-/// laws and never reads ``a``/``alpha``, so requiring accelerations would reject
-/// states this function can describe.  If a force law ever starts reading them, this
-/// is the contract that has to grow with it.
+/// ``r/q/v/omega/a/alpha`` must describe the complete original state. The inertial
+/// COM wrench is frozen here, including gyroscopic torque. The force bus's live
+/// gyroscopic derivative is removed from the frozen tangent, while velocity and
+/// all internal State vectors remain those of this original sample.
 ///
 /// Returns ``false`` when the frozen state cannot be described -- a body count that
 /// disagrees with the model, a non-finite pose or velocity, or model dimensions that

@@ -340,12 +340,14 @@ def _write_multibody_result(
     table_names: list[str] = []
     written_formats: dict[str, list[str]] = {format_name: [] for format_name in formats}
     identities = _output_sample_identities(result)
+    accepted_identities = _accepted_table_identities(result)
     for name, values in arrays.items():
         rows, columns = _channel_table(
             values,
             identities=identities,
             channel_name=name,
             case_spans=tuple(result.raw.cases),
+            channel_identities=accepted_identities.get(name),
         )
         if "csv" in requested:
             _write_csv_table(destination / f"{name}.csv", rows, columns)
@@ -385,15 +387,46 @@ def _output_sample_identities(result: Any) -> list[dict[str, Any]]:
     return identities
 
 
+def _accepted_table_identities(result: Any) -> dict[str, list[dict[str, Any]]]:
+    """Use checkpoint identities, never infer their sampling grid from length."""
+    if "accepted_sample_identity" not in result.named_blocks:
+        return {}
+    from ..results.sampling import select_samples
+
+    selection = select_samples(result, "accepted")
+    cases = tuple(result.raw.cases)
+    checkpoints = [{
+        "sample_index": point.index,
+        "case_index": point.case_index,
+        "case_name": str(cases[point.case_index]["name"]),
+        "accepted_step_id": point.accepted_step_id,
+        "output_sample_id": point.output_sample_id,
+        "time_s": point.time_s,
+        "sample_role": "initial" if point.accepted_step_id == 0 else "accepted",
+    } for point in selection.identities]
+    lookup = {(row["case_index"], row["accepted_step_id"]): row for row in checkpoints}
+    output_map = [{**lookup[(int(case), int(step))],
+        "output_sample_id": int(output), "time_s": float(time),
+        "sample_role": "output_observation"}
+        for case, output, step, time in result.named_blocks["accepted_output_map"]]
+    return {name: output_map if name == "accepted_output_map" else checkpoints
+        for name in result.named_blocks if name.startswith("accepted_")}
+
+
 def _channel_table(
     values: Any,
     *,
     identities: list[dict[str, Any]],
     channel_name: str,
     case_spans: tuple[Mapping[str, Any], ...],
+    channel_identities: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Flatten one channel and retain sample, case, time, and component identity."""
     array = np.asarray(values)
+    accepted_channel = channel_name.startswith("accepted_")
+    if accepted_channel and (channel_identities is None or array.ndim == 0
+            or len(channel_identities) != array.shape[0]):
+        raise ValueError("accepted channel requires its explicit checkpoint identities")
     if array.ndim == 0:
         coordinates = [()]
     else:
@@ -425,7 +458,9 @@ def _channel_table(
     for coordinate in coordinates:
         value = array.item() if not coordinate else array[coordinate].item()
         first_index = int(coordinate[0]) if coordinate else 0
-        if channel_name == "diagnostics":
+        if channel_identities is not None:
+            identity = channel_identities[first_index]
+        elif channel_name == "diagnostics":
             identity = diagnostic_rows[first_index]
         elif coordinate and array.shape[0] == len(identities):
             identity = identities[first_index]
@@ -450,6 +485,7 @@ def _channel_table(
     columns = [
         "sample_index", "case_index", "case_name", "output_sample_id",
         "time_s", "sample_role",
+        *(["accepted_step_id"] if accepted_channel else []),
         *[f"index_{axis}" for axis in range(max_indices)],
         "value", "unit", "frame_id", "reason",
     ]
@@ -472,7 +508,7 @@ def _channel_annotation(
     component = int(coordinate[-1]) if coordinate else 0
     if channel_name == "times_s":
         return "s", "time"
-    if channel_name == "body_state":
+    if channel_name in {"body_state", "accepted_body_state"}:
         if component < 3:
             return "m", "world"
         if component < 7:
@@ -485,6 +521,9 @@ def _channel_annotation(
             return "m/s^2", "world"
         if component < 19:
             return "rad/s^2", "world"
+    if channel_name in {"accepted_sample_identity", "accepted_output_map"}:
+        time_column = 2 if channel_name == "accepted_sample_identity" else 3
+        return ("s", "time") if component == time_column else ("1", None)
     if channel_name == "constraint_wrench":
         return ("N", "world") if component < 3 else ("N*m", "world")
     if channel_name in {"constraint_reaction", "coupler_reaction"}:

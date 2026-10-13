@@ -485,8 +485,40 @@ target_link_options(
 )
 target_link_libraries(
     mb_frozen_load_selftest PRIVATE
-    mb_solve_static mb_linearization mb_linear mb_joint mb_dual mb_model
-    mb_config mb_numeric
+    # The sign oracle reaches the real residual/force chain, as does the
+    # frozen oracle below; operator-only links would leave it unexecuted.
+    "-Wl,--start-group"
+    mb_solve_static mb_solve_dynamic mb_linearization mb_assembly mb_force
+    mb_element mb_tire mb_joint mb_model mb_tire_pac2002 mb_tire_fiala
+    mb_tire_brush mb_tire_common mb_tire_state mb_linear mb_numeric
+    mb_dual mb_input mb_config
+    "-Wl,--end-group"
+)
+
+# The load-driven companion of the self-test above.  It asserts `C = 1/k` and
+# `K = k` **side by side** on one tangent, because the design's whole point is that
+# the coordinate-driven and load-driven boundaries are two different physical
+# questions and neither may be obtained from the other.  It links the same group as
+# its sibling for the same reason: the batch solve and the load column must resolve
+# against the real assembler, not against operator stubs.
+add_executable(mb_frozen_local_response_selftest cpp/tests/frozen_local_response_selftest.cpp)
+target_include_directories(
+    mb_frozen_local_response_selftest PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/cpp/include"
+)
+target_compile_options(mb_frozen_local_response_selftest PRIVATE ${KERNEL_COMPILE_OPTIONS})
+target_link_options(mb_frozen_local_response_selftest PRIVATE -fopenmp)
+target_link_options(
+    mb_frozen_local_response_selftest PRIVATE -static -static-libgcc -static-libstdc++
+)
+target_link_libraries(
+    mb_frozen_local_response_selftest PRIVATE
+    "-Wl,--start-group"
+    mb_solve_static mb_solve_dynamic mb_linearization mb_assembly mb_force
+    mb_element mb_tire mb_joint mb_model mb_tire_pac2002 mb_tire_fiala
+    mb_tire_brush mb_tire_common mb_tire_state mb_linear mb_numeric
+    mb_dual mb_input mb_config
+    "-Wl,--end-group"
 )
 
 # Step 5's independent oracle.  Unlike the three self-tests above, this one does not
@@ -540,3 +572,21 @@ target_link_libraries(
     mb_config
     "-Wl,--end-group"
 )
+
+# Exercise the same internal run_model translation unit as the product, with a
+# const observer. No exported test API or alternate integration implementation.
+add_executable(mb_run_sample_selftest
+    cpp/tests/run_sample_selftest.cpp cpp/src/abi/kernel_abi.cpp)
+target_include_directories(mb_run_sample_selftest PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/cpp/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cpp/axle_dynamics")
+target_compile_options(mb_run_sample_selftest PRIVATE ${KERNEL_COMPILE_OPTIONS})
+target_link_options(mb_run_sample_selftest PRIVATE
+    -fopenmp -static -static-libgcc -static-libstdc++)
+target_link_libraries(mb_run_sample_selftest PRIVATE
+    "-Wl,--start-group"
+    mb_solve_dynamic mb_solve_static mb_linearization mb_input mb_output
+    mb_assembly mb_force mb_element mb_tire mb_joint mb_model
+    mb_tire_pac2002 mb_tire_fiala mb_tire_brush mb_tire_common mb_tire_state
+    mb_linear mb_numeric mb_dual mb_config
+    "-Wl,--end-group" ${SUSPENSION_KERNEL_OPENMP_STATIC})

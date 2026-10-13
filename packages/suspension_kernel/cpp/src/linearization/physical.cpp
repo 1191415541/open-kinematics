@@ -28,7 +28,8 @@
 namespace axle_kernel {
 
 int physical_tangent_dimension(const Model& model, const WorkingSample& working) {
-    return model.ndof + model.rows + static_cast<int>(working.active_tires.size());
+    return model.ndof + model.rows + (working.frozen_inertial_load ? 0 :
+        static_cast<int>(working.active_tires.size()));
 }
 
 namespace {
@@ -79,6 +80,8 @@ bool assemble_physical_tangent(
     const int n = model.ndof;
     const int m = model.rows;
     const int dimension = physical_tangent_dimension(model, working);
+    const std::size_t contact_count = working.frozen_inertial_load ? 0 :
+        working.active_tires.size();
     if (static_cast<int>(x.size()) != dimension) return false;
 
     // The candidate pose and the position-constraint Jacobian arrive in
@@ -96,7 +99,7 @@ bool assemble_physical_tangent(
     std::vector<int> active_mask(model.tires.size(), 0);
     std::vector<double> compression(model.tires.size(), 0.0);
     std::vector<double> compression_derivative(model.tires.size(), 0.0);
-    for (std::size_t index = 0; index < working.active_tires.size(); ++index) {
+    for (std::size_t index = 0; index < contact_count; ++index) {
         const int tire_index = working.active_tires[index];
         active_mask[static_cast<std::size_t>(tire_index)] = 1;
         compression[static_cast<std::size_t>(tire_index)] =
@@ -134,8 +137,21 @@ bool assemble_physical_tangent(
         set_direction_for_coordinate(direction, body, component, x, free_body);
         const bool force_smooth = external_force_directional(
             model, candidate, sample, direction, force_derivative,
-            brush_derivative, false, &static_contact, &force_scratch
+            brush_derivative, false,
+            working.frozen_inertial_load ? nullptr : &static_contact, &force_scratch
         );
+        if (working.frozen_inertial_load) {
+            // The common force bus includes -gyro(q,omega). For this protocol
+            // the entire inertia wrench is constant, so remove its live
+            // directional contribution using the bus's own unique arithmetic.
+            const std::vector<Vec3> zero(model.bodies.size());
+            std::vector<double> inertial_direction;
+            assemble_directional_generalized_force(inertial_direction, zero,
+                zero, model, candidate, direction, n);
+            for (int row = 0; row < n; ++row)
+                force_derivative[static_cast<std::size_t>(row)] -=
+                    inertial_direction[static_cast<std::size_t>(row)];
+        }
         const bool constraint_smooth = constraint_jacobian_directional(
             model, candidate, direction, jacobian_derivative
         );
@@ -178,7 +194,7 @@ bool assemble_physical_tangent(
                 jacobian[at(n+row, column)] = value;
             }
         }
-        for (std::size_t index = 0; index < working.active_tires.size(); ++index) {
+        for (std::size_t index = 0; index < contact_count; ++index) {
             const int tire_index = working.active_tires[index];
             bool road_smooth = true;
             smooth = smooth && road_smooth;
@@ -208,7 +224,7 @@ bool assemble_physical_tangent(
     }
 
     for (std::size_t active_index = 0;
-         active_index < working.active_tires.size(); ++active_index) {
+         active_index < contact_count; ++active_index) {
         std::fill(compression_derivative.begin(), compression_derivative.end(), 0.0);
         const int tire_index = working.active_tires[active_index];
         compression_derivative[static_cast<std::size_t>(tire_index)] = 1.0;
@@ -293,7 +309,9 @@ bool frozen_working_sample(
     if (pose.r.size() != model.bodies.size() ||
         pose.q.size() != model.bodies.size() ||
         pose.v.size() != model.bodies.size() ||
-        pose.omega.size() != model.bodies.size()) {
+        pose.omega.size() != model.bodies.size() ||
+        pose.a.size() != model.bodies.size() ||
+        pose.alpha.size() != model.bodies.size()) {
         return false;
     }
     for (std::size_t body = 0; body < pose.r.size(); ++body) {
@@ -311,6 +329,12 @@ bool frozen_working_sample(
     // checked here rather than left to surface as a thrown `length_error` from a call
     // the caller cannot see.
     if (model.ndof < 0 || model.rows < 0) return false;
+    std::vector<unsigned char> seen(model.tires.size(), 0);
+    for (const int tire : active_tires) {
+        if (tire < 0 || static_cast<std::size_t>(tire) >= seen.size() || seen[tire])
+            return false;
+        seen[tire] = 1;
+    }
     const long long entries =
         static_cast<long long>(model.rows)*static_cast<long long>(model.ndof);
     if (entries > static_cast<long long>(model.bodies.size())*6LL*64LL) return false;
@@ -321,6 +345,10 @@ bool frozen_working_sample(
             !std::isfinite(omega.x) || !std::isfinite(omega.y) ||
             !std::isfinite(omega.z)) {
             return false;
+        }
+        for (const Vec3& value : {pose.a[body], pose.alpha[body]}) {
+            if (!std::isfinite(value.x) || !std::isfinite(value.y) ||
+                !std::isfinite(value.z)) return false;
         }
     }
 
@@ -342,6 +370,18 @@ bool frozen_working_sample(
         static_cast<std::size_t>(model.rows)*static_cast<std::size_t>(n)) {
         return false;
     }
+    std::vector<double> inertial_wrench(static_cast<std::size_t>(n), 0.0);
+    for (std::size_t fi = 0; fi < model.free_body.size(); ++fi) {
+        const int body = model.free_body[fi];
+        const Mat3 inertia = body_world_inertia(model, body, qmat(pose.q[body]));
+        const Vec3 force = pose.a[body]*body_effective_mass(model, body);
+        const Vec3 moment = inertia*pose.alpha[body] +
+            cross(pose.omega[body], inertia*pose.omega[body]);
+        inertial_wrench[6*fi] = force.x; inertial_wrench[6*fi+1] = force.y;
+        inertial_wrench[6*fi+2] = force.z; inertial_wrench[6*fi+3] = moment.x;
+        inertial_wrench[6*fi+4] = moment.y; inertial_wrench[6*fi+5] = moment.z;
+    }
+    if (!finite_vec(inertial_wrench)) return false;
 
     // Past this point every value has been validated, so the assignments cannot
     // fail and the sample is complete when the function returns `true`.
@@ -360,6 +400,8 @@ bool frozen_working_sample(
     // mask here would be a second copy of an identity -- if that mask ever gains the
     // ability to clear a row, this line is what has to change with it.
     working.position_constraint = std::move(position_constraint);
+    working.frozen_inertial_load = true;
+    working.inertial_wrench = std::move(inertial_wrench);
     return true;
 }
 

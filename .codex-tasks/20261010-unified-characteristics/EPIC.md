@@ -1,10 +1,10 @@
 # 统一多体特性分析：Taskmaster 项目计划
 
 - 标识：20261010-unified-characteristics；形态：epic；规划日期：2026-10-10（Asia/Shanghai）。
-- 本轮只落盘计划/全部SPEC，不启动源码实施、商业软件或外部数据生成。
+- 2026-10-10 规划阶段只落盘计划/全部SPEC；后续用户已授权继续实施，2026-10-12提供Adams 2024.1目录以完成必要本地验证。
 - 设计真源：[unified_characteristics_design.md](../../packages/suspension_multibody/docs/unified_characteristics_design.md)；物理定义与数学细节以原设计为准，计划负责范围/步骤/依赖/验收。
 - 实施真源：[SUBTASKS.csv](SUBTASKS.csv)；规划真源：[planning/TODO.csv](planning/TODO.csv)；恢复：[PROGRESS.md](PROGRESS.md)。
-- 9个single-full子任务、51个叶子步骤；每任务SPEC/TODO/PROGRESS已预建，实施状态全部TODO。
+- 9个single-full子任务、51个叶子步骤；每任务SPEC/TODO/PROGRESS已预建，当前实施状态以SUBTASKS.csv及父PROGRESS恢复块为准。
 - 独立审查：[REVIEW.md](REVIEW.md)；当前源码落点：[raw/source-evidence.md](raw/source-evidence.md)。现有基础不算新增能力交付。
 - 可复现自检与Windows无sh的等价门禁：[VALIDATION.md](VALIDATION.md)。
 
@@ -72,11 +72,11 @@ AGENTS所列历史基线（1297 passed/1 skipped/1 xfailed；快速854 passed/1 
 
 ## 已知风险与确认边界
 
-- Adams本地help不足以自动证明动态冻结规则；未知pending_definition、无独立参考pending_reference，核心缺项阻断P5/P6。商业软件/许可或外部数据生成不属本轮授权。
+- Adams本地help不足以自动证明动态冻结规则；未知pending_definition、无独立参考pending_reference，核心缺项阻断P5/P6。用户2026-10-12已提供2024.1安装目录，必要本地Adams验证在本轮授权范围；不新增依赖或外部服务。
 - 现有分解/单RHS不等于统一solve-many/transpose接口；P2真实实现/验收，P7收益/VJP也不预设。
 - 现有CSV/Parquet读取不等于formats实际写表；P6补实行为，复用已有pyarrow/csv。
 - R5旧对象映射、R8共享片段、核心输出一致状态是必须解决的实质缺口。
-- 涉及结果/数据/范围的歧义、核心文件删除、新依赖、生产/真实数据/外部服务/商业资源、高风险Git或显著扩范围需按用户规则确认；本轮只写规划，不实施这些操作。
+- 涉及结果/数据/范围的歧义、核心文件删除、新依赖、外部服务、高风险Git或显著扩范围需按用户规则确认；既定目标所需的实现、接线、测试和文档修改按用户继续任务的授权实施。
 
 ## 完成条件
 

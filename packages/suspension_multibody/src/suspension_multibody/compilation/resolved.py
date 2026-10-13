@@ -20,6 +20,13 @@ from .motion import resolve_motion_boundaries
 _IDENTITY = {"contract", "contract_version", "kind", "name", "family", "solver", "time"}
 _GRID_PROTOCOLS = {"kc_quasi_static", "vehicle_kc"}
 _TABLE_PROTOCOLS = {"axle_dynamic", "vehicle_dynamic"}
+#: The time-history families that read one excitation per case, and so are the
+#: only ones a `runs` list can describe.  A grid family names its cases from its
+#: own sweep, so a run list on one would have to invent names for cases the sweep
+#: already named -- refused here as well as in the case layer.
+_RUNS_PROTOCOLS = {
+    "axle_dynamic", "vehicle_dynamic", "handling", "ride_four_post", "ride_random_road",
+}
 
 
 def plan_from_case(case: Mapping[str, Any], input_payload: bytes = b"") -> ResolvedSolvePlan:
@@ -82,13 +89,20 @@ def _check_input_references(model: dict[str, Any], case: dict[str, Any], payload
         row.get("target", row["name"]) for row in model.get("elements", ())
         if row.get("type") == "steering_actuator"
     }
-    for row in case.get("blobs", ()):
-        start, length = row.get("offset", 0), row.get("length", 0)
-        if start < 0 or length < 0 or start+length > len(payload):
-            raise ValueError(f"input {row.get('name')!r}: blob range falls outside payload")
-        for field, known in (("body", bodies), ("tire", tires), ("coordinate", driven), ("actuator", actuators)):
-            if field in row and row[field] not in known:
-                raise ValueError(f"input {row.get('name')!r}: unknown {field} {row[field]!r}")
+    runs = case.get("runs", ())
+
+    def check_rows(rows: Any) -> None:
+        for row in rows:
+            start, length = row.get("offset", 0), row.get("length", 0)
+            if start < 0 or length < 0 or start+length > len(payload):
+                raise ValueError(f"input {row.get('name')!r}: blob range falls outside payload")
+            for field, known in (("body", bodies), ("tire", tires), ("coordinate", driven), ("actuator", actuators)):
+                if field in row and row[field] not in known:
+                    raise ValueError(f"input {row.get('name')!r}: unknown {field} {row[field]!r}")
+
+    check_rows(case.get("blobs", ()))
+    for entry in runs:
+        check_rows(entry.get("blobs", ()))
     family = case["family"]
     if family == "handling":
         rows = case.get("handling", {}).get("steering", ())
@@ -99,6 +113,19 @@ def _check_input_references(model: dict[str, Any], case: dict[str, Any], payload
             rows = case[section].get(key, ())
             if not rows or any(row.get("tire") not in tires for row in rows):
                 raise ValueError(f"{section} requires explicitly declared tire IDs")
+    # A run that names one of those sections replaces the document's, so the
+    # replacement is checked the same way; a run that names none inherits the
+    # document's already-checked section.
+    for entry in runs:
+        if family == "handling" and "handling" in entry:
+            rows = entry["handling"].get("steering", ())
+            if not rows or any(row.get("actuator") not in actuators for row in rows):
+                raise ValueError("handling requires explicitly declared steering actuators")
+        for section, key in (("four_post", "corners"), ("ride_random_road", "wheels")):
+            if section in entry:
+                rows = entry[section].get(key, ())
+                if not rows or any(row.get("tire") not in tires for row in rows):
+                    raise ValueError(f"{section} requires explicitly declared tire IDs")
     for axis in case.get("k", {}).get("axes", ()):
         if axis["coordinate"] not in driven:
             raise ValueError(f"unknown grid coordinate {axis['coordinate']!r}")
@@ -138,10 +165,36 @@ def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: 
     for row in document.get("blobs", ()):
         if row["offset"] < 0 or row["offset"]+row["length"] > len(model.resource_payload):
             raise ValueError(f"model resource {row['name']!r} falls outside pinned payload")
+    # A run list is a case-level fact: it says one document runs several
+    # excitations on the document's single grid.  A grid family names its cases
+    # from its own sweep, so accepting a run list there would mean two sources
+    # for the same names; the case layer refuses it too, and this is the same
+    # refusal one layer earlier, where the caller can still read it.
+    runs = run.get("excitation", {}).get("runs")
+    if runs is not None and family not in _RUNS_PROTOCOLS:
+        raise ValueError(
+            f"case protocol {family!r} expands its own case grid and cannot take a runs list"
+        )
     case = {"contract": "multibody-case", "contract_version": CONTRACT_VERSION,
         "kind": "case", "family": family, "name": run["name"], "solver": run["solver"],
         **run.get("excitation", {})}
+    case.pop("runs", None)
+    if runs is not None:
+        names = [entry.get("name") for entry in runs]
+        if any(not isinstance(name, str) or not name for name in names):
+            raise ValueError("every run of a case document needs a non-empty name")
+        if len(set(names)) != len(names):
+            raise ValueError(f"a case document cannot declare two runs with one name: {names}")
+        # Each entry keeps what it declares: its own section, its road, its
+        # case-level overrides and any payload tables it already carries.  The
+        # tables the solve plan supplies by name are appended below, into the
+        # entry the row names.
+        case["runs"] = [dict(entry) for entry in runs]
     case["outputs"] = {"constraint_reaction": True, "element_wrench": True}
+    if "accepted_state" in run["outputs"]:
+        if run["study"] != "dynamic":
+            raise ValueError("accepted_state requires a dynamic study")
+        case["outputs"]["accepted_state"] = True
     if any(row["type"] == "roll_center" for row in model.to_document().get("measurements", ())):
         case["outputs"]["constraint_jacobian"] = True
     # Rebuilding the case must not drop the output request: the native reader
@@ -155,15 +208,36 @@ def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: 
     descriptors = case.setdefault("blobs", [])
     occupied = {row["name"] for row in descriptors if "name" in row}
 
-    def append(name: str, role: str, values: Any, **target: str) -> None:
-        if name in occupied:
+    def run_entry(name: str) -> dict[str, Any]:
+        for entry in case.get("runs", ()):
+            if entry["name"] == name:
+                return entry
+        raise ValueError(f"input names an undeclared run {name!r}")
+
+    def append(name: str, role: str, values: Any, run_name: str | None = None,
+               **target: str) -> None:
+        """
+        Append one sampled table, into the run that names it when it names one.
+
+        A table a run declares reaches that run alone.  A table without a run is
+        the document's, and every run sees it until it declares its own of the
+        same name -- which is what lets a shared excitation stay shared while a
+        per-run one differs.
+        """
+        if run_name is None:
+            into, taken = descriptors, occupied
+        else:
+            into = run_entry(run_name).setdefault("blobs", [])
+            taken = {row["name"] for row in into if "name" in row}
+        if name in taken:
             raise ValueError(f"duplicate input ID {name!r}")
         array = np.asarray(values, dtype="<f8")
         if not np.isfinite(array).all():
             raise ValueError(f"input {name!r} contains nonfinite values")
-        descriptors.append({"name": name, "role": role, **target, "offset": len(payload),
+        into.append({"name": name, "role": role, **target, "offset": len(payload),
             "length": array.nbytes, "shape": list(array.shape), "dtype": "float64", "order": "C"})
-        occupied.add(name)
+        if run_name is None:
+            occupied.add(name)
         payload.extend(array.tobytes())
 
     samples = np.asarray(run["samples"], dtype=float)
@@ -198,7 +272,8 @@ def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: 
         expected_shape = (len(samples), 6) if role == "body_wrench" else (len(samples),)
         if values.shape != expected_shape:
             raise ValueError(f"input {row['name']!r} must have shape {expected_shape}")
-        append(row["name"], role, values, **{key: row[key] for key in ("body", "tire", "coordinate", "actuator", "quantity") if key in row})
+        append(row["name"], role, values, run_name=row.get("run"),
+            **{key: row[key] for key in ("body", "tire", "coordinate", "actuator", "quantity") if key in row})
     if not descriptors:
         case.pop("blobs")
     state = run.get("initial_state", {})
@@ -220,6 +295,7 @@ def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: 
     _check_input_references(document, case, bytes(payload))
     from ..kernel.capabilities import (
         kernel_capability_document,
+        require_case_runs_version,
         require_characteristics_answerable,
         require_function_program_version,
     )
@@ -234,6 +310,11 @@ def compile_resolved(model: ResolvedModel, plan: ResolvedSolvePlan, *, request: 
             require_characteristics_answerable(str(declared.get("response_kind", "")))
     if motion.targets and 1 not in kernel_capability_document().get("joint_coordinate_motion_versions", ()):
         raise ValueError("loaded kernel does not support joint coordinate motion version 1")
+    if runs is not None:
+        # The kernel expands the document's run list; a build that does not know
+        # the form would expand the shared excitation once and report one case,
+        # silently dropping every other run.
+        require_case_runs_version(1)
     if family not in kernel_capability_document().get("case_families", ()):
         raise ValueError(f"loaded kernel does not support case protocol {family!r}")
     if 1 not in kernel_capability_document().get("constraint_channel_versions", ()):

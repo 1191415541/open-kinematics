@@ -39,7 +39,25 @@
 #include "mb_config/prelude.hpp"
 #include "mb_joint/registry.hpp"
 #include "mb_model/enums.hpp"
+#include <functional>
 
 namespace axle_kernel {
-int run_model( const AxleInput* input, AxleOutput* output, char* error_buffer, std::size_t error_capacity, const Model* model_override );
+// Internal observation only: the exported C structures and entry points retain
+// their existing layout. References are valid for the duration of the callback;
+// a consumer retaining a sample must copy its complete State and multipliers.
+enum class RunSampleKind { initial, accepted, output };
+struct RunSample {
+    const Model& model;
+    const State& state;
+    const std::vector<double>& constraint_multiplier;
+    double time;
+    RunSampleKind kind;
+    std::size_t accepted_step_id;
+    // Accepted observations have no output ID. Output observations explicitly
+    // link to the last accepted ID, without inferring that link from time.
+    std::size_t output_sample_id;
+};
+inline constexpr std::size_t kNoOutputSample = static_cast<std::size_t>(-1);
+using RunSampleObserver = std::function<void(const RunSample&)>;
+int run_model( const AxleInput* input, AxleOutput* output, char* error_buffer, std::size_t error_capacity, const Model* model_override, const RunSampleObserver* observer = nullptr );
 } // namespace axle_kernel

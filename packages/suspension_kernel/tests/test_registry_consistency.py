@@ -136,12 +136,53 @@ def test_every_supported_family_has_a_handler_and_every_unsupported_one_does_not
         ROOT / "packages/suspension_kernel/cpp/src/cases/case_dispatch.cpp"
     ).read_text(encoding="utf-8")
     for family in KNOWN_UNIMPLEMENTED:
-        assert f'{{"{family}", true, nullptr}}' in dispatch, family
+        assert f'{{"{family}", true, nullptr' in dispatch, family
     for family in set(PROTOCOL_CASE_FAMILIES) - set(KNOWN_UNIMPLEMENTED):
-        assert f'{{"{family}", true, nullptr}}' not in dispatch, (
+        assert f'{{"{family}", true, nullptr' not in dispatch, (
             f"{family!r} must have a handler"
         )
 
+
+
+#: The families whose document may state its cases as a `runs` list.
+#:
+#: A time-history family runs one excitation per case, so `runs` is how its
+#: document says so.  A grid family names its cases from its own sweep, so a
+#: `runs` list on one would be either silently ignored or expanded into
+#: colliding names; the dispatcher refuses it instead, and this states which
+#: side of that line each family is on.
+RUNS_CASE_FAMILIES = (
+    "axle_dynamic",
+    "vehicle_dynamic",
+    "handling",
+    "ride_four_post",
+    "ride_random_road",
+)
+
+
+def test_only_the_time_history_families_expand_a_runs_list() -> None:
+    """
+    The dispatcher's `reads_runs` column is the one this file expects.
+
+    Read from the row rather than from the branch: the column is what
+    `contract_expand_case` decides on, so a family that reads `runs` and is not
+    listed here would be refused, and one listed here that does not would be
+    handed a list its expander cannot see -- both of them silent at the ABI.
+    """
+    dispatch = (
+        ROOT / "packages/suspension_kernel/cpp/src/cases/case_dispatch.cpp"
+    ).read_text(encoding="utf-8")
+    rows: dict[str, bool] = {}
+    for line in dispatch.splitlines():
+        match = re.fullmatch(
+            r'\s*\{"([a-z_]+)",\s*(?:true|false),\s*.*?,\s*(true|false)\},?\s*',
+            line,
+        )
+        if match is not None:
+            rows[match.group(1)] = match.group(2) == "true"
+    assert set(rows) == set(PROTOCOL_CASE_FAMILIES), sorted(rows)
+    measured = {name for name, reads in rows.items() if reads}
+    assert measured == set(RUNS_CASE_FAMILIES), sorted(measured)
 
 def test_the_product_reads_its_capabilities_from_the_kernel() -> None:
     """
@@ -257,15 +298,6 @@ def test_the_frozen_port_tangent_reports_the_holding_force() -> None:
     ABI entry point yet: without a caller its assertions would never run, and an
     executable nothing runs buys nothing.
 
-    ``mb_frozen_sample_selftest`` (step 1) is deliberately **not** registered here.
-    Measured: it exits 0 when run directly, and exits 0 when launched from a fresh
-    pytest file in this same directory, but launched from *this* module it returns
-    0xC0000005 while still printing its success line.  ``mb_frozen_tangent_selftest``
-    is stable in exactly the same position (5/5 runs of this whole file), so the
-    fault is specific to that one executable rather than to this module's process.
-    The cause is not yet identified, so registering it would put an unexplained
-    crash into the fast gate; the step-1 evidence therefore stays with the executable
-    and this limitation is recorded rather than papered over.
     """
     output = _kernel_selftest("mb_frozen_tangent_selftest")
     assert "frozen force tangent self-test passed" in output, output
@@ -287,6 +319,34 @@ def test_the_frozen_load_column_carries_the_inverse_stiffness() -> None:
     """
     output = _kernel_selftest("mb_frozen_load_selftest")
     assert "frozen load column self-test passed" in output, output
+
+
+def test_real_dynamic_sample_observation_preserves_the_original_run() -> None:
+    output = _kernel_selftest("mb_run_sample_selftest")
+    assert "real dynamic sample observation self-test passed" in output, output
+
+
+def test_the_load_driven_local_response_is_executed() -> None:
+    """
+    P4a step 4's ``A X = B_w P`` / ``Y = G X + D P`` producer runs.
+
+    The executable asserts the measurement blade for each axis, the lever arm at a
+    *turned* pose (the identity pose makes it a permutation and hides a routine that
+    ignores the pose), the reference body's subtracted blade, ``C = 1/k`` next to the
+    coordinate-driven ``K = k`` on one tangent, one factorization for a batch of two
+    modes, and the refusal paths.
+
+    Registered here for the same reason as its siblings: the routine lives in the
+    solver layer and has no product ABI entry point yet, so without a caller its
+    assertions would never run -- an executable nothing runs buys nothing.
+    """
+    output = _kernel_selftest("mb_frozen_local_response_selftest")
+    assert "frozen local response self-test passed" in output, output
+
+
+def test_complete_frozen_sample_protocol_is_executed() -> None:
+    output = _kernel_selftest("mb_frozen_sample_selftest")
+    assert "frozen working sample self-test passed" in output, output
 
 
 def test_the_frozen_oracle_checks_the_tangent_against_the_residual() -> None:

@@ -23,7 +23,7 @@ namespace axle_kernel {
 int run_model(
     const AxleInput* input, AxleOutput* output,
     char* error_buffer, std::size_t error_capacity,
-    const Model* model_override
+    const Model* model_override, const RunSampleObserver* observer
 ) {
     if (!input || !output) { set_error(error_buffer,error_capacity,"input/output is null"); return 1; }
     // The axle ABI carries the same extension protocol as the vehicle ABI: the
@@ -329,6 +329,18 @@ int run_model(
     output->diagnostics[10]=initial_active_contacts;
     output->diagnostics[13]=output->energy_output[3];
     output->diagnostics[15]=trim_pinned_directions;
+    std::size_t observed_accepted_steps = 0;
+    const auto observe_sample = [&](const State& observed_state,
+                                    const std::vector<double>& multipliers,
+                                    double time, RunSampleKind kind,
+                                    std::size_t output_id) {
+        if (observer != nullptr) {
+            (*observer)(RunSample{model, observed_state, multipliers, time, kind,
+                                 observed_accepted_steps, output_id});
+        }
+    };
+    observe_sample(state, current_constraint_multiplier, input->sample_times[0],
+                   RunSampleKind::initial, 0);
     double previous_energy = output->energy_output[2];
     double suggested_step = std::max(
         input->min_step, std::min(input->max_step, input->internal_step)
@@ -439,6 +451,9 @@ int run_model(
                     accepted=true;
                     ++accepted_steps;
                     record_accepted_steps(1);
+                    ++observed_accepted_steps;
+                    observe_sample(state, current_constraint_multiplier, t,
+                                   RunSampleKind::accepted, kNoOutputSample);
                     ++event_count;
                     min_accepted_step=std::min(min_accepted_step,event_h);
                     max_accepted_step=std::max(max_accepted_step,event_h);
@@ -578,6 +593,14 @@ int run_model(
                                 failure_reason =
                                     "nonphysical energy rate detected";
                             } else {
+                                // Both half steps are now accepted. Observe the
+                                // actual first-half state before moving the end
+                                // state; duplicating the end state would invent
+                                // a checkpoint at t+h/2.
+                                ++observed_accepted_steps;
+                                observe_sample(first_half.state,
+                                    first_half.constraint_multiplier, t+0.5*h,
+                                    RunSampleKind::accepted, kNoOutputSample);
                                 capture_acceleration_history();
                                 state=std::move(second_half.state);
                                 current_constraint_multiplier=
@@ -588,6 +611,9 @@ int run_model(
                                 accepted=true;
                                 accepted_steps+=2;
                                 record_accepted_steps(2);
+                                ++observed_accepted_steps;
+                                observe_sample(state, current_constraint_multiplier, t,
+                                    RunSampleKind::accepted, kNoOutputSample);
                                 min_accepted_step=std::min(
                                     min_accepted_step,0.5*h
                                 );
@@ -680,6 +706,9 @@ int run_model(
                                 accepted=true;
                                 ++accepted_steps;
                                 record_accepted_steps(1);
+                                ++observed_accepted_steps;
+                                observe_sample(state, current_constraint_multiplier, t,
+                                    RunSampleKind::accepted, kNoOutputSample);
                                 min_accepted_step=std::min(
                                     min_accepted_step,h
                                 );
@@ -792,6 +821,8 @@ int run_model(
             return 5;
         }
         copy_state(state,model,output->body_state,sample_index);
+        observe_sample(state, current_constraint_multiplier, target,
+                       RunSampleKind::output, sample_index);
         write_constraint_wrenches(
             model,state,current_constraint_multiplier,
             output->constraint_wrench,sample_index

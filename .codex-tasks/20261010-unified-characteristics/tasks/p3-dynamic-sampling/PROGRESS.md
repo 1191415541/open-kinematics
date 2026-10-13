@@ -2,23 +2,25 @@
 
 ## 恢复入口
 
-- 日期：2026-10-10（Asia/Shanghai）。
+- 日期：2026-10-12（Asia/Shanghai）。
 - 任务：在原 native 一致接受态只读提取动态几何/输入导数/真实时间导数，提供 all_output、all_accepted、indices 的真实样本身份与序列。
-- 形态：single-full；状态：**DONE**（6/6 步全部完成并验收）。
-- 进度：**6/6**；子任务已关闭（2026-10-10）。
+- 形态：single-full；状态：**IN_PROGRESS**（2026-10-12 重开步骤 2/5）。
+- 进度：**4/6 步 DONE**；步骤 1/3/4/6 DONE；步骤 2 IN_PROGRESS（`indices` 显式集合选择已落地、真实多 case 读侧验收已补、两处 raw 形状缺陷已修；剩余项经实测定性为「本版本动态多 case 无生产者」，等用户裁定关单口径）；步骤 5 TODO（同计划开关不变性已实测，预算分项计量未复测）。
 - 真源：[TODO.csv](TODO.csv)；范围：[SPEC.md](SPEC.md)；父真源：[SUBTASKS.csv](../../SUBTASKS.csv)。
 - 验收：[raw/validation.md](raw/validation.md)（SPEC §57 要求的真实证据）。
 - 已完成：
   - 步骤 1 DONE（2026-10-10）——核实接受态与输出状态同步时序（只读审计，未改文件）。
     证据：[raw/sample-state-audit.md](raw/sample-state-audit.md)。
-  - 步骤 2 DONE（2026-10-10）——三种采样选择与独立身份表。
-    证据：[raw/sample-selection-evidence.md](raw/sample-selection-evidence.md)。
+  - 步骤 2 IN_PROGRESS（2026-10-12 重开）——三种采样选择与独立身份表。
+    历史证据：[raw/sample-selection-evidence.md](raw/sample-selection-evidence.md)；
+    本轮证据：[raw/accepted-producer-evidence.md](raw/accepted-producer-evidence.md)。
   - 步骤 3 DONE（2026-10-10）——动态几何/输入偏导与真实时间导数。
     证据：[raw/trajectory-rates-evidence.md](raw/trajectory-rates-evidence.md)。
   - 步骤 4 DONE（2026-10-10）——显式中心序列时间差分。
     证据：[raw/sampled-difference-evidence.md](raw/sampled-difference-evidence.md)。
-  - 步骤 5 DONE（2026-10-10）——状态不变性与性能预算。
-    证据：[raw/runtime-comparison.md](raw/runtime-comparison.md)。
+  - 步骤 5 TODO（2026-10-12 重开）——状态不变性与性能预算。
+    历史证据：[raw/runtime-comparison.md](raw/runtime-comparison.md)；
+    本轮只实测同计划开关不变性（见 accepted-producer-evidence.md §3），预算分项计量未复测。
   - 步骤 6 DONE（2026-10-10）——R8 阶段迁移与退出验证。
     证据：[raw/retirement-evidence.md](raw/retirement-evidence.md)、
     [raw/validation.md](raw/validation.md)。
@@ -156,7 +158,8 @@
   `dynamic_hash_baseline.json` 的 `failed_cases` **逐项相同（9 个，MATCH: True）**。
   同报告显示 `adams_accuracy_status: BLOCKED`、`accuracy_claim_permitted: False`，
   是 Adams 参考数据缺失的既有阻断，与本步无关、也不因本步缓解。
-- 下一步：**P3 已关闭**。按核心链推进 **P4a 冻结态刚度柔度**（6 步），
+- 下一步（2026-10-12 重开后）：**P3 未关闭**，步骤 2/5 仍未验收完成（本文件
+  「2026-10-12 重开本轮」小节）。同时按核心链推进 **P4a 冻结态刚度柔度**（6 步），
   先读 [P4a SPEC/TODO](../p4a-frozen-local-response/PROGRESS.md) 与
   [SUBTASKS.csv](../../SUBTASKS.csv) 确认依赖就绪。
 - 最新实施验证：**characteristics 401 passed；快速集 1958 passed/1 xfailed（skip 0、
@@ -196,6 +199,73 @@
   `_FakeResult` 的 `times_s` 与真实的按 case 截断拼接有一处保真度差异；
   多 case 用例基于手工 ledger 布局，偏移约定由 C++ 三处互证 + `raw.py` 三处既有读取确认，
   非端到端复现。
+
+## 2026-10-12 重开本轮：真实 accepted 生产者（步骤 2 主体 / 步骤 5 一部分）
+
+- **交付**：`RunSampleObserver`/`observe_sample` 只读观察**原提交点**（导出 C 结构布局不变、
+  `observer == nullptr` 时零工作量）；`accepted_state` 输出请求（准静态族显式拒绝）；
+  五个结果块 + manifest 列名与版本；Python `select_samples("accepted")` 校验后枚举；
+  导出按检查点自身身份出表。
+- **本轮证据**：[raw/accepted-producer-evidence.md](raw/accepted-producer-evidence.md)。
+- **实测（全部本轮执行）**：`test_native_accepted_sampling.py` **25 passed**；
+  `mb_run_sample_selftest` exit 0（同一次 `run_model` 有/无 observer，state/diagnostics/energy/
+  力元素账本/contact_events **逐位相同**，含接触事件与自适应两半）；
+  characteristics **472 passed**；快速集 **2034 passed / 1 xfailed**（skip 0、xfail 未增长）；
+  kernel+contracts **182 passed**（新注册两条自测）；ruff/ty 与三架构门 exit 0；
+  sentinel 逐位不变、parity 8 族、perf 见下。
+- **缺陷修复 5 处（红-修-绿，全部实测）**：时间容差硬编码 `1e-12` 误拒合法长运行；
+  状态列接受非前缀/越界值（`[1,2]`、`[NaN,1]`）；输出映射完整性未与**成功样本数**核对；
+  manifest 列名未校验；`frozen_working_sample` 文档称"不读 a/alpha"与冻结协议矛盾。
+  2 处 sabotage 反证判别力后已还原（`grep -c SABOTAGE == 0`）。
+- **perf 归因（对照实验）**：`kc_perf_gate` 在高负载时 `x1.30~x1.47` 超 `BUDGET_FACTOR=1.25`；
+  `git stash` 退回**全部** `packages/` 改动（HEAD `5808f53`）重建后立即测同一门**同样 FAIL**；
+  恢复改动、负载回落后 **OK**（`x1.189`/`x1.127`）。故与本次改动无关；
+  **未重录基线、未放宽 `BUDGET_FACTOR`**。
+- **仍缺（故步骤 2 不 DONE）**：`indices` 显式集合选择无入口；
+  多 case 动态运行的 accepted 身份无端到端用例。
+- **步骤 5 仍 TODO**：本轮只补同计划开关不变性（§3）；输出体积/峰值内存/组装分解分项计时未复测。
+
+## 2026-10-12 续本轮：`indices` 落地、真实多 case 读侧验收、两处形状缺陷
+
+- **`indices` 已落地**（用户裁定 A：读侧库 API，不改 `SAMPLE_KINDS`）：
+  `select_samples(result, kind, *, ids=..., case_index=...)`，`ids` 是**网格自身 per-case ID**
+  （`output`→`output_sample_id`，`accepted`→`accepted_step_id`），**不是数组下标**；
+  拒绝非整数/负数、重复、不存在、**跨 case 歧义**（须给 `case_index`）、**未按采样顺序列出**；
+  `initial` 无自有 ID，带 `ids` 一律拒绝。`require_selection` 透传。
+- **上一轮登记的第二个缺口（多 case accepted 端到端）经实测重新定性：不是缺测试，是本版本无生产者。**
+  五个动态族展开器各只有**一处** `out.cases.push_back`（`axle_dynamic.cpp:248`、
+  `vehicle_dynamic.cpp:322`、`handling.cpp:215`、`ride_four_post.cpp:154`、`ride_random_road.cpp:155`），
+  即每个动态族只产出一个 case；多 case 只出现在准静态网格族（`kc_quasi_static.cpp` 4 处，按轴值展开）。
+  真实运行实测：单 case 动态计划 `manifest.case_count == 1`；三值 K 网格 `case_count == 3`。
+  **已如实登记为「本版本无生产者」，不记为已覆盖**；要补须单独立项改 native 展开器并同步 SPEC。
+- **把真实多 case 生产结果纳入读侧验收**（缺口 2 中真正可做的部分）：
+  `tests/characteristics/test_sample_selection.py` 新增 5 条，跑真实三 case K 网格；
+  测试内先断言 `case_count == 3`，防止断言在退化为单 case 时变成空洞。
+- **本轮新发现并修复 2 处真实缺陷（红-修-绿）**：`results/characteristics.py` 的
+  `sample_identities` 与 `require_channel` 写死 `result.raw`，传原生 `RawContractResult` 时抛
+  `AttributeError`（同模块 `sampling.py` 三处均用 `getattr(result, "raw", result)`）。
+  后果：`select_samples` 在**同一个 run 上**按 kind 决定成败——`accepted` 可用、
+  `output`/`initial` 崩溃，调用方会把它读成实现 bug 而非契约限制。
+  sabotage 改回原式 3 条用例 FAIL，还原后 `grep SABOTAGE == 0`。
+- **另补步骤 2 验收断言**：自适应运行**确有拒绝试探**（`rejected` 合计 3，先断言 `> 0` 防空洞）
+  而 accepted 身份数**只由接受步计数决定**（`== 1 + sum(accepted_steps) == 39`，
+  `< 1 + accepted + rejected`，ID 连续、时间严格递增）；
+  同一 `id=1` 在 accepted 网格（`t=0.0005`）与 output 网格（`t=0.01`）指向不同状态，
+  两个网格的 ID **不可互换**。
+- **本轮门禁（实跑退出码）**：`ruff` 0；`ty` 0；三架构门 0/0/0；
+  characteristics **488 passed**；`test_native_accepted_sampling.py` **30 passed**；
+  `test_sample_selection.py` **30 passed**；快速集 **2051 passed / 1 xfailed**（xfail 未增长）；
+  kernel+contracts **182 passed**。本轮只改 Python 读取层与测试，未触 native/求解路径，
+  按 `AGENTS.md` §2 不触发 `gate-numeric`；未重录基线、未放宽阈值。
+- **步骤 2 关闭口径（用户裁定已下达，2026-10-13）**：原验收条件「initial/accepted/output/indices
+  可追溯、拒绝步与不同网格不混淆」四项均已落地并有真实证据；剩余项是**范围外**的 native 展开器
+  能力（本版本动态族单 case）。用户裁定：**「单独立项修改 native 动态展开器使多 case 可产，
+  再达到原条件后关闭」**。据此已在
+  [raw/deferred-native-multi-case.md](raw/deferred-native-multi-case.md) 按 EPIC §3「跨包移交门」
+  登记延期工作项（移交方/接收任务/交付内容/验收条件/依赖/最迟集成门齐全）。
+  **P3 步骤 2 原条件不放宽，在延期工作项交付并通过验收前保持 `IN_PROGRESS`**。
+  是否把该工作项提升为第 10 个顶层子任务（会改变 Epic「9 项全 DONE」的关闭条件）
+  须用户对关闭条件本身另作决定；在此之前保持 9 项结构不变。
 
 ## 证据与同步规则
 

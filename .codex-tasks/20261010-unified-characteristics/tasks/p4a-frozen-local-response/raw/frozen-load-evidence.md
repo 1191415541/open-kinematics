@@ -271,3 +271,42 @@ gauge 行不是力平衡行：切线把它替换成恒等行（`linearization/ph
 10. **`factor`/`isfinite` 双防线冗余无注释**（步骤 2 遗留），当前无缺陷。
 11. **`frozen_protocol`/`frozen_version` 缓存键已预留但未接线**。
 12. **P2 步骤 1 / P3 步骤 1 的专项 D2 复审仍未做**（历史遗留）。
+
+## 2026-10-12 纠正（不改写上文，只在此追加）
+
+本文档 §2/§3 的原表述"`B_w` 的条目是 `-1`"**已被实测推翻**。响应方程组是
+`A X = B_w P`，`B_w = -dR/dw`：单位载荷分量在机械残差里带来 `-1`
+（`out[col] = -force[col] - reaction[col]`），故 **`B_w` 在对应广义坐标上是 `+1`**，
+力臂项是 **`+cross(R*p, e_k)`**（保物理符号）。原实现检查的符号恰好相反，
+是一个"看起来像符号约定"的错答案。
+
+判定依据不是推理而是**真实残量回归**：`cpp/tests/frozen_load_selftest.cpp` 新增
+`test_load_column_is_negative_derivative_of_real_residual`，对真实 `static_residual`
+的**六个分量**各做中心差分（`h=1e-4`），逐行断言 `B_w[row] == -(R(+h)-R(-h))/(2h)`（`1e-12`）。
+该用例在旧符号下**先红**，修正 `kernel_static_trim.cpp`（`-1.0` → `1.0`、
+力臂 `-=` → `+=`）后 `mb_frozen_load_selftest.exe` exit 0。
+本文档 §3.2 的"单列断言 `== -1.0`"与 §4.3 的蓄意破坏表**都已随之重测**，
+不再作为该结论的证据。
+
+同轮的第二个真实缺陷（本文档 §8 未记录）：`frozen_load_column` 遇到力的平移 slot 是
+gauge 时**整列 return**，把力臂力矩一并丢弃。gauge 只替换该坐标的方程，不改同体行块内的
+物理力矩。现改为只抑制自身条目后继续进入力臂分支；新回归
+`test_a_gauge_translation_still_carries_its_lever_arm_moment` 先红（`column[4]=0`）后绿，
+并带无 gauge 的反向对照（`column[0]` 与 `column[4]` 同时为 `1.0`）。
+
+本文档 §8 第 8 条"`mb_frozen_sample_selftest` 在 pytest 进程内崩溃原因未明"**本轮未再复现**：
+该自测已注册进 `test_registry_consistency.py`，本轮在本模块内连跑 3 次均
+**18 passed / exit 0**（每轮 1.0~1.2 s），`pytest packages/suspension_kernel/tests`
+由 180 增至 **182 passed**。
+
+**必须如实说明**：崩溃的**根因仍未定位**。我一度推断是旧夹具 `model.tires` 为空却被传入
+`active_tires={1,0}`，导致 `assemble_physical_tangent` 里 `active_mask[tire_index] = 1`
+越界写；**该推断已被证伪**——`git show HEAD:.../frozen_sample_selftest.cpp` 实测
+`assemble_physical_tangent` 调用次数为 **0**，该自测从不进入装配路径，故不存在这条越界写。
+当前可陈述的事实只有两条：①注册后本模块内不再复现；②同一位置既有对照自测
+（`mb_frozen_tangent_selftest`）一直稳定。二者都不构成根因解释，**不声称已定位**。
+本轮与该路径相关的确定改动是：夹具把 `model.rows` 由 2 改为 10 并 `model.tires.resize(2)`、
+新增越界/重复 `active_tires` 的拒绝断言、`mb_frozen_load_selftest` 的链接组改为
+`--start-group` 全链（原为算子子集，符号未定义行为可能由此而来，但**未验证**）。
+
+本轮完整证据见 [frozen-inertial-load-evidence.md](frozen-inertial-load-evidence.md)。
